@@ -1,4 +1,6 @@
 import numpy as np
+import torch
+import torch.nn as nn
 from utils import contrast as UC
 from utils import prop as UP
 from config import activation_master
