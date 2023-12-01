@@ -1,3 +1,8 @@
+import numpy as np
+from utils import contrast as UC
+from utils import prop as UP
+from config import activation_master
+
 class Backtrace(object):
     """
     This is the constructor method for the Backtrace class. It initializes an instance of the class.
