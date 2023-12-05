@@ -1,4 +1,4 @@
-include README.md
+include readme.md
 include requirements.txt
 recursive-include dl_backtrace *.pickle
 recursive-exclude * __pycache__
