@@ -24,7 +24,7 @@ setup(
         'Operating System :: OS Independent',
     ],
     packages=find_packages(where='.'),
-    python_requires='>=3.0, <3.9',
+    python_requires='>=3.0',
     install_requires=install_requires,
     package_data={
         '': ['*.md', '*.txt'],
