@@ -1,9 +1,9 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from utils import contrast as UC
-from utils import prop as UP
-from config import activation_master
+from dl_backtrace.pytorch_backtrace.backtrace.utils import contrast as UC
+from dl_backtrace.pytorch_backtrace.backtrace.utils import prop as UP
+from dl_backtrace.pytorch_backtrace.backtrace.config import activation_master
 
 class Backtrace(object):
     """

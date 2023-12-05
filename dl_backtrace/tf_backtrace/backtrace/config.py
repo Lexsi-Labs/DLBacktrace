@@ -1,4 +1,4 @@
-from utils.prop import np_swish
+from dl_backtrace.tf_backtrace.backtrace.utils.prop import np_swish
 
 activation_master = {
     "None": {

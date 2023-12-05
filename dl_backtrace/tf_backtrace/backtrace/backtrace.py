@@ -1,9 +1,9 @@
 import numpy as np
 from tensorflow.keras import Model
 
-from config import activation_master
-from utils import contrast as UC
-from utils import prop as UP
+from dl_backtrace.tf_backtrace.backtrace.config import activation_master
+from dl_backtrace.tf_backtrace.backtrace.utils import contrast as UC
+from dl_backtrace.tf_backtrace.backtrace.utils import prop as UP
 
 
 class Backtrace(object):
