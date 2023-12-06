@@ -10,10 +10,10 @@ setup(
     name='dl_backtrace',
     use_scm_version=True,
     setup_requires=['setuptools_scm'],
-    description='Add description here...',
+    description='A python SDK for Deep Learning Backtrace',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    keywords='aryaxai, ML observability',
+    keywords='aryaxai deep learning backtrace, ML observability',
     license='MIT',
     url='https://xai.arya.ai/docs/introduction',
     classifiers=[
