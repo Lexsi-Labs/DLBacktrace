@@ -28,6 +28,5 @@ setup(
     install_requires=install_requires,
     package_data={
         '': ['*.md', '*.txt'],
-        'common/config': ['.env.*'],
     },
 )
