@@ -1,14 +1,5 @@
 # AryaXai-Backtrace
-Backtrace module for Generating Explainability on Deep learning models
-Example Notebooks :
-
-Tensorflow Backtrace Tabular Example : https://colab.research.google.com/drive/1A4J-wgShD7M_pUmsqbnI8BD3hE43dT8o?usp=sharing
-
-Tensorflow Backtrace Image Example : https://colab.research.google.com/drive/1KbLtcjYDrPQvG6oJj1wmHdiWxRrtKNrV?usp=sharing
-
-Pytorch Backtrace Tabular Example : https://colab.research.google.com/drive/1Z4UJNFd83dwXBMM0cmiNYEjh6xhRtQA_?usp=sharing
-
-Pytorch Backtrace Tabular Example : https://colab.research.google.com/drive/14XKwCsS9IZep2AlDDYfavnVRNz8_b-jM?usp=sharing
+Backtrace module for Generating Explainability on Deep learning models using TensorFlow / Pytorch
 
 # Backtrace Module
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -28,6 +19,38 @@ The Backtrace Module is a powerful and patent-pending algorithm developed by Ary
 ## Installation
 
 To integrate the Backtrace Module into your project, follow these simple steps:
+
+```bash
+pip install dl-backtrace
+```
+
+usage for Tensoflow based models
+
+```python
+from dl_backtrace.tf_backtrace import Backtrace as B
+from dl_backtrace.tf_backtrace import contrast as UC
+from dl_backtrace.tf_backtrace import prop as UP
+from dl_backtrace.tf_backtrace import activation_master
+```
+
+usage for Pytorch based models
+
+```python
+from dl_backtrace.pytorch_backtrace import Backtrace as B
+from dl_backtrace.pytorch_backtrace import contrast as UC
+from dl_backtrace.pytorch_backtrace import prop as UP
+from dl_backtrace.pytorch_backtrace import activation_master
+```
+
+## Example Notebooks
+
+| Name        | Link                          |
+|-------------|-------------------------------|
+| Tensorflow Backtrace Tabular Dataset | [Colab Link]([https://example.com/john](https://colab.research.google.com/drive/1A4J-wgShD7M_pUmsqbnI8BD3hE43dT8o?usp=sharing))  |
+| Tensorflow Backtrace Image Dataset | [Colab Link]([https://example.com/jane](https://colab.research.google.com/drive/1KbLtcjYDrPQvG6oJj1wmHdiWxRrtKNrV?usp=sharing))  |
+| Pytorch Backtrace Tabular Dataset | [Colab Link]([https://example.com/bob](https://colab.research.google.com/drive/1Z4UJNFd83dwXBMM0cmiNYEjh6xhRtQA_?usp=sharing)) |
+| Pytorch Backtrace Image Dataset | [Colab Link]([https://example.com/bob](https://colab.research.google.com/drive/14XKwCsS9IZep2AlDDYfavnVRNz8_b-jM?usp=sharing)) 
+
 
 For more detailed examples and use cases, check out our documentation.
 
