@@ -54,6 +54,21 @@ from dl_backtrace.pytorch_backtrace import activation_master
 
 For more detailed examples and use cases, check out our documentation.
 
+## Supported Layers and Future Work
+- [x] Dense (Fully Connected) Layer
+- [x] Convolutional Layer (Conv2D)
+- [x] Reshape Layer
+- [x] Flatten Layer
+- [x] Global Average Pooling 2D Layer
+- [x] Max Pooling 2D Layer
+- [x] Average Pooling 2D Layer
+- [x] Concatenate Layer
+- [x] Add Layer
+- [x] Long Short-Term Memory (LSTM) Layer
+- [ ] Embedding Layer
+- [ ] Other Custom Layers
+
+
 ## Getting Started
 If you are new to Backtrace, head over to our Getting Started Guide to quickly set up and use the module in your projects.
 
