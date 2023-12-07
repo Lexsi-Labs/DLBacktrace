@@ -65,6 +65,8 @@ For more detailed examples and use cases, check out our documentation.
 - [x] Concatenate Layer
 - [x] Add Layer
 - [x] Long Short-Term Memory (LSTM) Layer
+- [x] Batch Normalisation Layer
+- [x] Dropout Layer
 - [ ] Embedding Layer
 - [ ] Other Custom Layers
 
