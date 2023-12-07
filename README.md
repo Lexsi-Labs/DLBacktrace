@@ -47,6 +47,7 @@ from dl_backtrace.pytorch_backtrace import activation_master
 | Name        | Link                          |
 |-------------|-------------------------------|
 | Tensorflow Backtrace Tabular Dataset | [Colab Link](https://colab.research.google.com/drive/1A4J-wgShD7M_pUmsqbnI8BD3hE43dT8o?usp=sharing)  |
+| Tensorflow Backtrace Textual Dataset | [Colab Link](https://colab.research.google.com/drive/1zT_K8mHdzyfQe_LG576qwiBqw8o6LRQH?usp=sharing)  |
 | Tensorflow Backtrace Image Dataset | [Colab Link](https://colab.research.google.com/drive/1KbLtcjYDrPQvG6oJj1wmHdiWxRrtKNrV?usp=sharing)  |
 | Pytorch Backtrace Tabular Dataset | [Colab Link](https://colab.research.google.com/drive/1Z4UJNFd83dwXBMM0cmiNYEjh6xhRtQA_?usp=sharing) |
 | Pytorch Backtrace Image Dataset | [Colab Link](https://colab.research.google.com/drive/14XKwCsS9IZep2AlDDYfavnVRNz8_b-jM?usp=sharing) |
