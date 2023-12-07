@@ -46,10 +46,10 @@ from dl_backtrace.pytorch_backtrace import activation_master
 
 | Name        | Link                          |
 |-------------|-------------------------------|
-| Tensorflow Backtrace Tabular Dataset | [Colab Link]([https://example.com/john](https://colab.research.google.com/drive/1A4J-wgShD7M_pUmsqbnI8BD3hE43dT8o?usp=sharing))  |
-| Tensorflow Backtrace Image Dataset | [Colab Link]([https://example.com/jane](https://colab.research.google.com/drive/1KbLtcjYDrPQvG6oJj1wmHdiWxRrtKNrV?usp=sharing))  |
-| Pytorch Backtrace Tabular Dataset | [Colab Link]([https://example.com/bob](https://colab.research.google.com/drive/1Z4UJNFd83dwXBMM0cmiNYEjh6xhRtQA_?usp=sharing)) |
-| Pytorch Backtrace Image Dataset | [Colab Link]([https://example.com/bob](https://colab.research.google.com/drive/14XKwCsS9IZep2AlDDYfavnVRNz8_b-jM?usp=sharing)) 
+| Tensorflow Backtrace Tabular Dataset | [Colab Link](https://colab.research.google.com/drive/1A4J-wgShD7M_pUmsqbnI8BD3hE43dT8o?usp=sharing)  |
+| Tensorflow Backtrace Image Dataset | [Colab Link](https://colab.research.google.com/drive/1KbLtcjYDrPQvG6oJj1wmHdiWxRrtKNrV?usp=sharing)  |
+| Pytorch Backtrace Tabular Dataset | [Colab Link](https://colab.research.google.com/drive/1Z4UJNFd83dwXBMM0cmiNYEjh6xhRtQA_?usp=sharing) |
+| Pytorch Backtrace Image Dataset | [Colab Link](https://colab.research.google.com/drive/14XKwCsS9IZep2AlDDYfavnVRNz8_b-jM?usp=sharing) |
 
 
 For more detailed examples and use cases, check out our documentation.
