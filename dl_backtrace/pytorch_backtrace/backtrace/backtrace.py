@@ -46,6 +46,7 @@ class Backtrace(object):
             
         
         else:
+            self.model_type = model_type
             # create a tree-like structure that represents the layers of the neural network model
             self.create_tree(model)
 
