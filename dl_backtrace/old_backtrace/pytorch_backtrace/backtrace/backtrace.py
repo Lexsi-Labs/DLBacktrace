@@ -4,9 +4,6 @@ import torch.nn as nn
 from dl_backtrace.pytorch_backtrace.backtrace.utils import contrast as UC
 from dl_backtrace.pytorch_backtrace.backtrace.utils import prop as UP
 from dl_backtrace.pytorch_backtrace.backtrace.config import activation_master
-from dl_backtrace.pytorch_backtrace.backtrace.utils import helper as HP
-from dl_backtrace.pytorch_backtrace.backtrace.utils import encoder as EN
-from dl_backtrace.pytorch_backtrace.backtrace.utils import encoder_decoder as ED
 
 class Backtrace(object):
     """
@@ -14,78 +11,47 @@ class Backtrace(object):
     It takes two optional parameters: model (a neural network model) and activation_dict (a dictionary that maps layer names to activation functions).
     """
 
-    def __init__(self, model=None, activation_dict={}, model_type=None):
-        if model_type == 'encoder':
-            self.model = model
-            self.model_type = model_type
-            
-            # create a tree-like structure for encoder model
-            self.model_resource = EN.build_encoder_tree(model)
-            
-            # create a layer stack for encoder model
-            self.create_layer_stack()
-            
-            # extract the encoder model weights
-            self.model_weights = EN.extract_encoder_weights(model)
-            
-            # # calculate the output of each submodule of the encoder model
-            # self.all_out_model = EN.create_encoder_output(model)
-            
-        elif model_type == 'encoder_decoder':
-            self.model = model
-            self.model_type = model_type
-            
-            # create a tree-like structure and layer_stack for encoder-decoder model
-            self.model_resource, self.layer_stack = ED.build_enc_dec_tree(model)
-            
-            # extract the encoder-decoder model weights
-            self.model_weights = ED.extract_encoder_decoder_weights(model)
-                       
-            # # calculate the output of each submodule of the encoder-decoder model
-            # self.all_out_model = ED.calculate_encoder_decoder_output(model)
-            
-        
-        else:
-            self.model_type = model_type
-            # create a tree-like structure that represents the layers of the neural network model
-            self.create_tree(model)
+    def __init__(self, model=None, activation_dict={}):
 
-            # create a new model (an instance of tf.keras.Model) that produces the output of each layer in the neural network.
-            self.create_model_output(model)
+        # create a tree-like structure that represents the layers of the neural network model
+        self.create_tree(model)
 
-            # create a new model (an instance of tf.keras.Model) that produces the output of each layer in the neural network.
-            self.create_every_model_output(model)
+        # create a new model (an instance of tf.keras.Model) that produces the output of each layer in the neural network.
+        self.create_model_output(model)
 
-            # create a layer stack that defines the order in which layers should be processed during backpropagation.
-            self.create_layer_stack()
+        # create a new model (an instance of tf.keras.Model) that produces the output of each layer in the neural network.
+        self.create_every_model_output(model)
 
-            # checks if the model is sequential or not. If it's sequential, it adds the input layer to the layer stack.
-            # identity
+        # create a layer stack that defines the order in which layers should be processed during backpropagation.
+        self.create_layer_stack()
 
-            inp_name = 'identity'
-            self.layer_stack.append(inp_name)
-            self.model_resource[1][inp_name] = {}
-            self.model_resource[1][inp_name]["name"] = inp_name
-            self.model_resource[1][inp_name]["type"] = "input"
-            self.model_resource[1][inp_name]["parent"] = []
-            self.model_resource[1][inp_name]["child"] = None
-            self.model_resource[3].append(inp_name)
-            self.sequential = True
-            try:
+        # checks if the model is sequential or not. If it's sequential, it adds the input layer to the layer stack.
+        # identity
 
-                # calls the build_activation_dict method to build a dictionary that maps layer names to activation functions.
-                # If that fails, it creates a temporary dictionary with default activation functions.
-                if len(activation_dict) == 0:
-                    self.build_activation_dict(model)
-                else:
-                    self.activation_dict = activation_dict
+        inp_name = 'identity'
+        self.layer_stack.append(inp_name)
+        self.model_resource[1][inp_name] = {}
+        self.model_resource[1][inp_name]["name"] = inp_name
+        self.model_resource[1][inp_name]["type"] = "input"
+        self.model_resource[1][inp_name]["parent"] = []
+        self.model_resource[1][inp_name]["child"] = None
+        self.model_resource[3].append(inp_name)
+        self.sequential = True
+        try:
 
-            except Exception as e:
-                print(e)
-                temp_dict = {}
-                for l in model.layers:
-                    temp_dict[l.name] = activation_master["None"]
-                self.activation_dict = temp_dict 
+            # calls the build_activation_dict method to build a dictionary that maps layer names to activation functions.
+            # If that fails, it creates a temporary dictionary with default activation functions.
+            if len(activation_dict) == 0:
+                self.build_activation_dict(model)
+            else:
+                self.activation_dict = activation_dict
+
+        except Exception as e:
+            print(e)
+            temp_dict = {}
+            for l in model.layers:
+                temp_dict[l.name] = activation_master["None"]
+            self.activation_dict = temp_dict
 
     def build_activation_dict(self, model):
         model_resource = self.model_resource
@@ -355,7 +321,6 @@ class Backtrace(object):
             multiplier=100.0,
             scaler=0,
             max_unit=0,
-            predicted_token=None,
     ):
         # This method is used for evaluating layer-wise relevance based on different modes.
         if mode == "default":
@@ -365,7 +330,6 @@ class Backtrace(object):
                 multiplier=multiplier,
                 scaler=0,
                 max_unit=0,
-                predicted_token=predicted_token,
             )
             return output
         elif mode == "contrast":
@@ -378,7 +342,7 @@ class Backtrace(object):
             return output
 
     def proportional_eval(
-            self, all_out, start_wt=[], multiplier=100.0, scaler=0, max_unit=0, predicted_token=None
+            self, all_out, start_wt=[], multiplier=100.0, scaler=0, max_unit=0
     ):
         model_resource = self.model_resource
         activation_dict = self.activation_dict
@@ -386,21 +350,10 @@ class Backtrace(object):
         out_layer = model_resource[2][0]
         all_wt = {}
         if len(start_wt) == 0:
-            if self.model_type == 'encoder':
-                start_wt = UP.calculate_start_wt(all_out[out_layer].detach().numpy())
-                all_wt[out_layer] = start_wt * multiplier
-                layer_stack = self.layer_stack
-                all_wts = self.model_weights
-            if self.model_type == 'encoder_decoder':
-                start_wt = UP.calculate_enc_dec_start_wt(all_out[out_layer][0].detach().numpy(), predicted_token)
-                all_wt[out_layer] = start_wt * multiplier
-                layer_stack = self.layer_stack
-                all_wts = self.model_weights
-            else:
-                start_wt = UP.calculate_start_wt(all_out[out_layer])
-                all_wt[out_layer] = start_wt * multiplier
-                layer_stack = self.layer_stack
-                
+            start_wt = UP.calculate_start_wt(all_out[out_layer])
+        all_wt[out_layer] = start_wt * multiplier
+        layer_stack = self.layer_stack
+
         for start_layer in layer_stack:
             if model_resource[1][start_layer]["child"]:
                 child_nodes = model_resource[1][start_layer]["child"]
@@ -500,88 +453,6 @@ class Backtrace(object):
                         all_wt[start_layer], lstm_obj_f.compute_log
                     )
                     all_wt[child_nodes[0]] += temp_wt
-                    
-                elif model_resource[1][start_layer]["class"] == "Self_Attention":
-                    weights = all_wts[start_layer]
-                    self_attention_weights = HP.rename_self_attention_keys(weights)
-
-                    temp_wt = UP.calculate_wt_self_attention(
-                        all_wt[start_layer],
-                        all_out[child_nodes[0]][0].detach().numpy(),
-                        self_attention_weights,
-                    )
-                    all_wt[child_nodes[0]] += temp_wt
-                
-                elif model_resource[1][start_layer]["class"] == 'Residual':
-                    temp_wt = UP.calculate_wt_add(
-                        all_wt[start_layer],
-                        [all_out[ch].detach().numpy() for ch in child_nodes],
-                    )
-
-                    for ind, ch in enumerate(child_nodes):
-                        all_wt[ch] += temp_wt[ind]
-                
-                elif model_resource[1][start_layer]["class"] == 'Feed_Forward':
-                    weights = all_wts[start_layer]
-                    feed_forward_weights = HP.rename_feed_forward_keys(weights)
-
-                    temp_wt = UP.calculate_wt_feed_forward(
-                        all_wt[start_layer],
-                        all_out[child_nodes[0]][0].detach().numpy(),
-                        feed_forward_weights
-                    )
-                    all_wt[child_nodes[0]] += temp_wt
-                    
-                elif model_resource[1][start_layer]["class"] == "Pooler":
-                    weights = all_wts[start_layer]
-                    pooler_weights = HP.rename_pooler_keys(weights)
-
-                    temp_wt = UP.calculate_wt_pooler(
-                        all_wt[start_layer],
-                        all_out[child_nodes[0]][0].detach().numpy(),
-                        pooler_weights
-                    )
-                    all_wt[child_nodes[0]] += temp_wt
-                    
-                elif model_resource[1][start_layer]["class"] == "Classifier":
-                    weights = all_wts[start_layer]
-                    classifier_weights = HP.rename_classifier_keys(weights)
-
-                    temp_wt = UP.calculate_wt_classifier(
-                        all_wt[start_layer],
-                        all_out[child_nodes[0]][0].detach().numpy(),
-                        classifier_weights
-                    )
-                    all_wt[child_nodes[0]] += temp_wt
-                    
-                elif model_resource[1][start_layer]["class"] == "LM_Head":
-                    weights = all_wts[start_layer]
-                    lm_head_weights = HP.rename_decoder_lm_head(weights)
-
-                    temp_wt = UP.calculate_wt_lm_head(
-                        all_wt[start_layer],
-                        all_out[child_nodes[0]][0].detach().numpy(),
-                        lm_head_weights
-                    )
-                    all_wt[child_nodes[0]] += temp_wt
-                    
-                elif model_resource[1][start_layer]["class"] == 'Layer_Norm':
-                    temp_wt = all_wt[start_layer]
-                    all_wt[child_nodes[0]] += temp_wt
-                
-                elif model_resource[1][start_layer]["class"] == 'Cross_Attention':
-                    weights = all_wts[start_layer]
-                    cross_attention_weights = HP.rename_cross_attention_keys(weights)
-
-                    temp_wt = UP.calculate_wt_cross_attention(
-                        all_wt[start_layer],
-                        [all_out[ch][0].detach().numpy() for ch in child_nodes],
-                        cross_attention_weights,
-                    )
-
-                    for ind, ch in enumerate(child_nodes):
-                        all_wt[ch] += temp_wt[ind]
-
                 else:
                     temp_wt = all_wt[start_layer]
                     all_wt[child_nodes[0]] += temp_wt
