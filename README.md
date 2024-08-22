@@ -40,14 +40,18 @@ from dl_backtrace.pytorch_backtrace import Backtrace as B
 
 | Name        | Task        | Link                          |
 |-------------|-------------|-------------------------------|
-| Tensorflow Backtrace Tabular Dataset | | [Colab Link](https://colab.research.google.com/drive/1A4J-wgShD7M_pUmsqbnI8BD3hE43dT8o?usp=sharing)  |
-| Tensorflow Backtrace Textual Dataset | | [Colab Link](https://colab.research.google.com/drive/1zT_K8mHdzyfQe_LG576qwiBqw8o6LRQH?usp=sharing)  |
-| Tensorflow Backtrace Image Dataset | | [Colab Link](https://colab.research.google.com/drive/1KbLtcjYDrPQvG6oJj1wmHdiWxRrtKNrV?usp=sharing)  |
-| Pytorch Backtrace Tabular Dataset | | [Colab Link](https://colab.research.google.com/drive/1Z4UJNFd83dwXBMM0cmiNYEjh6xhRtQA_?usp=sharing) |
-| Pytorch Backtrace Image Dataset | | [Colab Link](https://colab.research.google.com/drive/14XKwCsS9IZep2AlDDYfavnVRNz8_b-jM?usp=sharing) |
+| Tensorflow Backtrace Loan Classification Tabular Dataset | Binary Classification | [Colab Link](https://colab.research.google.com/drive/1A4J-wgShD7M_pUmsqbnI8BD3hE43dT8o?usp=sharing)  |
+| Tensorflow Backtrace Textual Dataset | Sentiment Classification | [Colab Link](https://colab.research.google.com/drive/1zT_K8mHdzyfQe_LG576qwiBqw8o6LRQH?usp=sharing)  |
+| Tensorflow Backtrace Image Dataset | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1KbLtcjYDrPQvG6oJj1wmHdiWxRrtKNrV?usp=sharing)  |
 | Tensorflow Backtrace Bounding Box Regression Image Dataset | Single Object Detection | [Colab Link](https://colab.research.google.com/drive/15mmJ2aGt-_Ho7RdPWjNEEoFXE9mu9HLV?usp=sharing) |
 | Tensorflow Backtrace Next Word Generation Textual Dataset | Next Word Generation | [Colab Link](https://colab.research.google.com/drive/1iRMMcEm4iMVuk236vDtEB6rKsirny8cB?usp=sharing) |
-| Tensorflow Backtrace ImDB Sentiment Classification Textual Dataset | Sentiment Classification| [Colab Link](https://colab.research.google.com/drive/1L5nEMO6H8pbGo1Opd9S4mbYPMmq5Vl-M?usp=sharing)|
+| Tensorflow Backtrace ImDB Sentiment Classification Textual Dataset | Sentiment Classification | [Colab Link](https://colab.research.google.com/drive/1L5nEMO6H8pbGo1Opd9S4mbYPMmq5Vl-M?usp=sharing)|
+| Tensorflow Backtrace Binary Classification Textual Dataset | Binary Classification | [Colab Link](https://colab.research.google.com/drive/1PxFY4hEhcIr4nTVyfwLE_29CzQTCD3dA?usp=sharing) |
+| Tensorflow Backtrace Multi-Class Classification Textual Dataset | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1u3B18TZwfTdYJeYBGcHQ0T3fzfM2USGT?usp=sharing) |
+| Colonoscopy Binary Segmentation | TBC | [Colab Link](https://colab.research.google.com/drive/1cUNUao7fahDgndVI-cpn2iSByTiWaB4j?usp=sharing) | 
+| Car Binary Segmentation | TBC |  | 
+| Pytorch Backtrace Tabular Dataset | | [Colab Link](https://colab.research.google.com/drive/1Z4UJNFd83dwXBMM0cmiNYEjh6xhRtQA_?usp=sharing) |
+| Pytorch Backtrace Image Dataset | | [Colab Link](https://colab.research.google.com/drive/14XKwCsS9IZep2AlDDYfavnVRNz8_b-jM?usp=sharing) |
 
 For more detailed examples and use cases, check out our documentation.
 
