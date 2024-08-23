@@ -56,14 +56,14 @@ layer_outputs = backtrace.predict(test_data[0])
 relevance = backtrace.eval(layer_outputs,mode='default',scaler=1,thresholding=0.5,task="binary-classification")
 ```
 
-#### Depending on Task we have several attributes for Relevance Calcualtion in Evalaution:
+#### Depending on Task we have several attributes for Relevance Calculation in Evalaution:
 
 | Attribute    | Description | Values |
 |--------------|-------------|--------|
-| mode         |             |        |
-| scaler       |             |        |
-| thresholding |             |        |
-| task         |             |        |
+| mode         | evaluation mode of algorithm | { default, contrastive}|
+| scaler       | Total / Starting Relevance at the Last Layer | Integer ( Default: None, Preferred: 1)|
+| thresholding | Thresholding Model Prediction in Segemntation Task to select Pixels predicting the actual class. (Only works in Segmentation Tasks) |  Default:0.5      |
+| task         | The task of the Model | { binary-classification, multi-class classification, bbox-regression, binary-segmentation} |
 
 ## Example Notebooks : 
 
@@ -78,8 +78,8 @@ relevance = backtrace.eval(layer_outputs,mode='default',scaler=1,thresholding=0.
 | Backtrace ImDB Sentiment Classification Textual Dataset | Sentiment Classification | [Colab Link](https://colab.research.google.com/drive/1L5nEMO6H8pbGo1Opd9S4mbYPMmq5Vl-M?usp=sharing)|
 | Backtrace Binary Classification Textual Dataset | Binary Classification | [Colab Link](https://colab.research.google.com/drive/1PxFY4hEhcIr4nTVyfwLE_29CzQTCD3dA?usp=sharing) |
 | Backtrace Multi-Class NewsGroup20 Classification Textual Dataset | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1u3B18TZwfTdYJeYBGcHQ0T3fzfM2USGT?usp=sharing) |
-| Backtrace CVC-ClinicDB Colonoscopy Binary Segmentation | TBC | - | 
-| Backtrace CamVid Road Car Binary Segmentation | TBC | [Colab Link](https://colab.research.google.com/drive/1OAY7aAraKq_ucyVt5AYPBD8LkQOIuy1C?usp=sharing) | 
+| Backtrace CVC-ClinicDB Colonoscopy Binary Segmentation | Organ Segmentation | [Colab Link](https://colab.research.google.com/drive/1cUNUao7fahDgndVI-cpn2iSByTiWaB4j?usp=sharing) | 
+| Backtrace CamVid Road Car Binary Segmentation | Binary Segmentation | [Colab Link](https://colab.research.google.com/drive/1OAY7aAraKq_ucyVt5AYPBD8LkQOIuy1C?usp=sharing) | 
 
 ### Pytorch : 
 | Name        | Task        | Link                          |
