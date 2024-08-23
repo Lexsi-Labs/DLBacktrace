@@ -85,8 +85,8 @@ relevance = backtrace.eval(layer_outputs,mode='default',scaler=1,thresholding=0.
 ### Pytorch : 
 | Name        | Task        | Link                          |
 |-------------|-------------|-------------------------------|
-| Backtrace Tabular Dataset | | [Colab Link](https://colab.research.google.com/drive/1Z4UJNFd83dwXBMM0cmiNYEjh6xhRtQA_?usp=sharing) |
-| Backtrace Image Dataset | | [Colab Link](https://colab.research.google.com/drive/14XKwCsS9IZep2AlDDYfavnVRNz8_b-jM?usp=sharing) |
+| Backtrace Tabular Dataset | Binary Classification | [Colab Link](https://colab.research.google.com/drive/1_r-IS7aIuATSvGNRLk8VDVVLkDSaKCpD?usp=sharing)|
+| Backtrace Image Dataset | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1v2XajWtIbf7Vt31Z1fnKnAjyiDzPxwnU?usp=sharing) |
 
 For more detailed examples and use cases, check out our documentation.
 
