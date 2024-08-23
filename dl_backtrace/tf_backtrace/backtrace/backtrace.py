@@ -447,7 +447,7 @@ class Backtrace(object):
                     )
                     all_wt[child_nodes[0]] += temp_wt
                 elif model_resource["graph"][start_layer]["class"] == 'Residual':
-                    temp_wt = UP.calculate_wt_add(
+                    temp_wt = UP.calculate_wt_residual(
                         all_wt[start_layer],
                         [all_out[ch] for ch in child_nodes],
                     )
