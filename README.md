@@ -71,7 +71,7 @@ relevance = backtrace.eval(layer_outputs,mode='default',scaler=1,thresholding=0.
 
 | Name        | Task        | Link                          |
 |-------------|-------------|-------------------------------|
-| Backtrace Loan Classification Tabular Dataset | Binary Classification | [Colab Link](https://colab.research.google.com/drive/1H5jaryVPEAQuqk9XPP71UIL4cemli98K?usp=sharing)  |
+| Backtrace Loan Classification Tabular Dataset | Binary Classification | [Colab Link](https://colab.research.google.com/drive/1H5jaryVPEAQuqk9XPP71UIL4cemli98K?usp=sharing) |
 | Backtrace Image FMNIST Dataset | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1KbLtcjYDrPQvG6oJj1wmHdiWxRrtKNrV?usp=sharing)  |
 | Backtrace CUB Bounding Box Regression Image Dataset | Single Object Detection | [Colab Link](https://colab.research.google.com/drive/15mmJ2aGt-_Ho7RdPWjNEEoFXE9mu9HLV?usp=sharing) |
 | Backtrace Next Word Generation Textual Dataset | Next Word Generation | [Colab Link](https://colab.research.google.com/drive/1iRMMcEm4iMVuk236vDtEB6rKsirny8cB?usp=sharing) |
