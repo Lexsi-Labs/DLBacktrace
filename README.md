@@ -71,26 +71,29 @@ relevance = backtrace.eval(layer_outputs,mode='default',scaler=1,thresholding=0.
 
 | Name        | Task        | Link                          |
 |-------------|-------------|-------------------------------|
-| Tensorflow Backtrace Loan Classification Tabular Dataset | Binary Classification | [Colab Link](https://colab.research.google.com/drive/1A4J-wgShD7M_pUmsqbnI8BD3hE43dT8o?usp=sharing)  |
-| Tensorflow Backtrace Textual Dataset | Sentiment Classification | [Colab Link](https://colab.research.google.com/drive/1zT_K8mHdzyfQe_LG576qwiBqw8o6LRQH?usp=sharing)  |
-| Tensorflow Backtrace Image Dataset | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1KbLtcjYDrPQvG6oJj1wmHdiWxRrtKNrV?usp=sharing)  |
-| Tensorflow Backtrace Bounding Box Regression Image Dataset | Single Object Detection | [Colab Link](https://colab.research.google.com/drive/15mmJ2aGt-_Ho7RdPWjNEEoFXE9mu9HLV?usp=sharing) |
-| Tensorflow Backtrace Next Word Generation Textual Dataset | Next Word Generation | [Colab Link](https://colab.research.google.com/drive/1iRMMcEm4iMVuk236vDtEB6rKsirny8cB?usp=sharing) |
-| Tensorflow Backtrace ImDB Sentiment Classification Textual Dataset | Sentiment Classification | [Colab Link](https://colab.research.google.com/drive/1L5nEMO6H8pbGo1Opd9S4mbYPMmq5Vl-M?usp=sharing)|
-| Tensorflow Backtrace Binary Classification Textual Dataset | Binary Classification | [Colab Link](https://colab.research.google.com/drive/1PxFY4hEhcIr4nTVyfwLE_29CzQTCD3dA?usp=sharing) |
-| Tensorflow Backtrace Multi-Class Classification Textual Dataset | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1u3B18TZwfTdYJeYBGcHQ0T3fzfM2USGT?usp=sharing) |
-| Colonoscopy Binary Segmentation | TBC | [Colab Link](https://colab.research.google.com/drive/1cUNUao7fahDgndVI-cpn2iSByTiWaB4j?usp=sharing) | 
-| Car Binary Segmentation | TBC |  | 
+| Backtrace Loan Classification Tabular Dataset | Binary Classification | [Colab Link](https://colab.research.google.com/drive/1A4J-wgShD7M_pUmsqbnI8BD3hE43dT8o?usp=sharing)  |
+| Backtrace Textual Dataset | Sentiment Classification | [Colab Link](https://colab.research.google.com/drive/1zT_K8mHdzyfQe_LG576qwiBqw8o6LRQH?usp=sharing)  |
+| Backtrace Image FMNIST Dataset | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1KbLtcjYDrPQvG6oJj1wmHdiWxRrtKNrV?usp=sharing)  |
+| Backtrace CUB Bounding Box Regression Image Dataset | Single Object Detection | [Colab Link](https://colab.research.google.com/drive/15mmJ2aGt-_Ho7RdPWjNEEoFXE9mu9HLV?usp=sharing) |
+| Backtrace Next Word Generation Textual Dataset | Next Word Generation | [Colab Link](https://colab.research.google.com/drive/1iRMMcEm4iMVuk236vDtEB6rKsirny8cB?usp=sharing) |
+| Backtrace ImDB Sentiment Classification Textual Dataset | Sentiment Classification | [Colab Link](https://colab.research.google.com/drive/1L5nEMO6H8pbGo1Opd9S4mbYPMmq5Vl-M?usp=sharing)|
+| Backtrace Binary Classification Textual Dataset | Binary Classification | [Colab Link](https://colab.research.google.com/drive/1PxFY4hEhcIr4nTVyfwLE_29CzQTCD3dA?usp=sharing) |
+| Backtrace Multi-Class NewsGroup20 Classification Textual Dataset | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1u3B18TZwfTdYJeYBGcHQ0T3fzfM2USGT?usp=sharing) |
+| Backtrace CVC-ClinicDB Colonoscopy Binary Segmentation | TBC | [Colab Link](https://colab.research.google.com/drive/1cUNUao7fahDgndVI-cpn2iSByTiWaB4j?usp=sharing) | 
+| Backtrace CamVid Road Car Binary Segmentation | TBC |  | 
 
 ### Pytorch : 
 | Name        | Task        | Link                          |
 |-------------|-------------|-------------------------------|
-| Pytorch Backtrace Tabular Dataset | | [Colab Link](https://colab.research.google.com/drive/1Z4UJNFd83dwXBMM0cmiNYEjh6xhRtQA_?usp=sharing) |
-| Pytorch Backtrace Image Dataset | | [Colab Link](https://colab.research.google.com/drive/14XKwCsS9IZep2AlDDYfavnVRNz8_b-jM?usp=sharing) |
+| Backtrace Tabular Dataset | | [Colab Link](https://colab.research.google.com/drive/1Z4UJNFd83dwXBMM0cmiNYEjh6xhRtQA_?usp=sharing) |
+| Backtrace Image Dataset | | [Colab Link](https://colab.research.google.com/drive/14XKwCsS9IZep2AlDDYfavnVRNz8_b-jM?usp=sharing) |
 
 For more detailed examples and use cases, check out our documentation.
 
-## Supported Layers and Future Work (Tensorflow-Keras)
+## Supported Layers and Future Work :
+
+### Tensorflow-Keras:
+
 - [x] Dense (Fully Connected) Layer
 - [x] Convolutional Layer (Conv2D,Conv1D)
 - [x] Transpose Convolutional Layer (Conv2DTranspose,Conv1DTranspose)
@@ -108,8 +111,10 @@ For more detailed examples and use cases, check out our documentation.
 - [x] TextVectorization Layer
 - [ ] Other Custom Layers
 
-## Supported Layers and Future Work (Pytorch)
+### Pytorch :
+
 (Note: Currently we only Support Binary and Multi-Class Classification in Pytorch, Segmentation and Single Object Detection will be supported in the next release.)
+
 - [x] Linear (Fully Connected) Layer
 - [x] Convolutional Layer (Conv2D)
 - [x] Reshape Layer
