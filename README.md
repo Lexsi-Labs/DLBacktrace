@@ -24,19 +24,50 @@ To integrate the Backtrace Module into your project, follow these simple steps:
 pip install dl-backtrace
 ```
 
-usage for Tensoflow based models
+## Usage 
+
+### Tensoflow-Keras based models
 
 ```python
 from dl_backtrace.tf_backtrace import Backtrace as B
 ```
 
-usage for Pytorch based models
+### Pytorch based models
 
 ```python
 from dl_backtrace.pytorch_backtrace import Backtrace as B
 ```
 
-## Example Notebooks
+### Evalauting using Backtrace:
+
+1. Step - 1: Initialize a Backtrace Object using your Model
+```python
+backtrace = B(model=model)
+```
+
+2. Step - 2: Calculate layer-wise output using a data instance
+
+```python
+layer_outputs = backtrace.predict(test_data[0])
+```
+
+3. Step - 3: Calculate layer-wise Relevance using Evaluation 
+```python
+relevance = backtrace.eval(layer_outputs,mode='default',scaler=1,thresholding=0.5,task="binary-classification")
+```
+
+#### Depending on Task we have several attributes for Relevance Calcualtion in Evalaution:
+
+| Attribute    | Description | Values |
+|--------------|-------------|--------|
+| mode         |             |        |
+| scaler       |             |        |
+| thresholding |             |        |
+| task         |             |        |
+
+## Example Notebooks : 
+
+### Tensorflow-Keras : 
 
 | Name        | Task        | Link                          |
 |-------------|-------------|-------------------------------|
@@ -50,6 +81,10 @@ from dl_backtrace.pytorch_backtrace import Backtrace as B
 | Tensorflow Backtrace Multi-Class Classification Textual Dataset | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1u3B18TZwfTdYJeYBGcHQ0T3fzfM2USGT?usp=sharing) |
 | Colonoscopy Binary Segmentation | TBC | [Colab Link](https://colab.research.google.com/drive/1cUNUao7fahDgndVI-cpn2iSByTiWaB4j?usp=sharing) | 
 | Car Binary Segmentation | TBC |  | 
+
+### Pytorch : 
+| Name        | Task        | Link                          |
+|-------------|-------------|-------------------------------|
 | Pytorch Backtrace Tabular Dataset | | [Colab Link](https://colab.research.google.com/drive/1Z4UJNFd83dwXBMM0cmiNYEjh6xhRtQA_?usp=sharing) |
 | Pytorch Backtrace Image Dataset | | [Colab Link](https://colab.research.google.com/drive/14XKwCsS9IZep2AlDDYfavnVRNz8_b-jM?usp=sharing) |
 
