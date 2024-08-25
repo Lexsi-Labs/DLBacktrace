@@ -441,7 +441,7 @@ class Backtrace(object):
                     all_wt[child_nodes[0]] = all_wt[child_nodes[0]] + temp_wt.sum()
                 elif model_resource["graph"][start_layer]["class"] == "Self_Attention":
                     weights = all_wts[start_layer]
-                    self_attention_weights = HP.rename_attention_keys(weights)
+                    self_attention_weights = HP.rename_self_attention_keys(weights)
                     temp_wt = UP.calculate_wt_self_attention(
                         all_wt[start_layer],
                         all_out[child_nodes[0]][0],
