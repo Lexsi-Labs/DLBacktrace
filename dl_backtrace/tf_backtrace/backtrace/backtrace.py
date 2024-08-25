@@ -229,7 +229,7 @@ class Backtrace(object):
         all_wt = {}
         if len(start_wt) == 0:
             if self.model_type == 'encoder':
-                start_wt = UP.calculate_start_wt_UP(all_out[out_layer])
+                start_wt = UP.calculate_start_wt(all_out[out_layer])
                 all_wt[out_layer] = start_wt * multiplier
                 layer_stack = self.layer_stack
                 all_wts = self.model_weights
