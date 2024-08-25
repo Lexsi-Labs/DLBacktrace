@@ -51,6 +51,7 @@ class Backtrace(object):
             self.model_weights = EN.extract_encoder_weights(model)
             # # calculate the output of each submodule of the encoder model
             # self.all_out_model = EN.create_encoder_output(model)
+            self.activation_dict = None
         elif model_type == 'encoder_decoder':
             # create a tree-like structure and layer_stack for encoder-decoder model
             self.model_resource, self.layer_stack = ED.build_enc_dec_tree(model)
@@ -58,6 +59,7 @@ class Backtrace(object):
             self.model_weights = ED.extract_encoder_decoder_weights(model)
             # # calculate the output of each submodule of the encoder-decoder model
             # self.all_out_model = ED.calculate_encoder_decoder_output(model)
+            self.activation_dict = None 
         
         else:
             self.create_tree(model.layers)
