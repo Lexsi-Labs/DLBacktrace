@@ -108,11 +108,6 @@ For more detailed examples and use cases, check out our documentation.
 - [x] Dropout Layer
 - [x] Embedding Layer
 - [x] TextVectorization Layer
-- [x] Self-Attention Layer
-- [x] Cross-Attention Layer
-- [x] Feed-Forward Layer
-- [x] Pooler Layer
-- [x] Decoder LM (Language Model) Head
 - [ ] Other Custom Layers 
 
 ### Pytorch :
