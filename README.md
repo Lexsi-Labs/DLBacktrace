@@ -80,6 +80,8 @@ relevance = backtrace.eval(layer_outputs,mode='default',scaler=1,thresholding=0.
 | Backtrace Multi-Class NewsGroup20 Classification Textual Dataset | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1u3B18TZwfTdYJeYBGcHQ0T3fzfM2USGT?usp=sharing) |
 | Backtrace CVC-ClinicDB Colonoscopy Binary Segmentation | Organ Segmentation | [Colab Link](https://colab.research.google.com/drive/1cUNUao7fahDgndVI-cpn2iSByTiWaB4j?usp=sharing) | 
 | Backtrace CamVid Road Car Binary Segmentation | Binary Segmentation | [Colab Link](https://colab.research.google.com/drive/1OAY7aAraKq_ucyVt5AYPBD8LkQOIuy1C?usp=sharing) |
+| Backtrace BERT Encoder | Binary Classification | [Colab Link](https://colab.research.google.com/drive/1H7-4ox3YWMtoH0vptYGXaN63PRJFbTrX?usp=sharing) |
+| Backtrace Transformer Encoder-Decoder Model for Translation | Neural Machine Translation | [Colab Link](https://colab.research.google.com/drive/1NApbrd11TEqlrqGCBYPmgMvBbZBJhpWD?usp=sharing) |
 
 ### Pytorch : 
 | Name        | Task        | Link                          |
@@ -108,6 +110,11 @@ For more detailed examples and use cases, check out our documentation.
 - [x] Dropout Layer
 - [x] Embedding Layer
 - [x] TextVectorization Layer
+- [x] Self-Attention Layer
+- [x] Cross-Attention Layer
+- [x] Feed-Forward Layer
+- [x] Pooler Layer
+- [x] Decoder LM (Language Model) Head
 - [ ] Other Custom Layers 
 
 ### Pytorch :
