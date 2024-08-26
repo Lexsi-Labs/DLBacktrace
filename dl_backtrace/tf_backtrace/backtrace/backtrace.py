@@ -51,6 +51,7 @@ class Backtrace(object):
             self.model_weights = EN.extract_encoder_weights(model)
             # # calculate the output of each submodule of the encoder model
             # self.all_out_model = EN.create_encoder_output(model)
+            self.activation_dict = None
         elif model_type == 'encoder_decoder':
             # create a tree-like structure and layer_stack for encoder-decoder model
             self.model_resource, self.layer_stack = ED.build_enc_dec_tree(model)
@@ -58,6 +59,7 @@ class Backtrace(object):
             self.model_weights = ED.extract_encoder_decoder_weights(model)
             # # calculate the output of each submodule of the encoder-decoder model
             # self.all_out_model = ED.calculate_encoder_decoder_output(model)
+            self.activation_dict = None 
         
         else:
             self.create_tree(model.layers)
@@ -227,7 +229,7 @@ class Backtrace(object):
         all_wt = {}
         if len(start_wt) == 0:
             if self.model_type == 'encoder':
-                start_wt = UP.calculate_start_wt_UP(all_out[out_layer])
+                start_wt = UP.calculate_start_wt(all_out[out_layer])
                 all_wt[out_layer] = start_wt * multiplier
                 layer_stack = self.layer_stack
                 all_wts = self.model_weights
@@ -439,7 +441,7 @@ class Backtrace(object):
                     all_wt[child_nodes[0]] = all_wt[child_nodes[0]] + temp_wt.sum()
                 elif model_resource["graph"][start_layer]["class"] == "Self_Attention":
                     weights = all_wts[start_layer]
-                    self_attention_weights = HP.rename_attention_keys(weights)
+                    self_attention_weights = HP.rename_self_attention_keys(weights)
                     temp_wt = UP.calculate_wt_self_attention(
                         all_wt[start_layer],
                         all_out[child_nodes[0]][0],
@@ -447,7 +449,7 @@ class Backtrace(object):
                     )
                     all_wt[child_nodes[0]] += temp_wt
                 elif model_resource["graph"][start_layer]["class"] == 'Residual':
-                    temp_wt = UP.calculate_wt_add(
+                    temp_wt = UP.calculate_wt_residual(
                         all_wt[start_layer],
                         [all_out[ch] for ch in child_nodes],
                     )

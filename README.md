@@ -24,51 +24,113 @@ To integrate the Backtrace Module into your project, follow these simple steps:
 pip install dl-backtrace
 ```
 
-usage for Tensoflow based models
+## Usage 
+
+### Tensoflow-Keras based models
 
 ```python
 from dl_backtrace.tf_backtrace import Backtrace as B
-from dl_backtrace.tf_backtrace import contrast as UC
-from dl_backtrace.tf_backtrace import prop as UP
-from dl_backtrace.tf_backtrace import activation_master
 ```
 
-usage for Pytorch based models
+### Pytorch based models
 
 ```python
 from dl_backtrace.pytorch_backtrace import Backtrace as B
-from dl_backtrace.pytorch_backtrace import contrast as UC
-from dl_backtrace.pytorch_backtrace import prop as UP
-from dl_backtrace.pytorch_backtrace import activation_master
 ```
 
-## Example Notebooks
+### Evalauting using Backtrace:
 
-| Name        | Link                          |
-|-------------|-------------------------------|
-| Tensorflow Backtrace Tabular Dataset | [Colab Link](https://colab.research.google.com/drive/1A4J-wgShD7M_pUmsqbnI8BD3hE43dT8o?usp=sharing)  |
-| Tensorflow Backtrace Textual Dataset | [Colab Link](https://colab.research.google.com/drive/1zT_K8mHdzyfQe_LG576qwiBqw8o6LRQH?usp=sharing)  |
-| Tensorflow Backtrace Image Dataset | [Colab Link](https://colab.research.google.com/drive/1KbLtcjYDrPQvG6oJj1wmHdiWxRrtKNrV?usp=sharing)  |
-| Pytorch Backtrace Tabular Dataset | [Colab Link](https://colab.research.google.com/drive/1Z4UJNFd83dwXBMM0cmiNYEjh6xhRtQA_?usp=sharing) |
-| Pytorch Backtrace Image Dataset | [Colab Link](https://colab.research.google.com/drive/14XKwCsS9IZep2AlDDYfavnVRNz8_b-jM?usp=sharing) |
+1. Step - 1: Initialize a Backtrace Object using your Model
+```python
+backtrace = B(model=model)
+```
 
+2. Step - 2: Calculate layer-wise output using a data instance
+
+```python
+layer_outputs = backtrace.predict(test_data[0])
+```
+
+3. Step - 3: Calculate layer-wise Relevance using Evaluation 
+```python
+relevance = backtrace.eval(layer_outputs,mode='default',scaler=1,thresholding=0.5,task="binary-classification")
+```
+
+#### Depending on Task we have several attributes for Relevance Calculation in Evalaution:
+
+| Attribute    | Description | Values |
+|--------------|-------------|--------|
+| mode         | evaluation mode of algorithm | { default, contrastive}|
+| scaler       | Total / Starting Relevance at the Last Layer | Integer ( Default: None, Preferred: 1)|
+| thresholding | Thresholding Model Prediction in Segemntation Task to select Pixels predicting the actual class. (Only works in Segmentation Tasks) |  Default:0.5      |
+| task         | The task of the Model | { binary-classification, multi-class classification, bbox-regression, binary-segmentation} |
+
+## Example Notebooks : 
+
+### Tensorflow-Keras : 
+
+| Name        | Task        | Link                          |
+|-------------|-------------|-------------------------------|
+| Backtrace Loan Classification Tabular Dataset | Binary Classification | [Colab Link](https://colab.research.google.com/drive/1H5jaryVPEAQuqk9XPP71UIL4cemli98K?usp=sharing) |
+| Backtrace Image FMNIST Dataset | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1BZsdo7IWYGhdy0Pg_m8r7c3COczuW_tG?usp=sharing)  |
+| Backtrace CUB Bounding Box Regression Image Dataset | Single Object Detection | [Colab Link](https://colab.research.google.com/drive/15mmJ2aGt-_Ho7RdPWjNEEoFXE9mu9HLV?usp=sharing) |
+| Backtrace Next Word Generation Textual Dataset | Next Word Generation | [Colab Link](https://colab.research.google.com/drive/1iRMMcEm4iMVuk236vDtEB6rKsirny8cB?usp=sharing) |
+| Backtrace ImDB Sentiment Classification Textual Dataset | Sentiment Classification | [Colab Link](https://colab.research.google.com/drive/1L5nEMO6H8pbGo1Opd9S4mbYPMmq5Vl-M?usp=sharing)|
+| Backtrace Binary Classification Textual Dataset | Binary Classification | [Colab Link](https://colab.research.google.com/drive/1PxFY4hEhcIr4nTVyfwLE_29CzQTCD3dA?usp=sharing) |
+| Backtrace Multi-Class NewsGroup20 Classification Textual Dataset | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1u3B18TZwfTdYJeYBGcHQ0T3fzfM2USGT?usp=sharing) |
+| Backtrace CVC-ClinicDB Colonoscopy Binary Segmentation | Organ Segmentation | [Colab Link](https://colab.research.google.com/drive/1cUNUao7fahDgndVI-cpn2iSByTiWaB4j?usp=sharing) | 
+| Backtrace CamVid Road Car Binary Segmentation | Binary Segmentation | [Colab Link](https://colab.research.google.com/drive/1OAY7aAraKq_ucyVt5AYPBD8LkQOIuy1C?usp=sharing) |
+
+### Pytorch : 
+| Name        | Task        | Link                          |
+|-------------|-------------|-------------------------------|
+| Backtrace Tabular Dataset | Binary Classification | [Colab Link](https://colab.research.google.com/drive/1_r-IS7aIuATSvGNRLk8VDVVLkDSaKCpD?usp=sharing)|
+| Backtrace Image Dataset | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1v2XajWtIbf7Vt31Z1fnKnAjyiDzPxwnU?usp=sharing) |
 
 For more detailed examples and use cases, check out our documentation.
 
-## Supported Layers and Future Work
+## Supported Layers and Future Work :
+
+### Tensorflow-Keras:
+
 - [x] Dense (Fully Connected) Layer
-- [x] Convolutional Layer (Conv2D)
+- [x] Convolutional Layer (Conv2D,Conv1D)
+- [x] Transpose Convolutional Layer (Conv2DTranspose,Conv1DTranspose)
 - [x] Reshape Layer
 - [x] Flatten Layer
-- [x] Global Average Pooling 2D Layer
-- [x] Max Pooling 2D Layer
-- [x] Average Pooling 2D Layer
+- [x] Global Max Pooling (2D & 1D) Layer
+- [x] Global Average Pooling (2D & 1D) Layer
+- [x] Max Pooling (2D & 1D) Layer
+- [x] Average Pooling (2D & 1D) Layer
 - [x] Concatenate Layer
 - [x] Add Layer
 - [x] Long Short-Term Memory (LSTM) Layer
-- [x] Batch Normalisation Layer
 - [x] Dropout Layer
+- [x] Embedding Layer
+- [x] TextVectorization Layer
+- [ ] Other Custom Layers 
+
+### Pytorch :
+
+(Note: Currently we only Support Binary and Multi-Class Classification in Pytorch, Segmentation and Single Object Detection will be supported in the next release.)
+
+- [x] Linear (Fully Connected) Layer
+- [x] Convolutional Layer (Conv2D)
+- [x] Reshape Layer
+- [x] Flatten Layer
+- [x] Global Average Pooling 2D Layer (AdaptiveAvgPool2d)
+- [x] Max Pooling 2D Layer (MaxPool2d)
+- [x] Average Pooling 2D Layer (AvgPool2d)
+- [x] Concatenate Layer
+- [x] Add Layer
+- [x] Long Short-Term Memory (LSTM) Layer
+- [ ] Dropout Layer
 - [ ] Embedding Layer
+- [ ] EmbeddingBag Layer
+- [ ] 1d Convolution Layer (Conv1d)
+- [ ] 1d Pooling Layers (AvgPool1d,MaxPool1d,AdaptiveAvgPool1d,AdaptiveMaxPool1d)
+- [ ] Transpose Convolution Layers (ConvTranspose2d,ConvTranspose1d)
+- [ ] Global Max Pooling 2D Layer (AdaptiveMaxPool2d)
 - [ ] Other Custom Layers
 
 
