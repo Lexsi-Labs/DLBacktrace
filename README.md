@@ -64,6 +64,7 @@ relevance = backtrace.eval(layer_outputs,mode='default',scaler=1,thresholding=0.
 | scaler       | Total / Starting Relevance at the Last Layer | Integer ( Default: None, Preferred: 1)|
 | thresholding | Thresholding Model Prediction in Segemntation Task to select Pixels predicting the actual class. (Only works in Segmentation Tasks) |  Default:0.5      |
 | task         | The task of the Model | { binary-classification, multi-class classification, bbox-regression, binary-segmentation} |
+| model-type   | Type of the Model | {Encoder/ Encoder_Decoder} |
 
 ## Example Notebooks : 
 
