@@ -551,7 +551,6 @@ class LSTM_backtrace(object):
         output_neg = np.array(output_neg)
         return output_pos, output_neg
 
-
 def dummy_wt(wts, inp, *args):
     test_wt = np.zeros_like(inp)
     return test_wt
@@ -890,12 +889,10 @@ def calculate_wt_gavgpool(wts_pos, wts_neg, inp):
         wt_mat_neg[..., c] = temp_wt_neg
     return wt_mat_pos, wt_mat_neg
 
-
 def weight_scaler(arg, scaler=100.0):
     s1 = np.sum(arg)
     scale_factor = s1 / scaler
     return arg / scale_factor
-
 
 def weight_normalize(arg, max_val=1.0):
     arg_max = np.max(arg)
@@ -907,13 +904,15 @@ def weight_normalize(arg, max_val=1.0):
     else:
         return arg
 
-
 def calculate_padding_1d(kernel_size, inp, padding, strides, const_val=0.0):
     if padding == 'valid':
-        return inp, [0, 0]
+        return inp, [[0, 0],[0,0]]
     elif padding == 0:
-        return inp, [0, 0]
-    elif padding == "same":
+        return inp,  [[0, 0],[0,0]]
+    elif isinstance(padding, int):
+        inp_pad = np.pad(inp, ((padding, padding), (0,0)), 'constant', constant_values=const_val)
+        return inp_pad, [[padding, padding],[0,0]]
+    else:
         remainder = inp.shape[0] % strides
         if remainder == 0:
             pad_total = max(0, kernel_size - strides)
@@ -923,19 +922,8 @@ def calculate_padding_1d(kernel_size, inp, padding, strides, const_val=0.0):
         pad_left = int(np.floor(pad_total / 2.0))
         pad_right = int(np.ceil(pad_total / 2.0))
         
-        inp_pad = np.pad(inp, (pad_left, pad_right), 'constant', constant_values=const_val)
-        return inp_pad, [pad_left, pad_right]
-    else:
-        if isinstance(padding, int) and padding != None:
-            pad_left = padding
-            pad_right = padding
-            inp_pad = np.pad(inp, (pad_left, pad_right), 'constant', constant_values=const_val)
-            return inp_pad, [pad_left, pad_right]
-        else:
-            return inp, [0, 0]
-
-
-
+        inp_pad = np.pad(inp, ((pad_left, pad_right),(0,0)), 'constant', constant_values=const_val)
+        return inp_pad, [[pad_left, pad_right],[0,0]]
 
 def calculate_wt_conv_unit_1d(patch, wts_pos, wts_neg, w, b, act):
     k = w.numpy()
@@ -975,8 +963,8 @@ def calculate_wt_conv_1d(wts_pos, wts_neg, inp, w, b, padding, stride, act):
         out_ds_pos[indexes] += updates_pos
         out_ds_neg[indexes] += updates_neg
 
-    out_ds_pos = out_ds_pos[paddings[0]:(paddings[0] + inp.shape[0])]
-    out_ds_neg = out_ds_neg[paddings[0]:(paddings[0] + inp.shape[0])]
+    out_ds_pos = out_ds_pos[paddings[0][0]:(paddings[0][0] + inp.shape[0])]
+    out_ds_neg = out_ds_neg[paddings[0][0]:(paddings[0][0] + inp.shape[0])]
     return out_ds_pos, out_ds_neg
 
 def calculate_wt_max_unit_1d(patch, wts, pool_size):
@@ -1000,7 +988,7 @@ def calculate_wt_maxpool_1d(wts, inp, pool_size, padding, strides):
         tmp_patch = input_padded[indexes]
         updates = calculate_wt_max_unit_1d(tmp_patch, wts[ind, :], pool_size)
         out_ds[indexes] += updates
-    out_ds = out_ds[paddings[0]:(paddings[0] + inp.shape[0])]
+    out_ds = out_ds[paddings[0][0]:(paddings[0][0] + inp.shape[0])]
     return out_ds
 
 def calculate_wt_avg_unit_1d(patch, wts_pos, wts_neg, pool_size):
@@ -1037,8 +1025,8 @@ def calculate_wt_avgpool_1d(wts_pos, wts_neg, inp, pool_size, padding, strides, 
         out_ds_pos[indexes] += updates_pos
         out_ds_neg[indexes] += updates_neg
 
-    out_ds_pos = out_ds_pos[paddings[0]:(paddings[0] + inp.shape[0])]
-    out_ds_neg = out_ds_neg[paddings[0]:(paddings[0] + inp.shape[0])]
+    out_ds_pos = out_ds_pos[paddings[0][0]:(paddings[0][0] + inp.shape[0])]
+    out_ds_neg = out_ds_neg[paddings[0][0]:(paddings[0][0] + inp.shape[0])]
     return out_ds_pos,out_ds_neg
 
 def calculate_wt_gavgpool_1d(wts_pos,wts_neg,inp):
@@ -1100,6 +1088,10 @@ def calculate_output_padding_conv2d_transpose(input_shape, kernel_size, padding,
         out_shape = [(input_shape[0] - 1) * strides[0] + kernel_size[0],
                      (input_shape[1] - 1) * strides[1] + kernel_size[1]]
         return (out_shape, [[0,0],[0,0],[0,0]])
+    elif isinstance(padding, tuple) and padding == (0, 0):
+        out_shape = [(input_shape[0] - 1) * strides[0] + kernel_size[0],
+                     (input_shape[1] - 1) * strides[1] + kernel_size[1]]
+        return (out_shape, [[0,0],[0,0],[0,0]])
     else:  # 'same' padding
         out_shape = [input_shape[0] * strides[0], input_shape[1] * strides[1]]
         pad_h = max(0, (input_shape[0] - 1) * strides[0] + kernel_size[0] - out_shape[0])
@@ -1110,14 +1102,12 @@ def calculate_output_padding_conv2d_transpose(input_shape, kernel_size, padding,
         return (out_shape, paddings)
 
 def calculate_wt_conv2d_transpose_unit(patch, wts_pos, wts_neg, w, b, act):
-    
     if patch.ndim == 1:
         patch = patch.reshape(1, 1, -1)
     elif patch.ndim == 2:
         patch = patch.reshape(1, *patch.shape)
     elif patch.ndim != 3:
         raise ValueError(f"Unexpected patch shape: {patch.shape}")
-
     k = w.permute(0, 1, 3, 2).numpy()
     bias = b.numpy()
     b_ind = bias>0
@@ -1134,14 +1124,12 @@ def calculate_wt_conv2d_transpose_unit(patch, wts_pos, wts_neg, w, b, act):
     p_agg_wt_pos,p_agg_wt_neg,n_agg_wt_pos,n_agg_wt_neg,p_sum,n_sum = calculate_base_wt_array(p_sum,n_sum,bias,wts_pos,wts_neg)
     wt_mat_pos = np.zeros_like(k)
     wt_mat_neg = np.zeros_like(k)
-    
     wt_mat_pos = wt_mat_pos+((p_ind/p_sum)*p_agg_wt_pos)
     wt_mat_pos = wt_mat_pos+((n_ind/n_sum)*n_agg_wt_pos)*-1.0
     wt_mat_neg = wt_mat_neg+((p_ind/p_sum)*p_agg_wt_neg)
     wt_mat_neg = wt_mat_neg+((n_ind/n_sum)*n_agg_wt_neg)*-1.0
     wt_mat_pos = np.sum(wt_mat_pos,axis=-1)
     wt_mat_neg = np.sum(wt_mat_neg,axis=-1)
-    
     return wt_mat_pos, wt_mat_neg
 
 def calculate_wt_conv2d_transpose(wts_pos, wts_neg, inp, w, b, padding, strides, act):
@@ -1167,6 +1155,21 @@ def calculate_wt_conv2d_transpose(wts_pos, wts_neg, inp, w, b, padding, strides,
             out_ds_neg[out_ind1:end_ind1, out_ind2:end_ind2, :] += valid_updates_neg
 
     if padding == 'same':
+        adjusted_out_ds_pos = np.zeros(inp.shape)
+        adjusted_out_ds_neg = np.zeros(inp.shape)
+        for i in range(inp.shape[0]):
+            for j in range(inp.shape[1]):
+                start_i = max(0, i * strides[0])
+                start_j = max(0, j * strides[1])
+                end_i = min(out_ds_pos.shape[0], (i+1) * strides[0])
+                end_j = min(out_ds_pos.shape[1], (j+1) * strides[1])
+                relevant_area_pos = out_ds_pos[start_i:end_i, start_j:end_j, :]
+                adjusted_out_ds_pos[i, j, :] = np.sum(relevant_area_pos, axis=(0, 1))
+                relevant_area_neg = out_ds_neg[start_i:end_i, start_j:end_j, :]
+                adjusted_out_ds_neg[i, j, :] = np.sum(relevant_area_neg, axis=(0, 1))
+        out_ds_pos = adjusted_out_ds_pos
+        out_ds_neg = adjusted_out_ds_neg
+    elif isinstance(padding, tuple) and padding == (0, 0):
         adjusted_out_ds_pos = np.zeros(inp.shape)
         adjusted_out_ds_neg = np.zeros(inp.shape)
         for i in range(inp.shape[0]):

@@ -441,6 +441,7 @@ class Backtrace(object):
                     b1 = l1.state_dict()['bias']
                     pad1 = l1.padding[0]
                     strides1 = l1.stride[0]
+                    dilation1= l1.dilation[0]
                     temp_wt = UP.calculate_wt_conv1d_transpose(
                         all_wt[start_layer],
                         all_out[child_nodes[0]][0],
@@ -448,6 +449,7 @@ class Backtrace(object):
                         b1,
                         pad1, 
                         strides1,
+                        dilation1,
                         activation_dict[model_resource[1][start_layer]["name"]],
                     )
                     all_wt[child_nodes[0]] += temp_wt.T

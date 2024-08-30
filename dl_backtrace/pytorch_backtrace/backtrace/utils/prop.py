@@ -547,7 +547,6 @@ def calculate_wt_zero_pad(wts,inp,padding):
     return wt_mat
 
 def calculate_padding(kernel_size, inp, padding, strides, const_val=0.0):
-    print(padding)
     if padding=='valid':
         return (inp, [[0,0],[0,0],[0,0]])
     elif padding == 'same':
@@ -759,9 +758,12 @@ def calculate_wt_gmaxpool_2d(wts, inp):
 
 def calculate_padding_1d(kernel_size, inp, padding, strides, const_val=0.0):
     if padding == 'valid':
-        return inp, [0, 0]
+        return inp, [[0, 0],[0,0]]
     elif padding == 0:
-        return inp, [0, 0]
+        return inp,  [[0, 0],[0,0]]
+    elif isinstance(padding, int):
+        inp_pad = np.pad(inp, ((padding, padding), (0,0)), 'constant', constant_values=const_val)
+        return inp_pad, [[padding, padding],[0,0]]
     else:
         remainder = inp.shape[0] % strides
         if remainder == 0:
@@ -772,8 +774,8 @@ def calculate_padding_1d(kernel_size, inp, padding, strides, const_val=0.0):
         pad_left = int(np.floor(pad_total / 2.0))
         pad_right = int(np.ceil(pad_total / 2.0))
         
-        inp_pad = np.pad(inp, (pad_left, pad_right), 'constant', constant_values=const_val)
-        return inp_pad, [pad_left, pad_right]
+        inp_pad = np.pad(inp, ((pad_left, pad_right),(0,0)), 'constant', constant_values=const_val)
+        return inp_pad, [[pad_left, pad_right],[0,0]]
 
 def calculate_wt_conv_unit_1d(patch, wts, w, b, act):
     k = w.numpy()
@@ -834,7 +836,7 @@ def calculate_wt_conv_1d(wts, inp, w, b, padding, stride, act):
         tmp_patch = input_padded[indexes]
         updates = calculate_wt_conv_unit_1d(tmp_patch, wts[ind, :], w, b, act)
         out_ds[indexes] += updates
-    out_ds = out_ds[paddings[0]:(paddings[0] + inp.shape[0])]
+    out_ds = out_ds[paddings[0][0]:(paddings[0][0] + inp.shape[0])]
     return out_ds
 
 def calculate_wt_max_unit_1d(patch, wts):
@@ -858,7 +860,7 @@ def calculate_wt_maxpool_1d(wts, inp, pool_size, padding, stride):
         tmp_patch = input_padded[indexes]
         updates = calculate_wt_max_unit_1d(tmp_patch, wts[ind, :])
         out_ds[indexes] += updates
-    out_ds = out_ds[paddings[0]:(paddings[0] + inp.shape[0])]
+    out_ds = out_ds[paddings[0][0]:(paddings[0][0] + inp.shape[0])]
     return out_ds
 
 def calculate_wt_avg_unit_1d(patch, wts):
@@ -891,7 +893,7 @@ def calculate_wt_avgpool_1d(wts, inp, pool_size, padding, stride):
         tmp_patch = input_padded[indexes]
         updates = calculate_wt_avg_unit_1d(tmp_patch, wts[ind, :])
         out_ds[indexes] += updates
-    out_ds = out_ds[paddings[0]:(paddings[0] + inp.shape[0])]
+    out_ds = out_ds[paddings[0][0]:(paddings[0][0] + inp.shape[0])]
     return out_ds
 
 def calculate_wt_gavgpool_1d(wts, inp):
@@ -936,7 +938,6 @@ def calculate_wt_gmaxpool_1d(wts, inp):
         wt_mat[:, c] = max_indexes * wt
     return wt_mat
 
-
 def calculate_output_padding_conv2d_transpose(input_shape, kernel_size, padding, strides):
     if padding == 'valid':
         out_shape = [(input_shape[0] - 1) * strides[0] + kernel_size[0],
@@ -946,6 +947,11 @@ def calculate_output_padding_conv2d_transpose(input_shape, kernel_size, padding,
         out_shape = [(input_shape[0] - 1) * strides[0] + kernel_size[0],
                      (input_shape[1] - 1) * strides[1] + kernel_size[1]]
         paddings = [[0, 0], [0, 0], [0, 0]]
+    elif isinstance(padding, tuple) and padding != (None, None):
+        out_shape = [input_shape[0] * strides[0], input_shape[1] * strides[1]]
+        pad_h = padding[0]
+        pad_v = padding[1]
+        paddings = [[pad_h, pad_h], [pad_v, pad_v], [0, 0]]
     else:  # 'same' padding
         out_shape = [input_shape[0] * strides[0], input_shape[1] * strides[1]]
         pad_h = max(0, (input_shape[0] - 1) * strides[0] + kernel_size[0] - out_shape[0])
@@ -1060,13 +1066,19 @@ def calculate_wt_conv2d_transpose(wts, inp, w, b, padding, strides, act):
     return out_ds
 
 
-def calculate_output_padding_conv1d_transpose(input_shape, kernel_size, padding, strides):
+def calculate_output_padding_conv1d_transpose(input_shape, kernel_size, padding, strides,dilation):
     if padding == 'valid':
         out_shape = [(input_shape[0] - 1) * strides + kernel_size[0]]
         paddings = [[0, 0], [0, 0]]
     elif padding == 0:
         out_shape = [(input_shape[0] - 1) * strides + kernel_size[0]]
         paddings = [[0, 0], [0, 0]]
+    elif isinstance(padding, int):
+        out_shape = [input_shape[0] * strides]
+        pad_v = (dilation * (kernel_size[0] - 1)) - padding
+        out_shape = [input_shape[0] * strides + pad_v]
+        paddings = [[pad_v, pad_v], 
+                    [0, 0]]
     else:  # 'same' padding
         out_shape = [input_shape[0] * strides]
         pad_h = max(0, (input_shape[0] - 1) * strides + kernel_size[0] - out_shape[0])
@@ -1080,6 +1092,7 @@ def calculate_wt_conv1d_transpose_unit(patch, wts, w, b, act):
         patch = patch.reshape(1, -1)
     elif patch.ndim != 2:
         raise ValueError(f"Unexpected patch shape: {patch.shape}")
+    
     k = w.permute(0, 2, 1).numpy()
     bias = b.numpy()
     b_ind = bias > 0
@@ -1127,12 +1140,13 @@ def calculate_wt_conv1d_transpose_unit(patch, wts, w, b, act):
     wt_mat = np.sum(wt_mat, axis=-1)
     return wt_mat
 
-def calculate_wt_conv1d_transpose(wts, inp, w, b, padding, strides, act):
+def calculate_wt_conv1d_transpose(wts, inp, w, b, padding, strides, dilation, act):
     wts = wts.T
     inp = inp.T
     w = w.T
-    out_shape, paddings = calculate_output_padding_conv1d_transpose(inp.shape, w.shape, padding, strides)
+    out_shape, paddings = calculate_output_padding_conv1d_transpose(inp.shape, w.shape, padding, strides, dilation)
     out_ds = np.zeros(out_shape + [w.shape[2]])
+
     for ind in range(inp.shape[0]):
         out_ind = ind * strides
         tmp_patch = inp[ind, :]
