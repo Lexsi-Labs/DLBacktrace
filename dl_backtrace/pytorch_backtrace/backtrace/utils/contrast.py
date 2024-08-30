@@ -682,7 +682,7 @@ def calculate_wt_passthru(wts):
 def calculate_padding(kernel_size, inp, padding, strides, const_val=0.0):
     if padding=='valid':
         return (inp, [[0,0],[0,0],[0,0]])
-    else:
+    elif padding=="same":
         h = inp.shape[0]%strides[0]
         if h==0:
             pad_h = np.max([0,kernel_size[0]-strides[0]]) 
@@ -700,6 +700,17 @@ def calculate_padding(kernel_size, inp, padding, strides, const_val=0.0):
                     np.zeros((2)).astype("int32")]
         inp_pad = np.pad(inp, paddings, 'constant', constant_values=const_val)
         return (inp_pad,paddings)
+    else:
+        if isinstance(padding, tuple) and padding != (None, None):
+            pad_h = padding[0]
+            pad_v = padding[1]
+            paddings = [np.floor([pad_h,pad_h]).astype("int32"),
+                    np.floor([pad_v,pad_v]).astype("int32"),
+                    np.zeros((2)).astype("int32")]
+            inp_pad = np.pad(inp, paddings, 'constant', constant_values=const_val)
+            return (inp_pad,paddings)
+        else:
+            return (inp, [[0,0],[0,0],[0,0]])
     
 def calculate_wt_conv_unit(patch, wts_pos, wts_neg, w, b, act):
     k = w.numpy()
@@ -902,7 +913,7 @@ def calculate_padding_1d(kernel_size, inp, padding, strides, const_val=0.0):
         return inp, [0, 0]
     elif padding == 0:
         return inp, [0, 0]
-    else:
+    elif padding == "same":
         remainder = inp.shape[0] % strides
         if remainder == 0:
             pad_total = max(0, kernel_size - strides)
@@ -914,6 +925,17 @@ def calculate_padding_1d(kernel_size, inp, padding, strides, const_val=0.0):
         
         inp_pad = np.pad(inp, (pad_left, pad_right), 'constant', constant_values=const_val)
         return inp_pad, [pad_left, pad_right]
+    else:
+        if isinstance(padding, int) and padding != None:
+            pad_left = padding
+            pad_right = padding
+            inp_pad = np.pad(inp, (pad_left, pad_right), 'constant', constant_values=const_val)
+            return inp_pad, [pad_left, pad_right]
+        else:
+            return inp, [0, 0]
+
+
+
 
 def calculate_wt_conv_unit_1d(patch, wts_pos, wts_neg, w, b, act):
     k = w.numpy()
