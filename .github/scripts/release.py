@@ -41,7 +41,7 @@ def create_new_patch_release():
         new_version_number = bump_patch_number(last_version_number)
 
     subprocess.run(
-        ["gh", "release", "create", "--generate-notes", "0.0.18"],
+        ["gh", "release", "create", "--generate-notes", "0.0.19"],
         check=True,
     )
 
