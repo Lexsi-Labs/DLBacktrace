@@ -1,41 +1,31 @@
 import gc
-
+import torch
 import numpy as np
-import tensorflow as tf
 from numpy.lib.stride_tricks import as_strided
-from tensorflow.keras import backend as K
-
 
 def np_swish(x, beta=0.75):
     z = 1 / (1 + np.exp(-(beta * x)))
     return x * z
 
-
 def np_wave(x, alpha=1.0):
     return (alpha * x * np.exp(1.0)) / (np.exp(-x) + np.exp(x))
-
 
 def np_pulse(x, alpha=1.0):
     return alpha * (1 - np.tanh(x) * np.tanh(x))
 
-
 def np_absolute(x, alpha=1.0):
     return alpha * x * np.tanh(x)
 
-
 def np_hard_sigmoid(x):
     return np.clip(0.2 * x + 0.5, 0, 1)
-
 
 def np_sigmoid(x):
     z = 1 / (1 + np.exp(-x))
     return z
 
-
 def np_tanh(x):
     z = np.tanh(x)
     return z.astype(np.float32)
-
 
 class LSTM_forward(object):
     def __init__(
@@ -48,8 +38,8 @@ class LSTM_forward(object):
         self.bias = weights[2][1]
         self.return_sequence = return_sequence
         self.go_backwards = go_backwards
-        self.recurrent_activation = tf.math.sigmoid
-        self.activation = tf.math.tanh
+        self.recurrent_activation = torch.sigmoid()
+        self.activation = torch.tanh()
         self.compute_log = {}
         for i in range(self.num_cells):
             self.compute_log[i] = {}
@@ -63,23 +53,19 @@ class LSTM_forward(object):
         """Computes carry and output using split kernels."""
         x_i, x_f, x_c, x_o = x
         h_tm1_i, h_tm1_f, h_tm1_c, h_tm1_o = h_tm1
-        #print(self.recurrent_kernel[1][:, : self.units].shape)
-        #print(h_tm1_i.shape,self.recurrent_kernel[1][:, : self.units].shape)
-        w=tf.convert_to_tensor(self.recurrent_kernel[1], dtype=tf.float32)
-        #print(K.dot(h_tm1_i, w[:, : self.units]))
-
+        w=torch.as_tensor(self.recurrent_kernel[1], dtype=torch.float32)
         i = self.recurrent_activation(
-            x_i + K.dot(h_tm1_i, w[:, : self.units])
+            x_i + torch.dot(h_tm1_i, w[:, : self.units])
         )
         f = self.recurrent_activation(
-            x_f + K.dot(h_tm1_f, w[:, self.units : self.units * 2])
+            x_f + torch.dot(h_tm1_f, w[:, self.units : self.units * 2])
         )
         c = f * c_tm1 + i * self.activation(
             x_c
-            + K.dot(h_tm1_c, w[:, self.units * 2 : self.units * 3])
+            + torch.dot(h_tm1_c, w[:, self.units * 2 : self.units * 3])
         )
         o = self.recurrent_activation(
-            x_o + K.dot(h_tm1_o, w[:, self.units * 3 :])
+            x_o + torch.dot(h_tm1_o, w[:, self.units * 3 :])
         )
         self.compute_log[cell_num]["int_arrays"]["i"] = i
         self.compute_log[cell_num]["int_arrays"]["f"] = f
@@ -97,16 +83,16 @@ class LSTM_forward(object):
         inputs_f = inputs
         inputs_c = inputs
         inputs_o = inputs
-        k_i, k_f, k_c, k_o = tf.split(self.kernel[1], num_or_size_splits=4, axis=1)
-        x_i = K.dot(inputs_i, k_i)
-        x_f = K.dot(inputs_f, k_f)
-        x_c = K.dot(inputs_c, k_c)
-        x_o = K.dot(inputs_o, k_o)
-        b_i, b_f, b_c, b_o = tf.split(self.bias, num_or_size_splits=4, axis=0)
-        x_i = tf.add(x_i, b_i)
-        x_f = tf.add(x_f, b_f)
-        x_c = tf.add(x_c, b_c)
-        x_o = tf.add(x_o, b_o)
+        k_i, k_f, k_c, k_o = torch.split(self.kernel[1],self.kernel.size(1)//4,dim=1)
+        x_i = torch.dot(inputs_i, k_i)
+        x_f = torch.dot(inputs_f, k_f)
+        x_c = torch.dot(inputs_c, k_c)
+        x_o = torch.dot(inputs_o, k_o)
+        b_i, b_f, b_c, b_o = torch.split(self.bias,self.bias.size(1)//4,dim=0)
+        x_i = x_i + b_i
+        x_f = x_f + b_f
+        x_c = x_c + b_c
+        x_o = x_o + b_o
 
         h_tm1_i = h_tm1
         h_tm1_f = h_tm1
@@ -123,21 +109,18 @@ class LSTM_forward(object):
         return h, [h, c]
 
     def calculate_lstm_wt(self, input_data):
-        hstate = tf.convert_to_tensor(np.zeros((1, self.units)), dtype=tf.float32)
-        cstate = tf.convert_to_tensor(np.zeros((1, self.units)), dtype=tf.float32)
+        hstate = torch.tensor((1,self.units),dtype=torch.float32)
+        cstate = torch.tensor((1,self.units),dtype=torch.float32)
         output = []
         for ind in range(input_data.shape[0]):
-            inp = tf.convert_to_tensor(
-                input_data[ind, :].reshape((1, input_data.shape[1])), dtype=tf.float32
+            inp = torch.tensor(
+                input_data[ind, :].reshape((1, input_data.shape[1])), dtype=torch.float32
             )
             h, s = self.calculate_lstm_cell_wt(inp, [hstate, cstate], ind)
             hstate = s[0]
             cstate = s[1]
             output.append(h)
         return output
-
-
-
 
 class LSTM_backtrace(object):
     def __init__(
@@ -270,8 +253,6 @@ class LSTM_backtrace(object):
         x_i, x_f, x_c, x_o = x
         f = self.compute_log[cell_num]["int_arrays"]["f"].numpy()[0]
         i = self.compute_log[cell_num]["int_arrays"]["i"].numpy()[0]
-        #         o = self.recurrent_activation(
-        #             x_o + np.dot(h_tm1_o, self.recurrent_kernel[:, self.units * 3:])).astype(np.float32)
         temp1 = np.dot(h_tm1_o, self.recurrent_kernel[1][:, self.units * 3 :]).astype(
             np.float32
         )
@@ -283,9 +264,6 @@ class LSTM_backtrace(object):
             [],
             {"type": None},
         )
-
-        #         c = f * c_tm1 + i * self.activation(x_c + np.dot(
-        #             h_tm1_c, self.recurrent_kernel[:, self.units * 2:self.units * 3])).astype(np.float32)
         temp2 = f * c_tm1
         temp3_1 = np.dot(
             h_tm1_c, self.recurrent_kernel[1][:, self.units * 2 : self.units * 3]
@@ -303,9 +281,6 @@ class LSTM_backtrace(object):
             [],
             {"type": None},
         )
-
-        #         f = self.recurrent_activation(x_f + np.dot(
-        #             h_tm1_f, self.recurrent_kernel[:, self.units:self.units * 2])).astype(np.float32)
         temp4 = np.dot(h_tm1_f, self.recurrent_kernel[1][:, self.units : self.units * 2])
         wt_x_f, wt_temp4 = self.calculate_wt_add(wt_f, [x_f, temp4])
         wt_h_tm1_f = self.calculate_wt_fc(
@@ -315,9 +290,6 @@ class LSTM_backtrace(object):
             [],
             {"type": None},
         )
-
-        #         i = self.recurrent_activation(
-        #             x_i + np.dot(h_tm1_i, self.recurrent_kernel[:, :self.units])).astype(np.float32)
         temp5 = np.dot(h_tm1_i, self.recurrent_kernel[1][:, : self.units])
         wt_x_i, wt_temp5 = self.calculate_wt_add(wt_i, [x_i, temp5])
         wt_h_tm1_i = self.calculate_wt_fc(
@@ -364,7 +336,6 @@ class LSTM_backtrace(object):
         wt_h_tm1 = wt_h_tm1_i + wt_h_tm1_f + wt_h_tm1_c + wt_h_tm1_o
         inputs = self.compute_log[cell_num]["inp"].numpy()[0]
 
-        #print(np.split(self.kernel[1], indices_or_sections=4, axis=1))
         k_i, k_f, k_c, k_o = np.split(self.kernel[1], indices_or_sections=4, axis=1)
         b_i, b_f, b_c, b_o = np.split(self.bias[1], indices_or_sections=4, axis=0)
 
@@ -395,11 +366,9 @@ class LSTM_backtrace(object):
         output.reverse()
         return np.array(output)
 
-
 def dummy_wt(wts, inp, *args):
     test_wt = np.zeros_like(inp)
     return test_wt
-
 
 def calculate_wt_fc(wts, inp, w, b, act):
     mul_mat = np.einsum("ij,i->ij", w.numpy().T, inp).T
@@ -461,11 +430,9 @@ def calculate_wt_fc(wts, inp, w, b, act):
     wt_mat = wt_mat.sum(axis=0)
     return wt_mat
 
-
 def calculate_wt_rshp(wts, inp=None):
     x = np.reshape(wts, inp.shape)
     return x
-
 
 def calculate_wt_concat(wts, inp=None, axis=-1):
     wts=wts.T
@@ -475,7 +442,6 @@ def calculate_wt_concat(wts, inp=None, axis=-1):
         axis = axis - 1
     x = np.split(wts, indices_or_sections=splits, axis=axis)
     return x
-
 
 def calculate_wt_add(wts, inp=None):
     wts=wts.T
@@ -523,199 +489,231 @@ def calculate_wt_add(wts, inp=None):
     wt_mat = [i.reshape(wts.shape) for i in list(wt_mat)]
     return wt_mat
 
+def calculate_start_wt(arg, scaler=None,thresholding=0.5,task="binary-classification"):
+    if arg.ndim == 2:
+        if task == "binary-classification" or task == "multi-class classification":
+            x = np.argmax(arg[0])
+            m = np.max(arg[0])
+            y = np.zeros(arg.shape)
+            if scaler:
+                y[0][x] = scaler
+            else:
+                y[0][x] = m
+        elif task == "bbox-regression":
+            y = np.zeros(arg.shape)
+            if scaler:
+                y[0] = scaler
+                num_non_zero_elements = np.count_nonzero(y)
+                if num_non_zero_elements > 0:
+                    y = y / num_non_zero_elements 
+            else:
+                m = np.max(arg[0])
+                x = np.argmax(arg[0])
+                y[0][x] = m
+        else:
+            x = np.argmax(arg[0])
+            m = np.max(arg[0])
+            y = np.zeros(arg.shape)
+            if scaler:
+                y[0][x] = scaler
+            else:
+                y[0][x] = m
 
-def calculate_start_wt(arg):
-    x = np.argmax(arg[0])
-    y = np.zeros(arg.shape)
-    y[0][x] = 1
+    elif arg.ndim == 4 and task == "binary-segmentation":
+        indices = np.where(arg > thresholding)
+        y = np.zeros(arg.shape)
+        if scaler:
+            y[indices] = scaler
+            num_non_zero_elements = np.count_nonzero(y)
+            if num_non_zero_elements > 0:
+                y = y / num_non_zero_elements 
+        else:
+            y[indices] = arg[indices]
+            
+    else:
+        x = np.argmax(arg[0])
+        m = np.max(arg[0])
+        y = np.zeros(arg.shape)
+        if scaler:
+            y[0][x] = scaler
+        else:
+            y[0][x] = m
     return y[0]
-
 
 def calculate_wt_passthru(wts):
     return wts
-
-
-def calculate_wt_conv_unit(wt, p_mat, n_mat, t_sum, p_sum, n_sum, act):
-    wt_mat = np.zeros_like(p_mat)
-    if act["type"] == "mono":
-        if act["range"]["l"]:
-            if t_sum < act["range"]["l"]:
-                p_sum = 0
-        if act["range"]["u"]:
-            if t_sum > act["range"]["u"]:
-                n_sum = 0
-    elif act["type"] == "non_mono":
-        t_act = act["func"](t_sum)
-        p_act = act["func"](p_sum)
-        n_act = act["func"](n_sum)
-        if act["range"]["l"]:
-            if t_sum < act["range"]["l"]:
-                p_sum = 0
-        if act["range"]["u"]:
-            if t_sum > act["range"]["u"]:
-                n_sum = 0
-        if p_sum > 0 and n_sum > 0:
-            if t_act == p_act:
-                n_sum = 0
-            elif t_act == n_act:
-                p_sum = 0
-    p_agg_wt = 0.0
-    n_agg_wt = 0.0
-    if p_sum + n_sum > 0.0:
-        p_agg_wt = p_sum / (p_sum + n_sum)
-        n_agg_wt = n_sum / (p_sum + n_sum)
-    if p_sum == 0.0:
-        p_sum = 1.0
-    if n_sum == 0.0:
-        n_sum = 1.0
-    wt_mat = wt_mat + ((p_mat / p_sum) * wt * p_agg_wt)
-    wt_mat = wt_mat + ((n_mat / n_sum) * wt * n_agg_wt * -1.0)
+def calculate_wt_zero_pad(wts,inp,padding):
+    wt_mat = wts[padding[0][0]:inp.shape[0]+padding[0][0],padding[1][0]:inp.shape[1]+padding[1][0],:]
     return wt_mat
 
+def calculate_padding(kernel_size, inp, padding, strides, const_val=0.0):
+    if padding=='valid':
+        return (inp, [[0,0],[0,0],[0,0]])
+    elif padding == 'same':
+        h = inp.shape[0]%strides[0]
+        if h==0:
+            pad_h = np.max([0,kernel_size[0]-strides[0]]) 
+        else:
+            pad_h = np.max([0,kernel_size[0]-h])
 
-def calculate_wt_conv(wts, inp, w, b, act):
+        v = inp.shape[1]%strides[1]
+        if v==0:
+            pad_v = np.max([0,kernel_size[1]-strides[1]]) 
+        else:
+            pad_v = np.max([0,kernel_size[1]-v]) 
+
+        paddings = [np.floor([pad_h/2.0,(pad_h+1)/2.0]).astype("int32"),
+                    np.floor([pad_v/2.0,(pad_v+1)/2.0]).astype("int32"),
+                    np.zeros((2)).astype("int32")]
+        inp_pad = np.pad(inp, paddings, 'constant', constant_values=const_val)
+        return (inp_pad,paddings)
+    else:
+        if isinstance(padding, tuple) and padding != (None, None):
+            pad_h = padding[0]
+            pad_v = padding[1]
+            paddings = [np.floor([pad_h,pad_h]).astype("int32"),
+                    np.floor([pad_v,pad_v]).astype("int32"),
+                    np.zeros((2)).astype("int32")]
+            inp_pad = np.pad(inp, paddings, 'constant', constant_values=const_val)
+            return (inp_pad,paddings)
+        else:
+            return (inp, [[0,0],[0,0],[0,0]])
+    
+def calculate_wt_conv_unit(patch, wts, w, b, act):
+    k = w.numpy()
+    bias = b.numpy()
+    b_ind = bias>0
+    bias_pos = bias*b_ind
+    b_ind = bias<0
+    bias_neg = bias*b_ind*-1.0    
+    conv_out = np.einsum("ijkl,ijk->ijkl",k,patch)
+    p_ind = conv_out>0
+    p_ind = conv_out*p_ind
+    p_sum = np.einsum("ijkl->l",p_ind)
+    n_ind = conv_out<0
+    n_ind = conv_out*n_ind
+    n_sum = np.einsum("ijkl->l",n_ind)*-1.0
+    t_sum = p_sum+n_sum
+    wt_mat = np.zeros_like(k)
+    p_saturate = p_sum>0
+    n_saturate = n_sum>0
+    if act["type"]=='mono':
+        if act["range"]["l"]:
+            temp_ind = t_sum > act["range"]["l"]
+            p_saturate = temp_ind
+        if act["range"]["u"]:
+            temp_ind = t_sum < act["range"]["u"]
+            n_saturate = temp_ind
+    elif act["type"]=='non_mono':
+        t_act = act["func"](t_sum)
+        p_act = act["func"](p_sum + bias_pos)
+        n_act = act["func"](-1*(n_sum + bias_neg))
+        if act["range"]["l"]:
+            temp_ind = t_sum > act["range"]["l"]
+            p_saturate = p_saturate*temp_ind
+        if act["range"]["u"]:
+            temp_ind = t_sum < act["range"]["u"]
+            n_saturate = n_saturate*temp_ind
+        temp_ind = np.abs(t_act - p_act)>1e-5
+        n_saturate = n_saturate*temp_ind
+        temp_ind = np.abs(t_act - n_act)>1e-5
+        p_saturate = p_saturate*temp_ind
+    p_agg_wt = (1.0/(p_sum+n_sum+bias_pos+bias_neg))*wts*p_saturate
+    n_agg_wt = (1.0/(p_sum+n_sum+bias_pos+bias_neg))*wts*n_saturate
+
+    wt_mat = wt_mat+(p_ind*p_agg_wt)
+    wt_mat = wt_mat+(n_ind*n_agg_wt*-1.0)
+    wt_mat = np.sum(wt_mat,axis=-1)
+    return wt_mat
+
+def calculate_wt_conv(wts, inp, w, b, padding, strides, act):
+    wts = wts.T
+    inp = inp.T
+    w = w.T
+    input_padded, paddings = calculate_padding(w.shape, inp, padding, strides)
+    out_ds = np.zeros_like(input_padded)
+    for ind1 in range(wts.shape[0]):
+        for ind2 in range(wts.shape[1]):
+            indexes = [np.arange(ind1*strides[0], ind1*(strides[0])+w.shape[0]),
+                       np.arange(ind2*strides[1], ind2*(strides[1])+w.shape[1])]
+            # Take slice
+            tmp_patch = input_padded[np.ix_(indexes[0],indexes[1])]
+            updates = calculate_wt_conv_unit(tmp_patch, wts[ind1,ind2,:], w, b, act)
+            # Build tensor with "filtered" gradient
+            out_ds[np.ix_(indexes[0],indexes[1])]+=updates
+    out_ds = out_ds[paddings[0][0]:(paddings[0][0]+inp.shape[0]),
+                    paddings[1][0]:(paddings[1][0]+inp.shape[1]),:]
+    return out_ds
+
+
+def calculate_wt_max_unit(patch, wts, pool_size):
+    pmax = np.einsum("ijk,k->ijk",np.ones_like(patch),np.max(np.max(patch,axis=0),axis=0))
+    indexes = (patch-pmax)==0
+    indexes = indexes.astype(np.float32)
+    indexes_norm = 1.0/np.einsum("mnc->c",indexes)
+    indexes = np.einsum("ijk,k->ijk",indexes,indexes_norm)
+    out = np.einsum("ijk,k->ijk",indexes,wts)
+    return out
+
+def calculate_wt_maxpool(wts, inp, pool_size, padding, strides):
     wts=wts.T
     inp=inp.T
-    w=w.T
-    expanded_input = as_strided(
-        inp,
-        shape=(
-            inp.shape[0]
-            - w.numpy().shape[0]
-            + 1,  # The feature map is a few pixels smaller than the input
-            inp.shape[1] - w.numpy().shape[1] + 1,
-            inp.shape[2],
-            w.numpy().shape[0],
-            w.numpy().shape[1],
-        ),
-        strides=(
-            inp.strides[0],
-            inp.strides[1],
-            inp.strides[2],
-            inp.strides[
-                0
-            ],  # When we move one step in the 3rd dimension, we should move one step in the original data too
-            inp.strides[1],
-        ),
-        writeable=False,  # totally use this to avoid writing to memory in weird places
-    )
-    test_wt = np.einsum("mnc->cmn", np.zeros_like(inp), order="C", optimize=True)
-    for k in range(w.numpy().shape[-1]):
-        kernel = w.numpy()[:, :, :, k]
-        x = np.einsum(
-            "abcmn,mnc->abcmn", expanded_input, kernel, order="C", optimize=True
-        )
-        x_pos = x.copy()
-        x_neg = x.copy()
-        x_pos[x < 0] = 0
-        x_neg[x > 0] = 0
-        x_sum = np.einsum("abcmn->ab", x, order="C", optimize=True)
-        x_p_sum = np.einsum("abcmn->ab", x_pos, order="C", optimize=True)
-        x_n_sum = np.einsum("abcmn->ab", x_neg, order="C", optimize=True) * -1.0
-        #     print(np.sum(x),np.sum(x_pos),np.sum(x_neg),np.sum(x_n_sum))
-        for ind1 in range(expanded_input.shape[0]):
-            for ind2 in range(expanded_input.shape[1]):
-                temp_wt_mat = calculate_wt_conv_unit(
-                    wts[ind1, ind2, k],
-                    x_pos[ind1, ind2, :, :, :],
-                    x_neg[ind1, ind2, :, :, :],
-                    x_sum[ind1, ind2],
-                    x_p_sum[ind1, ind2],
-                    x_n_sum[ind1, ind2],
-                    act,
-                )
-                test_wt[
-                    :, ind1 : ind1 + kernel.shape[0], ind2 : ind2 + kernel.shape[1]
-                ] += temp_wt_mat
-    test_wt = np.einsum("cmn->mnc", test_wt, order="C", optimize=True)
-    gc.collect()
-    return test_wt
+    strides = (strides,strides)
+    padding = (padding,padding)
+    input_padded, paddings = calculate_padding(pool_size, inp, padding, strides, -np.inf)
+    out_ds = np.zeros_like(input_padded)
+    for ind1 in range(wts.shape[0]):
+        for ind2 in range(wts.shape[1]):
+            indexes = [np.arange(ind1*strides[0], ind1*(strides[0])+pool_size[0]),
+                       np.arange(ind2*strides[1], ind2*(strides[1])+pool_size[1])]
+            tmp_patch = input_padded[np.ix_(indexes[0],indexes[1])]
+            updates = calculate_wt_max_unit(tmp_patch, wts[ind1,ind2,:], pool_size)
+            out_ds[np.ix_(indexes[0],indexes[1])]+=updates
+    out_ds = out_ds[paddings[0][0]:(paddings[0][0]+inp.shape[0]),
+                    paddings[1][0]:(paddings[1][0]+inp.shape[1]),:]
+    return out_ds
 
 
-def get_max_index(mat=None):
-    max_ind = np.argmax(mat)
-    ind = []
-    rem = max_ind
-    for i in mat.shape[:-1]:
-        ind.append(rem // i)
-        rem = rem % i
-    ind.append(rem)
-    return tuple(ind)
+def calculate_wt_avg_unit(patch, wts, pool_size):
+    p_ind = patch>0
+    p_ind = patch*p_ind
+    p_sum = np.einsum("ijk->k",p_ind)
+    n_ind = patch<0
+    n_ind = patch*n_ind
+    n_sum = np.einsum("ijk->k",n_ind)*-1.0
+    t_sum = p_sum+n_sum
+    wt_mat = np.zeros_like(patch)
+    p_saturate = p_sum>0
+    n_saturate = n_sum>0
+    t_sum[t_sum==0] = 1.0
+    p_agg_wt = (1.0/(t_sum))*wts*p_saturate
+    n_agg_wt = (1.0/(t_sum))*wts*n_saturate
+    wt_mat = wt_mat+(p_ind*p_agg_wt)
+    wt_mat = wt_mat+(n_ind*n_agg_wt*-1.0)
+    return wt_mat
 
-
-def calculate_wt_maxpool(wts, inp, pool_size):
+def calculate_wt_avgpool(wts, inp, pool_size, padding, strides):
     wts=wts.T
     inp=inp.T
+
     pad1 = pool_size[0]
     pad2 = pool_size[1]
-    test_samp_pad = np.pad(inp, ((0, pad1), (0, pad2), (0, 0)), "constant")
-    dim1, dim2, _ = wts.shape
-    test_wt = np.zeros_like(test_samp_pad)
-    for k in range(inp.shape[2]):
-        wt_mat = wts[:, :, k]
-        for ind1 in range(dim1):
-            for ind2 in range(dim2):
-                temp_inp = test_samp_pad[
-                    ind1 * pool_size[0] : (ind1 + 1) * pool_size[0],
-                    ind2 * pool_size[1] : (ind2 + 1) * pool_size[1],
-                    k,
-                ]
-                max_index = get_max_index(temp_inp)
-                test_wt[
-                    ind1 * pool_size[0] : (ind1 + 1) * pool_size[0],
-                    ind2 * pool_size[1] : (ind2 + 1) * pool_size[1],
-                    k,
-                ][max_index] = wt_mat[ind1, ind2]
-    test_wt = test_wt[0 : inp.shape[0], 0 : inp.shape[1], :]
-    return test_wt
-
-
-def calculate_wt_avgpool(wts, inp, pool_size):
-    wts=wts.T
-    inp=inp.T
-
-    pad1 = pool_size[0]
-    pad2 = pool_size[1]
-    test_samp_pad = np.pad(inp, ((0, pad1), (0, pad2), (0, 0)), "constant")
-    dim1, dim2, _ = wts.shape
-    test_wt = np.zeros_like(test_samp_pad)
-    for k in range(inp.shape[2]):
-        wt_mat = wts[:, :, k]
-        for ind1 in range(dim1):
-            for ind2 in range(dim2):
-                temp_inp = test_samp_pad[
-                    ind1 * pool_size[0] : (ind1 + 1) * pool_size[0],
-                    ind2 * pool_size[1] : (ind2 + 1) * pool_size[1],
-                    k,
-                ]
-                wt_ind1 = test_wt[
-                    ind1 * pool_size[0] : (ind1 + 1) * pool_size[0],
-                    ind2 * pool_size[1] : (ind2 + 1) * pool_size[1],
-                    k,
-                ]
-                wt = wt_mat[ind1, ind2]
-                p_ind = temp_inp > 0
-                n_ind = temp_inp < 0
-                p_sum = np.sum(temp_inp[p_ind])
-                n_sum = np.sum(temp_inp[n_ind]) * -1
-                if p_sum > 0:
-                    p_agg_wt = p_sum / (p_sum + n_sum)
-                else:
-                    p_agg_wt = 0
-                if n_sum > 0:
-                    n_agg_wt = n_sum / (p_sum + n_sum)
-                else:
-                    n_agg_wt = 0
-                if p_sum == 0:
-                    p_sum = 1
-                if n_sum == 0:
-                    n_sum = 1
-                wt_ind1[p_ind] += (temp_inp[p_ind] / p_sum) * wt * p_agg_wt
-                wt_ind1[n_ind] += (temp_inp[n_ind] / n_sum) * wt * n_agg_wt * -1.0
-    test_wt = test_wt[0 : inp.shape[0], 0 : inp.shape[1], :]
-    return test_wt
-
-
+    strides = (strides,strides)
+    padding = (padding,padding)
+    input_padded, paddings = calculate_padding(pool_size, inp, padding, strides, -np.inf)
+    out_ds = np.zeros_like(input_padded)
+    for ind1 in range(wts.shape[0]):
+        for ind2 in range(wts.shape[1]):
+            indexes = [np.arange(ind1*strides[0], ind1*(strides[0])+pool_size[0]),
+                       np.arange(ind2*strides[1], ind2*(strides[1])+pool_size[1])]
+            # Take slice
+            tmp_patch = input_padded[np.ix_(indexes[0],indexes[1])]
+            updates = calculate_wt_avg_unit(tmp_patch, wts[ind1,ind2,:], pool_size)
+            # Build tensor with "filtered" gradient
+            out_ds[np.ix_(indexes[0],indexes[1])]+=updates
+    out_ds = out_ds[paddings[0][0]:(paddings[0][0]+inp.shape[0]),
+                    paddings[1][0]:(paddings[1][0]+inp.shape[1]),:]
+    return out_ds
 def calculate_wt_gavgpool(wts, inp):
     wts=wts.T
     inp=inp.T
@@ -744,6 +742,438 @@ def calculate_wt_gavgpool(wts, inp):
         temp_wt = temp_wt + ((n_mat / n_sum) * wt * n_agg_wt * -1.0)
         wt_mat[..., c] = temp_wt
     return wt_mat
+
+def calculate_wt_gmaxpool_2d(wts, inp):
+    channels = wts.shape[0]
+    wt_mat = np.zeros_like(inp)
+    for c in range(channels):
+        wt = wts[c]
+        x = inp[..., c]
+        max_val = np.max(x)
+        max_indexes = (x == max_val).astype(np.float32)
+        max_indexes_norm = 1.0 / np.sum(max_indexes)
+        max_indexes = max_indexes * max_indexes_norm
+        wt_mat[..., c] = max_indexes * wt
+    return wt_mat
+
+def calculate_padding_1d(kernel_size, inp, padding, strides, const_val=0.0):
+    if padding == 'valid':
+        return inp, [[0, 0],[0,0]]
+    elif padding == 0:
+        return inp,  [[0, 0],[0,0]]
+    elif isinstance(padding, int):
+        inp_pad = np.pad(inp, ((padding, padding), (0,0)), 'constant', constant_values=const_val)
+        return inp_pad, [[padding, padding],[0,0]]
+    else:
+        remainder = inp.shape[0] % strides
+        if remainder == 0:
+            pad_total = max(0, kernel_size - strides)
+        else:
+            pad_total = max(0, kernel_size - remainder)
+        
+        pad_left = int(np.floor(pad_total / 2.0))
+        pad_right = int(np.ceil(pad_total / 2.0))
+        
+        inp_pad = np.pad(inp, ((pad_left, pad_right),(0,0)), 'constant', constant_values=const_val)
+        return inp_pad, [[pad_left, pad_right],[0,0]]
+
+def calculate_wt_conv_unit_1d(patch, wts, w, b, act):
+    k = w.numpy()
+    bias = b.numpy()
+    b_ind = bias > 0
+    bias_pos = bias * b_ind
+    b_ind = bias < 0
+    bias_neg = bias * b_ind * -1.0
+    conv_out = np.einsum("ijk,ij->ijk", k, patch)
+    p_ind = conv_out > 0
+    p_ind = conv_out * p_ind
+    p_sum = np.einsum("ijk->k",p_ind)
+    n_ind = conv_out < 0
+    n_ind = conv_out * n_ind
+    n_sum = np.einsum("ijk->k",n_ind) * -1.0
+    t_sum = p_sum + n_sum
+    wt_mat = np.zeros_like(k)
+    p_saturate = p_sum > 0
+    n_saturate = n_sum > 0
+    if act["type"] == 'mono':
+        if act["range"]["l"]:
+            temp_ind = t_sum > act["range"]["l"]
+            p_saturate = temp_ind
+        if act["range"]["u"]:
+            temp_ind = t_sum < act["range"]["u"]
+            n_saturate = temp_ind
+    elif act["type"] == 'non_mono':
+        t_act = act["func"](t_sum)
+        p_act = act["func"](p_sum + bias_pos)
+        n_act = act["func"](-1 * (n_sum + bias_neg))
+        if act["range"]["l"]:
+            temp_ind = t_sum > act["range"]["l"]
+            p_saturate = p_saturate * temp_ind
+        if act["range"]["u"]:
+            temp_ind = t_sum < act["range"]["u"]
+            n_saturate = n_saturate * temp_ind
+        temp_ind = np.abs(t_act - p_act) > 1e-5
+        n_saturate = n_saturate * temp_ind
+        temp_ind = np.abs(t_act - n_act) > 1e-5
+        p_saturate = p_saturate * temp_ind
+    p_agg_wt = (1.0 / (p_sum + n_sum + bias_pos + bias_neg)) * wts * p_saturate
+    n_agg_wt = (1.0 / (p_sum + n_sum + bias_pos + bias_neg)) * wts * n_saturate
+
+    wt_mat = wt_mat + (p_ind * p_agg_wt)
+    wt_mat = wt_mat + (n_ind * n_agg_wt * -1.0)
+    wt_mat = np.sum(wt_mat, axis=-1)
+    return wt_mat
+
+def calculate_wt_conv_1d(wts, inp, w, b, padding, stride, act):
+    wts = wts.T
+    inp = inp.T
+    w = w.T
+    stride=stride
+    input_padded, paddings = calculate_padding_1d(w.shape[0], inp, padding, stride)
+    out_ds = np.zeros_like(input_padded)
+    for ind in range(wts.shape[0]):
+        indexes = np.arange(ind * stride, ind * stride + w.shape[0])
+        tmp_patch = input_padded[indexes]
+        updates = calculate_wt_conv_unit_1d(tmp_patch, wts[ind, :], w, b, act)
+        out_ds[indexes] += updates
+    out_ds = out_ds[paddings[0][0]:(paddings[0][0] + inp.shape[0])]
+    return out_ds
+
+def calculate_wt_max_unit_1d(patch, wts):
+    pmax = np.max(patch, axis=0)
+    indexes = (patch - pmax) == 0
+    indexes = indexes.astype(np.float32)
+    indexes_norm = 1.0 / np.sum(indexes, axis=0)
+    indexes = np.einsum("ij,j->ij", indexes, indexes_norm)
+    out = np.einsum("ij,j->ij", indexes, wts)
+    return out
+
+def calculate_wt_maxpool_1d(wts, inp, pool_size, padding, stride):
+    inp = inp.T
+    wts = wts.T
+    input_padded, paddings = calculate_padding_1d(pool_size, inp, padding, stride, -np.inf)
+    out_ds = np.zeros_like(input_padded)
+    stride=stride
+    pool_size=pool_size
+    for ind in range(wts.shape[0]):
+        indexes = np.arange(ind * stride, ind * stride + pool_size)
+        tmp_patch = input_padded[indexes]
+        updates = calculate_wt_max_unit_1d(tmp_patch, wts[ind, :])
+        out_ds[indexes] += updates
+    out_ds = out_ds[paddings[0][0]:(paddings[0][0] + inp.shape[0])]
+    return out_ds
+
+def calculate_wt_avg_unit_1d(patch, wts):
+    p_ind = patch > 0
+    p_ind = patch * p_ind
+    p_sum = np.sum(p_ind, axis=0)
+    n_ind = patch < 0
+    n_ind = patch * n_ind
+    n_sum = np.sum(n_ind, axis=0) * -1.0
+    t_sum = p_sum + n_sum
+    wt_mat = np.zeros_like(patch)
+    p_saturate = p_sum > 0
+    n_saturate = n_sum > 0
+    t_sum[t_sum == 0] = 1.0
+    p_agg_wt = (1.0 / t_sum) * wts * p_saturate
+    n_agg_wt = (1.0 / t_sum) * wts * n_saturate
+    wt_mat = wt_mat + (p_ind * p_agg_wt)
+    wt_mat = wt_mat + (n_ind * n_agg_wt * -1.0)
+    return wt_mat
+
+def calculate_wt_avgpool_1d(wts, inp, pool_size, padding, stride):
+    wts = wts.T
+    inp = inp.T
+    stride=stride
+    pool_size=pool_size
+    input_padded, paddings = calculate_padding_1d(pool_size, inp, padding[0], stride[0], 0)
+    out_ds = np.zeros_like(input_padded)
+    for ind in range(wts.shape[0]):
+        indexes = np.arange(ind * stride[0], ind * stride[0] + pool_size[0])
+        tmp_patch = input_padded[indexes]
+        updates = calculate_wt_avg_unit_1d(tmp_patch, wts[ind, :])
+        out_ds[indexes] += updates
+    out_ds = out_ds[paddings[0][0]:(paddings[0][0] + inp.shape[0])]
+    return out_ds
+
+def calculate_wt_gavgpool_1d(wts, inp):
+    channels = wts.shape[0]
+    wt_mat = np.zeros_like(inp)
+    for c in range(channels):
+        wt = wts[c]
+        temp_wt = wt_mat[:, c]
+        x = inp[:, c]
+        p_mat = np.copy(x)
+        n_mat = np.copy(x)
+        p_mat[p_mat < 0] = 0
+        n_mat[n_mat > 0] = 0
+        p_sum = np.sum(p_mat)
+        n_sum = np.sum(n_mat) * -1
+        p_agg_wt = 0.0
+        n_agg_wt = 0.0
+        if p_sum + n_sum > 0.0:
+            p_agg_wt = p_sum / (p_sum + n_sum)
+            n_agg_wt = n_sum / (p_sum + n_sum)
+        if p_sum == 0.0:
+            p_sum = 1.0
+        if n_sum == 0.0:
+            n_sum = 1.0
+        temp_wt = temp_wt + ((p_mat / p_sum) * wt * p_agg_wt)
+        temp_wt = temp_wt + ((n_mat / n_sum) * wt * n_agg_wt * -1.0)
+        wt_mat[:, c] = temp_wt
+    return wt_mat
+
+def calculate_wt_gmaxpool_1d(wts, inp):
+    wts = wts.T
+    inp = inp.T
+    channels = wts.shape[0]
+    wt_mat = np.zeros_like(inp)
+    for c in range(channels):
+        wt = wts[c]
+        x = inp[:, c]
+        max_val = np.max(x)
+        max_indexes = (x == max_val).astype(np.float32)
+        max_indexes_norm = 1.0 / np.sum(max_indexes)
+        max_indexes = max_indexes * max_indexes_norm
+        wt_mat[:, c] = max_indexes * wt
+    return wt_mat
+
+def calculate_output_padding_conv2d_transpose(input_shape, kernel_size, padding, strides):
+    if padding == 'valid':
+        out_shape = [(input_shape[0] - 1) * strides[0] + kernel_size[0],
+                     (input_shape[1] - 1) * strides[1] + kernel_size[1]]
+        paddings = [[0, 0], [0, 0], [0, 0]]
+    elif padding == (0,0):
+        out_shape = [(input_shape[0] - 1) * strides[0] + kernel_size[0],
+                     (input_shape[1] - 1) * strides[1] + kernel_size[1]]
+        paddings = [[0, 0], [0, 0], [0, 0]]
+    elif isinstance(padding, tuple) and padding != (None, None):
+        out_shape = [input_shape[0] * strides[0], input_shape[1] * strides[1]]
+        pad_h = padding[0]
+        pad_v = padding[1]
+        paddings = [[pad_h, pad_h], [pad_v, pad_v], [0, 0]]
+    else:  # 'same' padding
+        out_shape = [input_shape[0] * strides[0], input_shape[1] * strides[1]]
+        pad_h = max(0, (input_shape[0] - 1) * strides[0] + kernel_size[0] - out_shape[0])
+        pad_v = max(0, (input_shape[1] - 1) * strides[1] + kernel_size[1] - out_shape[1])
+        paddings = [[pad_h // 2, pad_h - pad_h // 2], 
+                    [pad_v // 2, pad_v - pad_v // 2], 
+                    [0, 0]]
+    
+    return out_shape, paddings
+
+def calculate_wt_conv2d_transpose_unit(patch, wts, w, b, act):
+    if patch.ndim == 1:
+        patch = patch.reshape(1, 1, -1)
+    elif patch.ndim == 2:
+        patch = patch.reshape(1, *patch.shape)
+    elif patch.ndim != 3:
+        raise ValueError(f"Unexpected patch shape: {patch.shape}")
+
+    k = w.permute(0, 1, 3, 2).numpy()
+    bias = b.numpy()
+    b_ind = bias > 0
+    bias_pos = bias * b_ind
+    b_ind = bias < 0
+    bias_neg = bias * b_ind * -1.0  
+    
+    conv_out = np.einsum('ijkl,mnk->ijkl', k, patch)    
+    p_ind = conv_out > 0
+    p_ind = conv_out * p_ind
+    n_ind = conv_out < 0
+    n_ind = conv_out * n_ind
+    
+    p_sum = np.einsum("ijkl->l", p_ind)
+    n_sum = np.einsum("ijkl->l", n_ind) * -1.0
+    t_sum = p_sum + n_sum
+    
+    wt_mat = np.zeros_like(k)
+    p_saturate = p_sum > 0
+    n_saturate = n_sum > 0
+    
+    if act["type"] == 'mono':
+        if act["range"]["l"]:
+            p_saturate = t_sum > act["range"]["l"]
+        if act["range"]["u"]:
+            n_saturate = t_sum < act["range"]["u"]
+    elif act["type"] == 'non_mono':
+        t_act = act["func"](t_sum)
+        p_act = act["func"](p_sum + bias_pos)
+        n_act = act["func"](-1 * (n_sum + bias_neg))
+        if act["range"]["l"]:
+            temp_ind = t_sum > act["range"]["l"]
+            p_saturate = p_saturate * temp_ind
+        if act["range"]["u"]:
+            temp_ind = t_sum < act["range"]["u"]
+            n_saturate = n_saturate * temp_ind
+        temp_ind = np.abs(t_act - p_act) > 1e-5
+        n_saturate = n_saturate * temp_ind
+        temp_ind = np.abs(t_act - n_act) > 1e-5
+        p_saturate = p_saturate * temp_ind
+    
+    p_agg_wt = (1.0 / (p_sum + n_sum + bias_pos + bias_neg)) * wts * p_saturate
+    n_agg_wt = (1.0 / (p_sum + n_sum + bias_pos + bias_neg)) * wts * n_saturate
+    
+    wt_mat = wt_mat + (p_ind * p_agg_wt)
+    wt_mat = wt_mat + (n_ind * n_agg_wt * -1.0)
+    wt_mat = np.sum(wt_mat, axis=-1)
+    return wt_mat
+
+def calculate_wt_conv2d_transpose(wts, inp, w, b, padding, strides, act):
+    wts = wts.T
+    inp = inp.T
+    w = w.T
+    out_shape, paddings = calculate_output_padding_conv2d_transpose(inp.shape, w.shape, padding, strides)
+    out_ds = np.zeros(out_shape + [w.shape[3]])
+    
+    for ind1 in range(inp.shape[0]):
+        for ind2 in range(inp.shape[1]):
+            out_ind1 = ind1 * strides[0]
+            out_ind2 = ind2 * strides[1]
+            tmp_patch = inp[ind1, ind2, :]
+            updates = calculate_wt_conv2d_transpose_unit(tmp_patch, wts[ind1, ind2, :], w, b, act)
+            end_ind1 = min(out_ind1 + w.shape[0], out_shape[0])
+            end_ind2 = min(out_ind2 + w.shape[1], out_shape[1])
+            valid_updates = updates[:end_ind1 - out_ind1, :end_ind2 - out_ind2, :]
+            out_ds[out_ind1:end_ind1, out_ind2:end_ind2, :] += valid_updates
+    
+    if padding == 'same':
+        adjusted_out_ds = np.zeros(inp.shape)
+        for i in range(inp.shape[0]):
+            for j in range(inp.shape[1]):
+                start_i = max(0, i * strides[0])
+                start_j = max(0, j * strides[1])
+                end_i = min(out_ds.shape[0], (i+1) * strides[0])
+                end_j = min(out_ds.shape[1], (j+1) * strides[1])
+                relevant_area = out_ds[start_i:end_i, start_j:end_j, :]
+                adjusted_out_ds[i, j, :] = np.sum(relevant_area, axis=(0, 1))
+        out_ds = adjusted_out_ds
+    elif isinstance(padding, tuple) and padding != (None, None):
+        adjusted_out_ds = np.zeros(inp.shape)
+        for i in range(inp.shape[0]):
+            for j in range(inp.shape[1]):
+                start_i = max(0, i * strides[0])
+                start_j = max(0, j * strides[1])
+                end_i = min(out_ds.shape[0], (i+1) * strides[0])
+                end_j = min(out_ds.shape[1], (j+1) * strides[1])
+                relevant_area = out_ds[start_i:end_i, start_j:end_j, :]
+                adjusted_out_ds[i, j, :] = np.sum(relevant_area, axis=(0, 1))
+        out_ds = adjusted_out_ds
+    else:
+        out_ds = out_ds[paddings[0][0]:(paddings[0][0] + inp.shape[0]),
+                        paddings[1][0]:(paddings[1][0] + inp.shape[1]), :]
+    
+    return out_ds
+
+
+def calculate_output_padding_conv1d_transpose(input_shape, kernel_size, padding, strides,dilation):
+    if padding == 'valid':
+        out_shape = [(input_shape[0] - 1) * strides + kernel_size[0]]
+        paddings = [[0, 0], [0, 0]]
+    elif padding == 0:
+        out_shape = [(input_shape[0] - 1) * strides + kernel_size[0]]
+        paddings = [[0, 0], [0, 0]]
+    elif isinstance(padding, int):
+        out_shape = [input_shape[0] * strides]
+        pad_v = (dilation * (kernel_size[0] - 1)) - padding
+        out_shape = [input_shape[0] * strides + pad_v]
+        paddings = [[pad_v, pad_v], 
+                    [0, 0]]
+    else:  # 'same' padding
+        out_shape = [input_shape[0] * strides]
+        pad_h = max(0, (input_shape[0] - 1) * strides + kernel_size[0] - out_shape[0])
+        paddings = [[pad_h // 2, pad_h // 2], 
+                    [0, 0]]
+    
+    return out_shape, paddings
+
+def calculate_wt_conv1d_transpose_unit(patch, wts, w, b, act):
+    if patch.ndim == 1:
+        patch = patch.reshape(1, -1)
+    elif patch.ndim != 2:
+        raise ValueError(f"Unexpected patch shape: {patch.shape}")
+    
+    k = w.permute(0, 2, 1).numpy()
+    bias = b.numpy()
+    b_ind = bias > 0
+    bias_pos = bias * b_ind
+    b_ind = bias < 0
+    bias_neg = bias * b_ind * -1.0  
+    conv_out = np.einsum('ijk,mj->ijk', k, patch)
+    p_ind = conv_out > 0
+    p_ind = conv_out * p_ind
+    n_ind = conv_out < 0
+    n_ind = conv_out * n_ind
+    
+    p_sum = np.einsum("ijl->l", p_ind)
+    n_sum = np.einsum("ijl->l", n_ind) * -1.0
+    t_sum = p_sum + n_sum
+    
+    wt_mat = np.zeros_like(k)
+    p_saturate = p_sum > 0
+    n_saturate = n_sum > 0
+    
+    if act["type"] == 'mono':
+        if act["range"]["l"]:
+            p_saturate = t_sum > act["range"]["l"]
+        if act["range"]["u"]:
+            n_saturate = t_sum < act["range"]["u"]
+    elif act["type"] == 'non_mono':
+        t_act = act["func"](t_sum)
+        p_act = act["func"](p_sum + bias_pos)
+        n_act = act["func"](-1 * (n_sum + bias_neg))
+        if act["range"]["l"]:
+            temp_ind = t_sum > act["range"]["l"]
+            p_saturate = p_saturate * temp_ind
+        if act["range"]["u"]:
+            temp_ind = t_sum < act["range"]["u"]
+            n_saturate = n_saturate * temp_ind
+        temp_ind = np.abs(t_act - p_act) > 1e-5
+        n_saturate = n_saturate * temp_ind
+        temp_ind = np.abs(t_act - n_act) > 1e-5
+        p_saturate = p_saturate * temp_ind
+    
+    p_agg_wt = (1.0 / (p_sum + n_sum + bias_pos + bias_neg)) * wts * p_saturate
+    n_agg_wt = (1.0 / (p_sum + n_sum + bias_pos + bias_neg)) * wts * n_saturate
+    wt_mat = wt_mat + (p_ind * p_agg_wt)
+    wt_mat = wt_mat + (n_ind * n_agg_wt * -1.0)
+    wt_mat = np.sum(wt_mat, axis=-1)
+    return wt_mat
+
+def calculate_wt_conv1d_transpose(wts, inp, w, b, padding, strides, dilation, act):
+    wts = wts.T
+    inp = inp.T
+    w = w.T
+    out_shape, paddings = calculate_output_padding_conv1d_transpose(inp.shape, w.shape, padding, strides, dilation)
+    out_ds = np.zeros(out_shape + [w.shape[2]])
+
+    for ind in range(inp.shape[0]):
+        out_ind = ind * strides
+        tmp_patch = inp[ind, :]
+        updates = calculate_wt_conv1d_transpose_unit(tmp_patch, wts[ind, :], w, b, act)
+        end_ind = min(out_ind + w.shape[0], out_shape[0])
+        valid_updates = updates[:end_ind - out_ind, :]
+        out_ds[out_ind:end_ind, :] += valid_updates
+    
+    if padding == 'same':
+        adjusted_out_ds = np.zeros(inp.shape)
+        for i in range(inp.shape[0]):
+            start_i = max(0, i * strides)
+            end_i = min(out_ds.shape[0], (i + 1) * strides)
+            relevant_area = out_ds[start_i:end_i, :]
+            adjusted_out_ds[i, :] = np.sum(relevant_area, axis=0)
+        out_ds = adjusted_out_ds
+    elif padding == 0:
+        adjusted_out_ds = np.zeros(inp.shape)
+        for i in range(inp.shape[0]):
+            start_i = max(0, i * strides)
+            end_i = min(out_ds.shape[0], (i + 1) * strides)
+            relevant_area = out_ds[start_i:end_i, :]
+            adjusted_out_ds[i, :] = np.sum(relevant_area, axis=0)
+        out_ds = adjusted_out_ds
+    else:
+        out_ds = out_ds[paddings[0][0]:(paddings[0][0] + inp.shape[0]), :]
+    return out_ds
 
 
 ####################################################################

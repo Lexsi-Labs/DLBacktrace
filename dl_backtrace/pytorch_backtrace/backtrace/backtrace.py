@@ -18,29 +18,22 @@ class Backtrace(object):
         if model_type == 'encoder':
             self.model = model
             self.model_type = model_type
-            
             # create a tree-like structure for encoder model
             self.model_resource = EN.build_encoder_tree(model)
-            
             # create a layer stack for encoder model
             self.create_layer_stack()
-            
             # extract the encoder model weights
             self.model_weights = EN.extract_encoder_weights(model)
-            
             # # calculate the output of each submodule of the encoder model
             # self.all_out_model = EN.create_encoder_output(model)
             
         elif model_type == 'encoder_decoder':
             self.model = model
             self.model_type = model_type
-            
             # create a tree-like structure and layer_stack for encoder-decoder model
             self.model_resource, self.layer_stack = ED.build_enc_dec_tree(model)
-            
             # extract the encoder-decoder model weights
-            self.model_weights = ED.extract_encoder_decoder_weights(model)
-                       
+            self.model_weights = ED.extract_encoder_decoder_weights(model)  
             # # calculate the output of each submodule of the encoder-decoder model
             # self.all_out_model = ED.calculate_encoder_decoder_output(model)
             
@@ -49,16 +42,12 @@ class Backtrace(object):
             self.model_type = model_type
             # create a tree-like structure that represents the layers of the neural network model
             self.create_tree(model)
-
             # create a new model (an instance of tf.keras.Model) that produces the output of each layer in the neural network.
             self.create_model_output(model)
-
             # create a new model (an instance of tf.keras.Model) that produces the output of each layer in the neural network.
             self.create_every_model_output(model)
-
             # create a layer stack that defines the order in which layers should be processed during backpropagation.
             self.create_layer_stack()
-
             # checks if the model is sequential or not. If it's sequential, it adds the input layer to the layer stack.
             # identity
 
@@ -72,7 +61,6 @@ class Backtrace(object):
             self.model_resource[3].append(inp_name)
             self.sequential = True
             try:
-
                 # calls the build_activation_dict method to build a dictionary that maps layer names to activation functions.
                 # If that fails, it creates a temporary dictionary with default activation functions.
                 if len(activation_dict) == 0:
@@ -92,10 +80,8 @@ class Backtrace(object):
         layer_list = list(model_resource[0].keys())
         activation_dict = {}
         activation_functions = ['relu', 'sigmoid', 'tanh', 'softmax']  # You can add more activation functions
-
         for l in layer_list:
             activation_found = False
-
             try:  # could be activation for that layer
                 for activation in activation_functions:
                     if activation in l.split('/')[1]:
@@ -103,7 +89,6 @@ class Backtrace(object):
                         activation_found = True
             except:
                 activation_dict[l] = 'None'
-
         # activation_master :
         for key, value in activation_dict.items():
             activation_dict[key] = activation_master.get(value)
@@ -112,10 +97,8 @@ class Backtrace(object):
     def create_tree(self, model):
         # create new layers same as tf version
         layers = list(model.named_children())
-
         activation_functions = ['relu', 'sigmoid', 'tanh', 'softmax']
         layer_sequence = []
-
         for i in range(len(layers) - 1):
             current_layer, current_layer_obj = layers[i]
             next_layer, next_layer_obj = layers[i + 1]
@@ -129,7 +112,6 @@ class Backtrace(object):
             else:
                 if any(af in current_layer_name for af in activation_functions) is False:
                     layer_sequence.append((current_layer_name, current_layer_obj))
-
         # creating model_resource variable
         layer_sequence
         ltree = {}
@@ -137,37 +119,28 @@ class Backtrace(object):
         inputs = []
         outputs = []
         intermediates = []
-
         prev_layer_id = None
-
         num_layers = len(layer_sequence)
-
         for i, (layer_name, layer) in enumerate(layer_sequence):
             layer_id = layer_name
             ltree[layer_id] = {}
             layer_tree[layer_id] = layer
-
             layer_type = layer.__class__.__name__
             ltree[layer_id]["name"] = layer_id.split("/")[0]
             ltree[layer_id]["class"] = layer_type
-
             if i < num_layers - 1:
                 ltree[layer_id]["type"] = "intermediate"
                 intermediates.append(layer_id)
             else:
                 ltree[layer_id]["type"] = "output"
                 outputs.append(layer_id)
-
             if prev_layer_id is not None:
                 ltree[layer_id]["child"] = [prev_layer_id]
                 ltree[prev_layer_id]["parent"] = [layer_id]
-
             prev_layer_id = layer_id
-
         # Set child of the last layer as an empty list
         if prev_layer_id is not None:
             ltree[prev_layer_id]["parent"] = []
-
         layer_tree.pop('identity')
         ltree.pop('identity')
         self.model_resource = (layer_tree, ltree, outputs, inputs)
@@ -198,7 +171,6 @@ class Backtrace(object):
             def __init__(self, base_model):
                 super(ModelWithEveryOutputs, self).__init__()
                 self.base_model = base_model
-
             def forward(self, x):
                 outputs = []
                 for layer_name, layer in self.base_model._modules.items():
@@ -212,7 +184,6 @@ class Backtrace(object):
                         x = layer(x)
                     outputs.append((layer_name, x))
                 return outputs
-
         self.every_out_model = ModelWithEveryOutputs(model)
 
     def create_model_output(self, model):
@@ -248,16 +219,12 @@ class Backtrace(object):
         every_out = self.every_out_model(inputs)
         activation_functions = ['relu', 'sigmoid', 'tanh', 'softmax']
         every_temp_out = {}
-
         for i in range(len(every_out)):
-
             current_layer, current_layer_obj = every_out[i]
             try:
                 next_layer, next_layer_obj = every_out[i + 1]
-
                 current_layer_name = current_layer
                 next_layer_name = next_layer
-
                 next_layer_type = next_layer_name.lower()
                 if any(af in next_layer_type for af in activation_functions):
                     if isinstance(next_layer_obj, tuple):
@@ -265,12 +232,10 @@ class Backtrace(object):
                         next_layer_tensor = next_layer_obj[0]
                     else:
                         next_layer_tensor = next_layer_obj
-
                     every_temp_out[
                         f"{current_layer_name}/{next_layer_name}"] = next_layer_tensor.detach().numpy().astype(
                         np.float32)
                     i += 1
-
                 else:
                     if any(af in current_layer_name for af in activation_functions) is False:
                         if isinstance(current_layer_obj, tuple):
@@ -278,12 +243,10 @@ class Backtrace(object):
                             current_layer_tensor = current_layer_obj[0]
                         else:
                             current_layer_tensor = current_layer_obj
-
                         every_temp_out[current_layer_name] = current_layer_tensor.detach().numpy().astype(np.float32)
             except:
                 if any(af in next_layer_type for af in activation_functions):
                     pass
-
                 else:
                     if any(af in current_layer for af in activation_functions) is False:
                         if isinstance(current_layer_obj, tuple):
@@ -291,7 +254,6 @@ class Backtrace(object):
                             current_layer_tensor = current_layer_obj[0]
                         else:
                             current_layer_tensor = current_layer_obj
-
                         every_temp_out[current_layer] = current_layer_tensor.detach().cpu().numpy().astype(np.float32)
         return every_temp_out
 
@@ -299,16 +261,12 @@ class Backtrace(object):
         all_out = self.all_out_model(inputs)
         activation_functions = ['relu', 'sigmoid', 'tanh', 'softmax']
         temp_out = {}
-
         for i in range(len(all_out)):
-
             current_layer, current_layer_obj = all_out[i]
             try:
                 next_layer, next_layer_obj = all_out[i + 1]
-
                 current_layer_name = current_layer
                 next_layer_name = next_layer
-
                 next_layer_type = next_layer_name.lower()
                 if any(af in next_layer_type for af in activation_functions):
                     if isinstance(next_layer_obj, tuple):
@@ -316,12 +274,10 @@ class Backtrace(object):
                         next_layer_tensor = next_layer_obj[0]
                     else:
                         next_layer_tensor = next_layer_obj
-
                     temp_out[
                         f"{current_layer_name}/{next_layer_name}"] = next_layer_tensor.detach().cpu().numpy().astype(
                         np.float32)
                     i += 1
-
                 else:
                     if any(af in current_layer_name for af in activation_functions) is False:
                         if isinstance(current_layer_obj, tuple):
@@ -329,12 +285,10 @@ class Backtrace(object):
                             current_layer_tensor = current_layer_obj[0]
                         else:
                             current_layer_tensor = current_layer_obj
-
                         temp_out[current_layer_name] = current_layer_tensor.detach().numpy().astype(np.float32)
             except:
                 if any(af in next_layer_type for af in activation_functions):
                     pass
-
                 else:
                     if any(af in current_layer for af in activation_functions) is False:
                         if isinstance(current_layer_obj, tuple):
@@ -342,20 +296,20 @@ class Backtrace(object):
                             current_layer_tensor = current_layer_obj[0]
                         else:
                             current_layer_tensor = current_layer_obj
-
                         temp_out[current_layer] = current_layer_tensor.detach().cpu().numpy().astype(np.float32)
-
         return temp_out
 
     def eval(
             self,
             all_out,
-            mode,
+            mode="default",
             start_wt=[],
             multiplier=100.0,
             scaler=0,
             max_unit=0,
             predicted_token=None,
+            thresholding=0.5,
+            task="binary-classification",
     ):
         # This method is used for evaluating layer-wise relevance based on different modes.
         if mode == "default":
@@ -366,10 +320,18 @@ class Backtrace(object):
                 scaler=0,
                 max_unit=0,
                 predicted_token=predicted_token,
+                thresholding=0.5,
+                task="binary-classification",
             )
             return output
         elif mode == "contrast":
-            temp_output = self.contrast_eval(all_out=all_out, multiplier=multiplier)
+            temp_output = self.contrast_eval(
+                all_out=all_out, 
+                multiplier=multiplier,
+                scaler=0,
+                thresholding=0.5,
+                task="binary-classification",
+            )
             output = {}
             for k in temp_output[0].keys():
                 output[k] = {}
@@ -378,7 +340,9 @@ class Backtrace(object):
             return output
 
     def proportional_eval(
-            self, all_out, start_wt=[], multiplier=100.0, scaler=0, max_unit=0, predicted_token=None
+            self, all_out, start_wt=[], multiplier=100.0, 
+            scaler=0, max_unit=0, predicted_token=None,
+            thresholding=0.5, task="binary-classification",
     ):
         model_resource = self.model_resource
         activation_dict = self.activation_dict
@@ -397,7 +361,7 @@ class Backtrace(object):
                 layer_stack = self.layer_stack
                 all_wts = self.model_weights
             else:
-                start_wt = UP.calculate_start_wt(all_out[out_layer])
+                start_wt = UP.calculate_start_wt(all_out[out_layer],scaler,thresholding,task=task)
                 all_wt[out_layer] = start_wt * multiplier
                 layer_stack = self.layer_stack
                 
@@ -427,11 +391,65 @@ class Backtrace(object):
                     l1 = model_resource[0][start_layer]
                     w1 = l1.state_dict()['weight']
                     b1 = l1.state_dict()['bias']
+                    pad1 = l1.padding
+                    strides1 = l1.stride
                     temp_wt = UP.calculate_wt_conv(
                         all_wt[start_layer],
                         all_out[child_nodes[0]][0],
                         w1,
                         b1,
+                        pad1,
+                        strides1,
+                        activation_dict[model_resource[1][start_layer]["name"]],
+                    )
+                    all_wt[child_nodes[0]] += temp_wt.T
+                elif model_resource[1][start_layer]["class"] == "ConvTranspose2d":
+                    l1 = model_resource[0][start_layer]
+                    w1 = l1.state_dict()['weight']
+                    b1 = l1.state_dict()['bias']
+                    pad1 = l1.padding
+                    strides1 = l1.stride
+                    temp_wt = UP.calculate_wt_conv2d_transpose(
+                        all_wt[start_layer],
+                        all_out[child_nodes[0]][0],
+                        w1,
+                        b1,
+                        pad1,
+                        strides1,
+                        activation_dict[model_resource[1][start_layer]["name"]],
+                    )
+                    all_wt[child_nodes[0]] += temp_wt.T
+                elif model_resource[1][start_layer]["class"] == "Conv1d":
+                    l1 = model_resource[0][start_layer]
+                    w1 = l1.state_dict()['weight']
+                    b1 = l1.state_dict()['bias']
+                    pad1 = l1.padding[0]
+                    strides1 = l1.stride[0]
+                    temp_wt = UP.calculate_wt_conv_1d(
+                        all_wt[start_layer],
+                        all_out[child_nodes[0]][0],
+                        w1,
+                        b1,
+                        pad1, 
+                        strides1,
+                        activation_dict[model_resource[1][start_layer]["name"]],
+                    )
+                    all_wt[child_nodes[0]] += temp_wt.T
+                elif model_resource[1][start_layer]["class"] == "ConvTranspose1d":
+                    l1 = model_resource[0][start_layer]
+                    w1 = l1.state_dict()['weight']
+                    b1 = l1.state_dict()['bias']
+                    pad1 = l1.padding[0]
+                    strides1 = l1.stride[0]
+                    dilation1= l1.dilation[0]
+                    temp_wt = UP.calculate_wt_conv1d_transpose(
+                        all_wt[start_layer],
+                        all_out[child_nodes[0]][0],
+                        w1,
+                        b1,
+                        pad1, 
+                        strides1,
+                        dilation1,
                         activation_dict[model_resource[1][start_layer]["name"]],
                     )
                     all_wt[child_nodes[0]] += temp_wt.T
@@ -462,6 +480,22 @@ class Backtrace(object):
                     l1 = model_resource[0][start_layer]
                     temp_wt = UP.calculate_wt_avgpool(
                         all_wt[start_layer], all_out[child_nodes[0]][0], (l1.kernel_size, l1.kernel_size)
+                    )
+                    all_wt[child_nodes[0]] += temp_wt.T
+                elif model_resource[1][start_layer]["class"] == "MaxPool1d":
+                    l1 = model_resource[0][start_layer]
+                    pad1 = l1.padding
+                    strides1 = l1.stride
+                    temp_wt = UP.calculate_wt_maxpool_1d(
+                        all_wt[start_layer], all_out[child_nodes[0]][0], l1.kernel_size,pad1,strides1
+                    )
+                    all_wt[child_nodes[0]] += temp_wt.T
+                elif model_resource[1][start_layer]["class"] == "AvgPool1d":
+                    l1 = model_resource[0][start_layer]
+                    pad1 = l1.padding
+                    strides1 = l1.stride
+                    temp_wt = UP.calculate_wt_avgpool_1d(
+                        all_wt[start_layer], all_out[child_nodes[0]][0], l1.kernel_size,pad1,strides1
                     )
                     all_wt[child_nodes[0]] += temp_wt.T
                 elif model_resource[1][start_layer]["class"] == "Concatenate":
@@ -511,7 +545,6 @@ class Backtrace(object):
                         self_attention_weights,
                     )
                     all_wt[child_nodes[0]] += temp_wt
-                
                 elif model_resource[1][start_layer]["class"] == 'Residual':
                     temp_wt = UP.calculate_wt_add(
                         all_wt[start_layer],
@@ -520,11 +553,9 @@ class Backtrace(object):
 
                     for ind, ch in enumerate(child_nodes):
                         all_wt[ch] += temp_wt[ind]
-                
                 elif model_resource[1][start_layer]["class"] == 'Feed_Forward':
                     weights = all_wts[start_layer]
                     feed_forward_weights = HP.rename_feed_forward_keys(weights)
-
                     temp_wt = UP.calculate_wt_feed_forward(
                         all_wt[start_layer],
                         all_out[child_nodes[0]][0].detach().numpy(),
@@ -535,7 +566,6 @@ class Backtrace(object):
                 elif model_resource[1][start_layer]["class"] == "Pooler":
                     weights = all_wts[start_layer]
                     pooler_weights = HP.rename_pooler_keys(weights)
-
                     temp_wt = UP.calculate_wt_pooler(
                         all_wt[start_layer],
                         all_out[child_nodes[0]][0].detach().numpy(),
@@ -546,7 +576,6 @@ class Backtrace(object):
                 elif model_resource[1][start_layer]["class"] == "Classifier":
                     weights = all_wts[start_layer]
                     classifier_weights = HP.rename_classifier_keys(weights)
-
                     temp_wt = UP.calculate_wt_classifier(
                         all_wt[start_layer],
                         all_out[child_nodes[0]][0].detach().numpy(),
@@ -557,7 +586,6 @@ class Backtrace(object):
                 elif model_resource[1][start_layer]["class"] == "LM_Head":
                     weights = all_wts[start_layer]
                     lm_head_weights = HP.rename_decoder_lm_head(weights)
-
                     temp_wt = UP.calculate_wt_lm_head(
                         all_wt[start_layer],
                         all_out[child_nodes[0]][0].detach().numpy(),
@@ -572,7 +600,6 @@ class Backtrace(object):
                 elif model_resource[1][start_layer]["class"] == 'Cross_Attention':
                     weights = all_wts[start_layer]
                     cross_attention_weights = HP.rename_cross_attention_keys(weights)
-
                     temp_wt = UP.calculate_wt_cross_attention(
                         all_wt[start_layer],
                         [all_out[ch][0].detach().numpy() for ch in child_nodes],
@@ -582,6 +609,10 @@ class Backtrace(object):
                     for ind, ch in enumerate(child_nodes):
                         all_wt[ch] += temp_wt[ind]
 
+                elif model_resource[1][start_layer]["class"] == "Embedding":
+                    temp_wt = all_wt[start_layer]
+                    temp_wt = np.mean(temp_wt,axis=1)
+                    all_wt[child_nodes[0]] = all_wt[child_nodes[0]] + temp_wt
                 else:
                     temp_wt = all_wt[start_layer]
                     all_wt[child_nodes[0]] += temp_wt
@@ -598,14 +629,16 @@ class Backtrace(object):
 
         return all_wt
 
-    def contrast_eval(self, all_out, multiplier=100.0):
+    def contrast_eval(self, all_out, multiplier=100.0,
+                            scaler=None,thresholding=0.5,
+                            task="binary-classification"):
         model_resource = self.model_resource
         activation_dict = self.activation_dict
         inputcheck = False
         out_layer = model_resource[2][0]
         all_wt_pos = {}
         all_wt_neg = {}
-        start_wt_pos, start_wt_neg = UC.calculate_start_wt(all_out[out_layer])
+        start_wt_pos, start_wt_neg = UC.calculate_start_wt(all_out[out_layer],scaler,thresholding,task)
         all_wt_pos[out_layer] = start_wt_pos * multiplier
         all_wt_neg[out_layer] = start_wt_neg * multiplier
         layer_stack = [out_layer]
@@ -636,14 +669,62 @@ class Backtrace(object):
                     l1 = model_resource[0][start_layer]
                     w1 = l1.state_dict()['weight']
                     b1 = l1.state_dict()['bias']
+                    pad1 = l1.padding
+                    strides1 = l1.stride
                     temp_wt_pos, temp_wt_neg = UC.calculate_wt_conv(
                         all_wt_pos[start_layer],
                         all_wt_neg[start_layer],
                         all_out[child_nodes[0]][0],
                         w1,
                         b1,
+                        pad1,
+                        strides1,
                         activation_dict[model_resource[1][start_layer]["name"]],
                     )
+                    all_wt_pos[child_nodes[0]] += temp_wt_pos.T
+                    all_wt_neg[child_nodes[0]] += temp_wt_neg.T
+                elif model_resource[1][start_layer]["class"] == "ConvTranspose2d":
+                    l1 = model_resource[0][start_layer]
+                    w1 = l1.state_dict()['weight']
+                    b1 = l1.state_dict()['bias']
+                    pad1 = l1.padding
+                    strides1 = l1.stride
+                    temp_wt_pos,temp_wt_neg = UC.calculate_wt_conv2d_transpose(
+                        all_wt_pos[start_layer],
+                        all_wt_neg[start_layer],
+                        all_out[child_nodes[0]][0],
+                        w1,
+                        b1,
+                        pad1, 
+                        strides1,
+                        activation_dict[model_resource[1][start_layer]["name"]],
+                    )
+                    all_wt_pos[child_nodes[0]] += temp_wt_pos.T
+                    all_wt_neg[child_nodes[0]] += temp_wt_neg.T
+                elif model_resource[1][start_layer]["class"] == 'Conv1d':
+                    l1 = model_resource[0][start_layer]
+                    w1 = l1.state_dict()['weight']
+                    b1 = l1.state_dict()['bias']
+                    pad1 = l1.padding[0]
+                    strides1 = l1.stride[0]
+                    temp_wt_pos,temp_wt_neg = UC.calculate_wt_conv_1d(all_wt_pos[start_layer],
+                                                                all_wt_neg[start_layer],
+                                                                all_out[child_nodes[0]][0],
+                                                                w1,b1, pad1, strides1,
+                                                                activation_dict[model_resource[1][start_layer]['name']])
+                    all_wt_pos[child_nodes[0]] += temp_wt_pos.T
+                    all_wt_neg[child_nodes[0]] += temp_wt_neg.T
+                elif model_resource[1][start_layer]["class"] == "ConvTranspose1d":
+                    l1 = model_resource[0][start_layer]
+                    w1 = l1.state_dict()['weight']
+                    b1 = l1.state_dict()['bias']
+                    pad1 = l1.padding[0]
+                    strides1 = l1.stride[0]
+                    temp_wt_pos,temp_wt_neg = UC.calculate_wt_conv1d_transpose(all_wt_pos[start_layer],
+                                                                            all_wt_neg[start_layer],
+                                                                            all_out[child_nodes[0]][0],
+                                                                            w1,b1, pad1, strides1,
+                                                                            activation_dict[model_resource[1][start_layer]['name']])
                     all_wt_pos[child_nodes[0]] += temp_wt_pos.T
                     all_wt_neg[child_nodes[0]] += temp_wt_neg.T
                 elif model_resource[1][start_layer]["class"] == "Reshape":
@@ -698,6 +779,22 @@ class Backtrace(object):
                         (l1.kernel_size, l1.kernel_size),
                     )
                     all_wt_neg[child_nodes[0]] += temp_wt.T
+                elif model_resource[1][start_layer]["class"] == "MaxPool1d":
+                    l1 = model_resource[0][start_layer]
+                    pad1 = l1.padding
+                    strides1 = l1.stride
+                    temp_wt = UC.calculate_wt_maxpool_1d(
+                        all_wt_pos[start_layer],
+                        all_out[child_nodes[0]][0],
+                        l1.kernel_size, pad1, strides1
+                    )
+                    all_wt_pos[child_nodes[0]] += temp_wt.T
+                    temp_wt = UC.calculate_wt_maxpool_1d(
+                        all_wt_neg[start_layer],
+                        all_out[child_nodes[0]][0],
+                        l1.kernel_size, pad1, strides1
+                    )
+                    all_wt_neg[child_nodes[0]] += temp_wt.T
                 elif model_resource[1][start_layer]["class"] == "AvgPool2d":
                     l1 = model_resource[0][start_layer]
                     temp_wt_pos, temp_wt_neg = UC.calculate_wt_avgpool(
@@ -705,6 +802,18 @@ class Backtrace(object):
                         all_wt_neg[start_layer],
                         all_out[child_nodes[0]][0],
                         (l1.kernel_size, l1.kernel_size),
+                    )
+                    all_wt_pos[child_nodes[0]] += temp_wt_pos.T
+                    all_wt_neg[child_nodes[0]] += temp_wt_neg.T
+                elif model_resource[1][start_layer]["class"] == "AvgPool1d":
+                    l1 = model_resource[0][start_layer]
+                    pad1 = l1.padding
+                    strides1 = l1.stride
+                    temp_wt_pos, temp_wt_neg = UC.calculate_wt_avgpool_1d(
+                        all_wt_pos[start_layer],
+                        all_wt_neg[start_layer],
+                        all_out[child_nodes[0]][0],
+                        l1.kernel_size, pad1, strides1
                     )
                     all_wt_pos[child_nodes[0]] += temp_wt_pos.T
                     all_wt_neg[child_nodes[0]] += temp_wt_neg.T
@@ -757,6 +866,15 @@ class Backtrace(object):
                     )
                     all_wt_pos[child_nodes[0]] = temp_wt_pos
                     all_wt_neg[child_nodes[0]] = temp_wt_neg
+                elif model_resource[1][start_layer]["class"] == "Embedding":
+                    temp_wt_pos = all_wt_pos[start_layer]
+                    temp_wt_neg = all_wt_neg[start_layer]
+
+                    temp_wt_pos = np.mean(temp_wt_pos,axis=1)
+                    temp_wt_neg = np.mean(temp_wt_neg,axis=1)
+
+                    all_wt_pos[child_nodes[0]] = all_wt_pos[child_nodes[0]] + temp_wt_pos
+                    all_wt_neg[child_nodes[0]] = all_wt_neg[child_nodes[0]] + temp_wt_neg
                 else:
                     temp_wt_pos = all_wt_pos[start_layer]
                     temp_wt_neg = all_wt_neg[start_layer]
