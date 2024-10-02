@@ -26,6 +26,7 @@ class Backtrace(object):
             self.model_weights = EN.extract_encoder_weights(model)
             # # calculate the output of each submodule of the encoder model
             # self.all_out_model = EN.create_encoder_output(model)
+            self.activation_dict = None
             
         elif model_type == 'encoder_decoder':
             self.model = model
@@ -36,6 +37,7 @@ class Backtrace(object):
             self.model_weights = ED.extract_encoder_decoder_weights(model)  
             # # calculate the output of each submodule of the encoder-decoder model
             # self.all_out_model = ED.calculate_encoder_decoder_output(model)
+            self.activation_dict = None
             
         
         else:
@@ -355,7 +357,7 @@ class Backtrace(object):
                 all_wt[out_layer] = start_wt * multiplier
                 layer_stack = self.layer_stack
                 all_wts = self.model_weights
-            if self.model_type == 'encoder_decoder':
+            elif self.model_type == 'encoder_decoder':
                 start_wt = UP.calculate_enc_dec_start_wt(all_out[out_layer][0].detach().numpy(), predicted_token)
                 all_wt[out_layer] = start_wt * multiplier
                 layer_stack = self.layer_stack
