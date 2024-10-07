@@ -490,7 +490,6 @@ def calculate_wt_add(wts, inp=None):
     return wt_mat
 
 def calculate_start_wt(arg, scaler=None,thresholding=0.5,task="binary-classification"):
-    print(f"arg shape: {arg.shape}")
     if arg.ndim == 2:
         if task == "binary-classification" or task == "multi-class classification":
             x = np.argmax(arg[0])
