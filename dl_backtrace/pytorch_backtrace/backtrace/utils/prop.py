@@ -1,4 +1,5 @@
 import gc
+import concurrent.futures
 import torch
 import numpy as np
 from numpy.lib.stride_tricks import as_strided
@@ -1423,7 +1424,6 @@ def calculate_wt_classifier(wts, inp, w):
 
     for i in range(mul_mat.shape[0]):
         l1_ind1 = mul_mat[i]
-        wt_ind1 = wt_mat[i]
         wt = wts[i]
 
         p_ind = l1_ind1 > 0
@@ -1472,8 +1472,8 @@ def calculate_wt_classifier(wts, inp, w):
         if n_sum == 0:
             n_sum = 1
 
-        wt_ind1[p_ind] = (l1_ind1[p_ind] / p_sum) * wt * p_agg_wt
-        wt_ind1[n_ind] = (l1_ind1[n_ind] / n_sum) * wt * n_agg_wt * -1.0
+        wt_mat[i][p_ind] = (l1_ind1[p_ind] / p_sum) * wt * p_agg_wt
+        wt_mat[i][n_ind] = (l1_ind1[n_ind] / n_sum) * wt * n_agg_wt * -1.0
 
     wt_mat = wt_mat.sum(axis=0)
     return wt_mat
@@ -1496,7 +1496,6 @@ def calculate_wt_pooler(wts, inp, w):
         # Iterate over each unit
         for j in range(contribution_matrix.shape[0]):
             l1_ind1 = contribution_matrix[j]
-            wt_ind1 = wt_mat[j]
             wt = wts[j]
 
             p_ind = l1_ind1 > 0
@@ -1545,14 +1544,408 @@ def calculate_wt_pooler(wts, inp, w):
                 n_sum = 1
 
             # Update weight matrix
-            wt_ind1[p_ind] = (l1_ind1[p_ind] / p_sum) * wt * p_agg_wt
-            wt_ind1[n_ind] = (l1_ind1[n_ind] / n_sum) * wt * n_agg_wt * -1.0
+            wt_mat[j][p_ind] = (l1_ind1[p_ind] / p_sum) * wt * p_agg_wt
+            wt_mat[j][n_ind] = (l1_ind1[n_ind] / n_sum) * wt * n_agg_wt * -1.0
 
-        # Calculate relevance for each token
+        # Calculate relevance for each token 
         relevance_inp[i] = wt_mat.sum(axis=0)
 
-    relevance_inp *= (100 / np.sum(relevance_inp))
+    relevance_inp *= (np.sum(wts) / np.sum(relevance_inp))
     return relevance_inp
+
+
+def process_single_relevance_V(i, wts, value_output):
+    wt_mat_V = np.zeros(value_output.shape)
+    for j in range(wts.shape[1]):
+        l1_ind1 = value_output
+        wt = wts[i, j]
+
+        p_ind = l1_ind1 > 0
+        n_ind = l1_ind1 < 0
+
+        p_sum = np.sum(l1_ind1[p_ind])
+        n_sum = np.sum(l1_ind1[n_ind]) * -1
+
+        if p_sum > 0:
+            p_agg_wt = p_sum / (p_sum + n_sum)
+        else:
+            p_agg_wt = 0
+        if n_sum > 0:
+            n_agg_wt = n_sum / (p_sum + n_sum)
+        else:
+            n_agg_wt = 0
+
+        if p_sum == 0:
+            p_sum = 1
+        if n_sum == 0:
+            n_sum = 1
+
+        wt_mat_V[p_ind] += (l1_ind1[p_ind] / p_sum) * wt * p_agg_wt
+        wt_mat_V[n_ind] += (l1_ind1[n_ind] / n_sum) * wt * n_agg_wt * -1.0
+
+    return wt_mat_V
+
+# Optimized parallel function
+def calculate_relevance_V_parallel(wts, value_output):
+    wt_mat_V_total = np.zeros(value_output.shape)
+
+    # Parallel processing using ProcessPoolExecutor
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        results = list(executor.map(process_single_relevance_V, range(wts.shape[0]), [wts] * wts.shape[0], [value_output] * wts.shape[0]))
+
+    # Combine the results into the final wt_mat_V matrix
+    for result in results:
+        wt_mat_V_total += result
+
+    return wt_mat_V_total
+
+
+def process_single_relevance_QK(i, wts, QK_output):
+    wt_mat_QK = np.zeros(QK_output.shape)
+    for j in range(wts.shape[1]):
+        l1_ind1 = QK_output
+        wt = wts[i, j]
+
+        p_ind = l1_ind1 > 0
+        n_ind = l1_ind1 < 0
+        p_sum = np.sum(l1_ind1[p_ind])
+        n_sum = np.sum(l1_ind1[n_ind]) * -1
+
+        t_sum = p_sum - n_sum
+
+        # This layer has a softmax activation function
+        act = {
+            "name": "softmax",
+            "range": {"l": -1, "u": 2},
+            "type": "mono",
+            "func": None,
+        }
+
+        if act["type"] == "mono":
+            if act["range"]["l"] and t_sum < act["range"]["l"]:
+                p_sum = 0
+            if act["range"]["u"] and t_sum > act["range"]["u"]:
+                n_sum = 0
+
+        if p_sum > 0:
+            p_agg_wt = p_sum / (p_sum + n_sum)
+        else:
+            p_agg_wt = 0
+        if n_sum > 0:
+            n_agg_wt = n_sum / (p_sum + n_sum)
+        else:
+            n_agg_wt = 0
+
+        if p_sum == 0:
+            p_sum = 1
+        if n_sum == 0:
+            n_sum = 1
+
+        wt_mat_QK[p_ind] += (l1_ind1[p_ind] / p_sum) * wt * p_agg_wt
+        wt_mat_QK[n_ind] += (l1_ind1[n_ind] / n_sum) * wt * n_agg_wt * -1.0
+
+    return wt_mat_QK
+
+# Optimized parallel function
+def calculate_relevance_QK_parallel(wts, QK_output):
+    wt_mat_QK_total = np.zeros(QK_output.shape)
+
+    # Parallel processing using ProcessPoolExecutor
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        results = list(executor.map(process_single_relevance_QK, range(wts.shape[0]), [wts] * wts.shape[0], [QK_output] * wts.shape[0]))
+
+    # Combine the results into the final wt_mat_QK matrix
+    for result in results:
+        wt_mat_QK_total += result
+
+    return wt_mat_QK_total
+
+
+def process_single_relevance_attention_output(i, wts, proj_output):
+    wt_mat_proj_output = np.zeros(proj_output.shape)
+    for j in range(wts.shape[1]):
+        l1_ind1 = proj_output
+        wt = wts[i, j]
+
+        p_ind = l1_ind1 > 0
+        n_ind = l1_ind1 < 0
+        p_sum = np.sum(l1_ind1[p_ind])
+        n_sum = np.sum(l1_ind1[n_ind]) * -1
+
+        if p_sum > 0:
+            p_agg_wt = p_sum / (p_sum + n_sum)
+        else:
+            p_agg_wt = 0
+        if n_sum > 0:
+            n_agg_wt = n_sum / (p_sum + n_sum)
+        else:
+            n_agg_wt = 0
+
+        if p_sum == 0:
+            p_sum = 1
+        if n_sum == 0:
+            n_sum = 1
+
+        wt_mat_proj_output[p_ind] += (l1_ind1[p_ind] / p_sum) * wt * p_agg_wt
+        wt_mat_proj_output[n_ind] += (l1_ind1[n_ind] / n_sum) * wt * n_agg_wt * -1.0
+
+    return wt_mat_proj_output
+
+# Optimized parallel function
+def calculate_wt_attention_output_projection_parallel(wts, proj_output):
+    wt_mat_proj_output_total = np.zeros(proj_output.shape)
+
+    # Parallel processing using ProcessPoolExecutor
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        results = list(executor.map(process_single_relevance_attention_output, range(wts.shape[0]), [wts] * wts.shape[0], [proj_output] * wts.shape[0]))
+
+    # Combine the results into the final wt_mat_proj_output matrix
+    for result in results:
+        wt_mat_proj_output_total += result
+
+    return wt_mat_proj_output_total
+
+
+def calculate_wt_self_attention_parallel(wts, inp, w, config):
+    '''
+    Input:
+        wts:  relevance score of the layer
+        inp: input to the layer
+        w: weights of the layer- ['W_q', 'W_k', 'W_v', 'W_o']
+
+    Outputs:
+        Step-1: outputs = torch.matmul(input_a, input_b)
+        Step-2: outputs = F.softmax(inputs, dim=dim, dtype=dtype)
+        Step-3: outputs = input_a * input_b
+    '''
+    query_output = np.einsum('ij,kj->ik', inp, w['W_q'])
+    key_output = np.einsum('ij,kj->ik', inp, w['W_k'])
+    value_output = np.einsum('ij,kj->ik', inp, w['W_v'])
+
+    # --------------- Reshape for Multi-Head Attention ----------------------
+    num_heads = config.num_attention_heads
+    hidden_size = config.hidden_size
+    head_dim = hidden_size // num_heads  # dimension of each attention head
+
+    query_states = np.einsum('thd->htd', query_output.reshape(query_output.shape[0], num_heads, head_dim))  # (num_heads, num_tokens, head_dim)
+    key_states = np.einsum('thd->htd', key_output.reshape(key_output.shape[0], num_heads, head_dim))  # (num_heads, num_tokens, head_dim)
+    value_states = np.einsum('thd->htd', value_output.reshape(value_output.shape[0], num_heads, head_dim))  # (num_heads, num_tokens, head_dim)
+
+    QK_output = np.einsum('hqd,hkd->hqk', query_states, key_states)    # (num_heads, num_tokens, num_tokens)
+    attn_weights = QK_output / np.sqrt(head_dim)
+
+    # Apply softmax along the last dimension (softmax over key dimension)
+    attn_weights = np.exp(attn_weights - np.max(attn_weights, axis=-1, keepdims=True))  # Numerically stable softmax
+    attn_weights = attn_weights / np.sum(attn_weights, axis=-1, keepdims=True)
+
+    # Weighted sum of values (num_heads, num_tokens, head_dim)
+    attn_output = np.einsum('hqk,hkl->hql', attn_weights, value_states)
+
+    # Reshape attention output back to original shape (num_tokens, hidden_size)
+    attn_output = np.einsum('hqd->qhd', attn_output)
+    attn_output = attn_output.reshape(attn_output.shape[0], num_heads * head_dim)
+
+    # Perform final linear projection (num_tokens, hidden_size)
+    final_output = np.einsum('qd,dh->qh', attn_output, w['W_d'])
+
+    # ------------- Relevance calculation for Final Linear Projection -------------
+    wt_mat_attn_proj = calculate_wt_attention_output_projection_parallel(wts, final_output)
+
+    # --------------- Relevance Calculation for Step-3 -----------------------
+    relevance_V = wt_mat_attn_proj / 2
+    relevance_QK = wt_mat_attn_proj / 2
+
+    # --------------- Relevance Calculation for V --------------------------------
+    wt_mat_V = calculate_relevance_V_parallel(relevance_V, value_states)
+
+    # --------------- Transformed Relevance QK ----------------------------------
+    wt_mat_QK = calculate_relevance_QK_parallel(relevance_QK, QK_output)
+
+    # --------------- Relevance Calculation for K and Q --------------------------------
+    stabilized_QK_output = stabilize(QK_output * 2)
+    norm_wt_mat_QK = wt_mat_QK / stabilized_QK_output
+    wt_mat_Q = np.einsum('htd,hdb->htb', norm_wt_mat_QK, key_states) * query_states
+    wt_mat_K = np.einsum('htd,htb->hbd', query_states, norm_wt_mat_QK) * key_states
+
+    # Relevance of the attention input
+    wt_mat = wt_mat_V + wt_mat_K + wt_mat_Q
+
+    # Reshape wt_mat
+    wt_mat = np.einsum('htd->thd', wt_mat)
+    wt_mat = wt_mat.reshape(wt_mat.shape[0], wt_mat.shape[1] * wt_mat.shape[2])
+
+    return wt_mat
+
+
+def process_second_layer(i, wts, intermediate_output, W_out):
+    """
+    Process a single sample for relevance propagation in the second layer.
+
+    Parameters:
+    - i (int): Index of the sample.
+    - wts (np.ndarray): Weight matrix.
+    - intermediate_output (np.ndarray): Intermediate layer outputs.
+    - W_out (np.ndarray): Output layer weights.
+
+    Returns:
+    - np.ndarray: Relevance scores for the intermediate layer.
+    """
+    R2 = wts[i]
+    contribution_matrix2 = W_out * intermediate_output[i]
+    wt_mat2 = np.zeros(contribution_matrix2.shape)
+
+    for j in range(contribution_matrix2.shape[0]):
+        l1_ind1 = contribution_matrix2[j]
+        wt_ind1 = wt_mat2[j]
+        wt = R2[j]
+
+        p_ind = l1_ind1 > 0
+        n_ind = l1_ind1 < 0
+        p_sum = np.sum(l1_ind1[p_ind])
+        n_sum = np.sum(l1_ind1[n_ind]) * -1
+
+        if p_sum > 0:
+            p_agg_wt = p_sum / (p_sum + n_sum)
+        else:
+            p_agg_wt = 0
+
+        if n_sum > 0:
+            n_agg_wt = n_sum / (p_sum + n_sum)
+        else:
+            n_agg_wt = 0
+
+        if p_sum == 0:
+            p_sum = 1
+        if n_sum == 0:
+            n_sum = 1
+
+        wt_ind1[p_ind] = (l1_ind1[p_ind] / p_sum) * wt * p_agg_wt
+        wt_ind1[n_ind] = (l1_ind1[n_ind] / n_sum) * wt * n_agg_wt * -1.0
+
+    relevance_out = wt_mat2.sum(axis=0)
+    return relevance_out
+
+
+def process_first_layer(i, relevance_out, inp, W_int):
+    """
+    Process a single sample for relevance propagation in the first layer.
+
+    Parameters:
+    - i (int): Index of the sample.
+    - relevance_out (np.ndarray): Relevance scores from the second layer.
+    - inp (np.ndarray): Input data.
+    - W_int (np.ndarray): Intermediate layer weights.
+
+    Returns:
+    - np.ndarray: Relevance scores for the input layer.
+    """
+    R1 = relevance_out[i]
+    contribution_matrix1 = W_int * inp[i]
+    wt_mat1 = np.zeros(contribution_matrix1.shape)
+
+    for j in range(contribution_matrix1.shape[0]):
+        l1_ind1 = contribution_matrix1[j]
+        wt_ind1 = wt_mat1[j]
+        wt = R1[j]
+
+        p_ind = l1_ind1 > 0
+        n_ind = l1_ind1 < 0
+        p_sum = np.sum(l1_ind1[p_ind])
+        n_sum = np.sum(l1_ind1[n_ind]) * -1
+
+        t_sum = p_sum - n_sum
+
+        # Activation function (ReLU)
+        act = {
+            "name": "relu",
+            "range": {"l": 0, "u": None},
+            "type": "mono",
+            "func": None,
+        }
+
+        if act["type"] == "mono":
+            if act["range"]["l"]:
+                if t_sum < act["range"]["l"]:
+                    p_sum = 0
+            if act["range"]["u"]:
+                if t_sum > act["range"]["u"]:
+                    n_sum = 0
+
+        if p_sum > 0:
+            p_agg_wt = p_sum / (p_sum + n_sum)
+        else:
+            p_agg_wt = 0
+
+        if n_sum > 0:
+            n_agg_wt = n_sum / (p_sum + n_sum)
+        else:
+            n_agg_wt = 0
+
+        if p_sum == 0:
+            p_sum = 1
+        if n_sum == 0:
+            n_sum = 1
+
+        wt_ind1[p_ind] = (l1_ind1[p_ind] / p_sum) * wt * p_agg_wt
+        wt_ind1[n_ind] = (l1_ind1[n_ind] / n_sum) * wt * n_agg_wt * -1.0
+
+    relevance_input = wt_mat1.sum(axis=0)
+    return relevance_input
+
+
+def calculate_wt_feed_forward_parallel(wts, inp, w):
+    """
+    Optimized function to calculate relevance input using parallel processing.
+
+    Parameters:
+    - wts (np.ndarray): Weight matrix (Shape: (n_samples, 512)).
+    - inp (np.ndarray): Input data (Shape: (n_samples, 512)).
+    - w (dict): Dictionary containing weights:
+        - 'W_int' (np.ndarray): Intermediate layer weights (Shape: (2048, 512)).
+        - 'W_out' (np.ndarray): Output layer weights (Shape: (512, 2048)).
+
+    Returns:
+    - np.ndarray: Aggregated relevance scores for the input layer (Shape: (512,)).
+    """
+    # Perform matrix multiplications
+    intermediate_output = np.einsum('ij,jk->ik', inp, w['W_int'].T)
+    feed_forward_output = np.einsum('ij,jk->ik', intermediate_output, w['W_out'].T)
+
+    # Initialize relevance matrices
+    relevance_out = np.zeros(intermediate_output.shape)
+    relevance_input = np.zeros(inp.shape)
+
+    # Relevance propagation for 2nd layer using parallel processing
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        # Prepare tasks for the second layer
+        results_second_layer = list(executor.map(
+            process_second_layer,
+            range(wts.shape[0]),
+            [wts] * wts.shape[0],
+            [intermediate_output] * wts.shape[0],
+            [w['W_out']] * wts.shape[0]
+        ))
+
+    # Aggregate the relevance_out results
+    for i, relevance in enumerate(results_second_layer):
+        relevance_out[i] = relevance
+
+    # Relevance propagation for 1st layer using parallel processing
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        # Prepare tasks for the first layer
+        results_first_layer = list(executor.map(
+            process_first_layer,
+            range(relevance_out.shape[0]),
+            [relevance_out] * relevance_out.shape[0],
+            [inp] * relevance_out.shape[0],
+            [w['W_int']] * relevance_out.shape[0]
+        ))
+
+    # Aggregate the relevance_input results
+    for i, relevance in enumerate(results_first_layer):
+        relevance_input[i] = relevance
+
+    return relevance_input
 
 
 ####################################################################
