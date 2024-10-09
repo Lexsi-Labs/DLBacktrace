@@ -1412,6 +1412,52 @@ def calculate_wt_feed_forward(wts, inp, w):
     return relevance_input
 
 
+def calculate_wt_residual(wts, inp=None):
+    wt_mat = []
+    inp_list = []
+    expanded_wts = as_strided(
+        wts,
+        shape=(np.prod(wts.shape),),
+        strides=(wts.strides[-1],),
+        writeable=False,  # totally use this to avoid writing to memory in weird places
+    )
+
+    for x in inp:
+        expanded_input = as_strided(
+            x,
+            shape=(np.prod(x.shape),),
+            strides=(x.strides[-1],),
+            writeable=False,  # totally use this to avoid writing to memory in weird places
+        )
+        inp_list.append(expanded_input)
+        wt_mat.append(np.zeros_like(expanded_input))
+    wt_mat = np.array(wt_mat)
+    inp_list = np.array(inp_list)
+    for i in range(wt_mat.shape[1]):
+        wt_ind1 = wt_mat[:, i]
+        wt = expanded_wts[i]
+        l1_ind1 = inp_list[:, i]
+        p_ind = l1_ind1 > 0
+        n_ind = l1_ind1 < 0
+        p_sum = np.sum(l1_ind1[p_ind])
+        n_sum = np.sum(l1_ind1[n_ind]) * -1
+        t_sum = p_sum - n_sum
+        p_agg_wt = 0
+        n_agg_wt = 0
+        if p_sum + n_sum > 0:
+            p_agg_wt = p_sum / (p_sum + n_sum)
+            n_agg_wt = n_sum / (p_sum + n_sum)
+        if p_sum == 0:
+            p_sum = 1
+        if n_sum == 0:
+            n_sum = 1
+        wt_ind1[p_ind] = (l1_ind1[p_ind] / p_sum) * wt * p_agg_wt
+        wt_ind1[n_ind] = (l1_ind1[n_ind] / n_sum) * wt * n_agg_wt * -1.0
+        wt_mat[:, i] = wt_ind1
+    wt_mat = [i.reshape(wts.shape) for i in list(wt_mat)]
+    return wt_mat
+
+
 def calculate_wt_classifier(wts, inp, w):
     '''
     Input:
