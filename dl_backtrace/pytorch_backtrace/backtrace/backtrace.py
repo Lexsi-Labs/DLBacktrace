@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
+from tqdm import tqdm
 from dl_backtrace.pytorch_backtrace.backtrace.utils import contrast as UC
 from dl_backtrace.pytorch_backtrace.backtrace.utils import prop as UP
 from dl_backtrace.pytorch_backtrace.backtrace.config import activation_master
