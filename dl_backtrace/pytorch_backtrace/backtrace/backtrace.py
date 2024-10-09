@@ -367,7 +367,7 @@ class Backtrace(object):
                 all_wt[out_layer] = start_wt * multiplier
                 layer_stack = self.layer_stack
                 
-        for start_layer in layer_stack:
+        for start_layer in tqdm(layer_stack):
             if model_resource[1][start_layer]["child"]:
                 child_nodes = model_resource[1][start_layer]["child"]
                 for ch in child_nodes:
