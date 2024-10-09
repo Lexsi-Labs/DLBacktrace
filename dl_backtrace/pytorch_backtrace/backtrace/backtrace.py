@@ -540,11 +540,12 @@ class Backtrace(object):
                 elif model_resource[1][start_layer]["class"] == "Self_Attention":
                     weights = all_wts[start_layer]
                     self_attention_weights = HP.rename_self_attention_keys(weights)
-
+                    config = self.model.config
                     temp_wt = UP.calculate_wt_self_attention_parallel(
                         all_wt[start_layer],
                         all_out[child_nodes[0]][0].detach().numpy(),
                         self_attention_weights,
+                        config
                     )
                     all_wt[child_nodes[0]] += temp_wt
                 elif model_resource[1][start_layer]["class"] == 'Residual':
@@ -558,12 +559,10 @@ class Backtrace(object):
                 elif model_resource[1][start_layer]["class"] == 'Feed_Forward':
                     weights = all_wts[start_layer]
                     feed_forward_weights = HP.rename_feed_forward_keys(weights)
-                    config = self.model.config
                     temp_wt = UP.calculate_wt_feed_forward_parallel(
                         all_wt[start_layer],
                         all_out[child_nodes[0]][0].detach().numpy(),
                         feed_forward_weights, 
-                        config
                     )
                     all_wt[child_nodes[0]] += temp_wt
                     
