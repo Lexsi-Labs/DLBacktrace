@@ -1772,11 +1772,20 @@ def calculate_wt_self_attention_parallel(wts, inp, w, config):
     num_heads = config.num_attention_heads
     hidden_size = config.hidden_size
     head_dim = hidden_size // num_heads  # dimension of each attention head
+    if hasattr(config, 'num_key_value_heads'):
+        num_key_value_heads = config.num_key_value_heads
+    else:
+        num_key_value_heads = num_heads
 
     query_states = np.einsum('thd->htd', query_output.reshape(query_output.shape[0], num_heads, head_dim))  # (num_heads, num_tokens, head_dim)
-    key_states = np.einsum('thd->htd', key_output.reshape(key_output.shape[0], num_heads, head_dim))  # (num_heads, num_tokens, head_dim)
-    value_states = np.einsum('thd->htd', value_output.reshape(value_output.shape[0], num_heads, head_dim))  # (num_heads, num_tokens, head_dim)
+    key_states = np.einsum('thd->htd', key_output.reshape(key_output.shape[0], num_key_value_heads, head_dim))  # (num_key_value_heads, num_tokens, head_dim)
+    value_states = np.einsum('thd->htd', value_output.reshape(value_output.shape[0], num_key_value_heads, head_dim))  # (num_key_value_heads, num_tokens, head_dim)
 
+    # calculate how many times we need to repeat the key/value heads
+    n_rep = num_heads // num_key_value_heads
+    key_states = np.repeat(key_states, n_rep, axis=0)
+    value_states = np.repeat(value_states, n_rep, axis=0)
+    
     QK_output = np.einsum('hqd,hkd->hqk', query_states, key_states)    # (num_heads, num_tokens, num_tokens)
     attn_weights = QK_output / np.sqrt(head_dim)
 
@@ -2094,3 +2103,194 @@ def calculate_wt_cross_attention(wts, inp, w):
     wt_mat_KV = wt_mat_V + wt_mat_K
     wt_mat = [wt_mat_KV, wt_mat_Q]
     return wt_mat
+
+
+####################################################################
+###################    LLAMA Decoder Model    ######################
+####################################################################
+
+def process_single_wt_row(i, wts, inp, w):
+    relevance_input_row = np.zeros(inp.shape[1])
+    R = wts[i]
+    contribution_matrix = np.einsum('ij,j->ij', w['W_lm_head'], inp[i])
+    wt_mat = np.zeros(contribution_matrix.shape)
+
+    for j in range(contribution_matrix.shape[0]):
+        l1_ind1 = contribution_matrix[j]
+        wt = R[j]
+
+        p_ind = l1_ind1 > 0
+        n_ind = l1_ind1 < 0
+
+        p_sum = np.sum(l1_ind1[p_ind])
+        n_sum = np.sum(l1_ind1[n_ind]) * -1
+
+        p_agg_wt = p_sum / (p_sum + n_sum) if p_sum > 0 else 0
+        n_agg_wt = n_sum / (p_sum + n_sum) if n_sum > 0 else 0
+
+        p_sum = p_sum if p_sum != 0 else 1
+        n_sum = n_sum if n_sum != 0 else 1
+
+        wt_mat[j][p_ind] += (l1_ind1[p_ind] / p_sum) * wt * p_agg_wt
+        wt_mat[j][n_ind] += (l1_ind1[n_ind] / n_sum) * wt * n_agg_wt * -1.0
+
+    relevance_input_row = wt_mat.sum(axis=0)
+    return relevance_input_row
+
+
+def calculate_wt_lm_head_parallel(wts, inp, w):
+    relevance_input = np.zeros(inp.shape)
+
+    # Parallel processing using ProcessPoolExecutor
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        results = list(executor.map(process_single_wt_row, range(wts.shape[0]), [wts]*wts.shape[0], [inp]*wts.shape[0], [w]*wts.shape[0]))
+
+    # Combine the results into the final relevance_input matrix
+    for i, result in enumerate(results):
+        relevance_input[i] = result
+
+    return relevance_input
+
+
+def process_single_relevance_proj(i, wts, output):
+    wt_mat = np.zeros(output.shape)
+    for j in range(wts.shape[1]):
+        l1_ind1 = output
+        wt = wts[i, j]
+
+        p_ind = l1_ind1 > 0
+        n_ind = l1_ind1 < 0
+        p_sum = np.sum(l1_ind1[p_ind])
+        n_sum = np.sum(l1_ind1[n_ind]) * -1
+
+        if p_sum > 0:
+            p_agg_wt = p_sum / (p_sum + n_sum)
+        else:
+            p_agg_wt = 0
+        if n_sum > 0:
+            n_agg_wt = n_sum / (p_sum + n_sum)
+        else:
+            n_agg_wt = 0
+
+        if p_sum == 0:
+            p_sum = 1
+        if n_sum == 0:
+            n_sum = 1
+
+        wt_mat[p_ind] += (l1_ind1[p_ind] / p_sum) * wt * p_agg_wt
+        wt_mat[n_ind] += (l1_ind1[n_ind] / n_sum) * wt * n_agg_wt * -1.0
+
+    return wt_mat
+
+def calculate_relevance_proj_parallel(wts, output):
+    wt_mat_total = np.zeros(output.shape)
+
+    # Parallel processing using ProcessPoolExecutor
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        results = list(executor.map(process_single_relevance_proj, range(wts.shape[0]), [wts] * wts.shape[0], [output] * wts.shape[0]))
+
+    # Combine the results into the final wt_mat matrix
+    for result in results:
+        wt_mat_total += result
+
+    return wt_mat_total
+
+
+def process_single_relevance_gated_proj(i, wts, output):
+    wt_mat = np.zeros(output.shape)
+
+    for j in range(wts.shape[1]):
+        l1_ind1 = output
+        wt = wts[i, j]
+
+        p_ind = l1_ind1 > 0
+        n_ind = l1_ind1 < 0
+        p_sum = np.sum(l1_ind1[p_ind])
+        n_sum = np.sum(l1_ind1[n_ind]) * -1
+
+        t_sum = p_sum - n_sum
+
+        act = {
+            'name': 'swish',
+            'range': {'l': -6, 'u': None},
+            'type': 'non_mono',
+            'func': np_swish
+        }
+
+        # Activation function processing (same as before)
+        if act["type"] == "mono":
+            if act["range"]["l"] and t_sum < act["range"]["l"]:
+                p_sum = 0
+            if act["range"]["u"] and t_sum > act["range"]["u"]:
+                n_sum = 0
+        elif act["type"] == "non_mono":
+            t_act = act["func"](t_sum)
+            p_act = act["func"](p_sum)
+            n_act = act["func"](-1 * n_sum)
+            if act["range"]["l"] and t_sum < act["range"]["l"]:
+                p_sum = 0
+            if act["range"]["u"] and t_sum > act["range"]["u"]:
+                n_sum = 0
+            if p_sum > 0 and n_sum > 0:
+                if t_act == p_act:
+                    n_sum = 0
+                elif t_act == n_act:
+                    p_sum = 0
+
+        if p_sum > 0:
+            p_agg_wt = p_sum / (p_sum + n_sum)
+        else:
+            p_agg_wt = 0
+        if n_sum > 0:
+            n_agg_wt = n_sum / (p_sum + n_sum)
+        else:
+            n_agg_wt = 0
+
+        if p_sum == 0:
+            p_sum = 1
+        if n_sum == 0:
+            n_sum = 1
+
+        wt_mat[p_ind] += (l1_ind1[p_ind] / p_sum) * wt * p_agg_wt
+        wt_mat[n_ind] += (l1_ind1[n_ind] / n_sum) * wt * n_agg_wt * -1.0
+
+    return wt_mat
+
+
+def calculate_relevance_gated_proj_parallel(wts, output):
+    wt_mat_total = np.zeros(output.shape)
+
+    # Parallel processing using ProcessPoolExecutor
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        results = list(executor.map(process_single_relevance_gated_proj, range(wts.shape[0]), [wts] * wts.shape[0], [output] * wts.shape[0]))
+
+    # Combine the results into the final wt_mat matrix
+    for result in results:
+        wt_mat_total += result
+
+    return wt_mat_total
+
+
+def calculate_wt_llama_feed_forward_parallel(wts, inp, w):
+    gate_proj_output = np.einsum('ij,jk->ik', inp, w['W_g'].T)    # (8, 14336)
+    up_proj_output = np.einsum('ij,jk->ik', inp, w['W_u'].T)    # (8, 14336)
+    intermediate_output = np_swish(gate_proj_output) * up_proj_output    # (8, 14336)
+    down_proj_output = np.einsum('ij,jk->ik', intermediate_output, w['W_d'].T)    # (8, 4096)
+
+    # -------------------- Relevance Calculation for down_proj-------------------------------------
+    relevance_down_proj = calculate_relevance_proj_parallel(wts, down_proj_output)
+
+    # -------------------- Relevance intermediate_output --------------------------------
+    relevance_int_output = calculate_relevance_proj_parallel(relevance_down_proj, intermediate_output)
+
+    # -------------------- Distribute the relevance into gate_proj and up_proj
+    relevance_gate_proj = relevance_int_output / 2
+    relevance_up_proj = relevance_int_output / 2
+
+    # ------------------- Distribute the gate_proj and up_proj to the input ---------------------------
+    relevance_input_gate_proj = calculate_relevance_gated_proj_parallel(relevance_gate_proj, inp)
+    relevance_input_up_proj = calculate_relevance_proj_parallel(relevance_up_proj, inp)
+
+    relevance_input = relevance_input_gate_proj + relevance_input_up_proj
+
+    return relevance_input
