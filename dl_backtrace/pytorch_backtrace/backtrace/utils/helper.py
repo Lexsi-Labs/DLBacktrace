@@ -6,19 +6,19 @@ from collections import defaultdict
 def rename_self_attention_keys(attention_weights):
     renamed_weights = {}
     for key, value in attention_weights.items():
-        if 'query.weight' in key or 'SelfAttention.q.weight' in key:
+        if 'query.weight' in key or 'SelfAttention.q.weight' in key or 'self_attn.q_proj' in key:
             new_key = key.replace(key, 'W_q')
         elif 'query.bias' in key or 'SelfAttention.q.bias' in key:
             new_key = key.replace(key, 'b_q')
-        elif 'key.weight' in key or 'SelfAttention.k.weight' in key:
+        elif 'key.weight' in key or 'SelfAttention.k.weight' in key or 'self_attn.k_proj' in key:
             new_key = key.replace(key, 'W_k')
         elif 'key.bias' in key or 'SelfAttention.k.bias' in key:
             new_key = key.replace(key, 'b_k')
-        elif 'value.weight' in key or 'SelfAttention.v.weight' in key:
+        elif 'value.weight' in key or 'SelfAttention.v.weight' in key or 'self_attn.v_proj' in key:
             new_key = key.replace(key, 'W_v')
         elif 'value.bias' in key or 'SelfAttention.v.bias' in key:
             new_key = key.replace(key, 'b_v')
-        elif 'output.dense.weight' in key or 'SelfAttention.o.weight' in key:
+        elif 'output.dense.weight' in key or 'SelfAttention.o.weight' in key or 'self_attn.o_proj' in key:
             new_key = key.replace(key, 'W_d')
         elif 'output.dense.bias' in key or 'SelfAttention.o.bias' in key:
             new_key = key.replace(key, 'b_d')
@@ -84,12 +84,28 @@ def rename_classifier_keys(classifier_weights):
         renamed_weights[new_key] = value
     return renamed_weights
 
+
 def rename_decoder_lm_head(lm_head_weights):
     renamed_weights = {}
 
     for key, value in lm_head_weights.items():
-        if 'shared.weight' in key:
+        if 'shared.weight' in key or 'lm_head.weight' in key:
             new_key = key.replace(key, 'W_lm_head')
+
+        renamed_weights[new_key] = value
+    return renamed_weights
+
+
+def rename_llama_feed_forward_keys(feed_forward_weights):
+    renamed_weights = {}
+
+    for key, value in feed_forward_weights.items():
+        if 'mlp.gate_proj.weight' in key:
+            new_key = key.replace(key, 'W_g')
+        elif 'mlp.up_proj.weight' in key:
+            new_key = key.replace(key, 'W_u')
+        elif 'mlp.down_proj.weight' in key:
+            new_key = key.replace(key, 'W_d')
 
         renamed_weights[new_key] = value
     return renamed_weights
