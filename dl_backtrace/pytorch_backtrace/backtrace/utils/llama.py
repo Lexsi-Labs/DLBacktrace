@@ -115,27 +115,27 @@ def extract_llama_weights(model):
     # Extract the model's parameters and organize them into the dictionary
     for name, param in model.named_parameters():
         if 'embed_tokens.weight' in name:
-            weights_dict['embeddings'][name] = param.data.numpy()
+            weights_dict['embeddings'][name] = param.data.cpu().numpy()
 
         elif 'layers' in name:
             layer = name.split('.')[2]
             submodule = name.split('.')[3]
 
             if 'input_layernorm' in submodule:
-                weights_dict[f'decoder_layer_norm_{layer}_0'][name] = param.data.numpy()
+                weights_dict[f'decoder_layer_norm_{layer}_0'][name] = param.data.cpu().numpy()
             elif 'self_attn' in submodule:
-                weights_dict[f'decoder_self_attention_{layer}'][name] = param.data.numpy()
+                weights_dict[f'decoder_self_attention_{layer}'][name] = param.data.cpu().numpy()
             elif 'post_attention_layernorm' in submodule:
-                weights_dict[f'decoder_layer_norm_{layer}_1'][name] = param.data.numpy()
+                weights_dict[f'decoder_layer_norm_{layer}_1'][name] = param.data.cpu().numpy()
             elif 'mlp' in submodule:
-                weights_dict[f'decoder_feed_forward_{layer}'][name] = param.data.numpy()
+                weights_dict[f'decoder_feed_forward_{layer}'][name] = param.data.cpu().numpy()
 
         elif 'norm.weight' in name:
-            weights_dict['decoder_layer_norm'][name] = param.data.numpy()
+            weights_dict['decoder_layer_norm'][name] = param.data.cpu().numpy()
 
     # Manually add the lm_head weights
     if hasattr(model, 'lm_head'):
-        lm_head_weights = model.lm_head.weight.data.numpy()
+        lm_head_weights = model.lm_head.weight.data.cpu().numpy()
         weights_dict['decoder_lm_head']['lm_head.weight'] = lm_head_weights
 
     return weights_dict
