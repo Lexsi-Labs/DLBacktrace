@@ -141,7 +141,7 @@ def extract_llama_weights(model):
     return weights_dict
 
 
-def create_llama_output(input_text, model, tokenizer, device):
+def create_llama_output(input_text, model, tokenizer, max_length, device):
     # Initialize variables
     token_idx = 0
     decoder_outputs = defaultdict(lambda: defaultdict(dict))

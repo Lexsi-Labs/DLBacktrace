@@ -8,6 +8,8 @@ from dl_backtrace.pytorch_backtrace.backtrace.config import activation_master
 from dl_backtrace.pytorch_backtrace.backtrace.utils import helper as HP
 from dl_backtrace.pytorch_backtrace.backtrace.utils import encoder as EN
 from dl_backtrace.pytorch_backtrace.backtrace.utils import encoder_decoder as ED
+from dl_backtrace.pytorch_backtrace.backtrace.utils import llama as LL
+
 
 class Backtrace(object):
     """
@@ -40,7 +42,17 @@ class Backtrace(object):
             # self.all_out_model = ED.calculate_encoder_decoder_output(model)
             self.activation_dict = None
             
-        
+        elif model_type == 'llama':
+            self.model = model
+            self.model_type = model_type
+            # create a tree-like structure and layer stack for llama model
+            self.model_resource, self.layer_stack = LL.build_llama_tree(model)
+            # extract the llama model weights
+            self.model_weights = LL.extract_llama_weights(model)
+            # # calculate the output of each submodule of the llama model
+            # self.all_out_model = LL.create_llama_output(input_text, model, tokenizer, max_length, device)
+            self.activation_dict = None 
+            
         else:
             self.model_type = model_type
             # create a tree-like structure that represents the layers of the neural network model
@@ -358,7 +370,7 @@ class Backtrace(object):
                 all_wt[out_layer] = start_wt * multiplier
                 layer_stack = self.layer_stack
                 all_wts = self.model_weights
-            elif self.model_type == 'encoder_decoder':
+            elif self.model_type == 'encoder_decoder' or self.model_type == 'llama':
                 start_wt = UP.calculate_enc_dec_start_wt(all_out[out_layer][0].detach().numpy(), predicted_token)
                 all_wt[out_layer] = start_wt * multiplier
                 layer_stack = self.layer_stack
