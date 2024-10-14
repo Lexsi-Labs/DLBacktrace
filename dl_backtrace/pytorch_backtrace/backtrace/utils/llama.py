@@ -86,13 +86,13 @@ def build_llama_tree(model, root='llama'):
     # reverse the layer_stack
     layer_stack = list(reversed(layer_stack))
 
-    # model_resource = (layer_tree, ltree, outputs, inputs)
-    model_resource = {
-        "layers": layer_tree,
-        "graph": ltree,
-        "outputs": outputs,
-        "inputs": inputs
-    }
+    model_resource = (layer_tree, ltree, outputs, inputs)
+    # model_resource = {
+    #     "layers": layer_tree,
+    #     "graph": ltree,
+    #     "outputs": outputs,
+    #     "inputs": inputs
+    # }
 
     return model_resource, layer_stack
 
