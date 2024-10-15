@@ -1836,17 +1836,17 @@ def calculate_wt_self_attention_parallel(wts, inp, w, config):
     final_output = np.einsum('qd,dh->qh', attn_output, w['W_d'])
 
     # ------------- Relevance calculation for Final Linear Projection -------------
-    wt_mat_attn_proj = calculate_wt_attention_output_projection_parallel(wts, final_output)
+    wt_mat_attn_proj = calculate_wt_attention_output_projection_parallel(wts, final_output, w)
 
     # --------------- Relevance Calculation for Step-3 -----------------------
     relevance_V = wt_mat_attn_proj / 2
     relevance_QK = wt_mat_attn_proj / 2
 
     # --------------- Relevance Calculation for V --------------------------------
-    wt_mat_V = calculate_relevance_V_parallel(relevance_V, value_states)
+    wt_mat_V = calculate_relevance_V_parallel(relevance_V, value_states, w)
 
     # --------------- Transformed Relevance QK ----------------------------------
-    wt_mat_QK = calculate_relevance_QK_parallel(relevance_QK, QK_output)
+    wt_mat_QK = calculate_relevance_QK_parallel(relevance_QK, QK_output, w)
 
     # --------------- Relevance Calculation for K and Q --------------------------------
     stabilized_QK_output = stabilize(QK_output * 2)
