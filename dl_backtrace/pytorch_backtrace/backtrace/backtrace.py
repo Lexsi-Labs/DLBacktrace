@@ -579,7 +579,7 @@ class Backtrace(object):
                     )
                     all_wt[child_nodes[0]] += temp_wt
                     
-                elif model_resource["graph"][start_layer]["class"] == 'LLAMA_Feed_Forward':
+                elif model_resource[1][start_layer]["class"] == 'LLAMA_Feed_Forward':
                     weights = all_wts[start_layer]
                     feed_forward_weights = HP.rename_llama_feed_forward_keys(weights)
                     temp_wt = UP.calculate_wt_llama_feed_forward_parallel(
