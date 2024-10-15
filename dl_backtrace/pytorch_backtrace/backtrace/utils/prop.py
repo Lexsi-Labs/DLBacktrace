@@ -1600,7 +1600,7 @@ def calculate_wt_pooler(wts, inp, w):
     return relevance_inp
 
 
-def process_single_relevance_V(i, wts, value_output):
+def process_single_relevance_V(i, wts, value_output, w):
     wt_mat_V = np.zeros(value_output.shape)
     for j in range(wts.shape[1]):
         l1_ind1 = value_output
@@ -1608,16 +1608,24 @@ def process_single_relevance_V(i, wts, value_output):
 
         p_ind = l1_ind1 > 0
         n_ind = l1_ind1 < 0
-
         p_sum = np.sum(l1_ind1[p_ind])
         n_sum = np.sum(l1_ind1[n_ind]) * -1
 
+        if w['b_v'][i] > 0:
+            pbias = w['b_v'][i]
+            nbias = 0
+        else:
+            pbias = 0
+            nbias = w['b_v'][i] * -1
+
         if p_sum > 0:
-            p_agg_wt = p_sum / (p_sum + n_sum)
+            p_agg_wt = (p_sum + pbias) / (p_sum + n_sum + pbias + nbias)
+            p_agg_wt = p_agg_wt * (p_sum / (p_sum + pbias))
         else:
             p_agg_wt = 0
         if n_sum > 0:
-            n_agg_wt = n_sum / (p_sum + n_sum)
+            n_agg_wt = (n_sum + nbias) / (p_sum + n_sum + pbias + nbias)
+            n_agg_wt = n_agg_wt * (n_sum / (n_sum + nbias))
         else:
             n_agg_wt = 0
 
@@ -1632,12 +1640,12 @@ def process_single_relevance_V(i, wts, value_output):
     return wt_mat_V
 
 # Optimized parallel function
-def calculate_relevance_V_parallel(wts, value_output):
+def calculate_relevance_V_parallel(wts, value_output, w):
     wt_mat_V_total = np.zeros(value_output.shape)
 
     # Parallel processing using ProcessPoolExecutor
     with concurrent.futures.ProcessPoolExecutor() as executor:
-        results = list(executor.map(process_single_relevance_V, range(wts.shape[0]), [wts] * wts.shape[0], [value_output] * wts.shape[0]))
+        results = list(executor.map(process_single_relevance_V, range(wts.shape[0]), [wts] * wts.shape[0], [value_output] * wts.shape[0], [w] * wts.shape[0]))
 
     # Combine the results into the final wt_mat_V matrix
     for result in results:
@@ -1646,7 +1654,7 @@ def calculate_relevance_V_parallel(wts, value_output):
     return wt_mat_V_total
 
 
-def process_single_relevance_QK(i, wts, QK_output):
+def process_single_relevance_QK(i, wts, QK_output, w):
     wt_mat_QK = np.zeros(QK_output.shape)
     for j in range(wts.shape[1]):
         l1_ind1 = QK_output
@@ -1657,7 +1665,20 @@ def process_single_relevance_QK(i, wts, QK_output):
         p_sum = np.sum(l1_ind1[p_ind])
         n_sum = np.sum(l1_ind1[n_ind]) * -1
 
-        t_sum = p_sum - n_sum
+        if w['b_q'][i] > 0 and w['b_k'][i] > 0:
+            pbias = w['b_q'][i] + w['b_k'][i]
+            nbias = 0
+        elif w['b_q'][i] > 0 and w['b_k'][i] < 0:
+            pbias = w['b_q'][i]
+            nbias = w['b_k'][i] * -1
+        elif w['b_q'][i] < 0 and w['b_k'][i] > 0:
+            pbias = w['b_q'][i] * -1
+            nbias = w['b_k'][i]            
+        else:
+            pbias = 0
+            nbias = (w['b_q'][i] + w['b_k'][i]) * -1
+
+        t_sum = p_sum + pbias - n_sum - nbias        
 
         # This layer has a softmax activation function
         act = {
@@ -1674,11 +1695,13 @@ def process_single_relevance_QK(i, wts, QK_output):
                 n_sum = 0
 
         if p_sum > 0:
-            p_agg_wt = p_sum / (p_sum + n_sum)
+            p_agg_wt = (p_sum + pbias) / (p_sum + n_sum + pbias + nbias)
+            p_agg_wt = p_agg_wt * (p_sum / (p_sum + pbias))
         else:
             p_agg_wt = 0
         if n_sum > 0:
-            n_agg_wt = n_sum / (p_sum + n_sum)
+            n_agg_wt = (n_sum + nbias) / (p_sum + n_sum + pbias + nbias)
+            n_agg_wt = n_agg_wt * (n_sum / (n_sum + nbias))
         else:
             n_agg_wt = 0
 
@@ -1693,21 +1716,21 @@ def process_single_relevance_QK(i, wts, QK_output):
     return wt_mat_QK
 
 # Optimized parallel function
-def calculate_relevance_QK_parallel(wts, QK_output):
+def calculate_relevance_QK_parallel(wts, QK_output, w):
     wt_mat_QK_total = np.zeros(QK_output.shape)
 
     # Parallel processing using ProcessPoolExecutor
     with concurrent.futures.ProcessPoolExecutor() as executor:
-        results = list(executor.map(process_single_relevance_QK, range(wts.shape[0]), [wts] * wts.shape[0], [QK_output] * wts.shape[0]))
+        results = list(executor.map(process_single_relevance_QK, range(wts.shape[0]), [wts] * wts.shape[0], [QK_output] * wts.shape[0], [w] * wts.shape[0]))
 
     # Combine the results into the final wt_mat_QK matrix
     for result in results:
-        wt_mat_QK_total += result
+        wt_mat_QK_total += result 
 
     return wt_mat_QK_total
 
 
-def process_single_relevance_attention_output(i, wts, proj_output):
+def process_single_relevance_attention_output(i, wts, proj_output, w):
     wt_mat_proj_output = np.zeros(proj_output.shape)
     for j in range(wts.shape[1]):
         l1_ind1 = proj_output
@@ -1718,12 +1741,21 @@ def process_single_relevance_attention_output(i, wts, proj_output):
         p_sum = np.sum(l1_ind1[p_ind])
         n_sum = np.sum(l1_ind1[n_ind]) * -1
 
+        if w['b_d'][i] > 0:
+            pbias = w['b_d'][i]
+            nbias = 0
+        else:
+            pbias = 0
+            nbias = w['b_d'][i] * -1
+
         if p_sum > 0:
-            p_agg_wt = p_sum / (p_sum + n_sum)
+            p_agg_wt = (p_sum + pbias) / (p_sum + n_sum + pbias + nbias)
+            p_agg_wt = p_agg_wt * (p_sum / (p_sum + pbias))
         else:
             p_agg_wt = 0
         if n_sum > 0:
-            n_agg_wt = n_sum / (p_sum + n_sum)
+            n_agg_wt = (n_sum + nbias) / (p_sum + n_sum + pbias + nbias)
+            n_agg_wt = n_agg_wt * (n_sum / (n_sum + nbias))
         else:
             n_agg_wt = 0
 
@@ -1738,18 +1770,18 @@ def process_single_relevance_attention_output(i, wts, proj_output):
     return wt_mat_proj_output
 
 # Optimized parallel function
-def calculate_wt_attention_output_projection_parallel(wts, proj_output):
+def calculate_wt_attention_output_projection_parallel(wts, proj_output, w):
     wt_mat_proj_output_total = np.zeros(proj_output.shape)
 
     # Parallel processing using ProcessPoolExecutor
     with concurrent.futures.ProcessPoolExecutor() as executor:
-        results = list(executor.map(process_single_relevance_attention_output, range(wts.shape[0]), [wts] * wts.shape[0], [proj_output] * wts.shape[0]))
+        results = list(executor.map(process_single_relevance_attention_output, range(wts.shape[0]), [wts] * wts.shape[0], [proj_output] * wts.shape[0], [w] * wts.shape[0]))
 
     # Combine the results into the final wt_mat_proj_output matrix
     for result in results:
         wt_mat_proj_output_total += result
 
-    return wt_mat_proj_output_total
+    return wt_mat_proj_output_total 
 
 
 def calculate_wt_self_attention_parallel(wts, inp, w, config):
@@ -1832,7 +1864,7 @@ def calculate_wt_self_attention_parallel(wts, inp, w, config):
     return wt_mat
 
 
-def process_second_layer(i, wts, intermediate_output, W_out):
+def process_second_layer(i, wts, intermediate_output, w):
     """
     Process a single sample for relevance propagation in the second layer.
 
@@ -1846,7 +1878,7 @@ def process_second_layer(i, wts, intermediate_output, W_out):
     - np.ndarray: Relevance scores for the intermediate layer.
     """
     R2 = wts[i]
-    contribution_matrix2 = W_out * intermediate_output[i]
+    contribution_matrix2 = w['W_out'] * intermediate_output[i]
     wt_mat2 = np.zeros(contribution_matrix2.shape)
 
     for j in range(contribution_matrix2.shape[0]):
@@ -1859,13 +1891,21 @@ def process_second_layer(i, wts, intermediate_output, W_out):
         p_sum = np.sum(l1_ind1[p_ind])
         n_sum = np.sum(l1_ind1[n_ind]) * -1
 
+        if w['b_out'][i] > 0:
+            pbias = w['b_out'][i]
+            nbias = 0
+        else:
+            pbias = 0
+            nbias = w['b_out'][i] * -1
+
         if p_sum > 0:
-            p_agg_wt = p_sum / (p_sum + n_sum)
+            p_agg_wt = (p_sum + pbias) / (p_sum + n_sum + pbias + nbias)
+            p_agg_wt = p_agg_wt * (p_sum / (p_sum + pbias))
         else:
             p_agg_wt = 0
-
         if n_sum > 0:
-            n_agg_wt = n_sum / (p_sum + n_sum)
+            n_agg_wt = (n_sum + nbias) / (p_sum + n_sum + pbias + nbias)
+            n_agg_wt = n_agg_wt * (n_sum / (n_sum + nbias))
         else:
             n_agg_wt = 0
 
@@ -1881,7 +1921,7 @@ def process_second_layer(i, wts, intermediate_output, W_out):
     return relevance_out
 
 
-def process_first_layer(i, relevance_out, inp, W_int):
+def process_first_layer(i, relevance_out, inp, w):
     """
     Process a single sample for relevance propagation in the first layer.
 
@@ -1895,7 +1935,7 @@ def process_first_layer(i, relevance_out, inp, W_int):
     - np.ndarray: Relevance scores for the input layer.
     """
     R1 = relevance_out[i]
-    contribution_matrix1 = W_int * inp[i]
+    contribution_matrix1 = w['W_int'] * inp[i]
     wt_mat1 = np.zeros(contribution_matrix1.shape)
 
     for j in range(contribution_matrix1.shape[0]):
@@ -1908,7 +1948,14 @@ def process_first_layer(i, relevance_out, inp, W_int):
         p_sum = np.sum(l1_ind1[p_ind])
         n_sum = np.sum(l1_ind1[n_ind]) * -1
 
-        t_sum = p_sum - n_sum
+        if w['b_int'][i] > 0:
+            pbias = w['b_int'][i]
+            nbias = 0
+        else:
+            pbias = 0
+            nbias = w['b_int'][i] * -1
+
+        t_sum = p_sum + pbias - n_sum - nbias
 
         # Activation function (ReLU)
         act = {
@@ -1927,12 +1974,13 @@ def process_first_layer(i, relevance_out, inp, W_int):
                     n_sum = 0
 
         if p_sum > 0:
-            p_agg_wt = p_sum / (p_sum + n_sum)
+            p_agg_wt = (p_sum + pbias) / (p_sum + n_sum + pbias + nbias)
+            p_agg_wt = p_agg_wt * (p_sum / (p_sum + pbias))
         else:
             p_agg_wt = 0
-
         if n_sum > 0:
-            n_agg_wt = n_sum / (p_sum + n_sum)
+            n_agg_wt = (n_sum + nbias) / (p_sum + n_sum + pbias + nbias)
+            n_agg_wt = n_agg_wt * (n_sum / (n_sum + nbias))
         else:
             n_agg_wt = 0
 
@@ -1945,7 +1993,7 @@ def process_first_layer(i, relevance_out, inp, W_int):
         wt_ind1[n_ind] = (l1_ind1[n_ind] / n_sum) * wt * n_agg_wt * -1.0
 
     relevance_input = wt_mat1.sum(axis=0)
-    return relevance_input
+    return relevance_input 
 
 
 def calculate_wt_feed_forward_parallel(wts, inp, w):
@@ -1978,7 +2026,7 @@ def calculate_wt_feed_forward_parallel(wts, inp, w):
             range(wts.shape[0]),
             [wts] * wts.shape[0],
             [intermediate_output] * wts.shape[0],
-            [w['W_out']] * wts.shape[0]
+            [w] * wts.shape[0]
         ))
 
     # Aggregate the relevance_out results
@@ -1993,7 +2041,7 @@ def calculate_wt_feed_forward_parallel(wts, inp, w):
             range(relevance_out.shape[0]),
             [relevance_out] * relevance_out.shape[0],
             [inp] * relevance_out.shape[0],
-            [w['W_int']] * relevance_out.shape[0]
+            [w] * relevance_out.shape[0]
         ))
 
     # Aggregate the relevance_input results
