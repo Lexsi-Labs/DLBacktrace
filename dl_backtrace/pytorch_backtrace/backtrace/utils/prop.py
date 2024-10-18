@@ -1829,28 +1829,33 @@ def calculate_wt_self_attention_parallel(wts, inp, w, config):
     attn_output = np.einsum('hqk,hkl->hql', attn_weights, value_states)
 
     # Reshape attention output back to original shape (num_tokens, hidden_size)
-    attn_output = np.einsum('hqd->qhd', attn_output)
-    attn_output = attn_output.reshape(attn_output.shape[0], num_heads * head_dim)
+    transposed_attn_output = np.einsum('hqd->qhd', attn_output)
+    reshaped_attn_output = transposed_attn_output.reshape(transposed_attn_output.shape[0], num_heads * head_dim)
 
     # Perform final linear projection (num_tokens, hidden_size)
-    final_output = np.einsum('qd,dh->qh', attn_output, w['W_d'])
+    final_output = np.einsum('qd,dh->qh', reshaped_attn_output, w['W_d'])
 
     # ------------- Relevance calculation for Final Linear Projection -------------
     wt_mat_attn_proj = calculate_wt_attention_output_projection_parallel(wts, final_output, w)
 
     # --------------- Relevance Calculation for Step-3 -----------------------
-    relevance_V = wt_mat_attn_proj / 2
-    relevance_QK = wt_mat_attn_proj / 2
-
+    # divide the relevance among `attn_weights` and `value_states`
+    wt_mat_attn_proj = wt_mat_attn_proj.reshape(-1, num_heads, head_dim)
+    wt_mat_attn_proj = np.einsum('qhd->hqd', wt_mat_attn_proj)
+    
+    stabilized_attn_output = stabilize(attn_output * 2)
+    norm_wt_mat_attn_proj = wt_mat_attn_proj / stabilized_attn_output
+    relevance_QK = np.einsum('htd,hbd->htb', norm_wt_mat_attn_proj, value_states) * attn_weights
+    relevance_V = np.einsum('htd,hdb->htb', attn_weights, norm_wt_mat_attn_proj)  * value_states
+    
     # --------------- Relevance Calculation for V --------------------------------
+    relevance_V = np.einsum('hqd->qhd', relevance_V)
+    relevance_V = relevance_V.reshape(-1, num_heads * head_dim)
     wt_mat_V = calculate_relevance_V_parallel(relevance_V, value_states, w)
 
-    # --------------- Transformed Relevance QK ----------------------------------
-    wt_mat_QK = calculate_relevance_QK_parallel(relevance_QK, QK_output, w)
-
-    # --------------- Relevance Calculation for K and Q --------------------------------
+    # --------------- Relevance Calculation for Q and K --------------------------------
     stabilized_QK_output = stabilize(QK_output * 2)
-    norm_wt_mat_QK = wt_mat_QK / stabilized_QK_output
+    norm_wt_mat_QK = relevance_QK / stabilized_QK_output
     wt_mat_Q = np.einsum('htd,hdb->htb', norm_wt_mat_QK, key_states) * query_states
     wt_mat_K = np.einsum('htd,htb->hbd', query_states, norm_wt_mat_QK) * key_states
 
