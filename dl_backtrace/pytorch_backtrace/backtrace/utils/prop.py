@@ -1804,20 +1804,11 @@ def calculate_wt_self_attention_parallel(wts, inp, w, config):
     num_heads = config.num_attention_heads
     hidden_size = config.hidden_size
     head_dim = hidden_size // num_heads  # dimension of each attention head
-    if hasattr(config, 'num_key_value_heads'):
-        num_key_value_heads = config.num_key_value_heads
-    else:
-        num_key_value_heads = num_heads
 
     query_states = np.einsum('thd->htd', query_output.reshape(query_output.shape[0], num_heads, head_dim))  # (num_heads, num_tokens, head_dim)
-    key_states = np.einsum('thd->htd', key_output.reshape(key_output.shape[0], num_key_value_heads, head_dim))  # (num_key_value_heads, num_tokens, head_dim)
-    value_states = np.einsum('thd->htd', value_output.reshape(value_output.shape[0], num_key_value_heads, head_dim))  # (num_key_value_heads, num_tokens, head_dim)
+    key_states = np.einsum('thd->htd', key_output.reshape(key_output.shape[0], num_heads, head_dim))  # (num_heads, num_tokens, head_dim)
+    value_states = np.einsum('thd->htd', value_output.reshape(value_output.shape[0], num_heads, head_dim))  # (num_heads, num_tokens, head_dim)
 
-    # calculate how many times we need to repeat the key/value heads
-    n_rep = num_heads // num_key_value_heads
-    key_states = np.repeat(key_states, n_rep, axis=0)
-    value_states = np.repeat(value_states, n_rep, axis=0)
-    
     QK_output = np.einsum('hqd,hkd->hqk', query_states, key_states)    # (num_heads, num_tokens, num_tokens)
     attn_weights = QK_output / np.sqrt(head_dim)
 
@@ -1828,7 +1819,6 @@ def calculate_wt_self_attention_parallel(wts, inp, w, config):
     # Weighted sum of values (num_heads, num_tokens, head_dim)
     attn_output = np.einsum('hqk,hkl->hql', attn_weights, value_states)
 
-    # Reshape attention output back to original shape (num_tokens, hidden_size)
     transposed_attn_output = np.einsum('hqd->qhd', attn_output)
     reshaped_attn_output = transposed_attn_output.reshape(transposed_attn_output.shape[0], num_heads * head_dim)
 
@@ -1842,29 +1832,28 @@ def calculate_wt_self_attention_parallel(wts, inp, w, config):
     # divide the relevance among `attn_weights` and `value_states`
     wt_mat_attn_proj = wt_mat_attn_proj.reshape(-1, num_heads, head_dim)
     wt_mat_attn_proj = np.einsum('qhd->hqd', wt_mat_attn_proj)
-    
+
     stabilized_attn_output = stabilize(attn_output * 2)
     norm_wt_mat_attn_proj = wt_mat_attn_proj / stabilized_attn_output
     relevance_QK = np.einsum('htd,hbd->htb', norm_wt_mat_attn_proj, value_states) * attn_weights
     relevance_V = np.einsum('htd,hdb->htb', attn_weights, norm_wt_mat_attn_proj)  * value_states
-    
+
     # --------------- Relevance Calculation for V --------------------------------
     relevance_V = np.einsum('hqd->qhd', relevance_V)
     relevance_V = relevance_V.reshape(-1, num_heads * head_dim)
     wt_mat_V = calculate_relevance_V_parallel(relevance_V, value_states, w)
 
-    # --------------- Relevance Calculation for Q and K --------------------------------
+    # --------------- Relevance Calculation for K and Q --------------------------------
     stabilized_QK_output = stabilize(QK_output * 2)
     norm_wt_mat_QK = relevance_QK / stabilized_QK_output
     wt_mat_Q = np.einsum('htd,hdb->htb', norm_wt_mat_QK, key_states) * query_states
     wt_mat_K = np.einsum('htd,htb->hbd', query_states, norm_wt_mat_QK) * key_states
 
-    # Relevance of the attention input
     wt_mat = wt_mat_V + wt_mat_K + wt_mat_Q
 
     # Reshape wt_mat
     wt_mat = np.einsum('htd->thd', wt_mat)
-    wt_mat = wt_mat.reshape(wt_mat.shape[0], wt_mat.shape[1] * wt_mat.shape[2])
+    wt_mat = wt_mat.reshape(wt_mat.shape[0], wt_mat.shape[1] * wt_mat.shape[2])  # reshaped_array = array.reshape(8, 32 * 128)
 
     return wt_mat
 
