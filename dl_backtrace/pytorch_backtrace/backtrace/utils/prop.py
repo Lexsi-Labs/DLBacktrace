@@ -1837,7 +1837,7 @@ def calculate_wt_self_attention_parallel(wts, inp, w, config):
     stabilized_attn_output = stabilize(attn_output * 2)
     norm_wt_mat_attn_proj = wt_mat_attn_proj / stabilized_attn_output
     relevance_QK = np.einsum('htd,hbd->htb', norm_wt_mat_attn_proj, value_states) * attn_weights
-    relevance_V = np.einsum('htd,hdb->htb', attn_weights, norm_wt_mat_attn_proj)  * value_states
+    relevance_V = np.einsum('hdt,hdb->htb', attn_weights, norm_wt_mat_attn_proj)  * value_states
 
     # --------------- Relevance Calculation for V --------------------------------
     relevance_V = np.einsum('hqd->qhd', relevance_V)
