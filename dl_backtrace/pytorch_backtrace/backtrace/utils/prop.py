@@ -1672,13 +1672,14 @@ def process_single_relevance_QK(i, wts, QK_output, w):
             pbias = w['b_q'][i]
             nbias = w['b_k'][i] * -1
         elif w['b_q'][i] < 0 and w['b_k'][i] > 0:
-            pbias = w['b_q'][i] * -1
-            nbias = w['b_k'][i]            
+            pbias = w['b_k'][i] 
+            nbias = w['b_q'][i] * -1
         else:
             pbias = 0
-            nbias = (w['b_q'][i] + w['b_k'][i]) * -1
+            nbias = w['b_q'][i] + w['b_k'][i]
+            nbias *= -1
 
-        t_sum = p_sum + pbias - n_sum - nbias        
+        t_sum = p_sum + pbias - n_sum - nbias
 
         # This layer has a softmax activation function
         act = {
@@ -1725,7 +1726,7 @@ def calculate_relevance_QK_parallel(wts, QK_output, w):
 
     # Combine the results into the final wt_mat_QK matrix
     for result in results:
-        wt_mat_QK_total += result 
+        wt_mat_QK_total += result
 
     return wt_mat_QK_total
 
