@@ -1842,10 +1842,15 @@ def calculate_wt_self_attention_parallel(wts, inp, w, config):
     relevance_V = np.einsum('hqd->qhd', relevance_V)
     relevance_V = relevance_V.reshape(-1, num_heads * head_dim)
     wt_mat_V = calculate_relevance_V_parallel(relevance_V, value_states, w)
+    
+    # --------------- Transformed Relevance QK ----------------------------------
+    relevance_QK = np.einsum('hqd->qhd', relevance_QK)
+    relevance_QK = relevance_QK.reshape(-1, relevance_QK.shape[1] * relevance_QK.shape[2])
+    wt_mat_QK = calculate_relevance_QK_parallel(relevance_QK, QK_output, w)
 
     # --------------- Relevance Calculation for K and Q --------------------------------
     stabilized_QK_output = stabilize(QK_output * 2)
-    norm_wt_mat_QK = relevance_QK / stabilized_QK_output
+    norm_wt_mat_QK = wt_mat_QK / stabilized_QK_output
     wt_mat_Q = np.einsum('htd,hdb->htb', norm_wt_mat_QK, key_states) * query_states
     wt_mat_K = np.einsum('htd,htb->hbd', query_states, norm_wt_mat_QK) * key_states
 
