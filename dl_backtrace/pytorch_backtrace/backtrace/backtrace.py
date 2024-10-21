@@ -388,7 +388,7 @@ class Backtrace(object):
                         if model_resource[1][start_layer]["class"] == 'LSTM':
                             all_wt[ch] = np.zeros_like(every_temp_out[ch][0])
                         else:
-                            all_wt[ch] = np.zeros_like(all_out[ch][0])
+                            all_wt[ch] = np.zeros_like(all_out[ch][0].detach().numpy())
 
                 if model_resource[1][start_layer]["class"] == "Linear":
                     l1 = model_resource[0][start_layer]
