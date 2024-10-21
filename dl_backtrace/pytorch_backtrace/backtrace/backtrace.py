@@ -612,7 +612,7 @@ class Backtrace(object):
                 elif model_resource[1][start_layer]["class"] == "LM_Head":
                     weights = all_wts[start_layer]
                     lm_head_weights = HP.rename_decoder_lm_head(weights)
-                    temp_wt = UP.calculate_wt_lm_head(
+                    temp_wt = UP.calculate_wt_lm_head_parallel(
                         all_wt[start_layer],
                         all_out[child_nodes[0]][0].detach().numpy(),
                         lm_head_weights
@@ -626,10 +626,12 @@ class Backtrace(object):
                 elif model_resource[1][start_layer]["class"] == 'Cross_Attention':
                     weights = all_wts[start_layer]
                     cross_attention_weights = HP.rename_cross_attention_keys(weights)
-                    temp_wt = UP.calculate_wt_cross_attention(
+                    config = self.model.config
+                    temp_wt = UP.calculate_wt_cross_attention_parallel(
                         all_wt[start_layer],
                         [all_out[ch][0].detach().numpy() for ch in child_nodes],
                         cross_attention_weights,
+                        config
                     )
 
                     for ind, ch in enumerate(child_nodes):
