@@ -38,7 +38,7 @@ def rename_cross_attention_keys(cross_attention_weights):
         elif 'EncDecAttention.v.weight' in key:
             new_key = key.replace(key, 'W_v')
         elif 'EncDecAttention.o.weight' in key:
-            new_key = key.replace(key, 'W_o')
+            new_key = key.replace(key, 'W_d')
 
         renamed_weights[new_key] = value
     return renamed_weights
