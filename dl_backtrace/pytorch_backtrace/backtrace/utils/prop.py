@@ -1602,6 +1602,12 @@ def calculate_wt_pooler(wts, inp, w):
 
 def process_single_relevance_V(i, wts, value_output, w):
     wt_mat_V = np.zeros(value_output.shape)
+
+    if 'b_v' in w:
+        bias_v = w['b_v'][i]
+    else:
+        bias_v = 0
+
     for j in range(wts.shape[1]):
         l1_ind1 = value_output
         wt = wts[i, j]
@@ -1611,12 +1617,12 @@ def process_single_relevance_V(i, wts, value_output, w):
         p_sum = np.sum(l1_ind1[p_ind])
         n_sum = np.sum(l1_ind1[n_ind]) * -1
 
-        if w['b_v'][i] > 0:
-            pbias = w['b_v'][i]
+        if bias_v > 0:
+            pbias = bias_v
             nbias = 0
         else:
             pbias = 0
-            nbias = w['b_v'][i] * -1
+            nbias = bias_v * -1
 
         if p_sum > 0:
             p_agg_wt = (p_sum + pbias) / (p_sum + n_sum + pbias + nbias)
@@ -1656,6 +1662,11 @@ def calculate_relevance_V_parallel(wts, value_output, w):
 
 def process_single_relevance_QK(i, wts, QK_output, w):
     wt_mat_QK = np.zeros(QK_output.shape)
+
+    # Check if 'b_q' and 'b_k' exist in the weights, default to 0 if not
+    b_q = w['b_q'][i] if 'b_q' in w else 0
+    b_k = w['b_k'][i] if 'b_k' in w else 0
+
     for j in range(wts.shape[1]):
         l1_ind1 = QK_output
         wt = wts[i, j]
@@ -1665,18 +1676,18 @@ def process_single_relevance_QK(i, wts, QK_output, w):
         p_sum = np.sum(l1_ind1[p_ind])
         n_sum = np.sum(l1_ind1[n_ind]) * -1
 
-        if w['b_q'][i] > 0 and w['b_k'][i] > 0:
-            pbias = w['b_q'][i] + w['b_k'][i]
+        if b_q > 0 and b_k > 0:
+            pbias = b_q + b_k
             nbias = 0
-        elif w['b_q'][i] > 0 and w['b_k'][i] < 0:
-            pbias = w['b_q'][i]
-            nbias = w['b_k'][i] * -1
-        elif w['b_q'][i] < 0 and w['b_k'][i] > 0:
-            pbias = w['b_k'][i] 
-            nbias = w['b_q'][i] * -1
+        elif b_q > 0 and b_k < 0:
+            pbias = b_q
+            nbias = b_k * -1
+        elif b_q < 0 and b_k > 0:
+            pbias = b_k
+            nbias = b_q * -1
         else:
             pbias = 0
-            nbias = w['b_q'][i] + w['b_k'][i]
+            nbias = b_q + b_k
             nbias *= -1
 
         t_sum = p_sum + pbias - n_sum - nbias
@@ -1733,6 +1744,12 @@ def calculate_relevance_QK_parallel(wts, QK_output, w):
 
 def process_single_relevance_attention_output(i, wts, proj_output, w):
     wt_mat_proj_output = np.zeros(proj_output.shape)
+
+    if 'b_d' in w:
+        bias_d = w['b_d'][i]
+    else:
+        bias_d = 0
+
     for j in range(wts.shape[1]):
         l1_ind1 = proj_output
         wt = wts[i, j]
@@ -1742,12 +1759,12 @@ def process_single_relevance_attention_output(i, wts, proj_output, w):
         p_sum = np.sum(l1_ind1[p_ind])
         n_sum = np.sum(l1_ind1[n_ind]) * -1
 
-        if w['b_d'][i] > 0:
-            pbias = w['b_d'][i]
+        if bias_d > 0:
+            pbias = bias_d
             nbias = 0
         else:
             pbias = 0
-            nbias = w['b_d'][i] * -1
+            nbias = bias_d * -1
 
         if p_sum > 0:
             p_agg_wt = (p_sum + pbias) / (p_sum + n_sum + pbias + nbias)
@@ -1782,7 +1799,7 @@ def calculate_wt_attention_output_projection_parallel(wts, proj_output, w):
     for result in results:
         wt_mat_proj_output_total += result
 
-    return wt_mat_proj_output_total 
+    return wt_mat_proj_output_total
 
 
 def calculate_wt_self_attention_parallel(wts, inp, w, config):
@@ -1802,13 +1819,17 @@ def calculate_wt_self_attention_parallel(wts, inp, w, config):
     value_output = np.einsum('ij,kj->ik', inp, w['W_v'])
 
     # --------------- Reshape for Multi-Head Attention ----------------------
-    num_heads = config.num_attention_heads
-    hidden_size = config.hidden_size
+    num_heads = getattr(config, 'num_attention_heads', getattr(config, 'num_heads', None))     # will work for BERT as well as T5
+    hidden_size = getattr(config, 'hidden_size', getattr(config, 'd_model', None))             # will work for BERT as well as T5
+    if hasattr(config, 'num_key_value_heads'):
+        num_key_value_heads = config.num_key_value_heads
+    else:
+        num_key_value_heads = num_heads
     head_dim = hidden_size // num_heads  # dimension of each attention head
 
     query_states = np.einsum('thd->htd', query_output.reshape(query_output.shape[0], num_heads, head_dim))  # (num_heads, num_tokens, head_dim)
-    key_states = np.einsum('thd->htd', key_output.reshape(key_output.shape[0], num_heads, head_dim))  # (num_heads, num_tokens, head_dim)
-    value_states = np.einsum('thd->htd', value_output.reshape(value_output.shape[0], num_heads, head_dim))  # (num_heads, num_tokens, head_dim)
+    key_states = np.einsum('thd->htd', key_output.reshape(key_output.shape[0], num_key_value_heads, head_dim))  # (num_key_value_heads, num_tokens, head_dim)
+    value_states = np.einsum('thd->htd', value_output.reshape(value_output.shape[0], num_key_value_heads, head_dim))  # (num_key_value_heads, num_tokens, head_dim)
 
     QK_output = np.einsum('hqd,hkd->hqk', query_states, key_states)    # (num_heads, num_tokens, num_tokens)
     attn_weights = QK_output / np.sqrt(head_dim)
@@ -1881,6 +1902,9 @@ def process_second_layer(i, wts, intermediate_output, w):
     contribution_matrix2 = w['W_out'] * intermediate_output[i]
     wt_mat2 = np.zeros(contribution_matrix2.shape)
 
+    # Check if the 'b_out' bias exists, otherwise set to 0
+    bias_out = w['b_out'][i] if 'b_out' in w else 0
+
     for j in range(contribution_matrix2.shape[0]):
         l1_ind1 = contribution_matrix2[j]
         wt_ind1 = wt_mat2[j]
@@ -1891,18 +1915,21 @@ def process_second_layer(i, wts, intermediate_output, w):
         p_sum = np.sum(l1_ind1[p_ind])
         n_sum = np.sum(l1_ind1[n_ind]) * -1
 
-        if w['b_out'][i] > 0:
-            pbias = w['b_out'][i]
+        # Handle positive and negative bias contributions
+        if bias_out > 0:
+            pbias = bias_out
             nbias = 0
         else:
             pbias = 0
-            nbias = w['b_out'][i] * -1
+            nbias = -bias_out
 
+        # Calculate aggregate weights for positive and negative values
         if p_sum > 0:
             p_agg_wt = (p_sum + pbias) / (p_sum + n_sum + pbias + nbias)
             p_agg_wt = p_agg_wt * (p_sum / (p_sum + pbias))
         else:
             p_agg_wt = 0
+
         if n_sum > 0:
             n_agg_wt = (n_sum + nbias) / (p_sum + n_sum + pbias + nbias)
             n_agg_wt = n_agg_wt * (n_sum / (n_sum + nbias))
@@ -1938,6 +1965,9 @@ def process_first_layer(i, relevance_out, inp, w):
     contribution_matrix1 = w['W_int'] * inp[i]
     wt_mat1 = np.zeros(contribution_matrix1.shape)
 
+    # Check if bias 'b_int' exists, default to 0 if not
+    bias_int = w['b_int'][i] if 'b_int' in w else 0
+
     for j in range(contribution_matrix1.shape[0]):
         l1_ind1 = contribution_matrix1[j]
         wt_ind1 = wt_mat1[j]
@@ -1948,12 +1978,13 @@ def process_first_layer(i, relevance_out, inp, w):
         p_sum = np.sum(l1_ind1[p_ind])
         n_sum = np.sum(l1_ind1[n_ind]) * -1
 
-        if w['b_int'][i] > 0:
-            pbias = w['b_int'][i]
+        # Handle positive and negative bias
+        if bias_int > 0:
+            pbias = bias_int
             nbias = 0
         else:
             pbias = 0
-            nbias = w['b_int'][i] * -1
+            nbias = -bias_int
 
         t_sum = p_sum + pbias - n_sum - nbias
 
@@ -1973,11 +2004,13 @@ def process_first_layer(i, relevance_out, inp, w):
                 if t_sum > act["range"]["u"]:
                     n_sum = 0
 
+        # Calculate aggregate weights for positive and negative values
         if p_sum > 0:
             p_agg_wt = (p_sum + pbias) / (p_sum + n_sum + pbias + nbias)
             p_agg_wt = p_agg_wt * (p_sum / (p_sum + pbias))
         else:
             p_agg_wt = 0
+
         if n_sum > 0:
             n_agg_wt = (n_sum + nbias) / (p_sum + n_sum + pbias + nbias)
             n_agg_wt = n_agg_wt * (n_sum / (n_sum + nbias))
@@ -1993,7 +2026,7 @@ def process_first_layer(i, relevance_out, inp, w):
         wt_ind1[n_ind] = (l1_ind1[n_ind] / n_sum) * wt * n_agg_wt * -1.0
 
     relevance_input = wt_mat1.sum(axis=0)
-    return relevance_input 
+    return relevance_input
 
 
 def calculate_wt_feed_forward_parallel(wts, inp, w):
@@ -2149,6 +2182,141 @@ def calculate_wt_cross_attention(wts, inp, w):
     wt_mat_K = np.einsum('ij,ik->kj', query_output, norm_wt_mat_QK) * key_output
 
     wt_mat_KV = wt_mat_V + wt_mat_K
+    wt_mat = [wt_mat_KV, wt_mat_Q]
+    return wt_mat
+
+
+def process_single_wt_row(i, wts, inp, w):
+    relevance_input_row = np.zeros(inp.shape[1])
+    R = wts[i]
+    contribution_matrix = np.einsum('ij,j->ij', w['W_lm_head'], inp[i])
+    wt_mat = np.zeros(contribution_matrix.shape)
+
+    for j in range(contribution_matrix.shape[0]):
+        l1_ind1 = contribution_matrix[j]
+        wt = R[j]
+
+        p_ind = l1_ind1 > 0
+        n_ind = l1_ind1 < 0
+
+        p_sum = np.sum(l1_ind1[p_ind])
+        n_sum = np.sum(l1_ind1[n_ind]) * -1
+
+        p_agg_wt = p_sum / (p_sum + n_sum) if p_sum > 0 else 0
+        n_agg_wt = n_sum / (p_sum + n_sum) if n_sum > 0 else 0
+
+        p_sum = p_sum if p_sum != 0 else 1
+        n_sum = n_sum if n_sum != 0 else 1
+
+        wt_mat[j][p_ind] += (l1_ind1[p_ind] / p_sum) * wt * p_agg_wt
+        wt_mat[j][n_ind] += (l1_ind1[n_ind] / n_sum) * wt * n_agg_wt * -1.0
+
+    relevance_input_row = wt_mat.sum(axis=0)
+    return relevance_input_row
+
+
+# Optimized parallel function
+def calculate_wt_lm_head_parallel(wts, inp, w):
+    relevance_input = np.zeros(inp.shape)
+
+    # Parallel processing using ProcessPoolExecutor
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        results = list(executor.map(process_single_wt_row, range(wts.shape[0]), [wts]*wts.shape[0], [inp]*wts.shape[0], [w]*wts.shape[0]))
+
+    # Combine the results into the final relevance_input matrix
+    for i, result in enumerate(results):
+        relevance_input[i] = result
+
+    return relevance_input
+
+
+def calculate_wt_cross_attention_parallel(wts, inp, w, config):
+    '''
+    Input:
+        wts:  relevance score of the layer
+        inp: input to the layer
+        w: weights of the layer- ['W_q', 'W_k', 'W_v', 'W_o']
+        inputs: dict_keys(['query', 'key', 'value'])
+
+    Outputs:
+        Step-1: outputs = torch.matmul(input_a, input_b)
+        Step-2: outputs = F.softmax(inputs, dim=dim, dtype=dtype)
+        Step-3: outputs = input_a * input_b
+    '''
+    k_v_inp, q_inp = inp
+    query_output = np.einsum('ij,kj->ik', q_inp, w['W_q'])
+    key_output = np.einsum('ij,kj->ik', k_v_inp, w['W_k'])
+    value_output = np.einsum('ij,kj->ik', k_v_inp, w['W_v'])
+
+    # --------------- Reshape for Multi-Head Attention ----------------------
+    num_heads = config.num_attention_heads
+    hidden_size = config.hidden_size
+    # Check if the config has 'num_key_value_heads' attribute
+    if hasattr(config, 'num_key_value_heads'):
+        num_key_value_heads = config.num_key_value_heads
+    else:
+        num_key_value_heads = config.num_heads
+    head_dim = hidden_size // num_heads  # dimension of each attention head
+
+    query_states = np.einsum('thd->htd', query_output.reshape(query_output.shape[0], num_heads, head_dim))  # (num_heads, num_tokens, head_dim)
+    key_states = np.einsum('thd->htd', key_output.reshape(key_output.shape[0], num_key_value_heads, head_dim))  # (num_key_value_heads, num_tokens, head_dim)
+    value_states = np.einsum('thd->htd', value_output.reshape(value_output.shape[0], num_key_value_heads, head_dim))  # (num_key_value_heads, num_tokens, head_dim)
+
+    QK_output = np.einsum('hqd,hkd->hqk', query_states, key_states)
+    attn_weights = QK_output / np.sqrt(head_dim)
+
+    # Apply softmax along the last dimension (softmax over key dimension)
+    attn_weights = np.exp(attn_weights - np.max(attn_weights, axis=-1, keepdims=True))  # Numerically stable softmax
+    attn_weights = attn_weights / np.sum(attn_weights, axis=-1, keepdims=True)
+
+    # Weighted sum of values (num_heads, num_tokens, head_dim)
+    attn_output = np.einsum('hqk,hkl->hql', attn_weights, value_states)
+
+    # Reshape attention output back to original shape (num_tokens, hidden_size)
+    transposed_attn_output = np.einsum('hqd->qhd', attn_output)
+    reshaped_attn_output = transposed_attn_output.reshape(transposed_attn_output.shape[0], num_heads * head_dim)
+
+    # Perform final linear projection (num_tokens, hidden_size)
+    final_output = np.einsum('qd,dh->qh', reshaped_attn_output, w['W_d'])
+
+    # ------------- Relevance calculation for Final Linear Projection -------------
+    wt_mat_attn_proj = calculate_wt_attention_output_projection_parallel(wts, final_output, w)
+
+    # --------------- Relevance Calculation for Step-3 -----------------------
+    wt_mat_attn_proj = wt_mat_attn_proj.reshape(-1, num_heads, head_dim)
+    wt_mat_attn_proj = np.einsum('qhd->hqd', wt_mat_attn_proj)
+
+    stabilized_attn_output = stabilize(attn_output * 2)
+    norm_wt_mat_attn_proj = wt_mat_attn_proj / stabilized_attn_output
+    relevance_QK = np.einsum('htd,hbd->htb', norm_wt_mat_attn_proj, value_states) * attn_weights
+    relevance_V = np.einsum('hdt,hdb->htb', attn_weights, norm_wt_mat_attn_proj)  * value_states
+
+    # --------------- Relevance Calculation for V --------------------------------
+    relevance_V = np.einsum('hqd->qhd', relevance_V)
+    relevance_V = relevance_V.reshape(-1, num_heads * head_dim)
+    wt_mat_V = calculate_relevance_V_parallel(relevance_V, value_states, w)
+
+    # --------------- Transformed Relevance QK ----------------------------------
+    relevance_QK = np.einsum('hqd->qhd', relevance_QK)
+    relevance_QK = relevance_QK.reshape(-1, relevance_QK.shape[1] * relevance_QK.shape[2])
+    wt_mat_QK = calculate_relevance_QK_parallel(relevance_QK, QK_output, w)
+
+    # --------------- Relevance Calculation for K and Q --------------------------------
+    stabilized_QK_output = stabilize(QK_output * 2)
+    norm_wt_mat_QK = wt_mat_QK / stabilized_QK_output
+
+    wt_mat_Q = np.einsum('htd,hdb->htb', norm_wt_mat_QK, key_states) * query_states
+    wt_mat_K = np.einsum('htd,htb->hbd', query_states, norm_wt_mat_QK) * key_states
+
+    # Relevance of KV input
+    wt_mat_KV = wt_mat_V + wt_mat_K
+
+    # Reshape wt_mat_Q and wt_mat_KV
+    wt_mat_Q = np.einsum('htd->thd', wt_mat_Q)
+    wt_mat_KV = np.einsum('htd->thd', wt_mat_KV)
+    wt_mat_Q = wt_mat_Q.reshape(wt_mat_Q.shape[0], wt_mat_Q.shape[1] * wt_mat_Q.shape[2])
+    wt_mat_KV = wt_mat_KV.reshape(wt_mat_KV.shape[0], wt_mat_KV.shape[1] * wt_mat_KV.shape[2])
+
     wt_mat = [wt_mat_KV, wt_mat_Q]
     return wt_mat
 
