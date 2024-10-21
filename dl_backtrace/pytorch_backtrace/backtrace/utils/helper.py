@@ -8,22 +8,29 @@ def rename_self_attention_keys(attention_weights):
     for key, value in attention_weights.items():
         if 'query.weight' in key or 'SelfAttention.q.weight' in key or 'self_attn.q_proj' in key:
             new_key = key.replace(key, 'W_q')
+            renamed_weights[new_key] = value
         elif 'query.bias' in key or 'SelfAttention.q.bias' in key:
             new_key = key.replace(key, 'b_q')
+            renamed_weights[new_key] = value
         elif 'key.weight' in key or 'SelfAttention.k.weight' in key or 'self_attn.k_proj' in key:
             new_key = key.replace(key, 'W_k')
+            renamed_weights[new_key] = value
         elif 'key.bias' in key or 'SelfAttention.k.bias' in key:
             new_key = key.replace(key, 'b_k')
+            renamed_weights[new_key] = value
         elif 'value.weight' in key or 'SelfAttention.v.weight' in key or 'self_attn.v_proj' in key:
             new_key = key.replace(key, 'W_v')
+            renamed_weights[new_key] = value
         elif 'value.bias' in key or 'SelfAttention.v.bias' in key:
             new_key = key.replace(key, 'b_v')
+            renamed_weights[new_key] = value
         elif 'output.dense.weight' in key or 'SelfAttention.o.weight' in key or 'self_attn.o_proj' in key:
             new_key = key.replace(key, 'W_d')
+            renamed_weights[new_key] = value
         elif 'output.dense.bias' in key or 'SelfAttention.o.bias' in key:
             new_key = key.replace(key, 'b_d')
+            renamed_weights[new_key] = value
 
-        renamed_weights[new_key] = value
     return renamed_weights
 
 
