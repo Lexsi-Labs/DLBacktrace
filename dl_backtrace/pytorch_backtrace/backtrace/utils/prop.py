@@ -5,8 +5,8 @@ import numpy as np
 from numpy.lib.stride_tricks import as_strided
 
 def np_swish(x, beta=0.75):
-    z = 1 / (1 + np.exp(-(beta * x)))
-    return x * z
+    z = 1 / (1 + np.exp(-np.clip(beta * x, -500, 500)))
+    return x * z 
 
 def np_wave(x, alpha=1.0):
     return (alpha * x * np.exp(1.0)) / (np.exp(-x) + np.exp(x))
