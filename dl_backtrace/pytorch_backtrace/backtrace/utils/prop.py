@@ -1819,8 +1819,8 @@ def calculate_wt_self_attention_parallel(wts, inp, w, config):
     value_output = np.einsum('ij,kj->ik', inp, w['W_v'])
 
     # --------------- Reshape for Multi-Head Attention ----------------------
-    num_heads = getattr(config, 'num_attention_heads', getattr(config, 'num_heads', None))     # will work for BERT as well as T5
-    hidden_size = getattr(config, 'hidden_size', getattr(config, 'd_model', None))             # will work for BERT as well as T5
+    num_heads = getattr(config, 'num_attention_heads', getattr(config, 'num_heads', None))     # will work for BERT as well as T5/ Llama
+    hidden_size = getattr(config, 'hidden_size', getattr(config, 'd_model', None))             # will work for BERT as well as T5/Llama
     if hasattr(config, 'num_key_value_heads'):
         num_key_value_heads = config.num_key_value_heads
     else:
@@ -1830,6 +1830,11 @@ def calculate_wt_self_attention_parallel(wts, inp, w, config):
     query_states = np.einsum('thd->htd', query_output.reshape(query_output.shape[0], num_heads, head_dim))  # (num_heads, num_tokens, head_dim)
     key_states = np.einsum('thd->htd', key_output.reshape(key_output.shape[0], num_key_value_heads, head_dim))  # (num_key_value_heads, num_tokens, head_dim)
     value_states = np.einsum('thd->htd', value_output.reshape(value_output.shape[0], num_key_value_heads, head_dim))  # (num_key_value_heads, num_tokens, head_dim)
+    
+    # calculate how many times we need to repeat the key/value heads
+    n_rep = num_heads // num_key_value_heads
+    key_states = np.repeat(key_states, n_rep, axis=0)
+    value_states = np.repeat(value_states, n_rep, axis=0)
 
     QK_output = np.einsum('hqd,hkd->hqk', query_states, key_states)    # (num_heads, num_tokens, num_tokens)
     attn_weights = QK_output / np.sqrt(head_dim)
