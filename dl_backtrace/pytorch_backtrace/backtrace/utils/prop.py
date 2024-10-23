@@ -2266,6 +2266,11 @@ def calculate_wt_cross_attention_parallel(wts, inp, w, config):
     query_states = np.einsum('thd->htd', query_output.reshape(query_output.shape[0], num_heads, head_dim))  # (num_heads, num_tokens, head_dim)
     key_states = np.einsum('thd->htd', key_output.reshape(key_output.shape[0], num_key_value_heads, head_dim))  # (num_key_value_heads, num_tokens, head_dim)
     value_states = np.einsum('thd->htd', value_output.reshape(value_output.shape[0], num_key_value_heads, head_dim))  # (num_key_value_heads, num_tokens, head_dim)
+    
+    # calculate how many times we need to repeat the key/value heads
+    n_rep = num_heads // num_key_value_heads
+    key_states = np.repeat(key_states, n_rep, axis=0)
+    value_states = np.repeat(value_states, n_rep, axis=0)
 
     QK_output = np.einsum('hqd,hkd->hqk', query_states, key_states)
     attn_weights = QK_output / np.sqrt(head_dim)
