@@ -1,0 +1,15 @@
+--- Benchmark Results ---
+Input size: 4096
+Output size: 1024
+Num runs: 100
+
+Original avg time: 0.181569 s
+Refactored avg time: 0.071098 s
+PyTorch avg time: 0.005013 s
+
+Speedup (Refactored vs Original): 2.55x
+Speedup (PyTorch vs Original): 36.22x
+
+Outputs match (original vs refactored): True
+Outputs match (original vs pytorch): True
+
