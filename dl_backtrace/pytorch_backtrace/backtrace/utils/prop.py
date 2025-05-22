@@ -715,6 +715,7 @@ def calculate_wt_avgpool(wts, inp, pool_size, padding, strides):
     out_ds = out_ds[paddings[0][0]:(paddings[0][0]+inp.shape[0]),
                     paddings[1][0]:(paddings[1][0]+inp.shape[1]),:]
     return out_ds
+
 def calculate_wt_gavgpool(wts, inp):
     wts=wts.T
     inp=inp.T
