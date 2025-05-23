@@ -1,6 +1,6 @@
 import numpy as np  
-from backtrace.refactored_utils.layers.ConvUnit2D.original_version import calculate_wt_conv_unit
-from backtrace.refactored_utils.layers.Padding.original import calculate_padding
+from ..ConvUnit2D.original_version import calculate_wt_conv_unit
+from ..Padding.original import calculate_padding
 
 def calculate_wt_conv(wts, inp, w, b, padding, strides, act):
     wts = wts.T

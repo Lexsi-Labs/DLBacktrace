@@ -1,21 +1,35 @@
 import torch
 import torch.nn.functional as F
-from typing import Dict, Any, Union, Tuple, List, Optional
-from backtrace.refactored_utils.layers.ConvUnit2D.pytorch_version import calculate_wt_conv_unit
-from backtrace.refactored_utils.layers.Padding.pytorch import calculate_padding
+from typing import Dict, Any, Union, Tuple, List, Optional, Callable
+from ..Padding.pytorch import calculate_padding
 
-PaddingModeTupleElementType = Union[int, float]
-PaddingModeTuple = Tuple[PaddingModeTupleElementType, PaddingModeTupleElementType]
+PaddingModeType = Union[str, Tuple[Any, Any]] 
 
+class ActivationRange:
+    def __init__(self, l: float, u: float):
+        self.l = l
+        self.u = u
+
+class ActivationParams:
+    def __init__(
+        self,
+        type: str,
+        range: ActivationRange,
+        func: None
+    ):
+        self.type = type
+        self.range = range
+        self.func = func
+        
 @torch.jit.script
-def pytorch_calculate_wt_conv(
+def calculate_wt_conv(
     grad_output_scales: torch.Tensor,
     input_activations: torch.Tensor,
     kernel_weights_orig_shape: torch.Tensor,
     bias: torch.Tensor,
-    padding_mode: Union[str, Tuple[PaddingModeTupleElementType, PaddingModeTupleElementType]],
+    padding_mode: PaddingModeType,
     strides: Tuple[int, int],
-    activation_params: Dict[str, Any]
+    activation_params: ActivationParams
 ) -> torch.Tensor:
     """
     Calculates the gradient with respect to the input activations of a
@@ -61,7 +75,7 @@ def pytorch_calculate_wt_conv(
     H_in_orig, W_in_orig, C_in_dim = input_activations_T.shape
     K_h, K_w, _, _ = kernel_weights_T.shape # C_in, F_dim are inner dims
 
-    kernel_size_tuple = (int(K_h), int(K_w))
+    kernel_size_tuple = (K_h, K_w)
 
     # 1. Calculate padding using the provided helper
     input_padded, padding_config = calculate_padding(
@@ -129,11 +143,11 @@ def pytorch_calculate_wt_conv(
     current_negative_saturation_mask = sum_abs_negative_conv_out > 0.0 # (L, F)
 
     # Activation logic (adapted from torch_calculate_wt_conv_unit)
-    act_type = str(activation_params["type"])
-    act_range_config = activation_params["range"] # type: Dict[str, Optional[float]]
+    act_type = str(activation_params.type)
+    act_range_config = activation_params.range 
 
-    _act_range_l_any = act_range_config.get("l") # Use .get for safety if key might be missing
-    _act_range_u_any = act_range_config.get("u")
+    _act_range_l_any = act_range_config.l
+    _act_range_u_any = act_range_config.u
     
     act_range_l: Optional[float] = None
     if isinstance(_act_range_l_any, (int, float)): act_range_l = float(_act_range_l_any)
@@ -142,26 +156,29 @@ def pytorch_calculate_wt_conv(
     if isinstance(_act_range_u_any, (int, float)): act_range_u = float(_act_range_u_any)
 
     if act_type == 'mono':
-        if act_range_l is not None:
+        if act_range_l:
             current_positive_saturation_mask = sum_abs_total_conv_out > act_range_l
-        if act_range_u is not None:
+        if act_range_u:
             current_negative_saturation_mask = sum_abs_total_conv_out < act_range_u
     elif act_type == 'non_mono':
         # activation_func: ActivationFunctionTypeTorch
-        activation_func_any = activation_params["func"] 
-        # JIT requires careful handling here. Assuming activation_func_any is a ScriptFunction or JIT-able.
-        activation_func = activation_func_any # type: ignore 
+        activation_func = activation_params.func 
 
-        activated_total_sum = activation_func(sum_abs_total_conv_out)
-        activated_positive_sum_plus_bias = activation_func(sum_positive_conv_out + positive_bias)
-        activated_neg_sum_plus_bias = activation_func(
-            -1.0 * (sum_abs_negative_conv_out + abs_negative_bias)
-        )
+        if activation_func is None:
+            activated_total_sum = sum_abs_total_conv_out
+            activated_positive_sum_plus_bias = sum_positive_conv_out + positive_bias
+            activated_neg_sum_plus_bias = -1.0 * (sum_abs_negative_conv_out + abs_negative_bias)
+        else:
+            activated_total_sum = activation_func(sum_abs_total_conv_out)
+            activated_positive_sum_plus_bias = activation_func(sum_positive_conv_out + positive_bias)
+            activated_neg_sum_plus_bias = activation_func(
+                -1.0 * (sum_abs_negative_conv_out + abs_negative_bias)
+            )
 
-        if act_range_l is not None:
+        if act_range_l:
             saturation_lower_bound_mask = sum_abs_total_conv_out > act_range_l
             current_positive_saturation_mask = current_positive_saturation_mask & saturation_lower_bound_mask
-        if act_range_u is not None:
+        if act_range_u:
             saturation_upper_bound_mask = sum_abs_total_conv_out < act_range_u
             current_negative_saturation_mask = current_negative_saturation_mask & saturation_upper_bound_mask
         
@@ -218,40 +235,52 @@ def pytorch_calculate_wt_conv(
     # Convert back to (H_pad, W_pad, C_in_dim)
     grad_input_padded = grad_input_padded_nchw.squeeze(0).permute(1, 2, 0)
 
-    # 5. Remove padding to get final gradient
-    pad_h_before_val: float
-    pad_w_before_val: float
+    # padding_config is Union[List[List[int]], List[torch.Tensor]]
+    # JIT needs to know it's a list before subscripting.
+    if not isinstance(padding_config, list):
+        # This case should ideally not be reached if calculate_padding adheres to its type hints.
+        raise RuntimeError("padding_config is not a list, which is unexpected given its type hint.")
 
-    # padding_config is TorchPaddingDetails = Union[List[List[int]], List[torch.Tensor]]
-    # Accessing padding_config[0] (for height)
-    # It's either List[int] or torch.Tensor
-    # JIT requires specific type checks
-    padding_dim0 = padding_config[0]
-    padding_dim1 = padding_config[1]
-
-    if isinstance(padding_dim0, torch.Tensor) and isinstance(padding_dim1, torch.Tensor):
-        pad_h_before_val = padding_dim0[0].item()
-        pad_w_before_val = padding_dim1[0].item()
-    elif isinstance(padding_dim0, list) and isinstance(padding_dim1, list):
-        # Assuming List[int] if not Tensor
-        # Check elements are int for robustness, though types imply it
-        if isinstance(padding_dim0[0], int) and isinstance(padding_dim1[0], int):
-             pad_h_before_val = float(padding_dim0[0])
-             pad_w_before_val = float(padding_dim1[0])
-        else:
-            # This case should not be reached if padding_config conforms to TorchPaddingDetails
-            # For JIT, an error or default might be needed if this state is possible
-            # Defaulting to 0 or raising error. Let's assume valid structure.
-            # Fallback for safety, though ideally an error if types are wrong.
-            pad_h_before_val = 0.0 
-            pad_w_before_val = 0.0
-            # Or raise RuntimeError("Unexpected padding_config structure")
-
+    # Now, JIT knows padding_config is a list.
+    # Check if it has the expected structure (at least two elements for H and W padding).
+    if len(padding_config) < 2:
+        raise RuntimeError("padding_config list is expected to have at least 2 elements (for H and W padding).")
+    
+    pc = padding_config
+    if isinstance(pc[0], torch.Tensor):
+        # Here TorchScript refines `pc` to List[Tensor]
+        pad_h_config = pc[0]
+        pad_w_config = pc[1]
     else:
-        # Fallback or error for mixed/unexpected types in padding_config
-        pad_h_before_val = 0.0 
-        pad_w_before_val = 0.0
-        # Or raise RuntimeError("Unexpected padding_config structure")
+        pad_h_list = pc  # List[List[int]]
+        pad_h_config = torch.tensor(pad_h_list[0], device=ref_device, dtype=ref_dtype).long()
+        pad_w_config = torch.tensor(pad_h_list[1], device=ref_device, dtype=ref_dtype).long()
+
+
+    pad_h_before_val: float = 1.0
+    if isinstance(pad_h_config, torch.Tensor):
+        if pad_h_config.numel() == 0:
+            raise RuntimeError("Empty padding tensor for height dimension.")
+        pad_h_before_val = float(pad_h_config[0].item())
+    elif isinstance(pad_h_config, list):
+        if len(pad_h_config) == 0 or not isinstance(pad_h_config[0], int):
+            raise RuntimeError("Invalid padding_config for height: expected non-empty List[int].")
+        pad_h_before_val = float(pad_h_config[0])
+    else:
+        raise RuntimeError(f"Unsupported padding_config type for height: {type(pad_h_config)}")
+
+
+    pad_w_before_val: float = 1.0
+    if isinstance(pad_w_config, torch.Tensor):
+        if pad_w_config.numel() == 0:
+            raise RuntimeError("Empty padding tensor for width dimension.")
+        pad_w_before_val = float(pad_w_config[0].item())
+    elif isinstance(pad_w_config, list):
+        if len(pad_w_config) == 0 or not isinstance(pad_w_config[0], int):
+            raise RuntimeError("Invalid padding_config for width: expected non-empty List[int].")
+        pad_w_before_val = float(pad_w_config[0])
+    else:
+        raise RuntimeError(f"Unsupported padding_config type for width: {type(pad_w_config)}")
 
 
     start_h_slice = int(pad_h_before_val)

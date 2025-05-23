@@ -4,7 +4,7 @@ from typing import Tuple, List, Union, Any # Any is used for tuple elements to m
 # Helper type alias for the padding_details part of the return type
 PaddingDetails = Union[List[List[int]], List[np.ndarray]]
 
-def calculate_padding_refactored(
+def calculate_padding(
     kernel_size: Tuple[int, ...],
     input_array: np.ndarray,
     padding_mode: Union[str, Tuple[Any, Any]],
@@ -59,7 +59,7 @@ def calculate_padding_refactored(
               `[[0,0],[0,0],[0,0]]` (a list of lists of Python integers).
             - For 'same' or tuple modes: A list of three 1D NumPy arrays,
               `[pad_dim0_arr, pad_dim1_arr, pad_dim2_arr]`. Each array
-              is of the form `np.array([pad_before, pad_after], dtype=np.float32)`.
+              is of the form `np.array([pad_before, pad_after], dtype=np.int32)`.
               These correspond to padding for dimensions 0, 1, and 2 of
               the input_array, respectively.
     """
@@ -98,20 +98,31 @@ def calculate_padding_refactored(
         # This ensures pad_before <= pad_after, e.g.:
         # total_pad = 3 -> [floor(1.5), floor(2.0)] -> np.array([1, 2])
         # total_pad = 4 -> [floor(2.0), floor(2.5)] -> np.array([2, 2])
-        # The result is converted to np.float32, matching the original.
-        pad_dim0_arr = np.floor([pad_h_total / 2.0, (pad_h_total + 1) / 2.0]).astype(np.float32)
-        pad_dim1_arr = np.floor([pad_w_total / 2.0, (pad_w_total + 1) / 2.0]).astype(np.float32)
+        # The result is converted to np.int32, matching the original.
+        pad_dim0_arr = np.floor([pad_h_total / 2.0, (pad_h_total + 1) / 2.0]).astype(np.int32)
+        pad_dim1_arr = np.floor([pad_w_total / 2.0, (pad_w_total + 1) / 2.0]).astype(np.int32)
         
         # Dimension 2 (e.g., channels, if input_array is HWC) receives zero padding.
-        # Original used np.zeros((2)).astype("float32").
-        pad_dim2_arr = np.array([0, 0], dtype=np.float32)
+        # Original used np.zeros((2)).astype("int32").
+        pad_dim2_arr = np.array([0, 0], dtype=np.int32)
 
         # The padding configuration for np.pad, as a list of np.ndarray.
         # This matches the original function's output type for 'same' mode.
         padding_config_for_np_pad: List[np.ndarray] = [pad_dim0_arr, pad_dim1_arr, pad_dim2_arr]
         
+        if input_array.ndim > 3:
+            num_extra_dims = input_array.ndim - 3
+            padding_config_for_np_pad.extend([np.array([0, 0], dtype=np.int32)] * num_extra_dims)
+            
+        elif input_array.ndim < 3 and input_array.ndim > 0:
+            pass
+        
         padded_array = np.pad(input_array, padding_config_for_np_pad, mode='constant', constant_values=const_val)
-        return padded_array, padding_config_for_np_pad
+        
+        # The returned padding_details should always be the 3-element list, as per original.
+        # So we return the original 3-element version, not the extended one for N-D.
+        returned_padding_details: List[np.ndarray] = [pad_dim0_arr, pad_dim1_arr, pad_dim2_arr]
+        return padded_array, returned_padding_details
 
     # This 'else' block handles cases where padding_mode is not 'valid' or 'same'.
     # It then checks if padding_mode is a tuple (and not (None, None)).
@@ -125,22 +136,32 @@ def calculate_padding_refactored(
             pad_val_dim0 = padding_mode[0]
             pad_val_dim1 = padding_mode[1]
 
-            # Original uses np.floor([val, val]).astype("float32").
+            # Original uses np.floor([val, val]).astype("int32").
             # This means `pad_val_dim0` is applied symmetrically (before and after) to dim 0.
             # `np.floor` handles potential float inputs by truncating towards negative infinity.
-            # The result is converted to np.float32.
-            pad_dim0_arr = np.floor([pad_val_dim0, pad_val_dim0]).astype(np.float32)
-            pad_dim1_arr = np.floor([pad_val_dim1, pad_val_dim1]).astype(np.float32)
+            # The result is converted to np.int32.
+            pad_dim0_arr = np.floor([pad_val_dim0, pad_val_dim0]).astype(np.int32)
+            pad_dim1_arr = np.floor([pad_val_dim1, pad_val_dim1]).astype(np.int32)
             
             # Dimension 2 receives zero padding, as in original.
-            pad_dim2_arr = np.array([0, 0], dtype=np.float32)
+            pad_dim2_arr = np.array([0, 0], dtype=np.int32)
 
             # The padding configuration for np.pad, as a list of np.ndarray.
             # This matches the original function's output type for tuple mode.
             padding_config_for_np_pad: List[np.ndarray] = [pad_dim0_arr, pad_dim1_arr, pad_dim2_arr]
 
+            # Similar N-D handling as in 'same' mode for np.pad compatibility
+            if input_array.ndim > 3:
+                num_extra_dims = input_array.ndim - 3
+                padding_config_for_np_pad.extend([np.array([0, 0], dtype=np.int32)] * num_extra_dims)
+            elif input_array.ndim < 3 and input_array.ndim > 0:
+                pass # Let np.pad handle it, replicating original's potential error
+
             padded_array = np.pad(input_array, padding_config_for_np_pad, mode='constant', constant_values=const_val)
-            return padded_array, padding_config_for_np_pad
+            
+            # Return the 3-element padding details, consistent with original.
+            returned_padding_details: List[np.ndarray] = [pad_dim0_arr, pad_dim1_arr, pad_dim2_arr]
+            return padded_array, returned_padding_details
         else:
             # Fallback: if padding_mode is an unrecognized string, or (None, None),
             # or any other type not handled by the 'if isinstance(padding_mode, tuple)...' condition.

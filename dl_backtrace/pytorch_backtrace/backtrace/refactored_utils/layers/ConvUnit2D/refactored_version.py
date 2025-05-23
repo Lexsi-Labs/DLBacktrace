@@ -4,7 +4,7 @@ from typing import Dict, Any, Callable, Union, Tuple
 # Type alias for the activation function callable
 ActivationFunctionType = Callable[[np.ndarray], np.ndarray]
 
-def refactored_calculate_wt_conv_unit(
+def calculate_wt_conv_unit(
     patch: np.ndarray,
     wts: Union[float, np.ndarray],
     kernel_weights: np.ndarray,

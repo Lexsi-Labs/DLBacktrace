@@ -1,9 +1,9 @@
 import numpy as np
 from typing import Dict, Any, Union, Tuple
-from backtrace.refactored_utils.layers.ConvUnit2D.refactored_version import calculate_wt_conv_unit
-from backtrace.refactored_utils.layers.Padding.refactored import calculate_padding
+from ..ConvUnit2D.refactored_version import calculate_wt_conv_unit
+from ..Padding.refactored import calculate_padding
 
-def refactored_calculate_wt_conv(
+def calculate_wt_conv(
     grad_output_scales: np.ndarray,
     input_activations: np.ndarray,
     kernel_weights_orig_shape: np.ndarray,

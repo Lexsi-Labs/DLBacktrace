@@ -1,8 +1,8 @@
 import numpy as np
 
 def calculate_wt_conv_unit(patch, wts, w, b, act):
-    k = w.numpy()
-    bias = b.numpy()
+    k = w
+    bias = b
     b_ind = bias>0
     bias_pos = bias*b_ind
     b_ind = bias<0
