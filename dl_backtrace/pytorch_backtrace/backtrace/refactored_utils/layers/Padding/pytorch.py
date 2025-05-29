@@ -1,159 +1,155 @@
 import torch
 import torch.nn.functional as F
-from typing import Tuple, List, Union, Any 
+import numpy as np
+from typing import Tuple, List, Union, Any # Any is used for tuple elements to match original's broad acceptance
 
-TorchPaddingDetails = List[torch.Tensor]
-PaddingModeType = Union[str, Tuple[Any, Any]] 
+# Helper type alias for the padding_details part of the return type
+PaddingDetails = Union[List[List[int]], List[np.ndarray]]
 
-def calculate_padding(
+def calculate_padding_pytorch(
     kernel_size: Tuple[int, int],
     input_tensor: torch.Tensor,
-    padding_mode: PaddingModeType, 
+    padding_mode: Union[str, Tuple[Any, Any]],
     strides: Tuple[int, int],
     const_val: float = 0.0
-) -> Tuple[torch.Tensor, TorchPaddingDetails]:
+) -> Tuple[torch.Tensor, PaddingDetails]:
     """
-    Calculates padding for a multi-dimensional tensor using PyTorch, replicating
-    the logic of the original NumPy-based function.
+    Calculates padding for a multi-dimensional tensor, typically for operations
+    like convolution, replicating the logic of the original NumPy-based function.
+
+    The padding configuration is primarily defined for three dimensions. If input_tensor.ndim < 2,
+    an IndexError will occur. If input_tensor.ndim == 2 for 'same' or tuple padding_mode,
+    a ValueError will be raised, consistent with the original np.pad behavior when
+    a 3-dimension padding spec is applied to a 2D array.
 
     Args:
-        kernel_size: Tuple `(kernel_h, kernel_w)`.
-        input_tensor: The input PyTorch tensor.
-        padding_mode: 'valid', 'same', or Tuple[Any, Any] for explicit padding.
-                      Tuple `(None, None)` or non-numeric tuple elements lead to fallback.
-        strides: Tuple `(stride_h, stride_w)`.
-        const_val: Value for constant padding.
+        kernel_size: A tuple of two integers `(kernel_h, kernel_w)`
+                     representing the height and width of the kernel.
+        input_tensor: The input PyTorch tensor. Padding is calculated primarily based
+                      on its first two dimensions (assumed to be height and width).
+        padding_mode: The padding mode. Can be:
+            - 'valid': No padding is applied.
+            - 'same': TensorFlow-style 'SAME' padding. Calculates padding
+                      such that the output of a convolution (with the given
+                      kernel_size and strides) would have spatial dimensions
+                      approximately the same as the input_tensor. Padding is
+                      applied to the first two dimensions, and zero padding
+                      to subsequent dimensions if input_tensor.ndim >= 3,
+                      or an error is raised if input_tensor.ndim < 3 (IndexError for <2D,
+                      ValueError for 2D).
+            - Tuple[Any, Any]: Explicit padding amounts for the first two
+                dimensions, e.g., `(pad_val_dim0, pad_val_dim1)`.
+                Each `pad_val_dimX` specifies the padding to be applied
+                symmetrically (both before and after) to dimension X of input_tensor.
+                These values are floored before being applied. For example,
+                `(2, 3)` implies 2 units of padding before and 2 after
+                dimension 0, and 3 units before and 3 after dimension 1.
+                Dimension 2 (the third dimension, if present) receives zero padding.
+                Subsequent dimensions also receive zero padding.
+                This mode is activated if `padding_mode` is a tuple and
+                not equal to `(None, None)`. If tuple elements are not
+                numerical or the tuple length is insufficient, errors will occur.
+                Raises ValueError if input_tensor.ndim == 2, or IndexError if <2D.
+        strides: A tuple of two integers `(stride_h, stride_w)` representing
+                 the strides for height and width.
+        const_val: The constant value to use for padding. Defaults to 0.0.
 
     Returns:
-        Tuple `(padded_tensor, padding_details)`.
-        `padding_details` is `List[List[int]]` or `List[torch.Tensor]`.
+        A tuple `(padded_tensor, padding_details)`:
+        - `padded_tensor`: The input tensor, possibly padded.
+        - `padding_details`: Information about the padding applied. The structure
+          and type of this element strictly match the original function:
+            - For 'valid' or fallback modes:
+              `[[0,0],[0,0],[0,0]]` (a list of lists of Python integers).
+            - For 'same' or tuple modes: A list of three 1D NumPy arrays,
+              `[pad_dim0_arr, pad_dim1_arr, pad_dim2_arr]`. Each array
+              is of the form `np.array([pad_before, pad_after], dtype=np.int32)`.
+              These correspond to padding for dimensions 0, 1, and 2 of
+              the input_tensor, respectively.
     """
-    input_h = input_tensor.shape[0]
-    input_w = input_tensor.shape[1] 
+    # Default padding details for 'valid' or fallback cases.
+    default_padding_details_valid_fallback: List[List[int]] = [[0, 0], [0, 0], [0, 0]]
 
-    zero = torch.tensor([0.0, 0.0], dtype=torch.float32, device=input_tensor.device)
-    default_padding_details_valid_fallback = [zero, zero, zero]
+    if padding_mode == 'valid':
+        return input_tensor, default_padding_details_valid_fallback
 
-    # padding_details_tensors_list: List[torch.Tensor] = [] 
-    padding_details_tensors_list: List[torch.Tensor] = [] 
+    elif padding_mode == 'same':
+        # IndexError if input_tensor.ndim < 2, consistent with original
+        input_h = input_tensor.shape[0]
+        input_w = input_tensor.shape[1]
 
-    if isinstance(padding_mode, str):
-        if padding_mode == 'valid':          
-            return input_tensor, default_padding_details_valid_fallback
+        kernel_h, kernel_w = kernel_size[0], kernel_size[1]
+        stride_h, stride_w = strides[0], strides[1]
         
-        elif padding_mode == 'same':
-            kernel_h, kernel_w = kernel_size[0], kernel_size[1]
-            stride_h, stride_w = strides[0], strides[1]
+        # Calculate total padding for height (dimension 0)
+        h_rem = input_h % stride_h
+        if h_rem == 0:
+            pad_h_total = max(0, kernel_h - stride_h)
+        else:
+            pad_h_total = max(0, kernel_h - h_rem)
 
-            h_rem = input_h % stride_h
-            w_rem = input_w % stride_w
+        # Calculate total padding for width (dimension 1)
+        w_rem = input_w % stride_w
+        if w_rem == 0:
+            pad_w_total = max(0, kernel_w - stride_w)
+        else:
+            pad_w_total = max(0, kernel_w - w_rem)
 
-            pad_h_total = max(0, kernel_h - stride_h) if h_rem == 0 else max(0, kernel_h - h_rem)
-            pad_w_total = max(0, kernel_w - stride_w) if w_rem == 0 else max(0, kernel_w - w_rem)
+        # Distribute padding: [floor(total/2.0), floor((total+1)/2.0)]
+        # Convert to int32 tensor
+        pad_dim0_arr_torch = torch.floor(torch.tensor([pad_h_total / 2.0, (pad_h_total + 1) / 2.0])).to(torch.int32)
+        pad_dim1_arr_torch = torch.floor(torch.tensor([pad_w_total / 2.0, (pad_w_total + 1) / 2.0])).to(torch.int32)
+        pad_dim2_arr_torch = torch.tensor([0, 0], dtype=torch.int32) # Dim 2 is zero-padded
 
-            pad_dim0_arr = torch.tensor([pad_h_total / 2.0, (pad_h_total + 1) / 2.0], dtype=torch.float32).floor()
-            pad_dim1_arr = torch.tensor([pad_w_total / 2.0, (pad_w_total + 1) / 2.0], dtype=torch.float32).floor()
-            pad_dim2_arr = torch.tensor([0.0, 0.0], dtype=torch.float32)
-            
-            padding_details_tensors_list = [pad_dim0_arr, pad_dim1_arr, pad_dim2_arr]
-        else: 
-            return input_tensor, default_padding_details_valid_fallback
+    elif isinstance(padding_mode, tuple) and padding_mode != (None, None):
 
-    elif isinstance(padding_mode, tuple):
-        if len(padding_mode) == 2:
-            elem0 = padding_mode[0]
-            elem1 = padding_mode[1]
+        pad_val_dim0 = padding_mode[0]
+        pad_val_dim1 = padding_mode[1]
 
-            is_none_tuple = (elem0 is None) and (elem1 is None)
-            if is_none_tuple:
-                ret_details: TorchPaddingDetails = default_padding_details_valid_fallback
-                return input_tensor, ret_details
-
-            temp_val0: float = 0.0
-            elem0_is_valid_numeric = False
-            if isinstance(elem0, int):
-                temp_val0 = float(elem0)
-                elem0_is_valid_numeric = True
-            elif isinstance(elem0, float):
-                temp_val0 = elem0
-                elem0_is_valid_numeric = True
-
-            temp_val1: float = 0.0
-            elem1_is_valid_numeric = False
-            if isinstance(elem1, int):
-                temp_val1 = float(elem1)
-                elem1_is_valid_numeric = True
-            elif isinstance(elem1, float):
-                temp_val1 = elem1
-                elem1_is_valid_numeric = True
-            
-            if elem0_is_valid_numeric and elem1_is_valid_numeric:
-                pad_dim0_arr = torch.tensor(
-                    [temp_val0, temp_val0], 
-                    dtype=torch.float32, device=input_tensor.device
-                ).floor()
-                pad_dim1_arr = torch.tensor(
-                    [temp_val1, temp_val1],
-                    dtype=torch.float32, device=input_tensor.device
-                ).floor()
-                pad_dim2_arr = torch.tensor([0.0, 0.0], dtype=torch.float32, device=input_tensor.device)
-                
-                padding_details_tensors_list = [pad_dim0_arr, pad_dim1_arr, pad_dim2_arr]
-            else:
-                ret_details: TorchPaddingDetails = default_padding_details_valid_fallback
-                return input_tensor, ret_details
-        else: 
-            ret_details: TorchPaddingDetails = default_padding_details_valid_fallback
-            return input_tensor, ret_details
-    else: 
-        ret_details: TorchPaddingDetails = default_padding_details_valid_fallback
-        return input_tensor, ret_details
-
-    if not padding_details_tensors_list:
-        ret_details: TorchPaddingDetails = default_padding_details_valid_fallback
-        return input_tensor, ret_details
-
-    p0_int: List[int] = padding_details_tensors_list[0].long().tolist()
-    p1_int: List[int] = padding_details_tensors_list[1].long().tolist() 
-    p2_int: List[int] = padding_details_tensors_list[2].long().tolist()
-
-    ndim = input_tensor.dim()
-    padded_tensor: torch.Tensor = torch.empty(0, dtype=input_tensor.dtype, device=input_tensor.device) 
-
-    # F.pad expects padding for (last_dim, second_to_last, ..., first_dim)
-    if ndim == 2: # e.g., (H, W)
-        # F.pad wants (pad_W_L, pad_W_R, pad_H_L, pad_H_R)
-        # Our p0 is for H (dim 0), p1 for W (dim 1)
-        pad_tuple = (p1_int[0], p1_int[1],    # Dim 1 (W)
-                     p0_int[0], p0_int[1])    # Dim 0 (H)
-        padded_tensor = F.pad(input_tensor, pad_tuple, mode='constant', value=const_val)
-    elif ndim == 3: # e.g., (H, W, C) or (D, H, W)
-        # F.pad wants (pad_C_L, pad_C_R, pad_W_L, pad_W_R, pad_H_L, pad_H_R)
-        # Our p0 is H (dim 0), p1 is W (dim 1), p2 is C/D (dim 2)
-        pad_tuple = (p2_int[0], p2_int[1],    # Dim 2 (conceptual C/D)
-                     p1_int[0], p1_int[1],    # Dim 1 (W)
-                     p0_int[0], p0_int[1])    # Dim 0 (H)
-        padded_tensor = F.pad(input_tensor, pad_tuple, mode='constant', value=const_val)
-    elif ndim == 4: # e.g., (N, C, H, W) -> F.pad wants (W, H, C, N)
-                    # or (D, H, W, C) -> F.pad wants (C, W, H, D)
-        # Our p0 for dim 0, p1 for dim 1, p2 for dim 2. Dim 3 is 0-padded.
-        # F.pad: (pad_dim3_L/R, pad_dim2_L/R, pad_dim1_L/R, pad_dim0_L/R)
-        pad_tuple = (0, 0,                   # Dim 3 (0-padded)
-                     p2_int[0], p2_int[1],   # Dim 2
-                     p1_int[0], p1_int[1],   # Dim 1
-                     p0_int[0], p0_int[1])   # Dim 0
-        padded_tensor = F.pad(input_tensor, pad_tuple, mode='constant', value=const_val)
-    elif ndim == 5: # e.g. (N, C, D, H, W) -> F.pad wants (W,H,D,C,N)
-        # Our p0 for dim 0, p1 for dim 1, p2 for dim 2. Dims 3,4 are 0-padded.
-        # F.pad: (pad_dim4, pad_dim3, pad_dim2, pad_dim1, pad_dim0)
-        pad_tuple = (0, 0,                   # Dim 4 (0-padded)
-                     0, 0,                   # Dim 3 (0-padded)
-                     p2_int[0], p2_int[1],   # Dim 2
-                     p1_int[0], p1_int[1],   # Dim 1
-                     p0_int[0], p0_int[1])   # Dim 0
-        padded_tensor = F.pad(input_tensor, pad_tuple, mode='constant', value=const_val)
-    elif ndim < 2:
-        raise ValueError(f"Input tensor must have at least 2 dimensions, got {ndim}")
+        pad_dim0_arr_torch = torch.floor(torch.tensor([pad_val_dim0, pad_val_dim0])).to(torch.int32)
+        pad_dim1_arr_torch = torch.floor(torch.tensor([pad_val_dim1, pad_val_dim1])).to(torch.int32)
+        pad_dim2_arr_torch = torch.tensor([0, 0], dtype=torch.int32) # Dim 2 is zero-padded
     
-    final_ret_details: TorchPaddingDetails = padding_details_tensors_list
-    return padded_tensor, final_ret_details
+    else: # Fallback for unrecognized string, (None, None), or other types
+        return input_tensor, default_padding_details_valid_fallback
+
+    if input_tensor.ndim == 2:
+        # Original np.pad would receive a 3-element pad_width spec for a 2D array, causing ValueError.
+        # We replicate this error explicitly.
+        raise ValueError(
+            f"For 'padding_mode' of '{padding_mode}', input_tensor.ndim must be at least 3. "
+            f"Received input_tensor.ndim = 2. This mirrors np.pad's behavior "
+            f"when applying a 3-dimensional padding specification to a 2D array."
+        )
+    
+    pad_config_for_f_pad_pairs = []
+    if input_tensor.ndim >= 1:
+        pad_config_for_f_pad_pairs.append(pad_dim0_arr_torch)
+    if input_tensor.ndim >= 2:
+        pad_config_for_f_pad_pairs.append(pad_dim1_arr_torch)
+    if input_tensor.ndim >= 3:
+        pad_config_for_f_pad_pairs.append(pad_dim2_arr_torch)
+    
+    # Add zero padding for any additional dimensions beyond the first 3
+    if input_tensor.ndim > 3:
+        for _ in range(input_tensor.ndim - 3):
+            pad_config_for_f_pad_pairs.append(torch.tensor([0, 0], dtype=torch.int32))
+
+    # Convert to the flat list format required by F.pad, reversing the order of dimensions
+    f_pad_input_tuple = []
+    for i in range(len(pad_config_for_f_pad_pairs) - 1, -1, -1):
+        pad_pair = pad_config_for_f_pad_pairs[i]
+        f_pad_input_tuple.extend([pad_pair[0].item(), pad_pair[1].item()])
+    
+    padded_tensor = F.pad(input_tensor, tuple(f_pad_input_tuple), mode='constant', value=const_val)
+
+    # Returned padding_details should be the 3-element list of np.ndarray, as per original.
+    returned_padding_details: List[np.ndarray] = [
+        pad_dim0_arr_torch,
+        pad_dim1_arr_torch,
+        pad_dim2_arr_torch
+    ]
+    return padded_tensor, returned_padding_details
+
+
+calculate_padding = torch.compile(calculate_padding_pytorch)
