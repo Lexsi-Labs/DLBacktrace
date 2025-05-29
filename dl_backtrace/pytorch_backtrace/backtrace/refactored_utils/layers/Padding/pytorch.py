@@ -5,7 +5,6 @@ from typing import Tuple, List, Union, Any
 TorchPaddingDetails = List[torch.Tensor]
 PaddingModeType = Union[str, Tuple[Any, Any]] 
 
-@torch.jit.script
 def calculate_padding(
     kernel_size: Tuple[int, int],
     input_tensor: torch.Tensor,
@@ -33,47 +32,32 @@ def calculate_padding(
     input_w = input_tensor.shape[1] 
 
     zero = torch.tensor([0.0, 0.0], dtype=torch.float32, device=input_tensor.device)
-    default_padding_details_valid_fallback: List[torch.Tensor] = [zero, zero, zero]
+    default_padding_details_valid_fallback = [zero, zero, zero]
 
     # padding_details_tensors_list: List[torch.Tensor] = [] 
     padding_details_tensors_list: List[torch.Tensor] = [] 
 
     if isinstance(padding_mode, str):
-        if padding_mode == 'valid':
-            ret_details: TorchPaddingDetails = default_padding_details_valid_fallback
-            return input_tensor, ret_details
+        if padding_mode == 'valid':          
+            return input_tensor, default_padding_details_valid_fallback
+        
         elif padding_mode == 'same':
             kernel_h, kernel_w = kernel_size[0], kernel_size[1]
             stride_h, stride_w = strides[0], strides[1]
 
             h_rem = input_h % stride_h
-            pad_h_total: int = 0 
-            if h_rem == 0:
-                pad_h_total = max(0, kernel_h - stride_h)
-            else:
-                pad_h_total = max(0, kernel_h - h_rem)
-
             w_rem = input_w % stride_w
-            pad_w_total: int = 0 
-            if w_rem == 0:
-                pad_w_total = max(0, kernel_w - stride_w)
-            else:
-                pad_w_total = max(0, kernel_w - w_rem)
-            
-            pad_dim0_arr = torch.tensor(
-                [float(pad_h_total) / 2.0, (float(pad_h_total) + 1.0) / 2.0],
-                dtype=torch.float32, device=input_tensor.device
-            ).floor()
-            pad_dim1_arr = torch.tensor(
-                [float(pad_w_total) / 2.0, (float(pad_w_total) + 1.0) / 2.0],
-                dtype=torch.float32, device=input_tensor.device
-            ).floor()
-            pad_dim2_arr = torch.tensor([0.0, 0.0], dtype=torch.float32, device=input_tensor.device)
+
+            pad_h_total = max(0, kernel_h - stride_h) if h_rem == 0 else max(0, kernel_h - h_rem)
+            pad_w_total = max(0, kernel_w - stride_w) if w_rem == 0 else max(0, kernel_w - w_rem)
+
+            pad_dim0_arr = torch.tensor([pad_h_total / 2.0, (pad_h_total + 1) / 2.0], dtype=torch.float32).floor()
+            pad_dim1_arr = torch.tensor([pad_w_total / 2.0, (pad_w_total + 1) / 2.0], dtype=torch.float32).floor()
+            pad_dim2_arr = torch.tensor([0.0, 0.0], dtype=torch.float32)
             
             padding_details_tensors_list = [pad_dim0_arr, pad_dim1_arr, pad_dim2_arr]
         else: 
-            ret_details: TorchPaddingDetails = default_padding_details_valid_fallback
-            return input_tensor, ret_details
+            return input_tensor, default_padding_details_valid_fallback
 
     elif isinstance(padding_mode, tuple):
         if len(padding_mode) == 2:

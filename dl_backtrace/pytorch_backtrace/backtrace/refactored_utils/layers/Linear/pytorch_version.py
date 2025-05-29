@@ -1,29 +1,15 @@
-from typing import Callable, Union, Optional
+from typing import Callable, Union, Optional, Dict, Any
 import torch
 
-class ActivationRange:
-    def __init__(self, l: float, u: float):
-        self.l = l
-        self.u = u
+# For type hinting the activation function callable
+ActivationCallable = Callable[[torch.Tensor], torch.Tensor]
 
-class ActivationParams:
-    def __init__(
-        self,
-        type: str,
-        range: ActivationRange,
-        func: None
-    ):
-        self.type = type
-        self.range = range
-        self.func = func
-
-@torch.jit.script
 def calculate_wt_fc(
     row_specific_weights: torch.Tensor,
     input_activations: torch.Tensor,
     weights_matrix: torch.Tensor,
     bias_vector: torch.Tensor,
-    activation_params: ActivationParams
+    activation_params: Dict[str, Any]
 ) -> torch.Tensor:
     """
     Calculates feature contributions in PyTorch based on weights, inputs, and activation rules.
@@ -55,22 +41,13 @@ def calculate_wt_fc(
     dtype = weights_matrix.dtype
     device = weights_matrix.device
 
-    # Ensure all input tensors are of the correct dtype and on the correct device.
-    # This makes subsequent operations consistent.
-    row_specific_weights_t = row_specific_weights.to(dtype=dtype, device=device)
-    input_activations_t = input_activations.to(dtype=dtype, device=device)
-    weights_matrix_t = weights_matrix.to(dtype=dtype, device=device)
-    bias_vector_t = bias_vector.to(dtype=dtype, device=device)
-
     # Scalar constants typed to match dtype and device
     _zero = torch.tensor(0.0, dtype=dtype, device=device)
     _one = torch.tensor(1.0, dtype=dtype, device=device)
     _minus_one = torch.tensor(-1.0, dtype=dtype, device=device)
 
     # Calculate scaled_weights_matrix: W[r,c] * inp[r]
-    # W (D_in, D_out), inp (D_in,) -> scaled_weights_matrix (D_in, D_out)
-    # input_activations_t[:, None] gives shape (D_in, 1) for broadcasting.
-    scaled_weights_matrix = weights_matrix_t * input_activations_t[None, :]
+    scaled_weights_matrix = weights_matrix * input_activations[None, :]
 
     # Positive and negative part identification and sums
     # is_positive_part/is_negative_part are boolean masks of shape (D_in, D_out)
@@ -83,8 +60,8 @@ def calculate_wt_fc(
     n_sum_vec = torch.sum(scaled_weights_matrix * is_negative_part, dim=1) * _minus_one # Sum of abs values; Shape (D_in,)
 
     # Bias handling (vectorized)
-    pbias_vec = torch.maximum(_zero, bias_vector_t) # Shape (D_in,)
-    nbias_vec = torch.maximum(_zero, -bias_vector_t) # Shape (D_in,)
+    pbias_vec = torch.maximum(_zero, bias_vector) # Shape (D_in,)
+    nbias_vec = torch.maximum(_zero, -bias_vector) # Shape (D_in,)
     
     # Total sum used for activation range checks
     t_sum_vec = p_sum_vec + pbias_vec - (n_sum_vec + nbias_vec) # Shape (D_in,)
@@ -95,36 +72,31 @@ def calculate_wt_fc(
     p_sum_for_act_func = p_sum_vec.clone()
     n_sum_for_act_func = n_sum_vec.clone()
     
-    activation_range = activation_params.range
+    activation_range = activation_params["range"]
 
     # Lower bound check
     # Original checks truthiness of the threshold value itself (e.g. 0 or 0.0 is falsy).
-    if activation_range.l:
-        lower_threshold = torch.tensor(activation_range.l, dtype=dtype, device=device)
+    if activation_range["l"]:
+        lower_threshold = torch.tensor(activation_range["l"], dtype=dtype, device=device)
         condition_lower_bound = t_sum_vec < lower_threshold
         # p_sum_vec is updated here
         p_sum_vec = torch.where(condition_lower_bound, _zero, p_sum_vec)
 
     # Upper bound check
-    if activation_range.u:
-        upper_threshold = torch.tensor(activation_range.u, dtype=dtype, device=device)
+    if activation_range["u"]:
+        upper_threshold = torch.tensor(activation_range["u"], dtype=dtype, device=device)
         condition_upper_bound = t_sum_vec > upper_threshold
         # n_sum_vec is updated here
         n_sum_vec = torch.where(condition_upper_bound, _zero, n_sum_vec)
 
-    if activation_params.type == "non_mono":
+    if activation_params["type"] == "non_mono":
         # This cast is necessary for JIT if "func" is stored as Any.
         # Assumes activation_params["func"] is a JIT-compatible callable.
-        activation_function = activation_params.func
-        if activation_function is None:
-            t_act_vec = t_sum_vec
-            p_act_vec = p_sum_for_act_func + pbias_vec
-            n_act_vec = _minus_one * (n_sum_for_act_func + nbias_vec)
-        else:
-            # Calculate activations. For p_act and n_act, use sums *before* range modifications.
-            t_act_vec = activation_function(t_sum_vec)
-            p_act_vec = activation_function(p_sum_for_act_func + pbias_vec)
-            n_act_vec = activation_function(_minus_one * (n_sum_for_act_func + nbias_vec))
+        activation_function : ActivationCallable = activation_params["func"]
+
+        t_act_vec = activation_function(t_sum_vec)
+        p_act_vec = activation_function(p_sum_for_act_func + pbias_vec)
+        n_act_vec = activation_function(_minus_one * (n_sum_for_act_func + nbias_vec))
         
         # Conditions for zeroing out, using p_sum_vec/n_sum_vec *after* range modifications.
         cond_both_sums_positive = (p_sum_vec > _zero) & (n_sum_vec > _zero)
@@ -172,13 +144,15 @@ def calculate_wt_fc(
     output_contributions = torch.zeros_like(scaled_weights_matrix, dtype=dtype, device=device)
 
     term_p_norm = scaled_weights_matrix / p_sum_div_vec[:, None]
-    update_p_values = term_p_norm * row_specific_weights_t[:, None] * p_agg_wt_vec[:, None]
+    update_p_values = term_p_norm * row_specific_weights[:, None] * p_agg_wt_vec[:, None]
     output_contributions = torch.where(is_positive_part, update_p_values, output_contributions)
 
     term_n_norm = scaled_weights_matrix / n_sum_div_vec[:, None]
-    update_n_values = term_n_norm * row_specific_weights_t[:, None] * n_agg_wt_vec[:, None] * _minus_one
+    update_n_values = term_n_norm * row_specific_weights[:, None] * n_agg_wt_vec[:, None] * _minus_one
     output_contributions = torch.where(is_negative_part, update_n_values, output_contributions)
     
     final_output_weights = torch.sum(output_contributions, dim=0)
 
     return final_output_weights
+
+compiled_calculate_wt_fc = torch.compile(calculate_wt_fc)
