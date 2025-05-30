@@ -2,10 +2,11 @@ import torch
 import torch.nn.functional as F
 from typing import Dict, Any, Union, Tuple
 from ..Padding.pytorch import calculate_padding
+from .build_cuda_version.wt_conv_ops import calculate_wt_conv2d_interface as calculate_wt_conv_cuda
 
 PaddingModeType = Union[str, Tuple[Any, Any]] 
         
-def calculate_wt_conv_pytorch_optimized(
+def calculate_wt_conv_cuda_optimized(
     grad_output_scales: torch.Tensor,
     input_activations: torch.Tensor,
     kernel_weights_orig_shape: torch.Tensor,
@@ -15,7 +16,7 @@ def calculate_wt_conv_pytorch_optimized(
     activation_params: Dict[str, Any]
 ) -> torch.Tensor:
     """
-    Optimized version of calculate_wt_conv_pytorch with improved performance.
+    CUDA Optimized version of calculate_wt_conv_pytorch with improved performance.
     
     Key optimizations:
     1. Reduced tensor permutations and reshaping operations
@@ -29,6 +30,26 @@ def calculate_wt_conv_pytorch_optimized(
     F_dim, O_w, O_h = grad_output_scales.shape
     C_in_dim, W_in_orig, H_in_orig = input_activations.shape
     _, _, K_w, K_h = kernel_weights_orig_shape.shape
+    
+    if activation_params["type"] == "mono":
+        act_type = 0
+    elif activation_params["type"] == "non_mono":
+        act_type = 1
+    else:
+        raise ValueError(f"Invalid activation type: {activation_params['type']}")
+    
+    act_func = 1 if activation_params["func"] == "relu" else 2 if activation_params["func"] == "sigmoid"  else 0
+    
+    act_range_l = activation_params["range"]["l"]
+    act_range_u = activation_params["range"]["u"]
+    
+    has_range_l = True if activation_params["range"]["l"] is not None else False
+    has_range_u = True if activation_params["range"]["u"] is not None else False
+    
+    if activation_params["range"]["u"]:
+        has_range_u = True
+    else:
+        has_range_u = False
     
     kernel_size_tuple = (K_h, K_w)
     
@@ -66,75 +87,20 @@ def calculate_wt_conv_pytorch_optimized(
     # Prepare kernel weights - single permute operation
     kernel_weights = kernel_weights_orig_shape.permute(3, 2, 1, 0)[None, ...]  # (1, K_h, K_w, C, F)
     
-    # Optimized convolution computation using einsum for better performance
-    # patches: (L, K_h, K_w, C), kernel_weights: (1, K_h, K_w, C, F)
-    conv_out = torch.einsum('lhwc,bhwcf->lhwcf', patches, kernel_weights)  # (L, K_h, K_w, C, F)
+    updates = torch.zeros_like(patches)
     
-    # Separate positive and negative parts
-    positive_conv = torch.clamp(conv_out, min=0.0)
-    negative_conv = torch.clamp(conv_out, max=0.0)
-    
-    # Sum over spatial and channel dimensions more efficiently
-    sum_positive = positive_conv.sum(dim=(1, 2, 3))  # (L, F)
-    sum_abs_negative = (-negative_conv).sum(dim=(1, 2, 3))  # (L, F)
-    sum_abs_total = sum_positive + sum_abs_negative  # (L, F)
-    
-    # Precompute bias terms
-    positive_bias = torch.clamp(bias, min=0.0)  # (F,)
-    abs_negative_bias = torch.clamp(-bias, min=0.0)  # (F,)
-    
-    # Initialize saturation masks
-    pos_mask = sum_positive > 0.0  # (L, F)
-    neg_mask = sum_abs_negative > 0.0  # (L, F)
-    
-    # Activation logic with reduced branching
-    act_type = activation_params["type"]
-    act_range = activation_params["range"]
-    
-    if act_type == 'mono':
-        if act_range["l"]:
-            pos_mask = sum_abs_total > act_range["l"]
-        if act_range["u"]:
-            neg_mask = sum_abs_total < act_range["u"]
-    
-    elif act_type == 'non_mono':
-        activation_func = activation_params["func"]
-        
-        # Batch all activation computations
-        activated_total = activation_func(sum_abs_total)
-        activated_pos_bias = activation_func(sum_positive + positive_bias)
-        activated_neg_bias = activation_func(-(sum_abs_negative + abs_negative_bias))
-        
-        if act_range["l"]:
-            range_mask_l = sum_abs_total > act_range["l"]
-            pos_mask = pos_mask & range_mask_l
-        if act_range["u"]:
-            range_mask_u = sum_abs_total < act_range["u"]
-            neg_mask = neg_mask & range_mask_u
-        
-        # Vectorized epsilon comparisons
-        epsilon = 1e-5
-        neg_check = torch.abs(activated_total - activated_pos_bias) > epsilon
-        pos_check = torch.abs(activated_total - activated_neg_bias) > epsilon
-        
-        neg_mask = neg_mask & neg_check
-        pos_mask = pos_mask & pos_check
-    
-    # Compute weights more efficiently
-    denominator = sum_abs_total + positive_bias + abs_negative_bias  # (L, F)
-    inv_denom = torch.reciprocal(denominator)  # More efficient than 1.0 / denominator
-    
-    # Convert masks to float in-place for efficiency
-    pos_weights = inv_denom * grad_scales * pos_mask  # (L, F)
-    neg_weights = inv_denom * grad_scales * neg_mask  # (L, F)
-    
-    # Efficient broadcasting and computation
-    # Reshape for broadcasting: (L, F) -> (L, 1, 1, 1, F)
-    pos_weights_bc = pos_weights.view(L_patches, 1, 1, 1, F_dim)
-    neg_weights_bc = neg_weights.view(L_patches, 1, 1, 1, F_dim)
-    
-    # Compute weighted contributions
-    updates = (positive_conv * pos_weights_bc - negative_conv * neg_weights_bc).sum(dim=-1)  # (L, K_h, K_w, C)
+    # Calculate updates
+    updates = calculate_wt_conv_cuda(
+        patches,
+        kernel_weights,
+        bias,
+        grad_scales,
+        L_patches, K_h, K_w, C_in_dim, F_dim,
+        act_type, act_func,
+        act_range_l, act_range_u,
+        has_range_l, has_range_u
+    )
+    torch.cuda.synchronize()
     
     # Efficient fold operation - prepare tensor layout directly
     updates_fold = updates.permute(0, 3, 1, 2).reshape(L_patches, -1).t()[None, ...]  # (1, C*K_h*K_w, L)
@@ -166,6 +132,3 @@ def calculate_wt_conv_pytorch_optimized(
         pad_w_before:pad_w_before + W_in_orig,
         :
     ]
-
-# Compiled version for even better performance
-calculate_wt_conv = torch.compile(calculate_wt_conv_pytorch_optimized)

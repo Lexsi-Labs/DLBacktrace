@@ -42,9 +42,9 @@ def calculate_wt_fc(
     device = weights_matrix.device
 
     # Scalar constants typed to match dtype and device
-    _zero = torch.tensor(0.0, dtype=dtype, device=device)
-    _one = torch.tensor(1.0, dtype=dtype, device=device)
-    _minus_one = torch.tensor(-1.0, dtype=dtype, device=device)
+    _zero = 0.0
+    _one = 1.0
+    _minus_one = -1.0
 
     # Calculate scaled_weights_matrix: W[r,c] * inp[r]
     scaled_weights_matrix = weights_matrix * input_activations[None, :]

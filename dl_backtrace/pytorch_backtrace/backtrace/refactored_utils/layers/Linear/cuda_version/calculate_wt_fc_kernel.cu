@@ -216,6 +216,8 @@ torch::Tensor calculate_wt_fc_cuda(
     
     size_t shared_mem_size = 2 * BLOCK_SIZE_X * BLOCK_SIZE_Y * sizeof(float);
     
+    cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+
     calculate_wt_fc_fused_kernel<<<grid_dim, block_dim, shared_mem_size>>>(
         row_specific_weights.data_ptr<float>(),
         input_activations.data_ptr<float>(),
@@ -225,7 +227,8 @@ torch::Tensor calculate_wt_fc_cuda(
         D_in_actual, D_out_actual,
         has_lower_bound, lower_threshold,
         has_upper_bound, upper_threshold,
-        is_non_mono, activation_func
+        is_non_mono, activation_func,
+        stream
     );
     
     // Check for errors
