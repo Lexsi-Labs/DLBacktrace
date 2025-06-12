@@ -493,13 +493,14 @@ def calculate_wt_add(wts, inp=None):
 def calculate_start_wt(arg, scaler=None,thresholding=0.5,task="binary-classification"):
     if arg.ndim == 2:
         if task == "binary-classification" or task == "multi-class classification":
-            x = np.argmax(arg[0])
-            m = np.max(arg[0])
-            y = np.zeros(arg.shape)
+            x = np.argmax(arg, axis=1)
+            m = np.max(arg, axis=1)
+            y = np.zeros_like(arg)
             if scaler:
-                y[0][x] = scaler
+                y[np.arange(arg.shape[0]), x] = scaler  # Set the max index to scaler
             else:
-                y[0][x] = m
+                y[np.arange(arg.shape[0]), x] = m  # Set the max index to max value
+                
         elif task == "bbox-regression":
             y = np.zeros(arg.shape)
             if scaler:

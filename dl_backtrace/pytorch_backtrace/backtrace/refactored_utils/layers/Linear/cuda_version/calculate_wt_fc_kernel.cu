@@ -84,20 +84,25 @@ __global__ void calculate_wt_fc_fused_kernel(
         // Total sum for activation checks
         float t_sum = p_sum + pbias - (n_sum + nbias);
         
-        // Store original values for non-mono activation
+        // Store original values for non-mono activation (BEFORE any modifications)
         float p_sum_for_act = p_sum;
         float n_sum_for_act = n_sum;
         
-        // Apply range bounds
-        if (has_lower_bound && t_sum < lower_threshold) {
-            p_sum = ZERO;
+        // STEP 1: Apply range bounds FIRST (matches PyTorch order)
+        if (has_lower_bound) {
+            if (t_sum < lower_threshold) {
+                p_sum = ZERO;
+            }
         }
-        if (has_upper_bound && t_sum > upper_threshold) {
+        if (has_upper_bound) {
+            if (t_sum > upper_threshold) {
             n_sum = ZERO;
         }
         
-        // Non-monotonic activation logic
-        if (is_non_mono && p_sum > ZERO && n_sum > ZERO) {
+        // STEP 2: Apply non-monotonic activation logic using ORIGINAL values for activation
+        // but MODIFIED values for conditions (matches PyTorch exactly)
+        if (is_non_mono) {
+            // Compute activations using ORIGINAL values (before range modifications)
             float t_act, p_act, n_act;
             
             switch (activation_func) {
@@ -118,34 +123,41 @@ __global__ void calculate_wt_fc_fused_kernel(
                     break;
             }
             
-            // Use exact equality to match PyTorch behavior
-            if (t_act == p_act) {
-                n_sum = ZERO;
-            } else if (t_act == n_act) {
-                p_sum = ZERO;
+            // Apply conditions using MODIFIED sums (after range bounds)
+            bool cond_both_sums_positive = (p_sum > ZERO) && (n_sum > ZERO);
+            if (cond_both_sums_positive) {
+                if (t_act == p_act) {
+                    n_sum = ZERO;
+                } else if (t_act == n_act) {  // This is elif, not else if
+                    p_sum = ZERO;
+                }
             }
         }
         
-        // Calculate aggregate weights
+        // Calculate aggregate weights using final modified p_sum and n_sum
         float den1_common = p_sum + n_sum + pbias + nbias;
         
         if (p_sum > ZERO) {
             float ratio1_p = (p_sum + pbias) / den1_common;
             float ratio2_p_denom = p_sum + pbias;
-            // Match PyTorch safe division logic: if denom is 0, use p_sum/1.0 = p_sum
-            float ratio2_p = (ratio2_p_denom == ZERO) ? p_sum : p_sum / ratio2_p_denom;
+            // Correct safe division logic matching PyTorch
+            float safe_ratio2_p_denom = (ratio2_p_denom == ZERO) ? ONE : ratio2_p_denom;
+            float ratio2_p = p_sum / safe_ratio2_p_denom;
+            
             p_agg_wt = ratio1_p * ratio2_p;
         }
         
         if (n_sum > ZERO) {
             float ratio1_n = (n_sum + nbias) / den1_common;
             float ratio2_n_denom = n_sum + nbias;
-            // Match PyTorch safe division logic
-            float ratio2_n = (ratio2_n_denom == ZERO) ? n_sum : n_sum / ratio2_n_denom;
+            // Correct safe division logic matching PyTorch
+            float safe_ratio2_n_denom = (ratio2_n_denom == ZERO) ? ONE : ratio2_n_denom;
+            float ratio2_n = n_sum / safe_ratio2_n_denom;
+            
             n_agg_wt = ratio1_n * ratio2_n;
         }
         
-        // Safe division denominators (match PyTorch logic)
+        // Set division denominators (after all modifications)
         p_sum_div = (p_sum == ZERO) ? ONE : p_sum;
         n_sum_div = (n_sum == ZERO) ? ONE : n_sum;
         
@@ -215,8 +227,6 @@ torch::Tensor calculate_wt_fc_cuda(
     dim3 grid_dim(D_in_actual, 1);
     
     size_t shared_mem_size = 2 * BLOCK_SIZE_X * BLOCK_SIZE_Y * sizeof(float);
-    
-    cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
     calculate_wt_fc_fused_kernel<<<grid_dim, block_dim, shared_mem_size>>>(
         row_specific_weights.data_ptr<float>(),
@@ -227,8 +237,7 @@ torch::Tensor calculate_wt_fc_cuda(
         D_in_actual, D_out_actual,
         has_lower_bound, lower_threshold,
         has_upper_bound, upper_threshold,
-        is_non_mono, activation_func,
-        stream
+        is_non_mono, activation_func
     );
     
     // Check for errors

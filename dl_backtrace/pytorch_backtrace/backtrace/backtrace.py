@@ -10,7 +10,6 @@ from dl_backtrace.pytorch_backtrace.backtrace.utils import encoder as EN
 from dl_backtrace.pytorch_backtrace.backtrace.utils import encoder_decoder as ED
 from dl_backtrace.pytorch_backtrace.backtrace.utils import llama as LL
 
-
 class Backtrace(object):
     """
     This is the constructor method for the Backtrace class. It initializes an instance of the class.
@@ -114,21 +113,23 @@ class Backtrace(object):
         layers = list(model.named_children())
         activation_functions = ['relu', 'sigmoid', 'tanh', 'softmax']
         layer_sequence = []
-        for i in range(len(layers) - 1):
+        i = 0
+        while i < len(layers):
             current_layer, current_layer_obj = layers[i]
-            next_layer, next_layer_obj = layers[i + 1]
-            current_layer_name = current_layer
-            next_layer_name = next_layer
-
-            next_layer_type = next_layer_name.lower()
-            if any(af in next_layer_type for af in activation_functions):
-                layer_sequence.append((f"{current_layer_name}/{next_layer_name}", current_layer_obj))
-                i += 1
-            else:
-                if any(af in current_layer_name for af in activation_functions) is False:
-                    layer_sequence.append((current_layer_name, current_layer_obj))
+            # Check for layer/activation pair
+            if i + 1 < len(layers):
+                next_layer, next_layer_obj = layers[i+1]
+                if any(af in next_layer.lower() for af in activation_functions):
+                    layer_sequence.append((f"{current_layer}/{next_layer}", current_layer_obj))
+                    i += 2 # Skip both
+                    continue
+            
+            # Handle single layer that is not an activation function by itself
+            if not any(af in current_layer.lower() for af in activation_functions):
+                 layer_sequence.append((current_layer, current_layer_obj))
+            i += 1
+            
         # creating model_resource variable
-        layer_sequence
         ltree = {}
         layer_tree = {}
         inputs = []
@@ -353,6 +354,27 @@ class Backtrace(object):
                 output[k]["Positive"] = temp_output[0][k]
                 output[k]["Negative"] = temp_output[1][k]
             return output
+        elif mode == "cuda_eval":
+            output = self.cuda_proportional_eval(
+                all_out=all_out,
+                start_wt=start_wt,
+                multiplier=multiplier,
+                scaler=0,
+                max_unit=0,
+                predicted_token=predicted_token,
+                thresholding=0.5,
+                task=task,
+            )
+            return output
+
+    def _safe_to_numpy(self, data):
+        """Helper function to safely convert tensor or numpy array to numpy array."""
+        if hasattr(data, 'detach'):
+            return data.detach().numpy()
+        elif hasattr(data, 'numpy'):
+            return data.numpy()
+        else:
+            return data
 
     def proportional_eval(
             self, all_out, start_wt=[], multiplier=100.0, 
@@ -366,17 +388,17 @@ class Backtrace(object):
         all_wt = {}
         if len(start_wt) == 0:
             if self.model_type == 'encoder':
-                start_wt = UP.calculate_start_wt(all_out[out_layer].detach().numpy(), scaler=1)
+                start_wt = UP.calculate_start_wt(self._safe_to_numpy(all_out[out_layer]), scaler=1)
                 all_wt[out_layer] = start_wt * multiplier
                 layer_stack = self.layer_stack
                 all_wts = self.model_weights
             elif self.model_type == 'encoder_decoder' or self.model_type == 'llama':
-                start_wt = UP.calculate_enc_dec_start_wt(all_out[out_layer][0].detach().numpy(), predicted_token)
+                start_wt = UP.calculate_enc_dec_start_wt(self._safe_to_numpy(all_out[out_layer][0]), predicted_token)
                 all_wt[out_layer] = start_wt * multiplier
                 layer_stack = self.layer_stack
                 all_wts = self.model_weights
             else:
-                start_wt = UP.calculate_start_wt(all_out[out_layer],scaler,thresholding,task=task)
+                start_wt = UP.calculate_start_wt(all_out[out_layer], scaler, thresholding, task=task)
                 all_wt[out_layer] = start_wt * multiplier
                 layer_stack = self.layer_stack
                 
@@ -388,7 +410,9 @@ class Backtrace(object):
                         if model_resource[1][start_layer]["class"] == 'LSTM':
                             all_wt[ch] = np.zeros_like(every_temp_out[ch][0])
                         else:
-                            all_wt[ch] = np.zeros_like(all_out[ch][0].detach().numpy())
+                            # Handle both tensor and numpy array cases
+                            child_data = self._safe_to_numpy(all_out[ch][0])
+                            all_wt[ch] = np.zeros_like(child_data)
 
                 if model_resource[1][start_layer]["class"] == "Linear":
                     l1 = model_resource[0][start_layer]
@@ -487,14 +511,22 @@ class Backtrace(object):
                     all_wt[child_nodes[0]] += temp_wt.T
                 elif model_resource[1][start_layer]["class"] == "MaxPool2d":
                     l1 = model_resource[0][start_layer]
+                    pool_size = (l1.kernel_size, l1.kernel_size) if isinstance(l1.kernel_size, int) else l1.kernel_size
+                    # Note: calculate_wt_maxpool internally converts these to tuples, so pass single values
+                    padding = l1.padding if isinstance(l1.padding, int) else l1.padding[0]
+                    strides = l1.stride if isinstance(l1.stride, int) else l1.stride[0]
                     temp_wt = UP.calculate_wt_maxpool(
-                        all_wt[start_layer], all_out[child_nodes[0]][0], (l1.kernel_size, l1.kernel_size)
+                        all_wt[start_layer], all_out[child_nodes[0]][0], pool_size, padding, strides
                     )
                     all_wt[child_nodes[0]] += temp_wt.T
                 elif model_resource[1][start_layer]["class"] == "AvgPool2d":
                     l1 = model_resource[0][start_layer]
+                    pool_size = (l1.kernel_size, l1.kernel_size) if isinstance(l1.kernel_size, int) else l1.kernel_size
+                    # Note: calculate_wt_avgpool internally converts these to tuples, so pass single values
+                    padding = l1.padding if isinstance(l1.padding, int) else l1.padding[0]
+                    strides = l1.stride if isinstance(l1.stride, int) else l1.stride[0]
                     temp_wt = UP.calculate_wt_avgpool(
-                        all_wt[start_layer], all_out[child_nodes[0]][0], (l1.kernel_size, l1.kernel_size)
+                        all_wt[start_layer], all_out[child_nodes[0]][0], pool_size, padding, strides
                     )
                     all_wt[child_nodes[0]] += temp_wt.T
                 elif model_resource[1][start_layer]["class"] == "MaxPool1d":
@@ -556,7 +588,7 @@ class Backtrace(object):
                     config = self.model.config
                     temp_wt = UP.calculate_wt_self_attention_parallel(
                         all_wt[start_layer],
-                        all_out[child_nodes[0]][0].detach().numpy(),
+                        self._safe_to_numpy(all_out[child_nodes[0]][0]),
                         self_attention_weights,
                         config
                     )
@@ -564,7 +596,7 @@ class Backtrace(object):
                 elif model_resource[1][start_layer]["class"] == 'Residual':
                     temp_wt = UP.calculate_wt_residual(
                         all_wt[start_layer],
-                        [all_out[ch].detach().numpy() for ch in child_nodes],
+                        [self._safe_to_numpy(all_out[ch]) for ch in child_nodes],
                     )
 
                     for ind, ch in enumerate(child_nodes):
@@ -574,7 +606,7 @@ class Backtrace(object):
                     feed_forward_weights = HP.rename_feed_forward_keys(weights)
                     temp_wt = UP.calculate_wt_feed_forward_parallel(
                         all_wt[start_layer],
-                        all_out[child_nodes[0]][0].detach().numpy(),
+                        self._safe_to_numpy(all_out[child_nodes[0]][0]),
                         feed_forward_weights, 
                     )
                     all_wt[child_nodes[0]] += temp_wt
@@ -584,7 +616,7 @@ class Backtrace(object):
                     feed_forward_weights = HP.rename_llama_feed_forward_keys(weights)
                     temp_wt = UP.calculate_wt_llama_feed_forward_parallel(
                         all_wt[start_layer],
-                        all_out[child_nodes[0]][0].detach().cpu().numpy(),
+                        self._safe_to_numpy(all_out[child_nodes[0]][0]),
                         feed_forward_weights,
                     )
                     all_wt[child_nodes[0]] += temp_wt
@@ -594,7 +626,7 @@ class Backtrace(object):
                     pooler_weights = HP.rename_pooler_keys(weights)
                     temp_wt = UP.calculate_wt_pooler(
                         all_wt[start_layer],
-                        all_out[child_nodes[0]][0].detach().numpy(),
+                        self._safe_to_numpy(all_out[child_nodes[0]][0]),
                         pooler_weights
                     )
                     all_wt[child_nodes[0]] += temp_wt
@@ -604,7 +636,7 @@ class Backtrace(object):
                     classifier_weights = HP.rename_classifier_keys(weights)
                     temp_wt = UP.calculate_wt_classifier(
                         all_wt[start_layer],
-                        all_out[child_nodes[0]][0].detach().numpy(),
+                        self._safe_to_numpy(all_out[child_nodes[0]][0]),
                         classifier_weights
                     )
                     all_wt[child_nodes[0]] += temp_wt
@@ -614,7 +646,7 @@ class Backtrace(object):
                     lm_head_weights = HP.rename_decoder_lm_head(weights)
                     temp_wt = UP.calculate_wt_lm_head_parallel(
                         all_wt[start_layer],
-                        all_out[child_nodes[0]][0].detach().numpy(),
+                        self._safe_to_numpy(all_out[child_nodes[0]][0]),
                         lm_head_weights
                     )
                     all_wt[child_nodes[0]] += temp_wt
@@ -629,7 +661,7 @@ class Backtrace(object):
                     config = self.model.config
                     temp_wt = UP.calculate_wt_cross_attention_parallel(
                         all_wt[start_layer],
-                        [all_out[ch][0].detach().numpy() for ch in child_nodes],
+                        [self._safe_to_numpy(all_out[ch][0]) for ch in child_nodes],
                         cross_attention_weights,
                         config
                     )
@@ -656,6 +688,315 @@ class Backtrace(object):
             all_wt = temp_dict
 
         return all_wt
+
+    def cuda_proportional_eval(
+            self, all_out, start_wt=[], multiplier=100.0, 
+            scaler=0, max_unit=0, predicted_token=None,
+            thresholding=0.5, task="binary-classification",
+    ):
+        """
+        CUDA-accelerated proportional evaluation method.
+        Uses CUDA implementations for supported layer types (Linear, Conv2d, MaxPool2d).
+        Falls back to original implementations for unsupported layers.
+        """
+        from dl_backtrace.pytorch_backtrace.backtrace.utils import prop as UP
+        from dl_backtrace.pytorch_backtrace.backtrace.utils import contrast as UC
+        
+        model_resource = self.model_resource
+        activation_dict = self.activation_dict
+        out_layer = model_resource[2][0]
+        all_wt = {}
+        
+        # Initialize starting weights (same as original)
+        if len(start_wt) == 0:
+            if self.model_type == 'encoder':
+                start_wt = UP.calculate_start_wt(self._safe_to_numpy(all_out[out_layer]), scaler=1)
+                all_wt[out_layer] = start_wt * multiplier
+                layer_stack = self.layer_stack
+                all_wts = self.model_weights
+            elif self.model_type == 'encoder_decoder' or self.model_type == 'llama':
+                start_wt = UP.calculate_enc_dec_start_wt(self._safe_to_numpy(all_out[out_layer][0]), predicted_token)
+                all_wt[out_layer] = start_wt * multiplier
+                layer_stack = self.layer_stack
+                all_wts = self.model_weights
+            else:
+                start_wt = UP.calculate_start_wt(all_out[out_layer], scaler, thresholding, task=task)
+                all_wt[out_layer] = start_wt * multiplier
+                layer_stack = self.layer_stack
+        
+        # Process each layer in the stack
+        for start_layer in tqdm(layer_stack):
+            if model_resource[1][start_layer]["child"]:
+                child_nodes = model_resource[1][start_layer]["child"]
+                
+                # Initialize child weights if not present
+                for ch in child_nodes:
+                    if ch not in all_wt:
+                        child_data = self._get_layer_data(all_out, ch)
+                        all_wt[ch] = np.zeros_like(child_data)
+                            
+                layer_class = model_resource[1][start_layer]["class"]
+                
+                temp_wt = None
+                # Process different layer types with CUDA acceleration where available
+                if layer_class == "Linear":
+                    temp_wt = self._cuda_process_linear_layer(start_layer, child_nodes, all_wt, all_out, model_resource, activation_dict)
+                elif layer_class == "Conv2d":
+                    temp_wt = self._cuda_process_conv2d_layer(start_layer, child_nodes, all_wt, all_out, model_resource, activation_dict)
+                elif layer_class == "MaxPool2d":
+                    temp_wt = self._cuda_process_maxpool2d_layer(start_layer, child_nodes, all_wt, all_out, model_resource)
+                elif layer_class == "Dropout":
+                    # Pass-through layer, no special processing needed, just add relevance.
+                    temp_wt = all_wt[start_layer]
+                elif layer_class == "Flatten":
+                    temp_wt = UP.calculate_wt_rshp(
+                        all_wt[start_layer], self._get_layer_data(all_out, child_nodes[0])
+                    )
+                else:
+                    # Generic pass-through for other unsupported layers
+                    print(f"CUDA eval not supported for layer type: {layer_class}. Passing through.")
+                    temp_wt = all_wt[start_layer]
+
+                # Add calculated weights to the child node
+                if temp_wt is not None:
+                    if isinstance(child_nodes, list) and len(child_nodes) > 1:
+                        # Handle layers with multiple children if necessary (e.g., Add, Concatenate)
+                         if isinstance(temp_wt, list) and len(temp_wt) == len(child_nodes):
+                            for i, ch in enumerate(child_nodes):
+                                all_wt[ch] += temp_wt[i]
+                         else:
+                            # Fallback if wt is not a list for multiple children
+                            for ch in child_nodes:
+                                all_wt[ch] += temp_wt
+                    else:
+                        # Transpose the weights for Conv and MaxPool layers before adding
+                        if layer_class in ["Conv2d", "MaxPool2d"]:
+                            all_wt[child_nodes[0]] += temp_wt.T
+                        else:
+                            all_wt[child_nodes[0]] += temp_wt
+        
+        # Apply normalization/scaling (same as original)
+        if max_unit > 0 and scaler == 0:
+            temp_dict = {}
+            for k in all_wt.keys():
+                temp_dict[k] = UC.weight_normalize(all_wt[k], max_val=max_unit)
+            all_wt = temp_dict
+        elif scaler > 0:
+            temp_dict = {}
+            for k in all_wt.keys():
+                temp_dict[k] = UC.weight_scaler(all_wt[k], scaler=scaler)
+            all_wt = temp_dict
+
+        return all_wt
+    
+    def _get_layer_data(self, all_out, layer_name):
+        """Helper function to extract layer data from all_out, handling different formats."""
+        if isinstance(all_out[layer_name], dict) and 0 in all_out[layer_name]:
+            data = all_out[layer_name][0]
+        else:
+            data = all_out[layer_name]
+        
+        data = self._safe_to_numpy(data)
+        
+        return data
+    
+    def _cuda_process_linear_layer(self, start_layer, child_nodes, all_wt, all_out, model_resource, activation_dict):
+        """Process Linear layer with CUDA implementation if available."""
+        l1 = model_resource[0][start_layer]
+        w1 = l1.state_dict()['weight']
+        b1 = l1.state_dict()['bias']
+        
+        input_data = self._get_layer_data(all_out, child_nodes[0])
+        
+        # weight_sample = all_wt[start_layer][0] if len(all_wt[start_layer].shape) > 1 else all_wt[start_layer]
+        # input_sample = all_out[child_nodes[0]][0]
+        
+        # # Handle batch dimension for Linear layers
+        if len(input_data.shape) > 1 and input_data.shape[0] > 1:
+            input_sample = input_data[0]
+            weight_sample = all_wt[start_layer][0] if len(all_wt[start_layer].shape) > 1 else all_wt[start_layer]
+        else:
+            input_sample = input_data.flatten() if len(input_data.shape) > 1 else input_data
+            weight_sample = all_wt[start_layer].flatten() if len(all_wt[start_layer].shape) > 1 else all_wt[start_layer]
+        
+        # Try CUDA implementation first
+        try:
+            if torch.cuda.is_available():
+                from dl_backtrace.pytorch_backtrace.backtrace.refactored_utils.layers.Linear.cuda_version.wt_fc_ops import calculate_wt_fc_interface as linear_cuda
+                
+                # Convert parameters for CUDA function
+                row_specific_weights = torch.tensor(weight_sample, dtype=torch.float32).cuda()
+                input_activations = torch.tensor(input_sample, dtype=torch.float32).cuda()
+                weights_matrix = w1.cuda()
+                bias_vector = b1.cuda()
+                
+                # Get activation parameters
+                activation_params = activation_dict[model_resource[1][start_layer]["name"]]
+                
+                has_lower_bound = True if activation_params["range"]["l"] is not None else False
+                lower_threshold = activation_params["range"]["l"]
+                has_upper_bound = True if activation_params["range"]["u"] is not None else False
+                upper_threshold = activation_params["range"]["u"]
+                is_non_mono = bool(activation_params["type"] == "non_mono")
+                
+                # Map activation function to enum
+                if activation_params.get("func"):
+                    if "relu" in str(activation_params["func"]).lower():
+                        activation_func = 1
+                    elif "sigmoid" in str(activation_params["func"]).lower():
+                        activation_func = 2
+                    else:
+                        activation_func = 0
+                else:
+                    activation_func = 0
+                
+                temp_wt = linear_cuda(
+                    row_specific_weights, input_activations, weights_matrix, bias_vector,
+                    has_lower_bound, lower_threshold, has_upper_bound, upper_threshold,
+                    is_non_mono, activation_func
+                ).cpu().numpy()
+                
+                print(f"[CUDA] Successfully processed Linear layer: {start_layer}")
+            else:
+                raise RuntimeError("CUDA not available")
+                
+        except Exception as e:
+            print(f"[FALLBACK] Linear layer {start_layer}: {e}")
+            # Fallback to original implementation
+            from dl_backtrace.pytorch_backtrace.backtrace.refactored_utils.layers.Linear.original_version import calculate_wt_fc as linear_original
+            temp_wt = linear_original(
+                weight_sample, input_sample, w1.detach().numpy(), b1.detach().numpy(),
+                activation_dict[model_resource[1][start_layer]["name"]]
+            )
+        
+        # Reshape result to match expected output shape
+        if len(all_wt[child_nodes[0]].shape) > 1:
+            temp_wt = temp_wt.reshape(all_wt[child_nodes[0]].shape)
+            
+        all_wt[child_nodes[0]] += temp_wt
+    
+    def _cuda_process_conv2d_layer(self, start_layer, child_nodes, all_wt, all_out, model_resource, activation_dict):
+        """Process Conv2d layer with CUDA implementation if available."""
+        l1 = model_resource[0][start_layer]
+        w1 = l1.state_dict()['weight']
+        b1 = l1.state_dict()['bias']
+        pad1 = l1.padding
+        strides1 = l1.stride
+        
+        input_data = self._get_layer_data(all_out, child_nodes[0])
+        
+        # # Handle batch dimension for Conv2D
+        if len(input_data.shape) == 4:
+            input_sample = input_data[0]
+            weight_sample = all_wt[start_layer][0] if len(all_wt[start_layer].shape) == 4 else all_wt[start_layer]
+        else:
+            input_sample = input_data
+            weight_sample = all_wt[start_layer]
+        
+        # weight_sample = all_wt[start_layer][0] if len(all_wt[start_layer].shape) == 4 else all_wt[start_layer]
+        # input_sample = all_out[child_nodes[0]][0]
+        
+        # Try CUDA implementation first
+        try:
+            if torch.cuda.is_available():
+                from dl_backtrace.pytorch_backtrace.backtrace.refactored_utils.layers.Conv2D.cuda_version import calculate_wt_conv_cuda_optimized
+                
+                activation_params = activation_dict[model_resource[1][start_layer]["name"]].copy()
+                
+                # Convert tensors and call CUDA function
+                grad_output_scales = torch.tensor(weight_sample, dtype=torch.float32).cuda()
+                input_activations = torch.tensor(input_sample, dtype=torch.float32).cuda()
+                kernel_weights_orig_shape = w1.cuda()
+                bias = b1.cuda()
+                
+                temp_wt = calculate_wt_conv_cuda_optimized(
+                    grad_output_scales, input_activations, kernel_weights_orig_shape,
+                    bias, pad1, strides1, activation_params
+                ).cpu().numpy()
+                
+                print(f"[CUDA] Successfully processed Conv2d layer: {start_layer}")
+            else:
+                raise RuntimeError("CUDA not available")
+                
+        except Exception as e:
+            print(f"[FALLBACK] Conv2d layer {start_layer}: {e}")
+            # Fallback to original implementation
+            from dl_backtrace.pytorch_backtrace.backtrace.refactored_utils.layers.Conv2D.original_version import calculate_wt_conv as conv2d_original
+            temp_wt = conv2d_original(
+                weight_sample, input_sample, w1.detach().numpy(), b1.detach().numpy(),
+                pad1, strides1, activation_dict[model_resource[1][start_layer]["name"]]
+            )
+        
+        # Handle the result shape to match target
+        target_shape = all_wt[child_nodes[0]].shape
+        temp_wt = temp_wt.T
+        
+        if len(target_shape) == 4 and len(temp_wt.shape) == 3:
+            temp_wt = temp_wt[np.newaxis, ...]
+        
+        if temp_wt.shape != target_shape:
+            if temp_wt.size == np.prod(target_shape):
+                temp_wt = temp_wt.reshape(target_shape)
+            else:
+                temp_wt = np.zeros(target_shape)
+        
+        all_wt[child_nodes[0]] += temp_wt
+    
+    def _cuda_process_maxpool2d_layer(self, start_layer, child_nodes, all_wt, all_out, model_resource):
+        """Process MaxPool2d layer with CUDA implementation if available."""
+        l1 = model_resource[0][start_layer]
+        pool_size = torch.tensor((l1.kernel_size, l1.kernel_size) if isinstance(l1.kernel_size, int) else l1.kernel_size, dtype=torch.int32).cuda()
+        padding = torch.tensor(l1.padding if isinstance(l1.padding, int) else l1.padding[0], dtype=torch.int32).cuda()
+        strides = torch.tensor(l1.stride if isinstance(l1.stride, int) else l1.stride[0], dtype=torch.int32).cuda()
+        
+        input_data = self._get_layer_data(all_out, child_nodes[0])
+        
+        # Handle batch dimension for MaxPool
+        if len(input_data.shape) == 4:
+            input_sample = input_data[0]
+            weight_sample = all_wt[start_layer][0] if len(all_wt[start_layer].shape) == 4 else all_wt[start_layer]
+        else:
+            input_sample = input_data
+            weight_sample = all_wt[start_layer]
+        
+        # weight_sample = all_wt[start_layer][0] if len(all_wt[start_layer].shape) == 4 else all_wt[start_layer]
+        # input_sample = all_out[child_nodes[0]][0]
+        
+        # Try CUDA implementation first
+        try:
+            if torch.cuda.is_available():
+                from dl_backtrace.pytorch_backtrace.backtrace.refactored_utils.layers.MaxPool2D.cuda_version import calculate_wt_maxpool_cuda
+                
+                temp_wt = calculate_wt_maxpool_cuda(
+                    torch.tensor(weight_sample).cuda(),
+                    torch.tensor(input_sample).cuda(),
+                    pool_size, padding, strides
+                ).cpu().numpy()
+                
+                print(f"[CUDA] Successfully processed MaxPool2d layer: {start_layer}")
+            else:
+                raise RuntimeError("CUDA not available")
+                
+        except Exception as e:
+            print(f"[FALLBACK] MaxPool2d layer {start_layer}: {e}")
+            # Fallback to original implementation
+            from dl_backtrace.pytorch_backtrace.backtrace.refactored_utils.layers.MaxPool2D.original_version import calculate_wt_maxpool as maxpool_original
+            temp_wt = maxpool_original(weight_sample, input_sample, pool_size, padding, strides)
+        
+        # Handle the result shape to match target
+        target_shape = all_wt[child_nodes[0]].shape
+        temp_wt = temp_wt.T
+        
+        if len(target_shape) == 4 and len(temp_wt.shape) == 3:
+            temp_wt = temp_wt[np.newaxis, ...]
+        
+        if temp_wt.shape != target_shape:
+            if temp_wt.size == np.prod(target_shape):
+                temp_wt = temp_wt.reshape(target_shape)
+            else:
+                temp_wt = np.zeros(target_shape)
+        
+        all_wt[child_nodes[0]] += temp_wt
 
     def contrast_eval(self, all_out, multiplier=100.0,
                             scaler=None,thresholding=0.5,

@@ -4,7 +4,8 @@ from typing import Dict, Any, Union, Tuple
 from ..Padding.pytorch import calculate_padding
 
 PaddingModeType = Union[str, Tuple[Any, Any]] 
-        
+
+# @torch.compile
 def calculate_wt_conv_pytorch_optimized(
     grad_output_scales: torch.Tensor,
     input_activations: torch.Tensor,
@@ -169,3 +170,4 @@ def calculate_wt_conv_pytorch_optimized(
 
 # Compiled version for even better performance
 calculate_wt_conv = torch.compile(calculate_wt_conv_pytorch_optimized)
+# calculate_wt_conv = calculate_wt_conv_pytorch_optimized

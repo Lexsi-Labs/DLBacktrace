@@ -891,7 +891,11 @@ def calculate_wt_gavgpool(wts_pos, wts_neg, inp):
 
 def weight_scaler(arg, scaler=100.0):
     s1 = np.sum(arg)
+    if s1 == 0:
+        return arg  # Return unchanged if sum is zero
     scale_factor = s1 / scaler
+    if scale_factor == 0:
+        return arg  # Return unchanged if scale factor is zero
     return arg / scale_factor
 
 def weight_normalize(arg, max_val=1.0):

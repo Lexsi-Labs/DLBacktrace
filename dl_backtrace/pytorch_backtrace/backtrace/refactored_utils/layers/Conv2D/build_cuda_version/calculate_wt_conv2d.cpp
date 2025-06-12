@@ -16,11 +16,11 @@ torch::Tensor calculate_wt_conv2d_interface(
     const float act_range_l, const float act_range_u,
     const bool has_range_l, const bool has_range_u
 ) {
-    std::cout << "--- C++ Input Shapes ---" << std::endl;
-    std::cout << "patches.shape: " << patches.sizes() << "device: " << patches.device() << std::endl;
-    std::cout << "kernel_weights.shape: " << kernel_weights.sizes() << "device: " << kernel_weights.device() << std::endl;
-    std::cout << "bias.shape: " << bias.sizes() << "device: " << bias.device() << std::endl;
-    std::cout << "grad_scales.shape: " << grad_scales.sizes() << "device: " << grad_scales.device() << std::endl;
+    // std::cout << "--- C++ Input Shapes ---" << std::endl;
+    // std::cout << "patches.shape: " << patches.sizes() << "device: " << patches.device() << std::endl;
+    // std::cout << "kernel_weights.shape: " << kernel_weights.sizes() << "device: " << kernel_weights.device() << std::endl;
+    // std::cout << "bias.shape: " << bias.sizes() << "device: " << bias.device() << std::endl;
+    // std::cout << "grad_scales.shape: " << grad_scales.sizes() << "device: " << grad_scales.device() << std::endl;
         
     // --- Tensor Checks ---
     TORCH_CHECK(patches.dim() == 4, "patches must be 4D");

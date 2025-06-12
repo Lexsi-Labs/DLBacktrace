@@ -1,0 +1,71 @@
+=== Performance Comparison ===
+Speedup: 53.29x
+Default mode time: 97.6784s
+CUDA eval mode time: 1.8331s
+
+=== Numerical Accuracy Comparison ===
+Maximum numerical difference: 5.02e-01
+Number of layers compared: 27
+
+Top 5 layer differences:
+  dropout1: 5.02e-01
+  fc1/relu_fc1: 5.02e-01
+  dropout2: 0.00e+00
+  fc2/relu_fc2: 0.00e+00
+  flatten: 0.00e+00
+
+=== Creating Visualization (CUDA Results) ===
+Creating relevance visualization...
+Rendering graph to cuda_relevance_benchmark.png...
+
+=== Final Benchmark Results ===
+--------------------------------------------------
+Model: VGG with 10 classes
+Test sample class: 0
+Layers processed: 27
+Default mode time: 97.6784s
+CUDA eval mode time: 1.8331s
+Performance improvement: 53.29x
+Maximum numerical difference: 5.02e-01
+--------------------------------------------------
+
+Relevance Summary (Original Implementation):
+--------------------------------------------------
+dropout2            :   7.529360
+fc2_relu_fc2        :   7.529360
+dropout1            :   1.236589
+fc1_relu_fc1        :   1.236589
+flatten             :   0.000000
+pool5               :   0.000000
+conv5_4_relu5_4     :   0.000000
+conv5_3_relu5_3     :   0.000000
+conv5_2_relu5_2     :   0.000000
+conv5_1_relu5_1     :   0.000000
+
+Relevance Summary (CUDA Implementation):
+---------------------------------------------
+dropout2            :   7.529360
+fc2_relu_fc2        :   7.529360
+dropout1            :   0.000000
+fc1_relu_fc1        :   0.000000
+flatten             :   0.000000
+pool5               :   0.000000
+conv5_4_relu5_4     :   0.000000
+conv5_3_relu5_3     :   0.000000
+conv5_2_relu5_2     :   0.000000
+conv5_1_relu5_1     :   0.000000
+
+Statistical Comparison of Relevance Scores:
+----------------------------------------------------------------------
+Metric               Original        CUDA            Abs Difference 
+----------------------------------------------------------------------
+Min Value            0.000000        0.000000        0.00e+00       
+Max Value            7.529360        7.529360        1.24e+00       
+Avg Value            0.649330        0.557730        9.16e-02       
+
+Metric (Abs)         Original        CUDA           
+--------------------------------------------------
+Min |Value|          0.000000        0.000000       
+Max |Value|          7.529360        7.529360       
+Avg |Value|          0.649330        0.557730       
+Total Layers         27             

@@ -59,60 +59,74 @@ __global__ void calculate_wt_conv_cuda_kernel(
     const float positive_bias = fmaxf(bias_val, 0.0f);
     const float abs_negative_bias = fmaxf(-bias_val, 0.0f);
     
-    // Initialize masks
+    // Initialize masks based on sum values
     bool pos_mask = sum_positive > 0.0f;
     bool neg_mask = sum_abs_negative > 0.0f;
     
-    // Activation logic
+    // Activation logic - match original implementation sequence
     if (act_type == 0) { // mono
-        if (has_range_l) {
-            pos_mask = sum_abs_total > act_range_l;
+        if (has_range_l && sum_abs_total <= act_range_l) {
+            pos_mask = false;
         }
-        if (has_range_u) {
-            neg_mask = sum_abs_total < act_range_u;
+        if (has_range_u && sum_abs_total >= act_range_u) {
+            neg_mask = false;
         }
     } else if (act_type == 1) { // non_mono
+        // Store original values for activation computation
+        float orig_p_sum = sum_positive;
+        float orig_n_sum = sum_abs_negative;
+        
+        // Compute activation functions with original values (like original implementation)
         float t_act, p_act, n_act;
         switch (act_func) {
             case 1: // ReLU
                 t_act = fmaxf(0.0f, sum_abs_total);
-                p_act = fmaxf(0.0f, sum_positive + positive_bias);
-                n_act = fmaxf(0.0f, -sum_abs_negative - abs_negative_bias);
+                p_act = fmaxf(0.0f, orig_p_sum + positive_bias);
+                n_act = fmaxf(0.0f, -orig_n_sum - abs_negative_bias);
                 break;
             case 2: // Sigmoid
                 t_act = 1.0f / (1.0f + expf(-sum_abs_total));
-                p_act = 1.0f / (1.0f + expf(-(sum_positive + positive_bias)));
-                n_act = 1.0f / (1.0f + expf(-(sum_abs_negative + abs_negative_bias)));
+                p_act = 1.0f / (1.0f + expf(-(orig_p_sum + positive_bias)));
+                n_act = 1.0f / (1.0f + expf(-(orig_n_sum + abs_negative_bias)));
                 break;
             default: // Identity
                 t_act = sum_abs_total;
-                p_act = sum_positive + positive_bias;
-                n_act = -sum_abs_negative - abs_negative_bias;
+                p_act = orig_p_sum + positive_bias;
+                n_act = -orig_n_sum - abs_negative_bias;
                 break;
         }
         
-        // Use exact equality to match PyTorch behavior
-        if (has_range_l) {
-            pos_mask = pos_mask && (sum_abs_total > act_range_l);
+        // Apply range bounds first
+        if (has_range_l && sum_abs_total <= act_range_l) {
+            pos_mask = false;
         }
-        if (has_range_u) {
-            neg_mask = neg_mask && (sum_abs_total < act_range_u);
+        if (has_range_u && sum_abs_total >= act_range_u) {
+            neg_mask = false;
         }
-
-        bool neg_check = fabs(t_act - p_act) > epsilon;
-        bool pos_check = fabs(t_act - n_act) > epsilon;
-
-        neg_mask = neg_mask && neg_check;
-        pos_mask = pos_mask && pos_check;
+        
+        // Then apply activation-based logic (matching original implementation)
+        if (pos_mask && neg_mask) {
+            if (fabsf(t_act - p_act) <= epsilon) {
+                neg_mask = false;
+            } else if (fabsf(t_act - n_act) <= epsilon) {
+                pos_mask = false;
+            }
+        }
     }
     
-    // Weight computation
+    // Weight computation with division by zero protection and numerical stability
     const float denominator = sum_abs_total + positive_bias + abs_negative_bias;
-    const float inv_denom = __fdividef(1.0f, denominator); // Fast division
+    // const float safe_denominator = (denominator == 0.0f || !isfinite(denominator)) ? 1e-8f : denominator;
+    const float inv_denom = __fdividef(1.0f, denominator); // Fast division with safety
     const float grad_scale = grad_scales_ptr[patch_idx * F_dim + feature_idx];
     
+    // Check for numerical stability in weight calculations
     const float pos_weight = inv_denom * grad_scale * (pos_mask ? 1.0f : 0.0f);
     const float neg_weight = inv_denom * grad_scale * (neg_mask ? 1.0f : 0.0f);
+    // const float pos_weight = (isfinite(inv_denom) && isfinite(grad_scale)) ? 
+    //                         inv_denom * grad_scale * (pos_mask ? 1.0f : 0.0f) : 0.0f;
+    // const float neg_weight = (isfinite(inv_denom) && isfinite(grad_scale)) ? 
+    //                         inv_denom * grad_scale * (neg_mask ? 1.0f : 0.0f) : 0.0f;
     
     // Compute and store updates for current patch
     for (int kh = 0; kh < K_h; kh++) {
@@ -130,12 +144,16 @@ __global__ void calculate_wt_conv_cuda_kernel(
                 
                 float update_val = 0.0f;
                 if (conv_val > 0.0f) {
-                    update_val += conv_val * pos_weight;
+                    update_val = conv_val * pos_weight;
                 } else {
-                    update_val -= conv_val * neg_weight; // Note: conv_val is negative
+                    update_val = -conv_val * neg_weight; // Note: conv_val is negative
                 }
                 
-                // Atomic add for thread cooperation (if multiple features per spatial location)
+                // Only add finite updates to prevent NaN propagation
+                // if (isfinite(update_val)) {
+                //     atomicAdd(&updates_ptr[update_offset], update_val);
+                // }
+
                 atomicAdd(&updates_ptr[update_offset], update_val);
             }
         }

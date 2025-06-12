@@ -43,13 +43,8 @@ def calculate_wt_conv_cuda_optimized(
     act_range_l = activation_params["range"]["l"]
     act_range_u = activation_params["range"]["u"]
     
-    has_range_l = True if activation_params["range"]["l"] is not None else False
-    has_range_u = True if activation_params["range"]["u"] is not None else False
-    
-    if activation_params["range"]["u"]:
-        has_range_u = True
-    else:
-        has_range_u = False
+    has_range_l = True if activation_params["range"]["l"] else False
+    has_range_u = True if activation_params["range"]["u"] else False
     
     kernel_size_tuple = (K_h, K_w)
     

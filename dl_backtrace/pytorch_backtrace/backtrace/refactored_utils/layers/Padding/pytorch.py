@@ -151,5 +151,5 @@ def calculate_padding_pytorch(
     ]
     return padded_tensor, returned_padding_details
 
-
-calculate_padding = torch.compile(calculate_padding_pytorch)
+# calculate_padding = torch.compile(calculate_padding_pytorch)
+calculate_padding = calculate_padding_pytorch
