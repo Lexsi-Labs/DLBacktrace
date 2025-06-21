@@ -1,18 +1,18 @@
 === Performance Comparison ===
-Speedup: 28.31x
-Default mode time: 2.4540s
-CUDA eval mode time: 0.0867s
+Speedup: 92.54x
+Default mode time: 13.0486s
+CUDA eval mode time: 0.1410s
 
 === Numerical Accuracy Comparison ===
-Maximum numerical difference: 4.98e-01
-Number of layers compared: 27
+Maximum numerical difference: 6.25e-01
+Number of layers compared: 28
 
 Top 5 layer differences:
-  dropout1: 4.98e-01
-  fc1/relu_fc1: 4.98e-01
-  flatten: 1.07e-03
-  pool5: 1.07e-03
-  conv5_4/relu5_4: 1.07e-03
+  conv5_4/relu5_4: 6.25e-01
+  conv5_3/relu5_3: 2.48e-02
+  conv5_2/relu5_2: 4.01e-05
+  dropout2: 9.54e-07
+  fc2/relu_fc2: 9.54e-07
 
 === Creating Visualization (CUDA Results) ===
 Creating relevance visualization...
@@ -21,51 +21,50 @@ Rendering graph to cuda_relevance_benchmark.png...
 === Final Benchmark Results ===
 --------------------------------------------------
 Model: VGG with 10 classes
-Test sample class: 3
-Layers processed: 27
-Default mode time: 2.4540s
-CUDA eval mode time: 0.0867s
-Performance improvement: 28.31x
-Maximum numerical difference: 4.98e-01
+Test sample class: 4
+Layers processed: 28
+Default mode time: 13.0486s
+CUDA eval mode time: 0.1410s
+Performance improvement: 92.54x
+Maximum numerical difference: 6.25e-01
 --------------------------------------------------
 
 Relevance Summary (Original Implementation):
 --------------------------------------------------
-fc2_relu_fc2        :   6.730805
-dropout2            :   6.730805
-dropout1            :   1.773444
-fc1_relu_fc1        :   1.773444
-flatten             :   0.029743
-pool5               :   0.029743
-conv5_4_relu5_4     :   0.029743
-conv5_3_relu5_3     :   0.000763
-conv5_2_relu5_2     :   0.000000
-conv5_1_relu5_1     :        nan
+fc3                 : 100.000000
+dropout2            :  56.487789
+fc2_relu_fc2        :  56.487789
+dropout1            :  30.617647
+fc1_relu_fc1        :  30.617647
+flatten             :   4.414175
+pool5               :   4.414175
+conv5_4_relu5_4     :   4.414175
+conv5_3_relu5_3     :   0.163796
+conv5_2_relu5_2     :   0.000540
 
 Relevance Summary (CUDA Implementation):
 ---------------------------------------------
-fc2_relu_fc2        :   6.730805
-dropout2            :   6.730805
-dropout1            :   0.000000
-fc1_relu_fc1        :   0.000000
-flatten             :   0.000000
-pool5               :   0.000000
-conv5_4_relu5_4     :   0.000000
-conv5_3_relu5_3     :   0.000000
-conv5_2_relu5_2     :   0.000000
-conv5_1_relu5_1     :   0.000000
+fc3                 : 100.000000
+dropout2            :  56.487789
+fc2_relu_fc2        :  56.487789
+dropout1            :  30.617643
+fc1_relu_fc1        :  30.617643
+flatten             :   4.414174
+pool5               :   4.414174
+conv5_4_relu5_4     :   4.414174
+conv5_3_relu5_3     :   0.256937
+conv5_2_relu5_2     :   0.000004
 
 Statistical Comparison of Relevance Scores:
 ----------------------------------------------------------------------
 Metric               Original        CUDA            Abs Difference 
 ----------------------------------------------------------------------
-Min Value            nan             nan             nan            
-Max Value            nan             nan             nan            
-Avg Value            nan             nan             nan            
+Min Value            0.000000        0.000000        0.00e+00       
+Max Value            100.000000      100.000000      9.31e-02       
+Avg Value            10.272062       10.275369       3.35e-03       
 
 Metric (Abs)         Original        CUDA           
 --------------------------------------------------
-Min |Value|          nan             nan            
-Max |Value|          nan             nan            
-Avg |Value|          nan             nan            
-Total Layers         27             
+Min |Value|          0.000000        0.000000       
+Max |Value|          100.000000      100.000000     
+Avg |Value|          10.272062       10.275369 

@@ -9,6 +9,7 @@ import os
 import time
 import torchvision
 import torchvision.transforms as transforms
+from tqdm import tqdm
 
 # Create synthetic dataset for testing (replacing ImageNet)
 def create_synthetic_data(num_samples=1000, num_classes=6, image_size=(3, 224, 224)):
@@ -29,46 +30,69 @@ def create_synthetic_data(num_samples=1000, num_classes=6, image_size=(3, 224, 2
     
     return X, y
 
+def initialize_binary_classification(root='./data'):
+    """Initializes CIFAR10 for binary classification (cats vs dogs)."""
+    transform = transforms.Compose(
+        [transforms.Resize((224, 224)),
+         transforms.ToTensor(),
+         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+
+    trainset = torchvision.datasets.CIFAR10(root=root, train=True,
+                                            download=True, transform=transform)
+    testset = torchvision.datasets.CIFAR10(root=root, train=False,
+                                           download=True, transform=transform)
+
+    # --- Binary Classification Modification: Filter dataset for two classes ---
+    binary_class_1 = 3  # cat
+    binary_class_2 = 5  # dog
+    classes = ('cat', 'dog')
+
+    # Filter training data
+    train_indices = [i for i, label in enumerate(trainset.targets) if label in [binary_class_1, binary_class_2]]
+    trainset.data = trainset.data[train_indices]
+    trainset.targets = [0 if trainset.targets[i] == binary_class_1 else 1 for i in train_indices]
+
+    # Filter test data
+    test_indices = [i for i, label in enumerate(testset.targets) if label in [binary_class_1, binary_class_2]]
+    testset.data = testset.data[test_indices]
+    testset.targets = [0 if testset.targets[i] == binary_class_1 else 1 for i in test_indices]
+
+    num_classes = 2 # Set number of classes to 2 for binary task
+    
+    return trainset, testset, num_classes, classes
+
+def initialize_multiclass_classification(root='./data'):
+    """Initializes CIFAR10 for multi-class classification (all 10 classes)."""
+    transform = transforms.Compose(
+        [transforms.Resize((224, 224)),
+         transforms.ToTensor(),
+         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+
+    trainset = torchvision.datasets.CIFAR10(root=root, train=True,
+                                            download=True, transform=transform)
+    testset = torchvision.datasets.CIFAR10(root=root, train=False,
+                                           download=True, transform=transform)
+                                           
+    num_classes = 10
+    classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+    
+    return trainset, testset, num_classes, classes
+
 # Generate synthetic data
-num_samples = 1000
-num_classes = 10
 print("=== VGG Backtrace CUDA Evaluation Benchmark ===")
 # print("Generating synthetic data for testing...")
 # X_data, y_data = create_synthetic_data(num_samples, num_classes)
 
-# CIFAR10 dataset
-transform = transforms.Compose(
-    [transforms.ToTensor(),
-     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+# --- Choose Initialization ---
+# Uncomment the desired initialization function
+trainset, testset, num_classes, classes = initialize_multiclass_classification()
+#trainset, testset, num_classes, classes = initialize_binary_classification()
 
-trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
-                                        download=True, transform=transform)
-testset = torchvision.datasets.CIFAR10(root='./data', train=False,
-                                       download=True, transform=transform)
-
-# --- Binary Classification Modification: Filter dataset for two classes ---
-binary_class_1 = 3  # cat
-binary_class_2 = 5  # dog
-new_classes = ('cat', 'dog')
-
-# Filter training data
-train_indices = [i for i, label in enumerate(trainset.targets) if label in [binary_class_1, binary_class_2]]
-trainset.data = trainset.data[train_indices]
-trainset.targets = [0 if trainset.targets[i] == binary_class_1 else 1 for i in train_indices]
-
-# Filter test data
-test_indices = [i for i, label in enumerate(testset.targets) if label in [binary_class_1, binary_class_2]]
-testset.data = testset.data[test_indices]
-testset.targets = [0 if testset.targets[i] == binary_class_1 else 1 for i in test_indices]
-
-num_classes = 2 # Set number of classes to 2 for binary task
-# --- End of Binary Classification Modification ---
 
 print(f"Training samples: {len(trainset)}, Test samples: {len(testset)}")
 print(f"Number of classes: {num_classes}")
 
 # Class mapping for CIFAR10
-classes = new_classes
 mapping = {classes[i]: i for i in range(num_classes)}
 
 class VGG19(nn.Module):
@@ -180,10 +204,129 @@ class VGG19(nn.Module):
         x = self.fc3(x)
         return x
 
+def load_pretrained_vgg(num_classes):
+    """
+    Loads a pretrained VGG-19 model and maps its weights to the custom VGG19 model.
+    This function transfers weights for all convolutional layers and the first two
+    fully-connected layers to leverage the features learned from ImageNet.
+    The final classification layer is left to be trained on the new dataset.
+    """
+    print("Loading pretrained VGG-19 model from torchvision...")
+    pretrained_vgg = torchvision.models.vgg19(weights=torchvision.models.VGG19_Weights.IMAGENET1K_V1)
+    pretrained_dict = pretrained_vgg.state_dict()
+
+    # Create an instance of the custom model
+    custom_vgg = VGG19(num_classes=num_classes)
+    custom_dict = custom_vgg.state_dict()
+
+    # Create a detailed mapping from torchvision VGG19 layer names to custom model names
+    mapping = {
+        # Convolutional layers
+        "features.0.weight": "conv1_1.weight", "features.0.bias": "conv1_1.bias",
+        "features.2.weight": "conv1_2.weight", "features.2.bias": "conv1_2.bias",
+        "features.5.weight": "conv2_1.weight", "features.5.bias": "conv2_1.bias",
+        "features.7.weight": "conv2_2.weight", "features.7.bias": "conv2_2.bias",
+        "features.10.weight": "conv3_1.weight", "features.10.bias": "conv3_1.bias",
+        "features.12.weight": "conv3_2.weight", "features.12.bias": "conv3_2.bias",
+        "features.14.weight": "conv3_3.weight", "features.14.bias": "conv3_3.bias",
+        "features.16.weight": "conv3_4.weight", "features.16.bias": "conv3_4.bias",
+        "features.19.weight": "conv4_1.weight", "features.19.bias": "conv4_1.bias",
+        "features.21.weight": "conv4_2.weight", "features.21.bias": "conv4_2.bias",
+        "features.23.weight": "conv4_3.weight", "features.23.bias": "conv4_3.bias",
+        "features.25.weight": "conv4_4.weight", "features.25.bias": "conv4_4.bias",
+        "features.28.weight": "conv5_1.weight", "features.28.bias": "conv5_1.bias",
+        "features.30.weight": "conv5_2.weight", "features.30.bias": "conv5_2.bias",
+        "features.32.weight": "conv5_3.weight", "features.32.bias": "conv5_3.bias",
+        "features.34.weight": "conv5_4.weight", "features.34.bias": "conv5_4.bias",
+        # Fully-connected layers (transferring first two)
+        "classifier.0.weight": "fc1.weight", "classifier.0.bias": "fc1.bias",
+        "classifier.3.weight": "fc2.weight", "classifier.3.bias": "fc2.bias",
+    }
+
+    # Create a new state dict for the custom model
+    new_pretrained_dict = {}
+    for torchvision_name, custom_name in mapping.items():
+        if torchvision_name in pretrained_dict and custom_name in custom_dict:
+            # Check if shapes are compatible before transferring
+            if pretrained_dict[torchvision_name].shape == custom_dict[custom_name].shape:
+                new_pretrained_dict[custom_name] = pretrained_dict[torchvision_name]
+            else:
+                print(f"Skipping layer {custom_name} due to shape mismatch.")
+    
+    # Update the custom model's dict and load the weights
+    custom_dict.update(new_pretrained_dict)
+    custom_vgg.load_state_dict(custom_dict, strict=False)
+    print("Successfully loaded pretrained weights into the custom model.")
+    
+    return custom_vgg
+
+def test_model_performance(model, test_loader, device, classes, num_classes):
+    """
+    Evaluates model performance on the test set, providing overall accuracy,
+    per-class accuracy, and a classification report.
+    """
+    model.eval()
+    correct = 0
+    total = 0
+    class_correct = list(0. for i in range(num_classes))
+    class_total = list(0. for i in range(num_classes))
+    all_preds = []
+    all_labels = []
+
+    with torch.no_grad():
+        for data in tqdm(test_loader, desc="Testing Model Performance"):
+            images, labels = data
+            images, labels = images.to(device), labels.to(device)
+            outputs = model(images)
+            _, predicted = torch.max(outputs.data, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+
+            all_preds.extend(predicted.cpu().numpy())
+            all_labels.extend(labels.cpu().numpy())
+
+            c = (predicted == labels).squeeze()
+            if len(c.shape) == 0: # Handle batch size of 1
+                c = c.unsqueeze(0)
+
+            for i in range(len(labels)):
+                label = labels[i]
+                if label < len(class_correct):
+                    class_correct[label] += c[i].item()
+                    class_total[label] += 1
+
+    print("\n=== Model Performance Results ===")
+    accuracy = 100 * correct / total
+    print(f'Overall Accuracy: {accuracy:.2f} %')
+
+    print("\nPer-class Accuracy:")
+    for i in range(num_classes):
+        if class_total[i] > 0:
+            print(f'  - {classes[i]:<10}: {100 * class_correct[i] / class_total[i]:.2f} % ({int(class_correct[i])}/{int(class_total[i])})')
+        else:
+            print(f'  - {classes[i]:<10}: N/A (no samples)')
+
+    # Add classification report from scikit-learn
+    try:
+        from sklearn.metrics import classification_report
+        print("\nClassification Report:")
+        
+        # Ensure that labels in classification_report are consistent
+        unique_labels = sorted(list(set(all_labels)))
+        target_names_filtered = [classes[i] for i in unique_labels]
+
+        print(classification_report(all_labels, all_preds, target_names=target_names_filtered, digits=4, labels=unique_labels))
+    except ImportError:
+        print("\nScikit-learn not found. Skipping classification report.")
+    except Exception as e:
+        print(f"\nCould not generate classification report: {e}")
+        
+    return accuracy 
+
 # Model setup
 print("\nInitializing model...")
 # Use VGGSmall for faster testing - change this line to switch between models
-model = VGG19(num_classes=num_classes)  # Changed from VGG19 to VGGSmall
+model = load_pretrained_vgg(num_classes=num_classes)
 
 # Check if CUDA is available
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -197,7 +340,7 @@ optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
 
 # Training parameters
 batch_size = 128  # Adjusted for CIFAR10
-num_epochs = 5  # Reduced for testing purposes
+num_epochs = 2  # Reduced for testing purposes
 num_workers = 2
 
 # Create data loaders
@@ -228,8 +371,12 @@ for epoch in range(num_epochs):
     avg_loss = total_loss / num_batches
     print(f"Epoch [{epoch+1}/{num_epochs}] Average Loss: {avg_loss:.4f}")
 
-# Model evaluation
-print("\nEvaluating model...")
+# Model performance testing
+print("\n=== Model Performance Testing ===")
+test_model_performance(model, test_loader, device, classes, num_classes)
+
+# Model evaluation for Backtrace
+print("\nSelecting sample for Backtrace analysis...")
 model.eval()
 with torch.no_grad():
     dataiter = iter(test_loader)
@@ -255,7 +402,7 @@ try:
 
     # Get layer outputs
     print("Getting layer outputs...")
-    layer_outputs = backtrace.predict_every(test_sample)
+    layer_outputs = backtrace.predict(test_sample)
     print(f"Number of layers captured: {len(layer_outputs)}")
     
     # Calculate relevance using default mode
@@ -264,8 +411,8 @@ try:
     relevance_default = backtrace.eval(
         layer_outputs, 
         mode='default',
-        scaler=1,
-        task='binary-classification', 
+        scaler=0,
+        task='classification', 
         multiplier=100.0
     )
     default_time = time.time() - start_time
@@ -278,8 +425,8 @@ try:
     relevance_cuda = backtrace.eval(
         layer_outputs, 
         mode='cuda_eval',
-        scaler=1,
-        task='binary-classification', 
+        scaler=0,
+        task='classification', 
         multiplier=100.0
     )
     cuda_time = time.time() - start_time
@@ -483,3 +630,5 @@ except Exception as e:
     traceback.print_exc()
 
 print("\nVGG CUDA benchmark test completed!") 
+
+

@@ -14,9 +14,9 @@ torch::Tensor calculate_wt_fc_cuda(
     const torch::Tensor& weights_matrix,
     const torch::Tensor& bias_vector,
     const bool has_lower_bound,
-    const float lower_threshold,
+    const c10::optional<float>& lower_threshold,
     const bool has_upper_bound,
-    const float upper_threshold,
+    const c10::optional<float>& upper_threshold,
     const bool is_non_mono,
     const int activation_func
 );

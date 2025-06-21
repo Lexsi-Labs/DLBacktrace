@@ -2,6 +2,7 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <cfloat>
+#include <stdio.h>
 
 __global__ void calculate_wt_fc_fused_kernel(
     const float* row_specific_weights_ptr,
@@ -9,18 +10,16 @@ __global__ void calculate_wt_fc_fused_kernel(
     const float* weights_matrix_ptr,
     const float* bias_vector_ptr,
     float* final_output_ptr,
-    const int D_in_kernel,
     const int D_out_kernel,
-    const bool has_lower_bound,
+    const int D_in_kernel,
     const float lower_threshold,
-    const bool has_upper_bound, 
     const float upper_threshold,
     const bool is_non_mono,
     const int activation_func
 ) {
 
-    int row = blockIdx.x;
-    if (row >= D_in_kernel) return;
+    int row = blockIdx.x; // output neuron index j
+    if (row >= D_out_kernel) return;
     
     int tid = threadIdx.y * blockDim.x + threadIdx.x;
     int block_size = blockDim.x * blockDim.y;
@@ -42,9 +41,9 @@ __global__ void calculate_wt_fc_fused_kernel(
     float local_p_sum = ZERO;
     float local_n_sum = ZERO;
     
-    // Each thread processes multiple columns
-    for (int col = tid; col < D_out_kernel; col += block_size) {
-        float scaled_weight = weights_matrix_ptr[row * D_out_kernel + col] * input_activations_ptr[row];
+    // Each thread processes multiple columns (input neurons k)
+    for (int col = tid; col < D_in_kernel; col += block_size) {
+        float scaled_weight = weights_matrix_ptr[row * D_in_kernel + col] * input_activations_ptr[col];
         
         if (scaled_weight > ZERO) {
             local_p_sum += scaled_weight;
@@ -89,14 +88,15 @@ __global__ void calculate_wt_fc_fused_kernel(
         float n_sum_for_act = n_sum;
         
         // STEP 1: Apply range bounds FIRST (matches PyTorch order)
-        if (has_lower_bound) {
+        if (lower_threshold != 0.0f) {
             if (t_sum < lower_threshold) {
                 p_sum = ZERO;
             }
         }
-        if (has_upper_bound) {
+        if (upper_threshold != 0.0f) {
             if (t_sum > upper_threshold) {
             n_sum = ZERO;
+            }
         }
         
         // STEP 2: Apply non-monotonic activation logic using ORIGINAL values for activation
@@ -140,7 +140,6 @@ __global__ void calculate_wt_fc_fused_kernel(
         if (p_sum > ZERO) {
             float ratio1_p = (p_sum + pbias) / den1_common;
             float ratio2_p_denom = p_sum + pbias;
-            // Correct safe division logic matching PyTorch
             float safe_ratio2_p_denom = (ratio2_p_denom == ZERO) ? ONE : ratio2_p_denom;
             float ratio2_p = p_sum / safe_ratio2_p_denom;
             
@@ -150,7 +149,6 @@ __global__ void calculate_wt_fc_fused_kernel(
         if (n_sum > ZERO) {
             float ratio1_n = (n_sum + nbias) / den1_common;
             float ratio2_n_denom = n_sum + nbias;
-            // Correct safe division logic matching PyTorch
             float safe_ratio2_n_denom = (ratio2_n_denom == ZERO) ? ONE : ratio2_n_denom;
             float ratio2_n = n_sum / safe_ratio2_n_denom;
             
@@ -176,8 +174,8 @@ __global__ void calculate_wt_fc_fused_kernel(
     n_sum_div = s_positive[3];
     
     // Compute and accumulate contributions
-    for (int col = tid; col < D_out_kernel; col += block_size) {
-        float scaled_weight = weights_matrix_ptr[row * D_out_kernel + col] * input_activations_ptr[row];
+    for (int col = tid; col < D_in_kernel; col += block_size) {
+        float scaled_weight = weights_matrix_ptr[row * D_in_kernel + col] * input_activations_ptr[col];
         float contribution = ZERO;
         
         if (scaled_weight > ZERO) {
@@ -198,33 +196,32 @@ torch::Tensor calculate_wt_fc_cuda(
     const torch::Tensor& weights_matrix,
     const torch::Tensor& bias_vector,
     const bool has_lower_bound,
-    const float lower_threshold,
+    const c10::optional<float>& lower_threshold,
     const bool has_upper_bound,
-    const float upper_threshold,
+    const c10::optional<float>& upper_threshold,
     const bool is_non_mono,
     const int activation_func
 ) {
+    float lower_threshold_value = lower_threshold.has_value() ? lower_threshold.value() : 0.0f;
+    float upper_threshold_value = upper_threshold.has_value() ? upper_threshold.value() : 0.0f;
+
     // Input validation
     TORCH_CHECK(row_specific_weights.dim() == 1, "row_specific_weights must be 1D");
     TORCH_CHECK(input_activations.dim() == 1, "input_activations must be 1D");
     TORCH_CHECK(weights_matrix.dim() == 2, "weights_matrix must be 2D");
     TORCH_CHECK(bias_vector.dim() == 1, "bias_vector must be 1D");
     
-    int D_in_actual = weights_matrix.size(0);  // Correct: number of input features
-    int D_out_actual = weights_matrix.size(1); // Correct: number of output features
-    
-    // TORCH_CHECK(row_specific_weights.size(0) == D_in_actual, "row_specific_weights size mismatch");
-    // TORCH_CHECK(input_activations.size(0) == D_in_actual, "input_activations size mismatch");
-    // TORCH_CHECK(bias_vector.size(0) == D_in_actual, "bias_vector size mismatch");
+    int D_out_actual = weights_matrix.size(0); // Correct: number of output features
+    int D_in_actual = weights_matrix.size(1);  // Correct: number of input features
  
     // Create output tensor
-    at::Tensor result = torch::zeros({D_out_actual}, weights_matrix.options());
+    at::Tensor result = torch::zeros({D_in_actual}, weights_matrix.options());
     
     // Launch kernel
     const int BLOCK_SIZE_X = 16;
     const int BLOCK_SIZE_Y = 16;
     dim3 block_dim(BLOCK_SIZE_X, BLOCK_SIZE_Y);
-    dim3 grid_dim(D_in_actual, 1);
+    dim3 grid_dim(D_out_actual, 1);
     
     size_t shared_mem_size = 2 * BLOCK_SIZE_X * BLOCK_SIZE_Y * sizeof(float);
 
@@ -234,9 +231,9 @@ torch::Tensor calculate_wt_fc_cuda(
         weights_matrix.data_ptr<float>(),
         bias_vector.data_ptr<float>(),
         result.data_ptr<float>(),
-        D_in_actual, D_out_actual,
-        has_lower_bound, lower_threshold,
-        has_upper_bound, upper_threshold,
+        D_out_actual, D_in_actual,
+        lower_threshold_value,
+        upper_threshold_value,
         is_non_mono, activation_func
     );
     

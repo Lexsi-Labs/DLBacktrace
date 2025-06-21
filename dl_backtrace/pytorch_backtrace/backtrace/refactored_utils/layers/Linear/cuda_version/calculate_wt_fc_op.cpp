@@ -10,9 +10,9 @@ torch::Tensor calculate_wt_fc_interface(
     const torch::Tensor& weights_matrix,
     const torch::Tensor& bias_vector,
     const bool has_lower_bound,
-    const float lower_threshold,
+    const c10::optional<float>& lower_threshold,
     const bool has_upper_bound,
-    const float upper_threshold,
+    const c10::optional<float>& upper_threshold,
     const bool is_non_mono,
     const int activation_func
 ) {
@@ -28,8 +28,8 @@ torch::Tensor calculate_wt_fc_interface(
     TORCH_CHECK(weights_matrix.dim() == 2, "weights_matrix must be 2D");
     TORCH_CHECK(bias_vector.dim() == 1, "bias_vector must be 1D");
     
-    int D_in = weights_matrix.size(0);
-    int D_out = weights_matrix.size(1);
+    int D_in = weights_matrix.size(1);
+    int D_out = weights_matrix.size(0);
 
     // TORCH_CHECK(row_specific_weights.sizes()[0] == D_out, "row_specific_weights size mismatch with D_in");
     // TORCH_CHECK(input_activations.sizes()[0] == D_in, "input_activations size mismatch with D_in");
@@ -81,5 +81,16 @@ torch::Tensor calculate_wt_fc_interface(
 
 // PYBIND11_MODULE definition remains the same
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-    m.def("calculate_wt_fc_interface", &calculate_wt_fc_interface, "Fused Weighted Fully Connected Layer with activation controls");
+    m.def("calculate_wt_fc_interface", &calculate_wt_fc_interface, "Fused Weighted Fully Connected Layer with activation controls",
+        py::arg("row_specific_weights"),
+        py::arg("input_activations"),
+        py::arg("weights_matrix"),
+        py::arg("bias_vector"),
+        py::arg("has_lower_bound"),
+        py::arg("lower_threshold"),
+        py::arg("has_upper_bound"),
+        py::arg("upper_threshold"),
+        py::arg("is_non_mono"),
+        py::arg("activation_func")
+    );
 }

@@ -7,17 +7,17 @@ this_dir = osp.dirname(osp.abspath(__file__))
 include_dirs = [osp.join(this_dir, "include")]
 
 setup(
-    name='wt_fc_ops',
+    name='wt_gavgpool_ops',
     version='0.1',
-    description='Weighted-Fused-Linear operations',
+    description='Weighted-Fused-Global-Average-Pooling operations',
     author='',
     author_email='',
     url='',
     ext_modules=[CUDAExtension(
-        name='wt_fc_ops',
+        name='wt_gavgpool_ops',
         sources=[
-                'calculate_wt_fc_op.cpp',
-                'calculate_wt_fc_kernel.cu'
+                'calculate_gavgpool2d_op.cpp',
+                'calculate_gavgpool2d_kernel.cu'
                 ],
         include_dirs=include_dirs,
         extra_compile_args={'cxx': ['-O3'],

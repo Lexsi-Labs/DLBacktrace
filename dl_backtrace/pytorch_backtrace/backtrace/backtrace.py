@@ -321,31 +321,31 @@ class Backtrace(object):
             mode="default",
             start_wt=[],
             multiplier=100.0,
-            scaler=0,
+            scaler=1,
             max_unit=0,
             predicted_token=None,
             thresholding=0.5,
             task="binary-classification",
-    ):
+    ):  
         # This method is used for evaluating layer-wise relevance based on different modes.
         if mode == "default":
             output = self.proportional_eval(
                 all_out=all_out,
                 start_wt=start_wt,
                 multiplier=multiplier,
-                scaler=0,
-                max_unit=0,
+                scaler=scaler,
+                max_unit=max_unit,
                 predicted_token=predicted_token,
-                thresholding=0.5,
-                task="binary-classification",
+                thresholding=thresholding,
+                task=task,
             )
             return output
         elif mode == "contrast":
             temp_output = self.contrast_eval(
                 all_out=all_out, 
                 multiplier=multiplier,
-                scaler=0,
-                thresholding=0.5,
+                scaler=scaler,
+                thresholding=thresholding,
                 task="binary-classification",
             )
             output = {}
@@ -359,10 +359,10 @@ class Backtrace(object):
                 all_out=all_out,
                 start_wt=start_wt,
                 multiplier=multiplier,
-                scaler=0,
-                max_unit=0,
+                scaler=scaler,
+                max_unit=max_unit,
                 predicted_token=predicted_token,
-                thresholding=0.5,
+                thresholding=thresholding,
                 task=task,
             )
             return output
@@ -378,7 +378,7 @@ class Backtrace(object):
 
     def proportional_eval(
             self, all_out, start_wt=[], multiplier=100.0, 
-            scaler=0, max_unit=0, predicted_token=None,
+            scaler=1, max_unit=0, predicted_token=None,
             thresholding=0.5, task="binary-classification",
     ):
         model_resource = self.model_resource
@@ -691,7 +691,7 @@ class Backtrace(object):
 
     def cuda_proportional_eval(
             self, all_out, start_wt=[], multiplier=100.0, 
-            scaler=0, max_unit=0, predicted_token=None,
+            scaler=1, max_unit=0, predicted_token=None,
             thresholding=0.5, task="binary-classification",
     ):
         """
@@ -737,43 +737,25 @@ class Backtrace(object):
                             
                 layer_class = model_resource[1][start_layer]["class"]
                 
-                temp_wt = None
                 # Process different layer types with CUDA acceleration where available
                 if layer_class == "Linear":
-                    temp_wt = self._cuda_process_linear_layer(start_layer, child_nodes, all_wt, all_out, model_resource, activation_dict)
+                    self._cuda_process_linear_layer(start_layer, child_nodes, all_wt, all_out, model_resource, activation_dict)
                 elif layer_class == "Conv2d":
-                    temp_wt = self._cuda_process_conv2d_layer(start_layer, child_nodes, all_wt, all_out, model_resource, activation_dict)
+                    self._cuda_process_conv2d_layer(start_layer, child_nodes, all_wt, all_out, model_resource, activation_dict)
                 elif layer_class == "MaxPool2d":
-                    temp_wt = self._cuda_process_maxpool2d_layer(start_layer, child_nodes, all_wt, all_out, model_resource)
+                    self._cuda_process_maxpool2d_layer(start_layer, child_nodes, all_wt, all_out, model_resource)
                 elif layer_class == "Dropout":
                     # Pass-through layer, no special processing needed, just add relevance.
-                    temp_wt = all_wt[start_layer]
+                    all_wt[child_nodes[0]] += all_wt[start_layer]
                 elif layer_class == "Flatten":
                     temp_wt = UP.calculate_wt_rshp(
                         all_wt[start_layer], self._get_layer_data(all_out, child_nodes[0])
                     )
+                    all_wt[child_nodes[0]] += temp_wt
                 else:
                     # Generic pass-through for other unsupported layers
                     print(f"CUDA eval not supported for layer type: {layer_class}. Passing through.")
-                    temp_wt = all_wt[start_layer]
-
-                # Add calculated weights to the child node
-                if temp_wt is not None:
-                    if isinstance(child_nodes, list) and len(child_nodes) > 1:
-                        # Handle layers with multiple children if necessary (e.g., Add, Concatenate)
-                         if isinstance(temp_wt, list) and len(temp_wt) == len(child_nodes):
-                            for i, ch in enumerate(child_nodes):
-                                all_wt[ch] += temp_wt[i]
-                         else:
-                            # Fallback if wt is not a list for multiple children
-                            for ch in child_nodes:
-                                all_wt[ch] += temp_wt
-                    else:
-                        # Transpose the weights for Conv and MaxPool layers before adding
-                        if layer_class in ["Conv2d", "MaxPool2d"]:
-                            all_wt[child_nodes[0]] += temp_wt.T
-                        else:
-                            all_wt[child_nodes[0]] += temp_wt
+                    all_wt[child_nodes[0]] += all_wt[start_layer]
         
         # Apply normalization/scaling (same as original)
         if max_unit > 0 and scaler == 0:
@@ -825,10 +807,10 @@ class Backtrace(object):
                 from dl_backtrace.pytorch_backtrace.backtrace.refactored_utils.layers.Linear.cuda_version.wt_fc_ops import calculate_wt_fc_interface as linear_cuda
                 
                 # Convert parameters for CUDA function
-                row_specific_weights = torch.tensor(weight_sample, dtype=torch.float32).cuda()
-                input_activations = torch.tensor(input_sample, dtype=torch.float32).cuda()
-                weights_matrix = w1.cuda()
-                bias_vector = b1.cuda()
+                row_specific_weights_tensor = torch.tensor(weight_sample, dtype=torch.float32).contiguous().cuda()
+                input_activations_tensor = torch.tensor(input_sample, dtype=torch.float32).contiguous().cuda()
+                weights_matrix_tensor = w1.contiguous().cuda()
+                bias_vector_tensor = b1.contiguous().cuda()
                 
                 # Get activation parameters
                 activation_params = activation_dict[model_resource[1][start_layer]["name"]]
@@ -851,9 +833,16 @@ class Backtrace(object):
                     activation_func = 0
                 
                 temp_wt = linear_cuda(
-                    row_specific_weights, input_activations, weights_matrix, bias_vector,
-                    has_lower_bound, lower_threshold, has_upper_bound, upper_threshold,
-                    is_non_mono, activation_func
+                    row_specific_weights=row_specific_weights_tensor,
+                    input_activations=input_activations_tensor,
+                    weights_matrix=weights_matrix_tensor,
+                    bias_vector=bias_vector_tensor,
+                    has_lower_bound=has_lower_bound,
+                    lower_threshold=lower_threshold,
+                    has_upper_bound=has_upper_bound,
+                    upper_threshold=upper_threshold,
+                    is_non_mono=is_non_mono,
+                    activation_func=activation_func
                 ).cpu().numpy()
                 
                 print(f"[CUDA] Successfully processed Linear layer: {start_layer}")
@@ -904,10 +893,10 @@ class Backtrace(object):
                 activation_params = activation_dict[model_resource[1][start_layer]["name"]].copy()
                 
                 # Convert tensors and call CUDA function
-                grad_output_scales = torch.tensor(weight_sample, dtype=torch.float32).cuda()
-                input_activations = torch.tensor(input_sample, dtype=torch.float32).cuda()
-                kernel_weights_orig_shape = w1.cuda()
-                bias = b1.cuda()
+                grad_output_scales = torch.tensor(weight_sample, dtype=torch.float32).contiguous().cuda()
+                input_activations = torch.tensor(input_sample, dtype=torch.float32).contiguous().cuda()
+                kernel_weights_orig_shape = w1.contiguous().cuda()
+                bias = b1.contiguous().cuda()
                 
                 temp_wt = calculate_wt_conv_cuda_optimized(
                     grad_output_scales, input_activations, kernel_weights_orig_shape,
@@ -945,9 +934,9 @@ class Backtrace(object):
     def _cuda_process_maxpool2d_layer(self, start_layer, child_nodes, all_wt, all_out, model_resource):
         """Process MaxPool2d layer with CUDA implementation if available."""
         l1 = model_resource[0][start_layer]
-        pool_size = torch.tensor((l1.kernel_size, l1.kernel_size) if isinstance(l1.kernel_size, int) else l1.kernel_size, dtype=torch.int32).cuda()
-        padding = torch.tensor(l1.padding if isinstance(l1.padding, int) else l1.padding[0], dtype=torch.int32).cuda()
-        strides = torch.tensor(l1.stride if isinstance(l1.stride, int) else l1.stride[0], dtype=torch.int32).cuda()
+        pool_size = torch.tensor((l1.kernel_size, l1.kernel_size) if isinstance(l1.kernel_size, int) else l1.kernel_size, dtype=torch.int32).contiguous().cuda()
+        padding = torch.tensor(l1.padding if isinstance(l1.padding, int) else l1.padding[0], dtype=torch.int32).contiguous().cuda()
+        strides = torch.tensor(l1.stride if isinstance(l1.stride, int) else l1.stride[0], dtype=torch.int32).contiguous().cuda()
         
         input_data = self._get_layer_data(all_out, child_nodes[0])
         
@@ -968,8 +957,8 @@ class Backtrace(object):
                 from dl_backtrace.pytorch_backtrace.backtrace.refactored_utils.layers.MaxPool2D.cuda_version import calculate_wt_maxpool_cuda
                 
                 temp_wt = calculate_wt_maxpool_cuda(
-                    torch.tensor(weight_sample).cuda(),
-                    torch.tensor(input_sample).cuda(),
+                    torch.tensor(weight_sample).contiguous().cuda(),
+                    torch.tensor(input_sample).contiguous().cuda(),
                     pool_size, padding, strides
                 ).cpu().numpy()
                 

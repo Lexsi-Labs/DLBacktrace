@@ -675,7 +675,6 @@ def calculate_wt_maxpool(wts, inp, pool_size, padding, strides):
                     paddings[1][0]:(paddings[1][0]+inp.shape[1]),:]
     return out_ds
 
-
 def calculate_wt_avg_unit(patch, wts, pool_size):
     p_ind = patch>0
     p_ind = patch*p_ind
@@ -717,7 +716,7 @@ def calculate_wt_avgpool(wts, inp, pool_size, padding, strides):
                     paddings[1][0]:(paddings[1][0]+inp.shape[1]),:]
     return out_ds
 
-def calculate_wt_gavgpool(wts, inp):
+def calculate_wt_gavgpool(wts, inp):#AdaptiveAvgPool2d
     wts=wts.T
     inp=inp.T
     channels = wts.shape[0]
