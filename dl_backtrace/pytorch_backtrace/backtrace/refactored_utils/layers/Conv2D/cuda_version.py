@@ -38,13 +38,29 @@ def calculate_wt_conv_cuda_optimized(
     else:
         raise ValueError(f"Invalid activation type: {activation_params['type']}")
     
-    act_func = 1 if activation_params["func"] == "relu" else 2 if activation_params["func"] == "sigmoid"  else 0
+    # Fix activation function mapping to match reference implementation
+    if activation_params["type"] == "non_mono":
+        if callable(activation_params["func"]):
+            # Check if it's a torch function by name or callable
+            func_name = activation_params["func"].__name__ if hasattr(activation_params["func"], '__name__') else str(activation_params["func"])
+            if 'relu' in func_name.lower():
+                act_func = 1  # ReLU
+            elif 'sigmoid' in func_name.lower():
+                act_func = 2  # Sigmoid
+            else:
+                act_func = 0  # Identity
+        else:
+            act_func = 0  # Default to identity if not callable
+    else:
+        act_func = 0  # For mono type, function doesn't matter
     
-    act_range_l = activation_params["range"]["l"]
-    act_range_u = activation_params["range"]["u"]
+    # Handle range values properly - convert None to 0.0 and ensure they're floats
+    act_range_l = float(activation_params["range"]["l"]) if activation_params["range"]["l"] is not None else 0.0
+    act_range_u = float(activation_params["range"]["u"]) if activation_params["range"]["u"] is not None else 0.0
     
-    has_range_l = True if activation_params["range"]["l"] else False
-    has_range_u = True if activation_params["range"]["u"] else False
+    # Boolean flags should be based on whether range values are actually set (not None)
+    has_range_l = activation_params["range"]["l"] is not None
+    has_range_u = activation_params["range"]["u"] is not None
     
     kernel_size_tuple = (K_h, K_w)
     

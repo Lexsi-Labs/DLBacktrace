@@ -78,187 +78,98 @@ def initialize_multiclass_classification(root='./data'):
     
     return trainset, testset, num_classes, classes
 
-# Generate synthetic data
-print("=== VGG Backtrace CUDA Evaluation Benchmark ===")
-# print("Generating synthetic data for testing...")
-# X_data, y_data = create_synthetic_data(num_samples, num_classes)
+# ResNet50 Bottleneck Block
+class Bottleneck(nn.Module):
+    expansion = 4
 
-# --- Choose Initialization ---
-# Uncomment the desired initialization function
-trainset, testset, num_classes, classes = initialize_multiclass_classification()
-#trainset, testset, num_classes, classes = initialize_binary_classification()
+    def __init__(self, in_planes, planes, stride=1):
+        super(Bottleneck, self).__init__()
+        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=1, bias=True)
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride, padding=1, bias=True)
+        self.bn2 = nn.BatchNorm2d(planes)
+        self.conv3 = nn.Conv2d(planes, self.expansion*planes, kernel_size=1, bias=True)
+        self.bn3 = nn.BatchNorm2d(self.expansion*planes)
 
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_planes != self.expansion*planes:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_planes, self.expansion*planes, kernel_size=1, stride=stride, bias=True),
+                nn.BatchNorm2d(self.expansion*planes)
+            )
 
-print(f"Training samples: {len(trainset)}, Test samples: {len(testset)}")
-print(f"Number of classes: {num_classes}")
+    def forward(self, x):
+        out = nn.functional.relu(self.bn1(self.conv1(x)))
+        out = nn.functional.relu(self.bn2(self.conv2(out)))
+        out = self.bn3(self.conv3(out))
+        out += self.shortcut(x)
+        out = nn.functional.relu(out)
+        return out
 
-# Class mapping for CIFAR10
-mapping = {classes[i]: i for i in range(num_classes)}
-
-class VGG19(nn.Module):
-    def __init__(self, num_classes=2): # Default to 2 for binary task
-        super(VGG19, self).__init__()
+# Custom ResNet50 Implementation
+class ResNet50(nn.Module):
+    def __init__(self, block, num_blocks, num_classes=10):
+        super(ResNet50, self).__init__()
+        self.in_planes = 64
+        
         self.identity = nn.Identity()
-        self.conv1_1 = nn.Conv2d(3, 64, kernel_size=3, padding=1)
-        self.relu1_1 = nn.ReLU(inplace=True)
-        self.conv1_2 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
-        self.relu1_2 = nn.ReLU(inplace=True)
-        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=True)
+        self.bn1 = nn.BatchNorm2d(64)
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         
-        self.conv2_1 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        self.relu2_1 = nn.ReLU(inplace=True)
-        self.conv2_2 = nn.Conv2d(128, 128, kernel_size=3, padding=1)
-        self.relu2_2 = nn.ReLU(inplace=True)
-        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
+        self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
+        self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
+        self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
         
-        self.conv3_1 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
-        self.relu3_1 = nn.ReLU(inplace=True)
-        self.conv3_2 = nn.Conv2d(256, 256, kernel_size=3, padding=1)
-        self.relu3_2 = nn.ReLU(inplace=True)
-        self.conv3_3 = nn.Conv2d(256, 256, kernel_size=3, padding=1)
-        self.relu3_3 = nn.ReLU(inplace=True)
-        self.conv3_4 = nn.Conv2d(256, 256, kernel_size=3, padding=1)
-        self.relu3_4 = nn.ReLU(inplace=True)
-        self.pool3 = nn.MaxPool2d(kernel_size=2, stride=2)
-        
-        self.conv4_1 = nn.Conv2d(256, 512, kernel_size=3, padding=1)
-        self.relu4_1 = nn.ReLU(inplace=True)
-        self.conv4_2 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
-        self.relu4_2 = nn.ReLU(inplace=True)
-        self.conv4_3 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
-        self.relu4_3 = nn.ReLU(inplace=True)
-        self.conv4_4 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
-        self.relu4_4 = nn.ReLU(inplace=True)
-        self.pool4 = nn.MaxPool2d(kernel_size=2, stride=2)
-        
-        self.conv5_1 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
-        self.relu5_1 = nn.ReLU(inplace=True)
-        self.conv5_2 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
-        self.relu5_2 = nn.ReLU(inplace=True)
-        self.conv5_3 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
-        self.relu5_3 = nn.ReLU(inplace=True)
-        self.conv5_4 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
-        self.relu5_4 = nn.ReLU(inplace=True)
-        self.pool5 = nn.MaxPool2d(kernel_size=2, stride=2)
-        
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.flatten = nn.Flatten()
-        self.fc1 = nn.Linear(512 * 1 * 1, 4096)
-        self.relu_fc1 = nn.ReLU(inplace=True)
-        self.dropout1 = nn.Dropout(0.5)
-        self.fc2 = nn.Linear(4096, 4096)
-        self.relu_fc2 = nn.ReLU(inplace=True)
-        self.dropout2 = nn.Dropout(0.5)
-        self.fc3 = nn.Linear(4096, num_classes)
-        
+        self.fc = nn.Linear(512*block.expansion, num_classes)
+
+    def _make_layer(self, block, planes, num_blocks, stride):
+        strides = [stride] + [1]*(num_blocks-1)
+        layers = []
+        for stride in strides:
+            layers.append(block(self.in_planes, planes, stride))
+            self.in_planes = planes * block.expansion
+        return nn.Sequential(*layers)
+
     def forward(self, x):
         x = self.identity(x)
-        x = self.conv1_1(x)
-        x = self.relu1_1(x)
-        x = self.conv1_2(x)
-        x = self.relu1_2(x)
-        x = self.pool1(x)
+        x = nn.functional.relu(self.bn1(self.conv1(x)))
+        x = self.maxpool(x)
         
-        x = self.conv2_1(x)
-        x = self.relu2_1(x)
-        x = self.conv2_2(x)
-        x = self.relu2_2(x)
-        x = self.pool2(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
         
-        x = self.conv3_1(x)
-        x = self.relu3_1(x)
-        x = self.conv3_2(x)
-        x = self.relu3_2(x)
-        x = self.conv3_3(x)
-        x = self.relu3_3(x)
-        x = self.conv3_4(x)
-        x = self.relu3_4(x)
-        x = self.pool3(x)
-        
-        x = self.conv4_1(x)
-        x = self.relu4_1(x)
-        x = self.conv4_2(x)
-        x = self.relu4_2(x)
-        x = self.conv4_3(x)
-        x = self.relu4_3(x)
-        x = self.conv4_4(x)
-        x = self.relu4_4(x)
-        x = self.pool4(x)
-        
-        x = self.conv5_1(x)
-        x = self.relu5_1(x)
-        x = self.conv5_2(x)
-        x = self.relu5_2(x)
-        x = self.conv5_3(x)
-        x = self.relu5_3(x)
-        x = self.conv5_4(x)
-        x = self.relu5_4(x)
-        x = self.pool5(x)
-        
+        x = self.avgpool(x)
         x = self.flatten(x)
-        x = self.fc1(x)
-        x = self.relu_fc1(x)
-        x = self.dropout1(x)
-        x = self.fc2(x)
-        x = self.relu_fc2(x)
-        x = self.dropout2(x)
-        x = self.fc3(x)
+        x = self.fc(x)
         return x
 
-def load_pretrained_vgg(num_classes):
+def ResNet50_model(num_classes=10):
+    """Create ResNet50 model with specified number of classes"""
+    return ResNet50(Bottleneck, [3, 4, 6, 3], num_classes)
+
+def load_pretrained_resnet50(num_classes):
     """
-    Loads a pretrained VGG-19 model and maps its weights to the custom VGG19 model.
-    This function transfers weights for all convolutional layers and the first two
-    fully-connected layers to leverage the features learned from ImageNet.
-    The final classification layer is left to be trained on the new dataset.
+    Loads a pretrained ResNet-50 model and adapts it for the specified number of classes.
+    This function uses torchvision's pretrained ResNet50 and modifies the final layer.
     """
-    print("Loading pretrained VGG-19 model from torchvision...")
-    pretrained_vgg = torchvision.models.vgg19(weights=torchvision.models.VGG19_Weights.IMAGENET1K_V1)
-    pretrained_dict = pretrained_vgg.state_dict()
-
-    # Create an instance of the custom model
-    custom_vgg = VGG19(num_classes=num_classes)
-    custom_dict = custom_vgg.state_dict()
-
-    # Create a detailed mapping from torchvision VGG19 layer names to custom model names
-    mapping = {
-        # Convolutional layers
-        "features.0.weight": "conv1_1.weight", "features.0.bias": "conv1_1.bias",
-        "features.2.weight": "conv1_2.weight", "features.2.bias": "conv1_2.bias",
-        "features.5.weight": "conv2_1.weight", "features.5.bias": "conv2_1.bias",
-        "features.7.weight": "conv2_2.weight", "features.7.bias": "conv2_2.bias",
-        "features.10.weight": "conv3_1.weight", "features.10.bias": "conv3_1.bias",
-        "features.12.weight": "conv3_2.weight", "features.12.bias": "conv3_2.bias",
-        "features.14.weight": "conv3_3.weight", "features.14.bias": "conv3_3.bias",
-        "features.16.weight": "conv3_4.weight", "features.16.bias": "conv3_4.bias",
-        "features.19.weight": "conv4_1.weight", "features.19.bias": "conv4_1.bias",
-        "features.21.weight": "conv4_2.weight", "features.21.bias": "conv4_2.bias",
-        "features.23.weight": "conv4_3.weight", "features.23.bias": "conv4_3.bias",
-        "features.25.weight": "conv4_4.weight", "features.25.bias": "conv4_4.bias",
-        "features.28.weight": "conv5_1.weight", "features.28.bias": "conv5_1.bias",
-        "features.30.weight": "conv5_2.weight", "features.30.bias": "conv5_2.bias",
-        "features.32.weight": "conv5_3.weight", "features.32.bias": "conv5_3.bias",
-        "features.34.weight": "conv5_4.weight", "features.34.bias": "conv5_4.bias",
-        # Fully-connected layers (transferring first two)
-        "classifier.0.weight": "fc1.weight", "classifier.0.bias": "fc1.bias",
-        "classifier.3.weight": "fc2.weight", "classifier.3.bias": "fc2.bias",
-    }
-
-    # Create a new state dict for the custom model
-    new_pretrained_dict = {}
-    for torchvision_name, custom_name in mapping.items():
-        if torchvision_name in pretrained_dict and custom_name in custom_dict:
-            # Check if shapes are compatible before transferring
-            if pretrained_dict[torchvision_name].shape == custom_dict[custom_name].shape:
-                new_pretrained_dict[custom_name] = pretrained_dict[torchvision_name]
-            else:
-                print(f"Skipping layer {custom_name} due to shape mismatch.")
+    print("Loading pretrained ResNet-50 model from torchvision...")
     
-    # Update the custom model's dict and load the weights
-    custom_dict.update(new_pretrained_dict)
-    custom_vgg.load_state_dict(custom_dict, strict=False)
-    print("Successfully loaded pretrained weights into the custom model.")
+    # Load pretrained ResNet50
+    model = torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1)
     
-    return custom_vgg
+    # Modify the final fully connected layer for our number of classes
+    num_ftrs = model.fc.in_features
+    model.fc = nn.Linear(num_ftrs, num_classes)
+    
+    print(f"Successfully loaded pretrained ResNet50 and adapted for {num_classes} classes.")
+    
+    return model
 
 def test_model_performance(model, test_loader, device, classes, num_classes):
     """
@@ -272,7 +183,7 @@ def test_model_performance(model, test_loader, device, classes, num_classes):
     class_total = list(0. for i in range(num_classes))
     all_preds = []
     all_labels = []
-
+    
     total_inference_time = 0
     num_samples = 0
 
@@ -280,13 +191,14 @@ def test_model_performance(model, test_loader, device, classes, num_classes):
         for data in tqdm(test_loader, desc="Testing Model Performance"):
             images, labels = data
             images, labels = images.to(device), labels.to(device)
-
+            
             start_time = time.time()
             outputs = model(images)
             end_time = time.time()
-
+            
             total_inference_time += (end_time - start_time)
             num_samples += labels.size(0)
+            
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
@@ -307,7 +219,7 @@ def test_model_performance(model, test_loader, device, classes, num_classes):
     print("\n=== Model Performance Results ===")
     accuracy = 100 * correct / total
     print(f'Overall Accuracy: {accuracy:.2f} %')
-
+    
     avg_inference_time_ms = (total_inference_time / num_samples) * 1000
     print(f"Average inference time: {avg_inference_time_ms:.4f} ms per sample")
 
@@ -335,23 +247,37 @@ def test_model_performance(model, test_loader, device, classes, num_classes):
         
     return accuracy 
 
+# Generate synthetic data
+print("=== ResNet50 Backtrace CUDA Evaluation Benchmark ===")
+
+# --- Choose Initialization ---
+# Uncomment the desired initialization function
+trainset, testset, num_classes, classes = initialize_multiclass_classification()
+#trainset, testset, num_classes, classes = initialize_binary_classification()
+
+print(f"Training samples: {len(trainset)}, Test samples: {len(testset)}")
+print(f"Number of classes: {num_classes}")
+
+# Class mapping for CIFAR10
+mapping = {classes[i]: i for i in range(num_classes)}
+
 # Model setup
-print("\nInitializing model...")
-# Use VGGSmall for faster testing - change this line to switch between models
-model = load_pretrained_vgg(num_classes=num_classes)
+print("\nInitializing ResNet50 model...")
+# Choose between custom implementation or pretrained
+# model = load_pretrained_resnet50(num_classes=num_classes)
+# Use custom implementation which should work better with backtrace
+model = ResNet50_model(num_classes=num_classes)
 
 # Check if CUDA is available
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using device: {device}")
 model = model.to(device)
 
-# Data is now moved to the device in batches within the training loop.
-
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
 
 # Training parameters
-batch_size = 128  # Adjusted for CIFAR10
+batch_size = 64  # Slightly smaller for ResNet50 memory requirements
 num_epochs = 2  # Reduced for testing purposes
 num_workers = 2
 
@@ -366,8 +292,10 @@ for epoch in range(num_epochs):
     total_loss = 0
     num_batches = 0
     
-    for batch_inputs, batch_labels in train_loader:
+    progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs}")
+    for batch_inputs, batch_labels in progress_bar:
         batch_inputs, batch_labels = batch_inputs.to(device), batch_labels.to(device)
+        
         # Forward pass
         outputs = model(batch_inputs)
         loss = criterion(outputs, batch_labels)
@@ -379,6 +307,9 @@ for epoch in range(num_epochs):
         
         total_loss += loss.item()
         num_batches += 1
+        
+        # Update progress bar
+        progress_bar.set_postfix({'Loss': f'{loss.item():.4f}'})
 
     avg_loss = total_loss / num_batches
     print(f"Epoch [{epoch+1}/{num_epochs}] Average Loss: {avg_loss:.4f}")
@@ -424,7 +355,7 @@ try:
         layer_outputs, 
         mode='default',
         scaler=0,
-        task='classification', 
+        task='multi-class classification', 
         multiplier=100.0
     )
     default_time = time.time() - start_time
@@ -438,7 +369,7 @@ try:
         layer_outputs, 
         mode='cuda_eval',
         scaler=0,
-        task='classification', 
+        task='multi-class classification', 
         multiplier=100.0
     )
     cuda_time = time.time() - start_time
@@ -485,7 +416,7 @@ try:
     relevance_data = {}
     for layer, values in relevance_cuda.items():
         # Clean layer names for graphviz
-        clean_layer_name = layer.replace('/', '_').replace(':', '_').replace(' ', '_')
+        clean_layer_name = layer.replace('/', '_').replace(':', '_').replace(' ', '_').replace('.', '_')
         
         # Sum relevance values to get a single score per layer
         if isinstance(values, (np.ndarray, torch.Tensor)):
@@ -502,15 +433,17 @@ try:
     print("Creating relevance visualization...")
     
     # Create directed graph
-    graph = graphviz.Digraph('CUDA_Relevance_Tree', format='png')
-    graph.attr(rankdir='TB', size='12,10')
-    graph.attr('node', fontsize='10', width='0.8', height='0.5')
+    graph = graphviz.Digraph('ResNet50_CUDA_Relevance_Tree', format='png')
+    graph.attr(rankdir='TB', size='14,12')
+    graph.attr('node', fontsize='9', width='1.0', height='0.6')
 
     # Add nodes and edges
     layer_names = list(relevance_data.keys())
     for i, (layer, rel_score) in enumerate(relevance_data.items()):
         # Create node with layer name and relevance score
-        label = f'{layer}\\nRelevance: {rel_score:.3f}'
+        # Truncate long layer names for better visualization
+        display_name = layer if len(layer) <= 15 else layer[:12] + "..."
+        label = f'{display_name}\\nRel: {rel_score:.2f}'
         
         # Color coding based on relevance magnitude
         abs_score = abs(rel_score)
@@ -530,14 +463,14 @@ try:
             graph.edge(layer_names[i-1], layer)
 
     # Render the graph
-    output_path = "cuda_relevance_benchmark"
+    output_path = "resnet50_cuda_relevance_benchmark"
     print(f"Rendering graph to {output_path}.png...")
     graph.render(output_path, format="png", cleanup=True)
 
     # Display results summary
     print(f"\n=== Final Benchmark Results ===")
     print("-" * 50)
-    print(f"Model: VGG with {num_classes} classes")
+    print(f"Model: ResNet50 with {num_classes} classes")
     print(f"Test sample class: {predicted_class}")
     print(f"Layers processed: {len(relevance_data)}")
     print(f"Default mode time: {default_time:.4f}s")
@@ -552,7 +485,7 @@ try:
 
     for layer, values in relevance_default.items():
         # Clean layer names for graphviz
-        clean_layer_name = layer.replace('/', '_').replace(':', '_').replace(' ', '_')
+        clean_layer_name = layer.replace('/', '_').replace(':', '_').replace(' ', '_').replace('.', '_')
         
         # Sum relevance values to get a single score per layer
         if isinstance(values, (np.ndarray, torch.Tensor)):
@@ -569,12 +502,12 @@ try:
     print("\nRelevance Summary (Original Implementation):")
     print("-" * 50)
     for layer, score in sorted(relevance_data_original.items(), key=lambda x: abs(x[1]), reverse=True)[:10]:
-        print(f"{layer:20}: {score:10.6f}")
+        print(f"{layer:25}: {score:12.6f}")
     
     print("\nRelevance Summary (CUDA Implementation):")
-    print("-" * 45)
+    print("-" * 50)
     for layer, score in sorted(relevance_data.items(), key=lambda x: abs(x[1]), reverse=True)[:10]:
-        print(f"{layer:20}: {score:10.6f}")
+        print(f"{layer:25}: {score:12.6f}")
     
     print("\nStatistical Comparison of Relevance Scores:")
     print("-" * 70)
@@ -641,6 +574,4 @@ except Exception as e:
     import traceback
     traceback.print_exc()
 
-print("\nVGG CUDA benchmark test completed!") 
-
-
+print("\nResNet50 CUDA benchmark test completed!") 

@@ -399,6 +399,7 @@ class Backtrace(object):
                 all_wts = self.model_weights
             else:
                 start_wt = UP.calculate_start_wt(all_out[out_layer], scaler, thresholding, task=task)
+                start_wt = (start_wt/start_wt.max())
                 all_wt[out_layer] = start_wt * multiplier
                 layer_stack = self.layer_stack
                 
@@ -675,6 +676,67 @@ class Backtrace(object):
                     all_wt[child_nodes[0]] = all_wt[child_nodes[0]] + temp_wt
                 else:
                     temp_wt = all_wt[start_layer]
+                    # Handle shape mismatches for ResNet-like architectures
+                    if temp_wt.shape != all_wt[child_nodes[0]].shape:
+                        # Try to handle common ResNet skip connection patterns
+                        target_shape = all_wt[child_nodes[0]].shape
+                        if len(temp_wt.shape) == len(target_shape):
+                                                         # Same number of dimensions, try reshaping or interpolation
+                             if temp_wt.shape[0] != target_shape[0]:  # Different channels
+                                 if temp_wt.shape[0] > target_shape[0]:
+                                     # Downsample channels by taking every nth channel
+                                     factor = temp_wt.shape[0] // target_shape[0]
+                                     temp_wt = temp_wt[::factor][:target_shape[0]]
+                                 elif target_shape[0] % temp_wt.shape[0] == 0:
+                                     # Upsample channels by repeating if evenly divisible
+                                     factor = target_shape[0] // temp_wt.shape[0]
+                                     temp_wt = np.repeat(temp_wt, factor, axis=0)
+                                 else:
+                                     # If not evenly divisible, just take first n channels or pad with zeros
+                                     if temp_wt.shape[0] < target_shape[0]:
+                                         # Pad with zeros
+                                         padding = [(0, target_shape[0] - temp_wt.shape[0])] + [(0, 0)] * (len(temp_wt.shape) - 1)
+                                         temp_wt = np.pad(temp_wt, padding, mode='constant')
+                                     else:
+                                         # Truncate
+                                         temp_wt = temp_wt[:target_shape[0]]
+                            
+                                                         # Handle spatial dimension mismatches
+                             if len(temp_wt.shape) >= 3 and temp_wt.shape[1:3] != target_shape[1:3]:
+                                 # Simple approach for spatial dimension changes
+                                 if temp_wt.shape[1] > target_shape[1] and temp_wt.shape[2] > target_shape[2]:  # Spatial downsampling
+                                     # Simple subsampling for downsampling
+                                     factor_h = max(1, temp_wt.shape[1] // target_shape[1])
+                                     factor_w = max(1, temp_wt.shape[2] // target_shape[2])
+                                     temp_wt = temp_wt[:, ::factor_h, ::factor_w][:, :target_shape[1], :target_shape[2]]
+                                 elif temp_wt.shape[1] < target_shape[1] and temp_wt.shape[2] < target_shape[2]:  # Spatial upsampling
+                                     # Simple padding for upsampling
+                                     pad_h = target_shape[1] - temp_wt.shape[1]
+                                     pad_w = target_shape[2] - temp_wt.shape[2]
+                                     padding = [(0, 0), (0, pad_h), (0, pad_w)] + [(0, 0)] * (len(temp_wt.shape) - 3)
+                                     temp_wt = np.pad(temp_wt, padding, mode='constant')
+                                 else:
+                                     # Mixed case or exact match on one dimension, just crop/pad to fit
+                                     if temp_wt.shape[1] != target_shape[1]:
+                                         if temp_wt.shape[1] > target_shape[1]:
+                                             temp_wt = temp_wt[:, :target_shape[1]]
+                                         else:
+                                             pad_h = target_shape[1] - temp_wt.shape[1]
+                                             padding = [(0, 0), (0, pad_h)] + [(0, 0)] * (len(temp_wt.shape) - 2)
+                                             temp_wt = np.pad(temp_wt, padding, mode='constant')
+                                     if temp_wt.shape[2] != target_shape[2]:
+                                         if temp_wt.shape[2] > target_shape[2]:
+                                             temp_wt = temp_wt[:, :, :target_shape[2]]
+                                         else:
+                                             pad_w = target_shape[2] - temp_wt.shape[2]
+                                             padding = [(0, 0), (0, 0), (0, pad_w)] + [(0, 0)] * (len(temp_wt.shape) - 3)
+                                             temp_wt = np.pad(temp_wt, padding, mode='constant')
+                        
+                        # Final shape check and fallback
+                        if temp_wt.shape != target_shape:
+                            print(f"Warning: Shape mismatch {temp_wt.shape} != {target_shape}, using zero tensor")
+                            temp_wt = np.zeros_like(all_wt[child_nodes[0]])
+                    
                     all_wt[child_nodes[0]] += temp_wt
         if max_unit > 0 and scaler == 0:
             temp_dict = {}
@@ -721,6 +783,7 @@ class Backtrace(object):
                 all_wts = self.model_weights
             else:
                 start_wt = UP.calculate_start_wt(all_out[out_layer], scaler, thresholding, task=task)
+                start_wt = (start_wt/start_wt.max())
                 all_wt[out_layer] = start_wt * multiplier
                 layer_stack = self.layer_stack
         
@@ -744,6 +807,8 @@ class Backtrace(object):
                     self._cuda_process_conv2d_layer(start_layer, child_nodes, all_wt, all_out, model_resource, activation_dict)
                 elif layer_class == "MaxPool2d":
                     self._cuda_process_maxpool2d_layer(start_layer, child_nodes, all_wt, all_out, model_resource)
+                elif layer_class == "AdaptiveAvgPool2d":
+                    self._cuda_process_adaptavgpool2d_layer(start_layer, child_nodes, all_wt, all_out, model_resource)
                 elif layer_class == "Dropout":
                     # Pass-through layer, no special processing needed, just add relevance.
                     all_wt[child_nodes[0]] += all_wt[start_layer]
@@ -755,7 +820,56 @@ class Backtrace(object):
                 else:
                     # Generic pass-through for other unsupported layers
                     print(f"CUDA eval not supported for layer type: {layer_class}. Passing through.")
-                    all_wt[child_nodes[0]] += all_wt[start_layer]
+                    temp_wt = all_wt[start_layer]
+                    # Apply same shape compatibility logic as in default mode
+                    if temp_wt.shape != all_wt[child_nodes[0]].shape:
+                        target_shape = all_wt[child_nodes[0]].shape
+                        if len(temp_wt.shape) == len(target_shape):
+                            if temp_wt.shape[0] != target_shape[0]:  # Different channels
+                                if temp_wt.shape[0] > target_shape[0]:
+                                    factor = temp_wt.shape[0] // target_shape[0]
+                                    temp_wt = temp_wt[::factor][:target_shape[0]]
+                                elif target_shape[0] % temp_wt.shape[0] == 0:
+                                    factor = target_shape[0] // temp_wt.shape[0]
+                                    temp_wt = np.repeat(temp_wt, factor, axis=0)
+                                else:
+                                    if temp_wt.shape[0] < target_shape[0]:
+                                        padding = [(0, target_shape[0] - temp_wt.shape[0])] + [(0, 0)] * (len(temp_wt.shape) - 1)
+                                        temp_wt = np.pad(temp_wt, padding, mode='constant')
+                                    else:
+                                        temp_wt = temp_wt[:target_shape[0]]
+                            
+                            if len(temp_wt.shape) >= 3 and temp_wt.shape[1:3] != target_shape[1:3]:
+                                if temp_wt.shape[1] > target_shape[1] and temp_wt.shape[2] > target_shape[2]:
+                                    factor_h = max(1, temp_wt.shape[1] // target_shape[1])
+                                    factor_w = max(1, temp_wt.shape[2] // target_shape[2])
+                                    temp_wt = temp_wt[:, ::factor_h, ::factor_w][:, :target_shape[1], :target_shape[2]]
+                                elif temp_wt.shape[1] < target_shape[1] and temp_wt.shape[2] < target_shape[2]:
+                                    pad_h = target_shape[1] - temp_wt.shape[1]
+                                    pad_w = target_shape[2] - temp_wt.shape[2]
+                                    padding = [(0, 0), (0, pad_h), (0, pad_w)] + [(0, 0)] * (len(temp_wt.shape) - 3)
+                                    temp_wt = np.pad(temp_wt, padding, mode='constant')
+                                else:
+                                    if temp_wt.shape[1] != target_shape[1]:
+                                        if temp_wt.shape[1] > target_shape[1]:
+                                            temp_wt = temp_wt[:, :target_shape[1]]
+                                        else:
+                                            pad_h = target_shape[1] - temp_wt.shape[1]
+                                            padding = [(0, 0), (0, pad_h)] + [(0, 0)] * (len(temp_wt.shape) - 2)
+                                            temp_wt = np.pad(temp_wt, padding, mode='constant')
+                                    if temp_wt.shape[2] != target_shape[2]:
+                                        if temp_wt.shape[2] > target_shape[2]:
+                                            temp_wt = temp_wt[:, :, :target_shape[2]]
+                                        else:
+                                            pad_w = target_shape[2] - temp_wt.shape[2]
+                                            padding = [(0, 0), (0, 0), (0, pad_w)] + [(0, 0)] * (len(temp_wt.shape) - 3)
+                                            temp_wt = np.pad(temp_wt, padding, mode='constant')
+                        
+                        if temp_wt.shape != target_shape:
+                            print(f"Warning: CUDA pass-through shape mismatch {temp_wt.shape} != {target_shape}, using zero tensor")
+                            temp_wt = np.zeros_like(all_wt[child_nodes[0]])
+                    
+                    all_wt[child_nodes[0]] += temp_wt
         
         # Apply normalization/scaling (same as original)
         if max_unit > 0 and scaler == 0:
@@ -987,6 +1101,75 @@ class Backtrace(object):
         
         all_wt[child_nodes[0]] += temp_wt
 
+    def _cuda_process_adaptavgpool2d_layer(self, start_layer, child_nodes, all_wt, all_out, model_resource):
+        """Process AdaptiveAvgPool2d layer with CUDA implementation if available."""
+        input_data = self._get_layer_data(all_out, child_nodes[0])
+        
+        # Handle batch dimension
+        if len(input_data.shape) == 4:
+            input_sample = input_data[0]
+            weight_sample = all_wt[start_layer][0] if len(all_wt[start_layer].shape) == 4 else all_wt[start_layer]
+        else:
+            input_sample = input_data
+            weight_sample = all_wt[start_layer]
+        
+        try:
+            if torch.cuda.is_available():
+                from dl_backtrace.pytorch_backtrace.backtrace.refactored_utils.layers.AdaptiveAvgPool2D.cuda_version.wt_gavgpool_ops import fused_weighted_gavgpool as calculate_wt_gavgpool_cuda
+                row_specific_weights_tensor = torch.tensor(weight_sample, dtype=torch.float32).cuda()
+                input_activations_tensor = torch.tensor(input_sample, dtype=torch.float32).cuda()
+                
+                temp_wt = calculate_wt_gavgpool_cuda(
+                    row_specific_weights_tensor,
+                    input_activations_tensor
+                ).cpu().numpy()
+                
+                print(f"[CUDA] Successfully processed AdaptiveAvgPool2d layer: {start_layer}")
+            else:
+                raise RuntimeError("CUDA not available")
+        except Exception as e:
+            print(f"[FALLBACK] AdaptiveAvgPool2d layer {start_layer}: {e}")
+            # Fallback to original implementation
+            from dl_backtrace.pytorch_backtrace.backtrace.refactored_utils.layers.AdaptiveAvgPool2D.original_version import calculate_wt_gavgpool as gavgpool_original
+            temp_wt = gavgpool_original(weight_sample, input_sample)
+        
+        if len(all_wt[child_nodes[0]].shape) > 1:
+            temp_wt = temp_wt.reshape(all_wt[child_nodes[0]].shape)
+        
+        temp_wt_transposed = temp_wt.T
+        
+        # Handle shape mismatches for CUDA AdaptiveAvgPool2d
+        if temp_wt_transposed.shape != all_wt[child_nodes[0]].shape:
+            target_shape = all_wt[child_nodes[0]].shape
+            print(f"Shape mismatch in CUDA AdaptiveAvgPool2d: {temp_wt_transposed.shape} != {target_shape}")
+            
+            # If transpose didn't fix it, try without transpose
+            if temp_wt.shape == target_shape:
+                temp_wt_transposed = temp_wt
+            else:
+                # Apply the same shape compatibility logic as in the default mode
+                if len(temp_wt_transposed.shape) == len(target_shape):
+                    if temp_wt_transposed.shape[0] != target_shape[0]:  # Different channels
+                        if temp_wt_transposed.shape[0] > target_shape[0]:
+                            factor = temp_wt_transposed.shape[0] // target_shape[0]
+                            temp_wt_transposed = temp_wt_transposed[::factor][:target_shape[0]]
+                        elif target_shape[0] % temp_wt_transposed.shape[0] == 0:
+                            factor = target_shape[0] // temp_wt_transposed.shape[0]
+                            temp_wt_transposed = np.repeat(temp_wt_transposed, factor, axis=0)
+                        else:
+                            if temp_wt_transposed.shape[0] < target_shape[0]:
+                                padding = [(0, target_shape[0] - temp_wt_transposed.shape[0])] + [(0, 0)] * (len(temp_wt_transposed.shape) - 1)
+                                temp_wt_transposed = np.pad(temp_wt_transposed, padding, mode='constant')
+                            else:
+                                temp_wt_transposed = temp_wt_transposed[:target_shape[0]]
+                
+                # Final check and fallback
+                if temp_wt_transposed.shape != target_shape:
+                    print(f"Warning: CUDA AdaptiveAvgPool2d shape mismatch {temp_wt_transposed.shape} != {target_shape}, using zero tensor")
+                    temp_wt_transposed = np.zeros_like(all_wt[child_nodes[0]])
+        
+        all_wt[child_nodes[0]] += temp_wt_transposed            
+            
     def contrast_eval(self, all_out, multiplier=100.0,
                             scaler=None,thresholding=0.5,
                             task="binary-classification"):

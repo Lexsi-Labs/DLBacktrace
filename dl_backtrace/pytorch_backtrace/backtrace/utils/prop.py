@@ -647,7 +647,6 @@ def calculate_wt_conv(wts, inp, w, b, padding, strides, act):
                     paddings[1][0]:(paddings[1][0]+inp.shape[1]),:]
     return out_ds
 
-
 def calculate_wt_max_unit(patch, wts, pool_size):
     pmax = np.einsum("ijk,k->ijk",np.ones_like(patch),np.max(np.max(patch,axis=0),axis=0))
     indexes = (patch-pmax)==0
@@ -740,8 +739,28 @@ def calculate_wt_gavgpool(wts, inp):#AdaptiveAvgPool2d
             p_sum = 1.0
         if n_sum == 0.0:
             n_sum = 1.0
-        temp_wt = temp_wt + ((p_mat / p_sum) * wt * p_agg_wt)
-        temp_wt = temp_wt + ((n_mat / n_sum) * wt * n_agg_wt * -1.0)
+        
+        # Handle broadcasting for different weight tensor shapes
+        # wt could be scalar or have different spatial dimensions than the feature map
+        if np.isscalar(wt):
+            wt_broadcast = wt
+        elif wt.shape == temp_wt.shape:
+            wt_broadcast = wt
+        else:
+            # For AdaptiveAvgPool2d, wt is typically (1,) or (1,1) and needs broadcasting
+            try:
+                wt_broadcast = np.broadcast_to(wt, temp_wt.shape)
+            except ValueError as e:
+                # If broadcasting fails, try using the scalar value from wt
+                if wt.size == 1:
+                    wt_broadcast = wt.item()
+                else:
+                    # As a fallback, take the mean of wt values
+                    wt_broadcast = np.mean(wt)
+                    print(f"Warning: Broadcasting failed for shapes wt{wt.shape} -> temp_wt{temp_wt.shape}, using mean value {wt_broadcast}")
+        
+        temp_wt = temp_wt + ((p_mat / p_sum) * wt_broadcast * p_agg_wt)
+        temp_wt = temp_wt + ((n_mat / n_sum) * wt_broadcast * n_agg_wt * -1.0)
         wt_mat[..., c] = temp_wt
     return wt_mat
 
