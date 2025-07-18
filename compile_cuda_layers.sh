@@ -6,7 +6,7 @@ set -e
 echo "Starting compilation of all CUDA layers..."
 
 # Base directory for layers
-LAYERS_DIR="dl_backtrace/pytorch_backtrace/backtrace/refactored_utils/layers"
+LAYERS_DIR="main/pytorch_backtrace/backtrace/utils/cuda_utils"
 
 # Check if the layers directory exists
 if [ ! -d "$LAYERS_DIR" ]; then
@@ -24,7 +24,7 @@ find "$LAYERS_DIR" -name "setup.py" -print0 | while IFS= read -r -d $'\0' setup_
         echo "Changing directory to $setup_dir"
         cd "$setup_dir"
         echo "Running 'python setup.py develop'..."
-        /home/omkar/Brendan/Projects/Backtrace_layers/DL-Backtrace/myvenv/bin/python setup.py develop
+        python setup.py develop
     )
 
     # Check if the subshell command was successful

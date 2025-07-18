@@ -85,11 +85,24 @@ relevance = backtrace.eval(layer_outputs,mode='default',scaler=1,thresholding=0.
 | Backtrace Transformer Encoder-Decoder Model for Neural Machine Translation | Neural Machine Translation | [Colab Link](https://colab.research.google.com/drive/1NApbrd11TEqlrqGCBYPmgMvBbZBJhpWD?usp=sharing) |
 | Backtrace Transformer Encoder-Decoder Model for Text Summarization | Text Summarization | [Colab Link](https://colab.research.google.com/drive/18CPNnEJzGlCPJ2sSXX4mArAzK1NLe9Lj?usp=sharing) |
 
-### Pytorch : 
+### Pytorch :  
 | Name        | Task        | Link                          |
 |-------------|-------------|-------------------------------|
-| Backtrace Tabular Dataset | Binary Classification | [Colab Link](https://colab.research.google.com/drive/1_r-IS7aIuATSvGNRLk8VDVVLkDSaKCpD?usp=sharing)|
-| Backtrace Image Dataset | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1v2XajWtIbf7Vt31Z1fnKnAjyiDzPxwnU?usp=sharing) |
+| Custom Tabular Model | Binary Classification | [Colab Link](https://colab.research.google.com/drive/1TqgeeBqQ1G9UGWfHV0MUloCccalpsRCh?usp=sharing)|
+| VGG Model | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1iJJZ0ApWHltTjnbGRKhJDrHlKTlm1koD?usp=sharing) |
+| ResNet Model | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1mpo--AD8vNqm6Y05rb46Yzjx6VhLwXZh?usp=sharing) |
+| ViT Model | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1BhzIw7Pf9-g1tqndaijwZ5FLaDUpjBaR?usp=sharing) |
+| DenseNet Model | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1CE2XBBGd5VSQuipJTyyRcb7mu5RSG6K5?usp=sharing) |
+| EfficientNet Model | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1O-MyvIKWoADG2RrF43p2k8mUYpF9N_8m?usp=sharing) |
+| MobileNet Model | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1BzsID9U3HndLrh67nPWRw_bm7UWLwLOH?usp=sharing) |
+| BERT-Base Model | Sentiment Classification | [Colab Link](https://colab.research.google.com/drive/1ANZPjaAxl2oF2WHj23f87AR9-ZDIMBm9?usp=sharing) |
+| ALBERT Model | Sentiment Classification | [Colab Link](https://colab.research.google.com/drive/1RuAW0FgtWqKkdVbc97VXf9z4oDXmA1ms?usp=sharing) |
+| RoBERTa Model | Sentiment Classification | [Colab Link](https://colab.research.google.com/drive/1Nw6lTSQKJvGU9JBZeXnA7EXboU7mE282?usp=sharing) |
+| DistilBERT Model | Sentiment Classification | [Colab Link](https://colab.research.google.com/drive/13_hqUC2vaJWfF-UheggHJU5RmWS5A2u3?usp=sharing) |
+| Electra Model | Sentiment Classification | [Colab Link](https://colab.research.google.com/drive/1sht3uLej8g-4hMtaHm7VwwUuGAmAqpH_?usp=sharing) |
+| XLNeT Model | Sentiment Classification | [Colab Link](https://colab.research.google.com/drive/1ZmVusCPgeXLGnbt7NzM-3SJuiGRgTzBa?usp=sharing) |
+| LLaMA-3.2-1B Model | Text Generation | [Colab Link](https://colab.research.google.com/drive/1i_CKoCfKdY4fcWyFdzuc_0e868jux12h?usp=sharing) |
+| LLaMA-3.2-3B Model | Text Generation | [Colab Link](https://colab.research.google.com/drive/1ki8kcc4ez8-kdvdlhtoq7Sed9v5hiaNs?usp=sharing) |
 
 For more detailed examples and use cases, check out our documentation.
 
@@ -133,13 +146,13 @@ For more detailed examples and use cases, check out our documentation.
 - [x] Concatenate Layer
 - [x] Add Layer
 - [x] Long Short-Term Memory (LSTM) Layer
-- [ ] Dropout Layer
-- [ ] Embedding Layer
+- [x] Dropout Layer
+- [x] Embedding Layer
 - [ ] EmbeddingBag Layer
 - [ ] 1d Convolution Layer (Conv1d)
-- [ ] 1d Pooling Layers (AvgPool1d,MaxPool1d,AdaptiveAvgPool1d,AdaptiveMaxPool1d)
+- [x] 1d Pooling Layers (AvgPool1d,MaxPool1d,AdaptiveAvgPool1d,AdaptiveMaxPool1d)
 - [ ] Transpose Convolution Layers (ConvTranspose2d,ConvTranspose1d)
-- [ ] Global Max Pooling 2D Layer (AdaptiveMaxPool2d)
+- [x] Global Max Pooling 2D Layer (AdaptiveMaxPool2d)
 - [ ] Other Custom Layers
 
 
@@ -150,7 +163,10 @@ If you are new to Backtrace, head over to our Getting Started Guide to quickly s
 We welcome contributions from the community. To contribute, please follow our Contribution Guidelines.
 
 ## License
-This project is licensed under the MIT License - see the LICENSE file for details.
+This software is the confidential and proprietary information of AryaXAI. 
+You may not copy, modify, distribute, or disclose any part of this software without express written permission from AryaXAI.
+
+This code is not open-source. It is made available solely as part of a hosted service provided by AryaXAI. All rights reserved.
 
 ## Contact
 For any inquiries or support, please contact AryaXAI Support.
