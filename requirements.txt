@@ -1,15 +1,17 @@
---extra-index-url https://download.pytorch.org/whl/cu126
-
-torch==2.6.0+cu126
-torchvision==0.21.0+cu126
-torchaudio==2.6.0+cu126
-
-tqdm
+--extra-index-url https://download.pytorch.org/whl/cu124
+torch==2.6.0+cu124
+torchvision==0.21.0+cu124
+torchaudio==2.6.0+cu124
 transformers==4.52.3
 huggingface-hub
 lz4
-matplotlib==3.7.1
-seaborn==0.12.2
+matplotlib
+seaborn
 threadpoolctl 
 ninja
 ipykernel
+ipywidgets
+joblib
+zstandard
+graphviz
+tqdm

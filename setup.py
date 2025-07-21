@@ -2,9 +2,13 @@ from setuptools import setup, find_packages
 
 with open('README.md', 'r', encoding='utf-8') as f:
     long_description = f.read()
-    
+
 with open('requirements.txt', 'r', encoding='utf-8') as pr:
-    install_requires = pr.readlines()
+    install_requires = [
+        line.strip()
+        for line in pr
+        if line.strip() and not line.startswith('--')
+    ]
 
 setup(
     name='dl_backtrace',

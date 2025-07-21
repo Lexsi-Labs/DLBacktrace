@@ -6,7 +6,7 @@ set -e
 echo "Starting compilation of all CUDA layers..."
 
 # Base directory for layers
-LAYERS_DIR="main/pytorch_backtrace/backtrace/utils/cuda_utils"
+LAYERS_DIR="dl_backtrace/pytorch_backtrace/dlbacktrace/utils/cuda_utils"
 
 # Check if the layers directory exists
 if [ ! -d "$LAYERS_DIR" ]; then
