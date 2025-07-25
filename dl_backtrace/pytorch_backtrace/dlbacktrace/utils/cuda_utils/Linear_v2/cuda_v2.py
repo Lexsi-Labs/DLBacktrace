@@ -197,9 +197,6 @@ torch::Tensor launch_calculate_wt_fc_kernel(
     
     bool has_bias = b.defined() && b.numel() > 0;
     
-    // Initialize output to zero
-    cudaMemset(relevance_x.data_ptr<float>(), 0, input_dim * sizeof(float));
-    
     // Configure kernel launch parameters
     const int threads_per_block = 256;
     dim3 grid_dim(output_dim);  // x: output
@@ -285,11 +282,6 @@ def calculate_wt_fc_cuda(relevance_y, input_array, w, b, act):
     Returns:
         relevance_x: relevance at the input, same shape as input_array
     """
-    # Debug logging
-    print(f"[CUDA DEBUG] Input shapes: relevance_y={relevance_y.shape}, input_array={input_array.shape}")
-    print(f"[CUDA DEBUG] Weight shape: {w.shape}, bias: {'None' if b is None else b.shape}")
-    print(f"[CUDA DEBUG] Activation: {act}")
-    
     # Validate inputs
     if relevance_y is None or input_array is None or w is None:
         print(f"[CUDA ERROR] One or more inputs is None")

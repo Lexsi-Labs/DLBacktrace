@@ -77,7 +77,6 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                 inp, weight, bias, running_mean, running_var = layer_in[:5]
                 momentum, eps = method_args
                 output = aten_op(inp, weight, bias, running_mean, running_var, momentum, eps)
-                print(f"output: {[o.shape for o in output]}" if isinstance(output, (list, tuple)) else f"output: {output.shape}")
                 return output
             else:
                 # Inputs passed individually or as a non-strict struct → fallback to legacy
@@ -90,7 +89,6 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                     layer_hyperparams.get("momentum"),
                     layer_hyperparams.get("eps"),
                 )
-                print(f"output: {[o.shape for o in output]}" if isinstance(output, (list, tuple)) else f"output: {output.shape}")
                 return output
 
         # --- Handle FX getitem nodes: tuple-indexing instead of tensor slicing ---
@@ -99,16 +97,11 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             tup = node_io[parent]["output_values"]
             idx = method_args[0]
 
-            print(f"parent: {parent}, idx: {idx}") 
-            print(f"tup: {[i.shape for i in tup]}" if isinstance(tup, (list, tuple)) else f"tup: {tup.shape}")
-
-            # --- Debugging statement ---
+            # --- Error checking ---
             if tup is None:
-                print(f"[DEBUG] getitem error: node_io['{parent}']['output_values'] is None")
                 raise RuntimeError(f"[ERROR] Cannot apply getitem on None from parent node '{parent}'")
 
             if not isinstance(tup, (tuple, list)):
-                print(f"[DEBUG] getitem error: Expected tuple or list, but got {type(tup)} from node '{parent}'")
                 raise TypeError(f"[ERROR] Invalid type for getitem: {type(tup)} from node '{parent}'")
 
             return tup[idx]
@@ -132,21 +125,9 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
 
             if isinstance(layer_hyperparams["bias"],bool):
                 output = aten_op(layer_in, layer_hyperparams["weight"])
-                if isinstance(output, torch.Tensor):
-                    print(f"[DEBUG:{func_name}] output shape: {output.shape}, "
-                        f"min: {output.min().item()}, max: {output.max().item()}, any NaN: {torch.isnan(output).any().item()}")
-
                 return output
             else:
                 output = aten_op(layer_in, layer_hyperparams["weight"], layer_hyperparams["bias"])
-                if isinstance(output, torch.Tensor):
-                    print(f"[DEBUG:{func_name}] output shape: {output.shape}, "
-                        f"min: {output.min().item()}, max: {output.max().item()}, any NaN: {torch.isnan(output).any().item()}")
-
-                print(f"[DEBUG:linear] {node_name} - Input: {layer_in.shape}, "
-                        f"W: {layer_hyperparams['weight'].shape}, "
-                        f"B: {getattr(layer_hyperparams['bias'], 'shape', 'None')}") 
-
                 return output
 
         elif func_name == "conv2d": 
@@ -192,7 +173,7 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                 if not tensor_candidates:
                     raise RuntimeError(f"[{node_name}] ❌ No tensor found in `layer_in` list: {layer_in}")
                 layer_in = tensor_candidates[0]
-                print(f"[{node_name}] ✅ layer_in extracted: {layer_in.shape}")
+                pass
 
             if not isinstance(layer_in, torch.Tensor):
                 raise RuntimeError(f"[{node_name}] ❌ `layer_norm` expected Tensor input, got {type(layer_in)}")
@@ -457,27 +438,6 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                     layer_hyperparams["sparse"]) 
 
         elif func_name in ("mul", "mul_"):
-            print(f"[DEBUG:mul] node_name={node_name}")
-            print(f"[DEBUG:mul] layer_in type: {type(layer_in)}")
-
-            if isinstance(layer_in, list):
-                for i, item in enumerate(layer_in):
-                    print(f"[DEBUG:mul] layer_in[{i}] type: {type(item)}")
-                    if isinstance(item, torch.Tensor):
-                        print(f"  ↳ tensor shape: {item.shape}, dtype: {item.dtype}, min: {item.min()}, max: {item.max()}")
-                    else:
-                        print(f"  ↳ value: {item}")
-            else:
-                print(f"[DEBUG:mul] layer_in: {layer_in}")
-
-            print(f"[DEBUG:mul] method_args type: {type(method_args)}")
-            if isinstance(method_args, list):
-                for i, item in enumerate(method_args):
-                    print(f"[DEBUG:mul] method_args[{i}] type: {type(item)}")
-                    if isinstance(item, torch.Tensor):
-                        print(f"  ↳ tensor shape: {item.shape}, dtype: {item.dtype}, min: {item.min()}, max: {item.max()}")
-                    else:
-                        print(f"  ↳ value: {item}")
 
             # Extract operands a and b robustly
             a = b = None
@@ -534,9 +494,6 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
 
             a = to_safe_tensor(a, b)
             b = to_safe_tensor(b, a)
-
-            print(f"[FINAL DEBUG:mul] a={a}, type={type(a)}, dtype={getattr(a, 'dtype', 'NA')}")
-            print(f"[FINAL DEBUG:mul] b={b}, type={type(b)}, dtype={getattr(b, 'dtype', 'NA')}")
 
             # Execute op
             try:
@@ -1290,14 +1247,9 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
         
         layer_in = [_sanitize_input_tensor(tensor_map[p]) for p in parents]
         output = layer_in
-        print(f"*****" * 5)
-        print(f"node_name: {node_name}, layer: {layer}, layer_type: {layer_type}, parents: {parents}, func_name: {func_name}, children: {children}")
-
-        # 🔍 Log dtype + shape if embedding
+        # Handle embedding function
         if func_name == "embedding":
-            for i, val in enumerate(layer_in):
-                if isinstance(val, torch.Tensor):
-                    print(f"[DEBUG:embedding node {node_name}] input[{i}] dtype={val.dtype}, shape={val.shape}")
+            pass
                     
         try:
             if layer_type == "Placeholder":

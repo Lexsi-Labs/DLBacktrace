@@ -1,6 +1,7 @@
 # DL-Backtrace/dl_backtrace/pytorch_backtrace/dlbacktrace/core/relevance_propagation.py
 
 import ast  # Needed to safely parse stringified lists
+import gc  # For memory cleanup
 import numpy as np
 import torch
 from tqdm import tqdm
@@ -15,17 +16,23 @@ def log(*args, **kwargs):
 
 
 def tensor_to_numpy(x):
-    """Convert Tensor, scalar, list/tuple, or ndarray to a NumPy array."""
+    """Convert Tensor, scalar, list/tuple, or ndarray to a NumPy array with memory-efficient float32."""
     if isinstance(x, np.ndarray):
-        return x
+        # Convert to float32 if it's float64 to save memory
+        return x.astype(np.float32) if x.dtype == np.float64 else x
     if isinstance(x, torch.Tensor):
-        return x.detach().cpu().numpy()
+        # Use float32 for memory efficiency
+        return x.detach().cpu().numpy().astype(np.float32)
     if isinstance(x, (int, float)):
         return np.array(x, dtype=np.float32)
     if isinstance(x, (list, tuple)):
         arrs = []
         for xi in x:
-            arrs.append(tensor_to_numpy(xi) if not isinstance(xi, np.ndarray) else xi)
+            converted = tensor_to_numpy(xi) if not isinstance(xi, np.ndarray) else xi
+            # Ensure float32 for memory efficiency
+            if hasattr(converted, 'dtype') and converted.dtype == np.float64:
+                converted = converted.astype(np.float32)
+            arrs.append(converted)
         try:
             return np.stack(arrs)
         except Exception:
@@ -34,7 +41,7 @@ def tensor_to_numpy(x):
 
 
 def process_input_for_eval(X):
-    """Unwrap single-element or multi-element lists/tuples and convert to NumPy."""
+    """Unwrap single-element or multi-element lists/tuples and convert to NumPy with memory optimization."""
     # Handle lists/tuples
     if isinstance(X, (list, tuple)):
         if len(X) == 1:
@@ -43,13 +50,15 @@ def process_input_for_eval(X):
             # Assume first element is the actual input tensor (skip weights, biases, etc.)
             X = X[0]
 
-    # Convert torch.Tensor to NumPy
+    # Convert torch.Tensor to NumPy with memory-efficient float32
     if isinstance(X, torch.Tensor):
-        return X.detach().cpu().numpy()
+        result = X.detach().cpu().numpy()
+        # Convert to float32 if it's float64 to save memory
+        return result.astype(np.float32) if result.dtype == np.float64 else result
 
-    # Already a NumPy array
+    # Already a NumPy array - ensure float32 for memory efficiency
     if isinstance(X, np.ndarray):
-        return X
+        return X.astype(np.float32) if X.dtype == np.float64 else X
 
     # Unknown type
     raise TypeError(f"Cannot process input of type {type(X)}")
@@ -91,8 +100,9 @@ def align_relevance(r, target_shape, total_relevance=None):
       5) Final broadcast attempt,
       6-8) Handle 1D/2D mismatches.
     """
-    r = np.array(r, dtype=np.float64)
-    original_total = np.sum(r) if total_relevance is None else total_relevance
+    # Use float32 to reduce memory usage by ~50%
+    r = np.array(r, dtype=np.float32)
+    original_total = np.sum(r, dtype=np.float32) if total_relevance is None else total_relevance
 
     # 0) collapse extra leading dims
     while r.ndim > len(target_shape):
@@ -278,7 +288,6 @@ def align_relevance(r, target_shape, total_relevance=None):
 
     return r
 
-
 def assign_embedding_relevance(node, info, all_wt, node_io):
     """
     Embedding layers: align relevance to token IDs shape; robust to shape mismatches.
@@ -399,7 +408,7 @@ def run_evaluation(
     scaler=1.0,
     thresholding=0.5,
     task="binary-classification",
-    get_layer_implementation=None
+    get_layer_implementation=None,
 ):
     """
     Perform LRP-style backtrace through node_io.
@@ -411,7 +420,7 @@ def run_evaluation(
     # Set default layer implementation function if not provided
     if get_layer_implementation is None:
         get_layer_implementation = lambda x: "original"
-
+    
     # --- Step 1: seed the 'output' node ---
     raw_out = node_io["output"]["input_values"]
     if isinstance(raw_out, (list, tuple)):
@@ -423,7 +432,7 @@ def run_evaluation(
     seed_np = tensor_to_numpy(seed)
     if seed_np.size == 0 or np.all(seed_np == 0):
         log("seed zero or empty → using ones") 
-        seed_np = np.ones_like(out_np, dtype=np.float64)
+        seed_np = np.ones_like(out_np, dtype=np.float32)
     all_wt["output"] = seed_np * multiplier
     log(f"seed output → {all_wt['output'].shape}, relevance of seed: {np.sum(all_wt['output']):.8f}")
 
@@ -464,10 +473,10 @@ def run_evaluation(
         if not tensor_inputs:
             # fallback to output shape
             out_val = tensor_to_numpy(info["output_values"])
-            zeros = [np.zeros_like(out_val, dtype=np.float64)]
+            zeros = [np.zeros_like(out_val, dtype=np.float32)]
             log(f"  zero-init fallback → {out_val.shape}")
         else:
-            zeros = [np.zeros_like(tensor_to_numpy(v), dtype=np.float64) for v in tensor_inputs]
+            zeros = [np.zeros_like(tensor_to_numpy(v), dtype=np.float32) for v in tensor_inputs]
             if len(zeros) > 1:
                 log(f"  zero-init multi-parent → {[z.shape for z in zeros]}")
             else:
@@ -475,9 +484,6 @@ def run_evaluation(
 
         all_wt[name] = zeros if len(zeros) > 1 else zeros[0]
         
-        # ✅ Debug print to verify buffer dtypes
-        print(f"[INIT DEBUG] all_wt[{name}] dtype(s): {[x.dtype for x in all_wt[name]] if isinstance(all_wt[name], list) else all_wt[name].dtype}")
-
         log(f"all_wt[{name}]: {len(zeros) if len(zeros) > 0 else zeros[0].shape}")
 
     # --- Step 3: backpropagate relevance ---
@@ -515,36 +521,34 @@ def run_evaluation(
 
                 if parent_idx is not None:
                     if parent_idx < len(buf):
-                        arr = np.array(r, dtype=np.float64)
+                        arr = np.array(r, dtype=np.float32)
 
-                        # Ensure buffer dtype is float64
-                        if buf[parent_idx].dtype != np.float64:
-                            log(f"[FIX] casting buf[{parent_idx}] from {buf[parent_idx].dtype} to float64")
-                            buf[parent_idx] = buf[parent_idx].astype(np.float64)
+                        # Ensure buffer dtype is float32 for memory efficiency
+                        if buf[parent_idx].dtype != np.float32:
+                            log(f"[FIX] casting buf[{parent_idx}] from {buf[parent_idx].dtype} to float32")
+                            buf[parent_idx] = buf[parent_idx].astype(np.float32)
 
                         buf[parent_idx] += align_relevance(arr, buf[parent_idx].shape)
 
                 else:
                     for i in range(len(buf)):
                         if i < len(parts) and parts[i] is not None:
-                            arr = np.array(parts[i], dtype=np.float64)
+                            arr = np.array(parts[i], dtype=np.float32)
 
-                            print(f"[DEBUG] buf[{i}].dtype: {buf[i].dtype}, arr dtype: {arr.dtype}")
-                            if buf[i].dtype != np.float64:
-                                log(f"[FIX] casting buf[{i}] from {buf[i].dtype} to float64")
-                                buf[i] = buf[i].astype(np.float64)
+                            if buf[i].dtype != np.float32:
+                                log(f"[FIX] casting buf[{i}] from {buf[i].dtype} to float32")
+                                buf[i] = buf[i].astype(np.float32)
 
                             buf[i] += align_relevance(arr, buf[i].shape)
 
                 all_wt[name] = buf
 
             else:
-                arr = np.array(r, dtype=np.float64)
+                arr = np.array(r, dtype=np.float32)
 
-                print(f"[DEBUG] buf dtype: {buf.dtype}, arr dtype: {arr.dtype}")
-                if buf.dtype != np.float64:
-                    log(f"[FIX] casting buf from {buf.dtype} to float64")
-                    buf = buf.astype(np.float64)
+                if buf.dtype != np.float32:
+                    log(f"[FIX] casting buf from {buf.dtype} to float32")
+                    buf = buf.astype(np.float32)
 
                 all_wt[name] = buf + align_relevance(arr, buf.shape)
 
@@ -770,7 +774,7 @@ def run_evaluation(
                 R = get_relevance_from_child(c, name, all_wt, node_io)
                 if R is None:
                     continue 
-                R = np.array(R, dtype=np.float64)
+                R = np.array(R, dtype=np.float32)  # Use float32 for memory efficiency
                 log(f"R: {np.sum(R):.8f}, shape: {R.shape}")
                 log(f"    before VecOp '{func}', R={R.shape}")
 
@@ -990,7 +994,7 @@ class RelevancePropagator:
         multiplier=100.0,
         scaler=1.0,
         thresholding=0.5,
-        task="binary-classification"
+        task="binary-classification",
     ):
         return run_evaluation(
             self.node_io,
@@ -1001,5 +1005,5 @@ class RelevancePropagator:
             scaler=scaler,
             thresholding=thresholding,
             task=task,
-            get_layer_implementation=self.get_layer_implementation  # Pass the function
+            get_layer_implementation=self.get_layer_implementation,  # Pass the function
         )

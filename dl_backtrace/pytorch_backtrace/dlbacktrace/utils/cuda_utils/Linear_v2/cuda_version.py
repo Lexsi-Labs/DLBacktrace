@@ -19,11 +19,6 @@ def calculate_wt_fc_cuda(relevance_y, input_array, w, b, act):
     Returns:
         relevance_x: relevance at the input, same shape as input_array
     """
-    # Debug logging
-    print(f"[CUDA DEBUG] Input shapes: relevance_y={relevance_y.shape}, input_array={input_array.shape}")
-    print(f"[CUDA DEBUG] Weight shape: {w.shape}, bias: {'None' if b is None else b.shape}")
-    print(f"[CUDA DEBUG] Activation: {act}")
-    
     # Validate inputs
     if relevance_y is None or input_array is None or w is None:
         print(f"[CUDA ERROR] One or more inputs is None")
