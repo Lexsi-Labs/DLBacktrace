@@ -584,7 +584,7 @@ def run_evaluation(
             B = None if isinstance(hp["bias"], bool) or hp["bias"] is None else hp["bias"].detach().cpu().numpy()
             stride, pad = hp["stride"], hp["padding"]
             X = process_input_for_eval(info["input_values"])
-            log(f"  [Conv2d] X={X.shape}, W={W.shape}")
+            log(f"  [Conv2d] X={X.shape}, W={W.shape}, B={B.shape}, pad={pad}, stride={stride}, activation_master: {activation_master[activation_dict[name]]}")
             for c in children:
                 R = get_relevance_from_child(c, name, all_wt, node_io)
                 if R is not None:
