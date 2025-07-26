@@ -1,7 +1,7 @@
 import torch
 from typing import Tuple, Union
 from ..WtMaxunit2D.pytorch_version import calculate_wt_max_unit_pytorch
-from ..Conv2D.pytorch_version import calculate_padding
+from ..Padding.pytorch import calculate_padding
 
 def calculate_wt_maxpool_pytorch(
     wts: torch.Tensor, 
