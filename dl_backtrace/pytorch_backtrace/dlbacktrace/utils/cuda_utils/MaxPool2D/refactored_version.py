@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Tuple, Union
 from ..WtMaxunit2D.refactored_version import calculate_wt_max_unit
-from ..Padding.refactored import calculate_padding
+from ..Conv2D.refactored_version import calculate_padding
 
 def calculate_wt_maxpool(wts: np.ndarray, inp: np.ndarray, pool_size: Union[int, Tuple[int, int]], 
                         padding: Union[int, Tuple[int, int]], strides: Union[int, Tuple[int, int]]) -> np.ndarray:
