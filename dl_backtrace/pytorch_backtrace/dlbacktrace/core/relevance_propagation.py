@@ -699,9 +699,7 @@ def run_evaluation(
                         add_rel([R, np.zeros_like(Y)])  # Relevance only to X
                     else:
                         # Neither parent is a weight node → split relevance normally
-                        impl = get_layer_implementation("Mathematical_Operation_mul")
-                        log(f"Using {impl} implementation for multiply operation {name}")
-                        Rx, Ry = UD2.launch_wt_mul(impl, R, X, Y)
+                        Rx, Ry = UD.calculate_wt_mul(R, X, Y)
                         log(f"X--- relevance: {np.sum(Rx):.8f}, shape: {Rx.shape}") 
                         log(f"Y--- relevance: {np.sum(Ry):.8f}, shape: {Ry.shape}") 
                         add_rel([Rx, Ry])

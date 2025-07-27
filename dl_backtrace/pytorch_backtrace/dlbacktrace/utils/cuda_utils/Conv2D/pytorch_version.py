@@ -7,17 +7,25 @@ def convert_to_pytorch_format(
     input_array, 
     w, 
     b,
+    padding,
+    strides
 ) -> torch.Tensor:
     """
     Convert the input tensors to the PyTorch format.
     """
-    relevance_y = torch.tensor(relevance_y, dtype=torch.float32)
-    input_array = torch.tensor(input_array, dtype=torch.float32)
-    w = torch.tensor(w, dtype=torch.float32)
-    b = torch.tensor(b, dtype=torch.float32)
-    return relevance_y, input_array, w, b
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-
+    relevance_y = torch.tensor(relevance_y, dtype=torch.float32, device=device)
+    input_array = torch.tensor(input_array, dtype=torch.float32, device=device)
+    w = torch.tensor(w, dtype=torch.float32, device=device)
+    b = torch.tensor(b, dtype=torch.float32, device=device)
+    strides = torch.tensor(strides, dtype=torch.int32, device=device)
+    
+    if padding != 'valid' and padding != 'same':
+        padding = torch.tensor(padding, dtype=torch.int32, device=device)
+        
+    return relevance_y, input_array, w, b, padding, strides
+    
 def calculate_wt_conv_unit(
     patch: torch.Tensor, 
     wts: torch.Tensor, 
@@ -243,7 +251,7 @@ def calculate_wt_conv(
     Returns:
         Relevance scores propagated to input layer, shape (batch_size, in_channels, height, width)
     """
-    relevance_y, input_array, w, b = convert_to_pytorch_format(relevance_y, input_array, w, b)
+    relevance_y, input_array, w, b, padding, strides = convert_to_pytorch_format(relevance_y, input_array, w, b, padding, strides)
     batch_size = input_array.shape[0]
     
     # Transpose weight matrix to match original behavior (out_channels, in_channels, h, w) -> (h, w, in_channels, out_channels)
@@ -309,99 +317,4 @@ def calculate_wt_conv(
         # Transpose back to original format (h, w, channels) -> (channels, h, w) and store
         relevance_x[batch_idx] = output_unpadded.permute(2, 0, 1)
     
-    return relevance_x
-
-# Optimized vectorized version for better performance
-def calculate_wt_conv_vectorized(
-    relevance_y: torch.Tensor,
-    input_array: torch.Tensor, 
-    w: torch.Tensor,
-    b: torch.Tensor,
-    padding: Union[str, Tuple[Union[int, None], Union[int, None]]],
-    strides: Tuple[int, int],
-    act: Dict[str, Any]
-) -> torch.Tensor:
-    """
-    Vectorized version of calculate_wt_conv for improved performance.
-    
-    This version processes the entire batch at once using unfold operations
-    and vectorized computations, significantly reducing computation time.
-    """
-    batch_size, in_channels, input_h, input_w = input_array.shape
-    batch_size, out_channels, output_h, output_w = relevance_y.shape
-    kernel_h, kernel_w = w.shape[2], w.shape[3]
-    
-    # Apply padding to input
-    if padding == 'same':
-        pad_h = max(0, (output_h - 1) * strides[0] + kernel_h - input_h)
-        pad_w = max(0, (output_w - 1) * strides[1] + kernel_w - input_w)
-        pad_h_before, pad_h_after = pad_h // 2, (pad_h + 1) // 2
-        pad_w_before, pad_w_after = pad_w // 2, (pad_w + 1) // 2
-        input_padded = F.pad(input_array, (pad_w_before, pad_w_after, pad_h_before, pad_h_after))
-    elif padding == 'valid':
-        input_padded = input_array
-        pad_h_before = pad_w_before = 0
-    else:
-        # Custom padding
-        if isinstance(padding, tuple):
-            pad_h, pad_w = padding
-            input_padded = F.pad(input_array, (pad_w, pad_w, pad_h, pad_h))
-            pad_h_before, pad_w_before = pad_h, pad_w
-        else:
-            input_padded = input_array
-            pad_h_before = pad_w_before = 0
-    
-    # Use unfold to extract all patches at once
-    # input_patches shape: (batch_size, in_channels * kernel_h * kernel_w, output_h * output_w)
-    input_patches = F.unfold(input_padded, kernel_size=(kernel_h, kernel_w), stride=strides)
-    
-    # Reshape patches to (batch_size, output_h, output_w, in_channels, kernel_h, kernel_w)
-    input_patches = input_patches.view(batch_size, in_channels, kernel_h, kernel_w, output_h, output_w)
-    input_patches = input_patches.permute(0, 4, 5, 1, 2, 3)
-    
-    # Reshape weight tensor to match patch format (kernel_h, kernel_w, in_channels, out_channels)
-    w_reshaped = w.permute(2, 3, 1, 0)
-    
-    # Initialize output tensor
-    relevance_x = torch.zeros_like(input_padded)
-    
-    # Process each batch
-    for batch_idx in range(batch_size):
-        current_relevance = relevance_y[batch_idx]  # (out_channels, output_h, output_w)
-        current_patches = input_patches[batch_idx]  # (output_h, output_w, in_channels, kernel_h, kernel_w)
-        
-        # Initialize accumulated output for this batch
-        batch_output = torch.zeros_like(input_padded[batch_idx])
-        
-        # Process each output location
-        for out_h in range(output_h):
-            for out_w in range(output_w):
-                # Get patch and relevance for current location
-                patch = current_patches[out_h, out_w]  # (in_channels, kernel_h, kernel_w)
-                relevance_weight = current_relevance[:, out_h, out_w]  # (out_channels,)
-                
-                # Transpose patch to match expected format (kernel_h, kernel_w, in_channels)
-                patch_transposed = patch.permute(1, 2, 0)
-                
-                # Calculate weighted updates
-                patch_updates = calculate_wt_conv_unit(
-                    patch_transposed, relevance_weight, w_reshaped, b, act
-                )
-                
-                # Calculate indices for placing updates
-                h_start = out_h * strides[0]
-                h_end = h_start + kernel_h
-                w_start = out_w * strides[1]
-                w_end = w_start + kernel_w
-                
-                # Accumulate updates (transpose back to channel-first format)
-                batch_output[:, h_start:h_end, w_start:w_end] += patch_updates.permute(2, 0, 1)
-        
-        # Remove padding and store result
-        if pad_h_before > 0 or pad_w_before > 0:
-            relevance_x[batch_idx] = batch_output[:, pad_h_before:pad_h_before + input_h, 
-                                                    pad_w_before:pad_w_before + input_w]
-        else:
-            relevance_x[batch_idx] = batch_output
-    
-    return relevance_x
+    return relevance_x.cpu().numpy()

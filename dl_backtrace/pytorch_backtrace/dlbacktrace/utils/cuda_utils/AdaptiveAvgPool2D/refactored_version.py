@@ -1,77 +1,76 @@
 import numpy as np
 from typing import Tuple
 
-def calculate_wt_gavgpool(wts: np.ndarray, inp: np.ndarray) -> np.ndarray:
+def calculate_wt_gavgpool(relevance_y: np.ndarray, input_array: np.ndarray) -> np.ndarray:
     """
-    Calculate weighted global average pooling with separate handling of positive and negative values.
+    Calculate weighted global average pooling with positive/negative weight aggregation.
     
-    This function performs weighted global average pooling by:
-    1. Separating positive and negative parts of the input
-    2. Computing aggregate weights based on the proportion of positive/negative sums
-    3. Applying weighted averaging separately to positive and negative components
+    This function processes input arrays by separating positive and negative values,
+    computing aggregated weights based on their sums, and applying weighted transformations
+    across all channels and batch samples.
     
     Args:
-        wts (np.ndarray): Weight array that becomes (channels,) after transpose
-        inp (np.ndarray): Input array that becomes (..., channels) after transpose
-        
+        relevance_y (np.ndarray): Relevance weights array of shape (batch_size, channels, height, width)
+        input_array (np.ndarray): Input array of shape (batch_size, channels, height, width)
+    
     Returns:
-        np.ndarray: Weighted pooling result with same shape as transposed input
+        np.ndarray: Weighted relevance array of shape (batch_size, channels, height, width)
+    
+    Note:
+        - Replicates original logic for handling division by zero (sets sum to 1.0 when sum is 0.0)
+        - Maintains exact numerical behavior including potential numerical instabilities
     """
-    # Transpose inputs to match original function behavior
-    wts_t = wts.T
-    inp_t = inp.T
     
-    # After transpose, the last dimension is the channel dimension
-    channels = inp_t.shape[-1]
+    # Transpose all arrays once for vectorized operations (batch, height, width, channels)
+    input_transposed = input_array.transpose(0, 2, 3, 1)  # (bs, h, w, c)
+    weights_transposed = relevance_y.transpose(0, 2, 3, 1)  # (bs, h, w, c)
     
-    # Vectorized separation of positive and negative parts across all channels
-    p_mat = np.maximum(inp_t, 0)
-    n_mat = np.minimum(inp_t, 0)
+    # Initialize output array
+    wt_mat = np.zeros_like(input_transposed)
     
-    # Sum over all spatial/batch dimensions (all except the last one)
-    if inp_t.ndim > 1:
-        spatial_axes = tuple(range(inp_t.ndim - 1))
-        p_sums = np.sum(p_mat, axis=spatial_axes)
-        n_sums = np.sum(n_mat, axis=spatial_axes) * -1
-    else:
-        p_sums = p_mat
-        n_sums = n_mat * -1
+    # Vectorized separation of positive and negative values across all batches and channels
+    positive_mask = input_transposed >= 0  # (bs, h, w, c)
+    negative_mask = input_transposed < 0   # (bs, h, w, c)
     
-    # Compute aggregate weights vectorized across all channels
-    total_sums = p_sums + n_sums
+    # Create positive and negative matrices using broadcasting
+    p_mat = input_transposed * positive_mask  # Zeros out negative values
+    n_mat = input_transposed * negative_mask  # Zeros out positive values
     
-    # Initialize aggregate weights
-    p_agg_wts = np.zeros(channels, dtype=inp_t.dtype)
-    n_agg_wts = np.zeros(channels, dtype=inp_t.dtype)
+    # Compute sums across spatial dimensions (h, w) for each batch and channel
+    p_sum = np.sum(p_mat, axis=(1, 2))  # (bs, c)
+    n_sum = np.sum(n_mat, axis=(1, 2)) * -1.0  # (bs, c) - make positive
     
-    # Only compute aggregate weights where total_sums > 0 (replicating original condition exactly)
-    valid_mask = total_sums > 0.0
-    p_agg_wts[valid_mask] = p_sums[valid_mask] / total_sums[valid_mask]
-    n_agg_wts[valid_mask] = n_sums[valid_mask] / total_sums[valid_mask]
+    # Calculate aggregate weights - vectorized across all batches and channels
+    total_sum = p_sum + n_sum  # (bs, c)
     
-    # Handle division by zero cases (replicating original behavior exactly)
-    # Use dtype-preserving constants
-    p_sums_normalized = np.where(p_sums == 0.0, np.array(1.0, dtype=inp.dtype), p_sums)
-    n_sums_normalized = np.where(n_sums == 0.0, np.array(1.0, dtype=inp.dtype), n_sums)
+    # Replicate original logic: only compute aggregate weights when total_sum > 0
+    valid_sum_mask = total_sum > 0.0
+    p_agg_wt = np.zeros_like(total_sum)
+    n_agg_wt = np.zeros_like(total_sum)
     
-    # Reshape sums and aggregate weights for broadcasting
-    if inp_t.ndim > 1:
-        broadcast_shape = (1,) * (inp_t.ndim - 1) + (channels,)
-        p_sums_broadcast = p_sums_normalized.reshape(broadcast_shape)
-        n_sums_broadcast = n_sums_normalized.reshape(broadcast_shape)
-        p_agg_wts_broadcast = p_agg_wts.reshape(broadcast_shape)
-        n_agg_wts_broadcast = n_agg_wts.reshape(broadcast_shape)
-    else:
-        p_sums_broadcast = p_sums_normalized
-        n_sums_broadcast = n_sums_normalized
-        p_agg_wts_broadcast = p_agg_wts
-        n_agg_wts_broadcast = n_agg_wts
+    # Use boolean indexing to apply original conditional logic
+    p_agg_wt[valid_sum_mask] = p_sum[valid_sum_mask] / total_sum[valid_sum_mask]
+    n_agg_wt[valid_sum_mask] = n_sum[valid_sum_mask] / total_sum[valid_sum_mask]
     
-    # Corrected vectorized operation: Multiply normalized input by the *transpose* of the transposed wts
-    # which is the original wts. (wts_t.T = (wts.T).T = wts)
-    positive_contribution = (p_mat / p_sums_broadcast) * wts_t.T * p_agg_wts_broadcast
-    negative_contribution = (n_mat / n_sums_broadcast) * wts_t.T * n_agg_wts_broadcast * -1.0
+    # Handle division by zero: set sum to 1.0 when sum is 0.0 (replicating original logic)
+    p_sum_safe = np.where(p_sum == 0.0, 1.0, p_sum)
+    n_sum_safe = np.where(n_sum == 0.0, 1.0, n_sum)
     
+    # Expand dimensions for broadcasting: (bs, 1, 1, c)
+    p_sum_safe = p_sum_safe[:, np.newaxis, np.newaxis, :]
+    n_sum_safe = n_sum_safe[:, np.newaxis, np.newaxis, :]
+    p_agg_wt = p_agg_wt[:, np.newaxis, np.newaxis, :]
+    n_agg_wt = n_agg_wt[:, np.newaxis, np.newaxis, :]
+    
+    # Vectorized weight calculation using broadcasting
+    # Positive contribution: (p_mat / p_sum) * weight * p_agg_wt
+    positive_contribution = (p_mat / p_sum_safe) * weights_transposed * p_agg_wt
+    
+    # Negative contribution: (n_mat / n_sum) * weight * n_agg_wt * -1.0
+    negative_contribution = (n_mat / n_sum_safe) * weights_transposed * n_agg_wt * -1.0
+    
+    # Combine contributions
     wt_mat = positive_contribution + negative_contribution
     
-    return wt_mat
+    # Transpose back to original shape (batch_size, channels, height, width)
+    return wt_mat.transpose(0, 3, 1, 2)

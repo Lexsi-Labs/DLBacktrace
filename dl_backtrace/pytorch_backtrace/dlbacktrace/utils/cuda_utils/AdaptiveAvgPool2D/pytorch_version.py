@@ -1,85 +1,74 @@
 import torch
-from torch import Tensor
+import torch.nn.functional as F
+from typing import Tuple
 
-def calculate_wt_gavgpool(wts: Tensor, inp: Tensor) -> Tensor:
+@torch.compile
+def calculate_wt_gavgpool(relevance_y: torch.Tensor, input_array: torch.Tensor) -> torch.Tensor:
     """
-    Calculate weighted global average pooling with separate handling of positive and negative values.
+    Calculate weighted global average pooling with positive/negative weight aggregation.
     
-    This function performs weighted global average pooling by:
-    1. Separating positive and negative parts of the input
-    2. Computing aggregate weights based on the proportion of positive/negative sums
-    3. Applying weighted averaging separately to positive and negative components
+    This function processes input tensors by separating positive and negative values,
+    computing aggregated weights based on their sums, and applying weighted transformations
+    across all channels and batch samples. Optimized for PyTorch with autograd support.
     
     Args:
-        wts (Tensor): Weight tensor that becomes (channels,) after transpose
-        inp (Tensor): Input tensor that becomes (..., channels) after transpose
-        
+        relevance_y (torch.Tensor): Relevance weights tensor of shape (batch_size, channels, height, width).
+                                   Should be on the same device as input_array.
+        input_array (torch.Tensor): Input tensor of shape (batch_size, channels, height, width).
+                                    Should be on the same device as relevance_y.
+    
     Returns:
-        Tensor: Weighted pooling result with same shape as transposed input
+        torch.Tensor: Weighted relevance tensor of shape (batch_size, channels, height, width).
+                     Maintains gradient information for backpropagation.
+    
+    Note:
+        - Replicates original logic for handling division by zero (sets sum to 1.0 when sum is 0.0)
+        - Maintains exact numerical behavior including potential numerical instabilities
+        - Optimized with torch.compile for improved execution speed
     """
-    # Transpose inputs to match original function behavior
-    wts_t = wts.T
-    inp_t = inp.T
     
-    # After transpose, the last dimension is the channel dimension
-    channels = inp_t.shape[-1]
+    # Transpose tensors once for vectorized operations (batch, height, width, channels)
+    input_transposed = input_array.permute(0, 2, 3, 1)  # (bs, h, w, c)
+    weights_transposed = relevance_y.permute(0, 2, 3, 1)  # (bs, h, w, c)
     
-    # Vectorized separation of positive and negative parts across all channels
-    p_mat = torch.clamp(inp_t, min=0.0)
-    n_mat = torch.clamp(inp_t, max=0.0)
+    # Vectorized separation using boolean masking - more memory efficient
+    positive_mask = input_transposed >= 0  # (bs, h, w, c)
     
-    # Sum over all spatial/batch dimensions (all except the last one)
-    if inp_t.ndim > 1:
-        spatial_axes = tuple(range(inp_t.ndim - 1))
-        p_sums = torch.sum(p_mat, dim=spatial_axes)
-        n_sums = torch.sum(n_mat, dim=spatial_axes) * -1.0
-    else:
-        p_sums = p_mat
-        n_sums = n_mat * -1.0
+    # Use torch.where for conditional selection - autograd compatible
+    p_mat = torch.where(positive_mask, input_transposed, torch.zeros_like(input_transposed))
+    n_mat = torch.where(positive_mask, torch.zeros_like(input_transposed), input_transposed)
     
-    # Compute aggregate weights vectorized across all channels
-    total_sums = p_sums + n_sums
+    # Compute sums across spatial dimensions (h, w) for each batch and channel
+    p_sum = torch.sum(p_mat, dim=(1, 2))  # (bs, c)
+    n_sum = torch.sum(n_mat, dim=(1, 2)) * -1.0  # (bs, c) - make positive
     
-    # Only compute aggregate weights where total_sums > 0 (replicating original condition exactly)
-    valid_mask = total_sums > 0.0
+    # Calculate aggregate weights - vectorized across all batches and channels
+    total_sum = p_sum + n_sum  # (bs, c)
     
-    # Initialize aggregate weights with zeros
-    p_agg_wts = torch.zeros_like(total_sums)
-    n_agg_wts = torch.zeros_like(total_sums)
+    # Replicate original logic: compute aggregate weights with division by zero handling
+    # Use torch.where to avoid explicit boolean indexing
+    p_agg_wt = torch.where(total_sum > 0.0, p_sum / total_sum, torch.zeros_like(p_sum))
+    n_agg_wt = torch.where(total_sum > 0.0, n_sum / total_sum, torch.zeros_like(n_sum))
     
-    # Use torch.where for vectorized conditional assignment
-    p_agg_wts = torch.where(valid_mask, p_sums / total_sums, p_agg_wts)
-    n_agg_wts = torch.where(valid_mask, n_sums / total_sums, n_agg_wts)
+    # Handle division by zero: set sum to 1.0 when sum is 0.0 (replicating original logic)
+    p_sum_safe = torch.where(p_sum == 0.0, torch.ones_like(p_sum), p_sum)
+    n_sum_safe = torch.where(n_sum == 0.0, torch.ones_like(n_sum), n_sum)
     
-    # Handle division by zero cases (replicating original behavior exactly)
-    # Use torch.where for conditional replacement with dtype-preserving constants
-    p_sums_normalized = torch.where(p_sums == 0.0, 
-                                   torch.ones_like(p_sums), 
-                                   p_sums)
-    n_sums_normalized = torch.where(n_sums == 0.0, 
-                                   torch.ones_like(n_sums), 
-                                   n_sums)
+    # Expand dimensions for broadcasting: (bs, 1, 1, c)
+    p_sum_safe = p_sum_safe.unsqueeze(1).unsqueeze(1)
+    n_sum_safe = n_sum_safe.unsqueeze(1).unsqueeze(1)
+    p_agg_wt = p_agg_wt.unsqueeze(1).unsqueeze(1)
+    n_agg_wt = n_agg_wt.unsqueeze(1).unsqueeze(1)
     
-    # Reshape sums and aggregate weights for broadcasting
-    if inp_t.ndim > 1:
-        broadcast_shape = (1,) * (inp_t.ndim - 1) + (channels,)
-        p_sums_broadcast = p_sums_normalized.reshape(broadcast_shape)
-        n_sums_broadcast = n_sums_normalized.reshape(broadcast_shape)
-        p_agg_wts_broadcast = p_agg_wts.reshape(broadcast_shape)
-        n_agg_wts_broadcast = n_agg_wts.reshape(broadcast_shape)
-    else:
-        p_sums_broadcast = p_sums_normalized
-        n_sums_broadcast = n_sums_normalized
-        p_agg_wts_broadcast = p_agg_wts
-        n_agg_wts_broadcast = n_agg_wts
+    # Vectorized weight calculation using broadcasting
+    # Positive contribution: (p_mat / p_sum) * weight * p_agg_wt
+    positive_contribution = (p_mat / p_sum_safe) * weights_transposed * p_agg_wt
     
-    # Corrected vectorized operation: Multiply normalized input by the *transpose* of the transposed wts
-    positive_contribution = (p_mat / p_sums_broadcast) * wts_t.T * p_agg_wts_broadcast
-    negative_contribution = (n_mat / n_sums_broadcast) * wts_t.T * n_agg_wts_broadcast * -1.0
+    # Negative contribution: (n_mat / n_sum) * weight * n_agg_wt * -1.0
+    negative_contribution = (n_mat / n_sum_safe) * weights_transposed * n_agg_wt * -1.0
     
+    # Combine contributions efficiently
     wt_mat = positive_contribution + negative_contribution
     
-    return wt_mat
-
-# Compile the function for optimized execution
-calculate_wt_gavgpool_compiled = torch.compile(calculate_wt_gavgpool, mode='max-autotune')
+    # Transpose back to original shape (batch_size, channels, height, width)
+    return wt_mat.permute(0, 3, 1, 2)

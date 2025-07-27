@@ -78,10 +78,9 @@ def launch_conv2d(version, wts, inp, w, b, padding, strides, act):
         return func(wts, inp, w, b, padding, strides, act)
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    wts_t, inp_t, w_t, b_t = _prepare_tensors(device, wts, inp, w, b)
     
     if version == 'pytorch':
-        return calculate_wt_conv_pytorch(wts_t, inp_t, w_t, b_t, padding, strides, act).cpu().numpy()
+        return calculate_wt_conv_pytorch(wts, inp, w, b, padding, strides, act)
     elif version == 'cuda':
         #return calculate_wt_conv_cuda(wts_t, inp_t, w_t, padding, strides, act).cpu().numpy()
         return None

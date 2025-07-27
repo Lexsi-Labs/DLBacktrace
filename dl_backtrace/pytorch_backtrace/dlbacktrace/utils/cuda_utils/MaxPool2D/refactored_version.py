@@ -1,94 +1,87 @@
 import numpy as np
 from typing import Tuple, Union
 from ..WtMaxunit2D.refactored_version import calculate_wt_max_unit
-from ..Conv2D.refactored_version import calculate_padding
+from ..Padding.original import calculate_padding
 
-def calculate_wt_maxpool(wts: np.ndarray, inp: np.ndarray, pool_size: Union[int, Tuple[int, int]], 
-                        padding: Union[int, Tuple[int, int]], strides: Union[int, Tuple[int, int]]) -> np.ndarray:
+def calculate_wt_maxpool(
+    relevance_y: np.ndarray, 
+    input_array: np.ndarray, 
+    pool_size: Tuple[int, int], 
+    pad: Union[int, Tuple[int, int]], 
+    stride: Union[int, Tuple[int, int]]
+) -> np.ndarray:
     """
-    Perform weighted max pooling operation on input tensor.
+    Calculate weighted max pooling with relevance propagation.
     
-    This function applies weighted max pooling where weights are distributed among the maximum
-    values within each pooling window. The operation slides a pooling window across the input
-    with specified strides, and for each window, identifies maximum values per channel and
-    distributes the corresponding weights among these maximum positions.
+    This function performs weighted max pooling on input arrays using relevance weights,
+    propagating relevance values backward through the pooling operation.
     
     Args:
-        wts (np.ndarray): Weights tensor of shape (channels, out_height, out_width) containing
-                         the weights to be applied at each output position for each channel.
-        inp (np.ndarray): Input tensor of shape (channels, in_height, in_width) to be pooled.
-        pool_size (Union[int, Tuple[int, int]]): Size of the pooling window. If int, same size
-                                               is used for both height and width dimensions.
-        padding (Union[int, Tuple[int, int]]): Padding to be applied. If int, same padding
-                                             is used for both height and width dimensions.
-        strides (Union[int, Tuple[int, int]]): Stride of the pooling operation. If int, same
-                                             stride is used for both height and width dimensions.
+        relevance_y: Relevance weights array of shape (batch_size, height, width, channels)
+        input_array: Input array of shape (batch_size, height, width, channels)
+        pool_size: Tuple of (pool_height, pool_width) for pooling window size
+        pad: Padding size, either int for symmetric padding or tuple of (pad_h, pad_w)
+        stride: Stride size, either int for symmetric stride or tuple of (stride_h, stride_w)
     
     Returns:
-        np.ndarray: Output tensor of same shape as input, where weighted max pooling has been
-                   applied. Values represent the distributed weights at positions achieving
-                   maximum values within their respective pooling windows.
-    
-    Notes:
-        - Input tensors are transposed at the beginning and the result maintains original orientation
-        - Padding is applied with -inf values to ensure they don't interfere with max operations
-        - Overlapping pooling windows accumulate their contributions additively
+        np.ndarray: Relevance propagated array with same shape as input_array
     """
-    # Transpose inputs to work with internal representation
-    # This replicates the original's tensor orientation handling
-    wts_transposed = wts.T
-    inp_transposed = inp.T
+    batch_size, _, _, _ = input_array.shape
     
-    # Normalize stride and padding parameters to tuples
-    strides_tuple = (strides, strides) if isinstance(strides, int) else strides
-    padding_tuple = (padding, padding) if isinstance(padding, int) else padding
+    # Normalize stride and padding to tuples for consistency
+    strides = stride if isinstance(stride, tuple) else (stride, stride)
+    padding = pad if isinstance(pad, tuple) else (pad, pad)
     
-    # Normalize pool_size to tuple for consistent handling
-    if isinstance(pool_size, int):
-        pool_size_tuple = (pool_size, pool_size)
-    else:
-        pool_size_tuple = pool_size
+    # Pre-allocate result array for better memory efficiency
+    relevance_x = np.zeros_like(input_array)
     
-    # Apply padding to input with -inf values (replicating original behavior)
-    input_padded, paddings = calculate_padding(pool_size_tuple, inp_transposed, 
-                                             padding_tuple, strides_tuple, -np.inf)
+    # Process each batch item
+    for batch_idx in range(batch_size):
+        # Transpose for processing (original behavior preserved)
+        weights_transposed = relevance_y[batch_idx].T
+        input_transposed = input_array[batch_idx].T
+        
+        # Calculate padding using the existing function (maintains original logic)
+        input_padded, paddings = calculate_padding(
+            pool_size, input_transposed, padding, strides
+        )
+        
+        # Initialize output with same shape as padded input
+        output_downsampled = np.zeros_like(input_padded)
+        
+        # Vectorized processing where possible, but maintaining exact original logic
+        output_height, output_width = weights_transposed.shape[:2]
+        
+        for row_idx in range(output_height):
+            for col_idx in range(output_width):
+                # Calculate patch indices (preserving original indexing logic)
+                row_indices = np.arange(
+                    row_idx * strides[0], 
+                    row_idx * strides[0] + pool_size[0]
+                )
+                col_indices = np.arange(
+                    col_idx * strides[1], 
+                    col_idx * strides[1] + pool_size[1]
+                )
+                
+                # Extract patch using advanced indexing (maintains original behavior)
+                patch = input_padded[np.ix_(row_indices, col_indices)]
+                
+                # Calculate weighted max unit updates using existing function
+                weight_slice = weights_transposed[row_idx, col_idx, :]
+                updates = calculate_wt_max_unit(patch, weight_slice, pool_size)
+                
+                # Accumulate updates in-place (preserves original += operation)
+                output_downsampled[np.ix_(row_indices, col_indices)] += updates
+        
+        # Remove padding to restore original dimensions (exact original logic)
+        unpadded_output = output_downsampled[
+            paddings[0][0]:(paddings[0][0] + input_transposed.shape[0]),
+            paddings[1][0]:(paddings[1][0] + input_transposed.shape[1]),
+            :
+        ]
+        
+        # Transpose back and store result (preserves original .T operation)
+        relevance_x[batch_idx] = unpadded_output.T
     
-    # Initialize output array with zeros, same shape as padded input
-    output_accumulated = np.zeros_like(input_padded)
-    
-    # Get output dimensions from weights tensor
-    out_height, out_width = wts_transposed.shape[:2]
-    
-    # Iterate through each output position
-    for output_row in range(out_height):
-        for output_col in range(out_width):
-            # Calculate the receptive field indices for current output position
-            row_start = output_row * strides_tuple[0]
-            row_end = row_start + pool_size_tuple[0]
-            col_start = output_col * strides_tuple[1]
-            col_end = col_start + pool_size_tuple[1]
-            
-            # Extract patch from padded input using advanced indexing
-            row_indices = np.arange(row_start, row_end)
-            col_indices = np.arange(col_start, col_end)
-            current_patch = input_padded[np.ix_(row_indices, col_indices)]
-            
-            # Get weights for current output position across all channels
-            current_weights = wts_transposed[output_row, output_col, :]
-            
-            # Calculate weighted max unit values for current patch
-            weighted_updates = calculate_wt_max_unit(current_patch, current_weights, pool_size_tuple)
-            
-            # Accumulate updates into output array at corresponding positions
-            # This handles overlapping pooling windows by summing contributions
-            output_accumulated[np.ix_(row_indices, col_indices)] += weighted_updates
-    
-    # Remove padding to get final output with original input dimensions
-    # Extract the region corresponding to the original input size
-    final_output = output_accumulated[
-        paddings[0][0]:(paddings[0][0] + inp_transposed.shape[0]),
-        paddings[1][0]:(paddings[1][0] + inp_transposed.shape[1]),
-        :
-    ]
-    
-    return final_output
+    return relevance_x
