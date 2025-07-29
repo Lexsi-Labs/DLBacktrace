@@ -14,7 +14,7 @@ from .cuda_utils.Conv2D.pytorch_version import calculate_wt_conv as calculate_wt
 # MaxPool2D Layer
 from .cuda_utils.MaxPool2D.original_version import calculate_wt_maxpool as calculate_wt_maxpool_original
 from .cuda_utils.MaxPool2D.refactored_version import calculate_wt_maxpool as calculate_wt_maxpool_refactored
-from .cuda_utils.MaxPool2D.pytorch_version import calculate_wt_maxpool_pytorch as calculate_wt_maxpool_pytorch
+from .cuda_utils.MaxPool2D.pytorch_version import calculate_wt_maxpool as calculate_wt_maxpool_pytorch
 #from .cuda_utils.MaxPool2D.cuda_version import calculate_wt_maxpool_cuda as calculate_wt_maxpool_cuda
 
 # AdaptiveAvgPool2D Layer
