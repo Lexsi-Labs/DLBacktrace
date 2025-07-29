@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from typing import Tuple, Union
-from ..WtMaxunit2D.pytorch_version import calculate_wt_max_unit
+from ..WtMaxunit2D.pytorch_version import calculate_wt_max_unit_optimized as calculate_wt_max_unit
 from ..Padding.pytorch import calculate_padding
 
 def calculate_wt_maxpool(
