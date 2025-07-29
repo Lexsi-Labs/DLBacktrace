@@ -527,7 +527,7 @@ def calculate_wt_conv(relevance_y, input_array, w, b, padding, strides, act):
         relevance_x.append(out_ds.T)
     return np.array(relevance_x)
 
-def calculate_wt_gavgpool(relevance_y, input_array):
+def calculate_wt_gavgpool(relevance_y, input_array): # AdaptiveAvgPool2D
     bs,_,_,_ = input_array.shape
     relevance_x =[]
     for i in range(bs):
