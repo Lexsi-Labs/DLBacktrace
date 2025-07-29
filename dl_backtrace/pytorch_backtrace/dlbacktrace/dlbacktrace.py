@@ -203,8 +203,7 @@ class DLBacktraceFX:
             multiplier=multiplier,
             scaler=scaler,
             thresholding=thresholding,
-            task=task,
-            memory_efficient=True
+            task=task
         )
         return self.all_wt
 
