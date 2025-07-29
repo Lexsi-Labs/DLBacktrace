@@ -378,7 +378,7 @@ def assign_embedding_relevance(node, info, all_wt, node_io):
         prev = prev.detach().cpu().numpy()
 
     # 5) Fast path for matching shapes
-    if prev is not None and R_out.shape == prev.shape == target_shape:
+    if prev is not None and R_out.shape == prev.shape:
         if DEBUG:
             log(f"[{node}] ℹ️ Relevance already aligned, fast accumulation.")
         all_wt[node] = prev + R_out
