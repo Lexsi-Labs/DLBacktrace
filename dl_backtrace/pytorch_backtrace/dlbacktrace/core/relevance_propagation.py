@@ -1097,7 +1097,10 @@ class RelevancePropagator:
         scaler=1.0,
         thresholding=0.5,
         task="binary-classification",
+        debug=False,
     ):
+        global DEBUG
+        DEBUG = debug
         return run_evaluation(
             self.node_io,
             self.activation_master,
