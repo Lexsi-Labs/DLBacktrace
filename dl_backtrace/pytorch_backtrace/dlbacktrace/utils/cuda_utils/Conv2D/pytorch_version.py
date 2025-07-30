@@ -282,13 +282,34 @@ def calculate_wt_conv(
         # Process each spatial location in the output (matching original's loop structure)
         for out_h in range(output_height):
             for out_w in range(output_width):
-                # Calculate index ranges exactly like the original version
-                h_indices = torch.arange(out_h * stride_h, out_h * stride_h + kernel_h, device=input_padded.device)
-                w_indices = torch.arange(out_w * stride_w, out_w * stride_w + kernel_w, device=input_padded.device)
+                # Calculate start indices like the original version
+                h_start = out_h * stride_h
+                h_end = h_start + kernel_h
+                w_start = out_w * stride_w
+                w_end = w_start + kernel_w
+                
+                # Ensure indices are within bounds of the padded tensor
+                h_end = min(h_end, input_padded.shape[0])
+                w_end = min(w_end, input_padded.shape[1])
+                
+                # Create index ranges, ensuring they don't exceed tensor bounds
+                h_indices = torch.arange(h_start, h_end, device=input_padded.device, dtype=torch.long)
+                w_indices = torch.arange(w_start, w_end, device=input_padded.device, dtype=torch.long)
                 
                 # Extract patch using advanced indexing (equivalent to np.ix_)
-                # This guarantees exact kernel dimensions
                 input_patch = input_padded[h_indices.unsqueeze(1), w_indices.unsqueeze(0), :]
+                
+                # Pad patch if it's smaller than kernel size (boundary condition)
+                if input_patch.shape[0] < kernel_h or input_patch.shape[1] < kernel_w:
+                    pad_h_needed = max(0, kernel_h - input_patch.shape[0])
+                    pad_w_needed = max(0, kernel_w - input_patch.shape[1])
+                    
+                    if pad_h_needed > 0 or pad_w_needed > 0:
+                        # Pad with zeros to match kernel dimensions
+                        pad_values = (0, pad_w_needed, 0, pad_h_needed)  # (left, right, top, bottom)
+                        input_patch = input_patch.permute(2, 0, 1)  # (channels, height, width)
+                        input_patch = F.pad(input_patch, pad_values, mode='constant', value=0.0)
+                        input_patch = input_patch.permute(1, 2, 0)  # back to (height, width, channels)
                 
                 # Get relevance weight for current output location
                 relevance_weight = current_relevance[out_h, out_w, :]
@@ -297,8 +318,13 @@ def calculate_wt_conv(
                 patch_updates = calculate_wt_conv_unit(
                     input_patch, relevance_weight, w_transposed, b, act
                 )
-                # Accumulate updates using the same indexing pattern
-                output_accumulated[h_indices.unsqueeze(1), w_indices.unsqueeze(0), :] += patch_updates
+                
+                # Accumulate updates with proper bounds checking
+                actual_h_size = min(patch_updates.shape[0], h_end - h_start)
+                actual_w_size = min(patch_updates.shape[1], w_end - w_start)
+                
+                output_accumulated[h_start:h_start + actual_h_size, w_start:w_start + actual_w_size, :] += \
+                    patch_updates[:actual_h_size, :actual_w_size, :]
         
         # Remove padding to get final output, preserving original slice behavior
         pad_h_before, pad_w_before = paddings[0][0], paddings[1][0]
