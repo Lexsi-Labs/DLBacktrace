@@ -258,6 +258,7 @@ def calculate_wt_conv(
         # Extract current batch data and transpose to match original layout (batch, channels, h, w) -> (h, w, channels, batch)
         current_relevance = relevance_y[batch_idx].permute(2, 1, 0)  # Shape: (h, w, out_channels)
         current_input = input_array[batch_idx].permute(2, 1, 0)      # Shape: (h, w, in_channels)
+        kernel_h, kernel_w = w_transposed.shape[0], w_transposed.shape[1]
         
         # Apply padding using kernel shape like the original version
         input_padded, paddings = calculate_padding(
@@ -272,7 +273,7 @@ def calculate_wt_conv(
         
         # Vectorized index calculation for better performance
         stride_h, stride_w = strides
-        kernel_h, kernel_w = w_transposed.shape[0], w_transposed.shape[1]
+
         
         # Process each spatial location in the output (matching original's loop structure)
         for out_h in range(output_height):

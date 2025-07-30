@@ -190,7 +190,7 @@ class DLBacktraceFX:
         self.node_io = executor.run(inputs)
         return self.node_io
 
-    def evaluation(self, mode="default", start_wt=[], multiplier=100.0, scaler=1.0, thresholding=0.5, task="binary-classification"):
+    def evaluation(self, mode="default", start_wt=[], multiplier=100.0, scaler=1.0, thresholding=0.5, task="binary-classification", debug=False):
         evaluator = RelevancePropagator(
             graph=self.graph,
             node_io=self.node_io,
@@ -203,7 +203,8 @@ class DLBacktraceFX:
             multiplier=multiplier,
             scaler=scaler,
             thresholding=thresholding,
-            task=task
+            task=task,
+            debug=debug
         )
         return self.all_wt
 
