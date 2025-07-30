@@ -116,7 +116,11 @@ def calculate_wt_conv_unit(
     
     # Calculate denominator with numerical stabilization
     denom = p_sum + n_sum + denom_bias_term
-    denom = torch.where(denom == 0, torch.tensor(1e-12, device=device, dtype=torch.float32), denom)
+    print("Creating epsilon")
+    epsilon = torch.full_like(denom, 1e-12)
+    print("Epsilon created and applying where")
+    denom = torch.where(denom == 0, epsilon, denom)
+    print("Where applied")
     
     # Calculate aggregated weights
     inv_denom = 1.0 / denom
@@ -291,11 +295,12 @@ def calculate_wt_conv(
                 # Get relevance weight for current output location
                 relevance_weight = current_relevance[out_h, out_w, :]
                 
+                print("Calculating wt conv unit")
                 # Calculate weighted convolution updates for this patch
                 patch_updates = calculate_wt_conv_unit(
                     input_patch, relevance_weight, w_transposed, b, act
                 )
-                
+                print("Wt conv unit calculated")
                 # Accumulate updates using the same indexing pattern
                 output_accumulated[h_indices.unsqueeze(1), w_indices.unsqueeze(0), :] += patch_updates
         
