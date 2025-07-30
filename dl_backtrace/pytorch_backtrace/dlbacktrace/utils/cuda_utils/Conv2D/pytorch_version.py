@@ -176,22 +176,17 @@ def calculate_padding(
         else:
             pad_v = max(0, kernel_size[1] - width_remainder)
         
-        # Calculate asymmetric padding (before, after) for each dimension
-        pad_h_before = int(pad_h // 2)
-        pad_h_after = int((pad_h + 1) // 2)
-        pad_v_before = int(pad_v // 2)
-        pad_v_after = int((pad_v + 1) // 2)
-        
+        # Calculate asymmetric padding exactly like the original version
         paddings = [
-            torch.floor(torch.tensor([pad_h_before, pad_h_after])).to(torch.int32),
-            torch.floor(torch.tensor([pad_v_before, pad_v_after])).to(torch.int32), 
-            torch.tensor([0, 0]).to(torch.int32)  # No padding for channel dimension
+            torch.floor(torch.tensor([pad_h/2.0, (pad_h+1)/2.0])).to(torch.int32),
+            torch.floor(torch.tensor([pad_v/2.0, (pad_v+1)/2.0])).to(torch.int32),
+            torch.zeros(2, dtype=torch.int32)  # No padding for channel dimension
         ]
         
         # Apply padding using PyTorch's pad function
         # Note: F.pad expects (left, right, top, bottom) for 2D padding
-        pad_values = (pad_v_before, pad_v_after, pad_h_before, pad_h_after)
-        inp= inp.permute(2, 0, 1)
+        pad_values = (paddings[1][0].item(), paddings[1][1].item(), paddings[0][0].item(), paddings[0][1].item())
+        inp = inp.permute(2, 0, 1)
         inp_padded = F.pad(inp, pad_values, mode='constant', value=const_val)
         inp_padded = inp_padded.permute(1, 2, 0)
         return inp_padded, paddings 
@@ -202,18 +197,16 @@ def calculate_padding(
         if isinstance(padding, tuple) and padding != (None, None):
             pad_h, pad_v = padding
             
-            # Apply symmetric padding - same amount before and after
-            pad_h = int(pad_h)
-            pad_v = int(pad_v)
+            # Apply symmetric padding exactly like the original version
             paddings = [
                 torch.floor(torch.tensor([pad_h, pad_h])).to(torch.int32),
                 torch.floor(torch.tensor([pad_v, pad_v])).to(torch.int32),
-                torch.tensor([0, 0]).to(torch.int32)  # No padding for channel dimension
+                torch.zeros(2, dtype=torch.int32)  # No padding for channel dimension
             ]
             
             # Apply padding using PyTorch's pad function
-            pad_values = (pad_v, pad_v, pad_h, pad_h)
-            inp= inp.permute(2, 0, 1)
+            pad_values = (paddings[1][0].item(), paddings[1][1].item(), paddings[0][0].item(), paddings[0][1].item())
+            inp = inp.permute(2, 0, 1)
             inp_padded = F.pad(inp, pad_values, mode='constant', value=const_val)
             inp_padded = inp_padded.permute(1, 2, 0)
             return inp_padded, paddings
@@ -266,9 +259,9 @@ def calculate_wt_conv(
         current_relevance = relevance_y[batch_idx].permute(2, 1, 0)  # Shape: (h, w, out_channels)
         current_input = input_array[batch_idx].permute(2, 1, 0)      # Shape: (h, w, in_channels)
         
-        # Apply padding using the optimized calculate_padding function
+        # Apply padding using kernel shape like the original version
         input_padded, paddings = calculate_padding(
-            w_transposed.shape[:2], current_input, padding, strides
+            (kernel_h, kernel_w), current_input, padding, strides
         )
         
         # Initialize output tensor for accumulated updates
@@ -281,28 +274,27 @@ def calculate_wt_conv(
         stride_h, stride_w = strides
         kernel_h, kernel_w = w_transposed.shape[0], w_transposed.shape[1]
         
-        # Process each spatial location in the output
+        # Process each spatial location in the output (matching original's loop structure)
         for out_h in range(output_height):
             for out_w in range(output_width):
-                # Calculate input patch indices
-                h_start = out_h * stride_h
-                h_end = h_start + kernel_h
-                w_start = out_w * stride_w  
-                w_end = w_start + kernel_w
+                # Calculate index ranges exactly like the original version
+                h_indices = torch.arange(out_h * stride_h, out_h * stride_h + kernel_h, device=input_padded.device)
+                w_indices = torch.arange(out_w * stride_w, out_w * stride_w + kernel_w, device=input_padded.device)
                 
-                # Extract input patch efficiently using tensor slicing
-                input_patch = input_padded[h_start:h_end, w_start:w_end, :]
+                # Extract patch using advanced indexing (equivalent to np.ix_)
+                # This guarantees exact kernel dimensions
+                input_patch = input_padded[h_indices.unsqueeze(1), w_indices.unsqueeze(0), :]
                 
                 # Get relevance weight for current output location
                 relevance_weight = current_relevance[out_h, out_w, :]
                 
                 # Calculate weighted convolution updates for this patch
                 patch_updates = calculate_wt_conv_unit(
-                    input_patch, relevance_weight, w_transposed, b, act#input patch is (h, w, in_channels, batch_size) and w is (h, w, in_channels, out_channels)
+                    input_patch, relevance_weight, w_transposed, b, act
                 )
                 
-                # Accumulate updates into output tensor using in-place addition
-                output_accumulated[h_start:h_end, w_start:w_end, :] += patch_updates
+                # Accumulate updates using the same indexing pattern
+                output_accumulated[h_indices.unsqueeze(1), w_indices.unsqueeze(0), :] += patch_updates
         
         # Remove padding to get final output, preserving original slice behavior
         pad_h_before, pad_w_before = paddings[0][0], paddings[1][0]

@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from torch.utils.cpp_extension import load_inline
 import numpy as np
 
+
 linear_layer_cuda_source = r"""
 #include <torch/extension.h>
 #include <cfloat>
