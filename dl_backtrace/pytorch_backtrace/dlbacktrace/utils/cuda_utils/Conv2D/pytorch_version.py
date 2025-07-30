@@ -15,6 +15,8 @@ def convert_to_pytorch_format(
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
+    print(f"[DEBUG] device: {device}")
+    
     relevance_y = torch.tensor(relevance_y, dtype=torch.float32, device=device)
     input_array = torch.tensor(input_array, dtype=torch.float32, device=device)
     w = torch.tensor(w, dtype=torch.float32, device=device)
