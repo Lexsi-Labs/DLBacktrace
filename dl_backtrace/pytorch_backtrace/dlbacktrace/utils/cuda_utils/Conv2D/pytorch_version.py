@@ -76,7 +76,7 @@ def calculate_wt_conv_unit(
         # Create zero tensors for bias terms when bias is None
         bias_pos = torch.zeros_like(p_sum)
         bias_neg = torch.zeros_like(n_sum)
-        denom_bias_term = 0.0
+        denom_bias_term = torch.zeros_like(p_sum)
     
     # Initialize saturation indicators
     p_saturate = (p_sum > 0).float()
@@ -86,10 +86,12 @@ def calculate_wt_conv_unit(
     if act["type"] == 'mono':
         # Monotonic activation function
         if act["range"].get("l") is not None:
-            temp_ind = (t_sum > act["range"]["l"]).float()
+            l_threshold = torch.tensor(act["range"]["l"], device=t_sum.device, dtype=t_sum.dtype)
+            temp_ind = (t_sum > l_threshold).float()
             p_saturate = temp_ind
         if act["range"].get("u") is not None:
-            temp_ind = (t_sum < act["range"]["u"]).float()
+            u_threshold = torch.tensor(act["range"]["u"], device=t_sum.device, dtype=t_sum.dtype)
+            temp_ind = (t_sum < u_threshold).float()
             n_saturate = temp_ind
     
     elif act["type"] == 'non_mono':
@@ -100,21 +102,26 @@ def calculate_wt_conv_unit(
         
         # Apply range constraints if specified
         if act["range"].get("l") is not None:
-            temp_ind = (t_sum > act["range"]["l"]).float()
+            l_threshold = torch.tensor(act["range"]["l"], device=t_sum.device, dtype=t_sum.dtype)
+            temp_ind = (t_sum > l_threshold).float()
             p_saturate = p_saturate * temp_ind
         if act["range"].get("u") is not None:
-            temp_ind = (t_sum < act["range"]["u"]).float()
+            u_threshold = torch.tensor(act["range"]["u"], device=t_sum.device, dtype=t_sum.dtype)
+            temp_ind = (t_sum < u_threshold).float()
             n_saturate = n_saturate * temp_ind
         
         # Apply activation function difference thresholding
-        temp_ind = (torch.abs(t_act - p_act) > 1e-5).float()
+        eps_threshold = torch.tensor(1e-5, device=t_act.device, dtype=t_act.dtype)
+        temp_ind = (torch.abs(t_act - p_act) > eps_threshold).float()
         n_saturate = n_saturate * temp_ind
-        temp_ind = (torch.abs(t_act - n_act) > 1e-5).float()
+        temp_ind = (torch.abs(t_act - n_act) > eps_threshold).float()
         p_saturate = p_saturate * temp_ind
     
     # Calculate denominator with numerical stabilization
     denom = p_sum + n_sum + denom_bias_term
-    denom = torch.where(denom == 0, torch.tensor(1e-12, device=denom.device, dtype=denom.dtype), denom)
+    # Use a more CUDA-friendly approach for tensor creation
+    epsilon = torch.full_like(denom, 1e-12)
+    denom = torch.where(denom == 0, epsilon, denom)
     
     # Calculate aggregated weights
     inv_denom = 1.0 / denom
