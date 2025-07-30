@@ -51,9 +51,7 @@ __global__ void calculate_wt_fc_kernel(
     
     if (output_idx >= output_dim) return;
 
-    // Shared memory for reductions
-    extern __shared__ float shared_mem[];
-    float* contributions = shared_mem;
+    // Use only fixed-size shared memory for reductions
     __shared__ float p_sum_shared[256];
     __shared__ float n_sum_shared[256];
 
@@ -63,20 +61,18 @@ __global__ void calculate_wt_fc_kernel(
 
     int mul_val = output_idx * input_dim;
 
+    // First pass: compute positive and negative sums
     for (int i = threadIdx.x; i < input_dim; i += blockDim.x) {
         float contrib = input_array[i] * w[mul_val + i];
-        contributions[i] = contrib;
         local_p_sum += fmaxf(contrib, 0.0f);
         local_n_sum += fmaxf(-contrib, 0.0f);
     }
-
-    __syncthreads();
 
     p_sum_shared[threadIdx.x] = local_p_sum;
     n_sum_shared[threadIdx.x] = local_n_sum;
     __syncthreads();
 
-    // Parallel reduction for positive sum
+    // Parallel reduction for positive and negative sums
     for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
         if (threadIdx.x < stride) {
             p_sum_shared[threadIdx.x] += p_sum_shared[threadIdx.x + stride];
@@ -148,9 +144,9 @@ __global__ void calculate_wt_fc_kernel(
     float p_agg_wt_val = __fmul_rn(p_agg_wt, relevance_val);
     float n_agg_wt_val = __fmul_rn(n_agg_wt, relevance_val);
     
-    // Compute and accumulate final weights
+    // Second pass: compute and accumulate final weights (recompute contributions on-the-fly)
     for (int i = threadIdx.x; i < input_dim; i += blockDim.x) {
-        float contrib = contributions[i];
+        float contrib = input_array[i] * w[mul_val + i];
         float weight = 0.0f;
 
         if (contrib > 0.0f) {
@@ -201,10 +197,9 @@ torch::Tensor launch_calculate_wt_fc_kernel(
     // Configure kernel launch parameters
     const int threads_per_block = 256;
     dim3 grid_dim(output_dim);  // x: output
-    size_t shared_mem_size = input_dim * sizeof(float);
     
     // Launch kernel
-    calculate_wt_fc_kernel<<<grid_dim, threads_per_block, shared_mem_size>>>(
+    calculate_wt_fc_kernel<<<grid_dim, threads_per_block>>>(
         relevance_y.data_ptr<float>(),
         input_array.data_ptr<float>(),
         w.data_ptr<float>(),
