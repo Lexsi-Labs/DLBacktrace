@@ -55,7 +55,7 @@ def calculate_wt_conv_unit(
                      the last dimension
     """
     
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda")
     
     # Compute convolution output once using torch.einsum
     conv_out = torch.einsum("ijkl,ijk->ijkl", w, patch)
@@ -116,7 +116,7 @@ def calculate_wt_conv_unit(
     
     # Calculate denominator with numerical stabilization
     denom = p_sum + n_sum + denom_bias_term
-    denom = torch.where(denom == 0, torch.tensor(1e-12, device=device), denom)
+    denom = torch.where(denom == 0, torch.tensor(1e-12, device=device, dtype=torch.float32), denom)
     
     # Calculate aggregated weights
     inv_denom = 1.0 / denom
