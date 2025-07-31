@@ -18,8 +18,8 @@ def convert_to_pytorch_format(
     relevance_y = torch.tensor(relevance_y, dtype=torch.float32, device=device)
     input_array = torch.tensor(input_array, dtype=torch.float32, device=device)
     w = torch.tensor(w, dtype=torch.float32, device=device)
-    b = torch.tensor(b, dtype=torch.float32, device=device)
-    strides = torch.tensor(strides, dtype=torch.int32, device=device)
+    b = torch.tensor(b, dtype=torch.float32, device=device) if b is not None else None
+    strides = torch.tensor(strides, dtype=torch.int32, device=device) if strides is not None else None
     
     if padding != 'valid' and padding != 'same':
         padding = torch.tensor(padding, dtype=torch.int32, device=device)
@@ -225,7 +225,7 @@ def calculate_wt_conv(
     w,
     b,
     padding: Union[str, Tuple[Union[int, None], Union[int, None]]],
-    strides: Tuple[int, int],
+    strides:Tuple[int, int],
     act: Dict[str, Any]
 ) -> torch.Tensor:
     """
