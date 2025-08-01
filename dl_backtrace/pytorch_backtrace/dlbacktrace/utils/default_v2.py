@@ -9,7 +9,7 @@ from .cuda_utils.Linear_v2.cuda_v2 import calculate_wt_fc_cuda as calculate_wt_f
 from .cuda_utils.Conv2D.original_version import calculate_wt_conv as calculate_wt_conv_original
 from .cuda_utils.Conv2D.refactored_version import calculate_wt_conv as calculate_wt_conv_refactored
 from .cuda_utils.Conv2D.pytorch_version import calculate_wt_conv as calculate_wt_conv_pytorch
-#from .cuda_utils.Conv2D.launch_cuda_version import calculate_wt_conv as calculate_wt_conv_cuda
+from .cuda_utils.Conv2D.cuda_v2 import calculate_wt_conv_cuda as calculate_wt_conv_cuda
 
 # MaxPool2D Layer
 from .cuda_utils.MaxPool2D.original_version import calculate_wt_maxpool as calculate_wt_maxpool_original
@@ -81,9 +81,10 @@ def launch_conv2d(version, wts, inp, w, b, padding, strides, act):
     
     if version == 'pytorch':
         return calculate_wt_conv_pytorch(wts, inp, w, b, padding, strides, act)
+    
     elif version == 'cuda':
-        #return calculate_wt_conv_cuda(wts_t, inp_t, w_t, padding, strides, act).cpu().numpy()
-        return None
+        return calculate_wt_conv_cuda(wts, inp, w, b, padding, strides, act).cpu().numpy()
+
     else:
         raise ValueError(f"Unknown version for Conv2D layer: {version}")
 
