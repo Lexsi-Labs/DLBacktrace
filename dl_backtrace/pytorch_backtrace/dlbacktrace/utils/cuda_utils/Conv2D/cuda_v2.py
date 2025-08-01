@@ -475,6 +475,10 @@ def calculate_wt_conv_cuda(relevance_y, input_array, w, b, padding, strides, act
             b = torch.tensor(b, dtype=torch.float32, device=device)
         else:
             b = b.to(device=device, dtype=torch.float32)
+    else:
+        # Create zero bias tensor when bias is None (CUDA function expects a tensor)
+        out_channels = w.shape[0]
+        b = torch.zeros(out_channels, dtype=torch.float32, device=device)
     
     # STRIDE_VALIDATION: Ensure strides are properly formatted
     if strides is None:
