@@ -478,11 +478,11 @@ def calculate_wt_conv_cuda(relevance_y, input_array, w, b, padding, strides, act
     
     # STRIDE_VALIDATION: Ensure strides are properly formatted
     if strides is None:
-        strides = torch.tensor([1, 1], dtype=torch.int32, device=device)
+        strides = [1, 1]
     elif isinstance(strides, torch.Tensor):
         strides = strides.tolist()
     else:
-        strides = torch.tensor(strides, dtype=torch.int32, device=device)
+        strides = list(strides)
     
     # Ensure strides has exactly 2 elements
     if len(strides) == 1:
