@@ -248,7 +248,14 @@ def get_cuda_arch_flags():
     arch_flag = f"--generate-code=arch=compute_{major}{minor},code=sm_{major}{minor}"
     return [arch_flag]
 
-extra_flags = ['-O3', '--use_fast_math', '-Xcompiler', '-fPIC']
+extra_flags = [
+    '-O3', 
+    '--use_fast_math', 
+    '-Xcompiler', '-fPIC',
+    '-Xptxas', '-dlcm=cg',
+    '-Xptxas', '-dscm=wt',
+]
+
 extra_flags.extend(get_cuda_arch_flags())
 
 custom_linear_layer_cuda_ops = load_inline(

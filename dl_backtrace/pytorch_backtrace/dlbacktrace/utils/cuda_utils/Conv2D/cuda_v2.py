@@ -30,28 +30,30 @@ __device__ __forceinline__ float apply_activation(float x, int act_func) {
     }
 }
 
-// DEVICE_FUNCTION: Calculate weighted convolution unit with warp-level optimizations
-__device__ void calculate_wt_conv_unit_cuda(
-    const float* patch,           // Input patch [kernel_h * kernel_w * in_channels]
+// CHUNKED_DEVICE_FUNCTION: Channel-chunked version of weighted convolution unit
+__device__ void calculate_wt_conv_unit_cuda_chunked(
+    const float* patch_chunk,     // Input patch chunk [kernel_h * kernel_w * chunk_size]
     const float* relevance_wts,   // Relevance weights [out_channels] 
-    const float* w,               // Kernel weights [kernel_h * kernel_w * in_channels * out_channels]
+    const float* w,               // Full kernel weights [kernel_h * kernel_w * in_channels * out_channels]
     const float* b,               // Bias [out_channels]
-    int kernel_h, int kernel_w, int in_channels, int out_channels,
+    int kernel_h, int kernel_w, int chunk_size, int out_channels, int in_channels,
+    int channel_offset,           // Starting channel index for this chunk
     int act_type, float act_range_l, float act_range_u, int act_func_int,
-    float* output_patch           // Output [kernel_h * kernel_w * in_channels]
+    float* output_chunk           // Output chunk [kernel_h * kernel_w * chunk_size]
 ) {
-    // VECTORIZED_COMPUTATION: Process multiple output channels per thread
+    // Process multiple output channels per thread
     for (int oc = threadIdx.x; oc < out_channels; oc += blockDim.x) {
         float p_sum = 0.0f, n_sum = 0.0f;
         
-        // MEMORY_COALESCING: Sequential access pattern for convolution computation  
+        // Compute convolution for current chunk and output channel
         for (int i = 0; i < kernel_h; i++) {
             for (int j = 0; j < kernel_w; j++) {
-                for (int ic = 0; ic < in_channels; ic++) {
-                    int patch_idx = (i * kernel_w + j) * in_channels + ic;
-                    int weight_idx = ((i * kernel_w + j) * in_channels + ic) * out_channels + oc;
+                for (int ic = 0; ic < chunk_size; ic++) {
+                    int chunk_patch_idx = (i * kernel_w + j) * chunk_size + ic;
+                    int global_ic = channel_offset + ic;
+                    int weight_idx = ((i * kernel_w + j) * in_channels + global_ic) * out_channels + oc;
                     
-                    float conv_val = w[weight_idx] * patch[patch_idx];
+                    float conv_val = w[weight_idx] * patch_chunk[chunk_patch_idx];
                     p_sum += fmaxf(conv_val, 0.0f);
                     n_sum += fmaxf(-conv_val, 0.0f);
                 }
@@ -63,7 +65,7 @@ __device__ void calculate_wt_conv_unit_cuda(
         float bias_neg = (b != nullptr) ? fmaxf(-b[oc], 0.0f) : 0.0f;
         float denom_bias_term = bias_pos + bias_neg;
         
-        // ACTIVATION_HANDLING: Process activation function constraints
+        // Activation handling (same as original)
         float p_saturate = (p_sum > 0.0f) ? 1.0f : 0.0f;
         float n_saturate = (n_sum > 0.0f) ? 1.0f : 0.0f;
         
@@ -80,7 +82,6 @@ __device__ void calculate_wt_conv_unit_cuda(
             float p_act = apply_activation(p_sum + bias_pos, act_func_int);
             float n_act = apply_activation(-(n_sum + bias_neg), act_func_int);
             
-            // Apply range constraints if specified (like PyTorch)
             if (!isinf(act_range_l)) {
                 float temp_ind = (t_sum > act_range_l) ? 1.0f : 0.0f;
                 p_saturate = p_saturate * temp_ind;
@@ -90,12 +91,11 @@ __device__ void calculate_wt_conv_unit_cuda(
                 n_saturate = n_saturate * temp_ind;
             }
             
-            // Apply activation function difference thresholding (corrected order)
             n_saturate = n_saturate * (fabsf(t_act - p_act) > 1e-5f);
             p_saturate = p_saturate * (fabsf(t_act - n_act) > 1e-5f);
         }
         
-        // NUMERICAL_STABILIZATION: Prevent division by zero
+        // Numerical stabilization
         float denom = p_sum + n_sum + denom_bias_term;
         denom = (denom == 0.0f) ? 1e-12f : denom;
         
@@ -104,25 +104,26 @@ __device__ void calculate_wt_conv_unit_cuda(
         float p_agg_wt = inv_denom * relevance_wt * p_saturate;
         float n_agg_wt = inv_denom * relevance_wt * n_saturate;
         
-        // WEIGHT_ACCUMULATION: Apply weighted updates to output patch
+        // Apply weighted updates to output chunk
         for (int i = 0; i < kernel_h; i++) {
             for (int j = 0; j < kernel_w; j++) {
-                for (int ic = 0; ic < in_channels; ic++) {
-                    int patch_idx = (i * kernel_w + j) * in_channels + ic;
-                    int weight_idx = ((i * kernel_w + j) * in_channels + ic) * out_channels + oc;
+                for (int ic = 0; ic < chunk_size; ic++) {
+                    int chunk_patch_idx = (i * kernel_w + j) * chunk_size + ic;
+                    int global_ic = channel_offset + ic;
+                    int weight_idx = ((i * kernel_w + j) * in_channels + global_ic) * out_channels + oc;
                     
-                    float conv_val = w[weight_idx] * patch[patch_idx];
+                    float conv_val = w[weight_idx] * patch_chunk[chunk_patch_idx];
                     float p_part = fmaxf(conv_val, 0.0f);
                     float n_part = fmaxf(-conv_val, 0.0f);
                     
-                    atomicAdd(&output_patch[patch_idx], p_part * p_agg_wt - n_part * n_agg_wt);
+                    atomicAdd(&output_chunk[chunk_patch_idx], p_part * p_agg_wt - n_part * n_agg_wt);
                 }
             }
         }
     }
 }
 
-// MAIN_KERNEL: Fused weighted convolution kernel with shared memory optimization
+// MAIN_KERNEL: Fused weighted convolution kernel with channel chunking optimization
 __global__ void weighted_conv_kernel(
     const float* relevance_y,     // [batch_size, out_channels, out_h, out_w]
     const float* input_array,     // [batch_size, in_channels, in_h, in_w]
@@ -161,42 +162,17 @@ __global__ void weighted_conv_kernel(
     // Skip if patch is empty
     if (actual_patch_h <= 0 || actual_patch_w <= 0) return;
     
-    // PATCH_EXTRACTION: Extract input patch for current output location
-    float patch[MAX_KERNEL_SIZE * MAX_KERNEL_SIZE * 32]; // Local patch storage
-    float output_patch[MAX_KERNEL_SIZE * MAX_KERNEL_SIZE * 32];
+    // OPTIMIZED_CHANNEL_HANDLING: Use chunking for large channel counts
+    const int MAX_LOCAL_CHANNELS = 256;
+    const int chunk_size = min(in_channels, MAX_LOCAL_CHANNELS);
+    const int patch_chunk_size = kernel_h * kernel_w * chunk_size;
     
-    // Initialize both patches to zero
-    for (int i = 0; i < kernel_h * kernel_w * in_channels; i++) {
-        patch[i] = 0.0f;
-        output_patch[i] = 0.0f;
-    }
+    // Use reasonably sized local memory (always <= 256 channels per chunk)
+    float patch_chunk[MAX_KERNEL_SIZE * MAX_KERNEL_SIZE * 256];
+    float output_chunk[MAX_KERNEL_SIZE * MAX_KERNEL_SIZE * 256];
     
-    // BOUNDARY_SAFE_LOAD: Load input patch with boundary checking
-    for (int ky = 0; ky < kernel_h; ky++) {
-        for (int kx = 0; kx < kernel_w; kx++) {
-            // Calculate actual input coordinates
-            int input_y = in_y_start + ky;
-            int input_x = in_x_start + kx;
-            
-            // Only load if within bounds, otherwise leave as zero (padding)
-            if (input_y >= 0 && input_y < in_h && input_x >= 0 && input_x < in_w) {
-                for (int ic = 0; ic < in_channels; ic += blockDim.x) {
-                    int channel_idx = ic + threadIdx.x;
-                    if (channel_idx < in_channels) {
-                        int input_idx = batch_idx * (in_channels * in_h * in_w) + 
-                                       channel_idx * (in_h * in_w) + 
-                                       input_y * in_w + input_x;
-                        int patch_idx = (ky * kernel_w + kx) * in_channels + channel_idx;
-                        patch[patch_idx] = input_array[input_idx];
-                    }
-                }
-            }
-            // If out of bounds, patch[patch_idx] remains 0.0f (zero padding)
-        }
-    }
-    
-    // RELEVANCE_LOAD: Load relevance weights for current output position
-    float relevance_wts[32]; // Assuming max 32 out_channels per thread
+    // RELEVANCE_LOAD: Load relevance weights for current output position  
+    float relevance_wts[1024]; // Still need full relevance array
     for (int oc = 0; oc < out_channels; oc++) {
         int relevance_idx = batch_idx * (out_channels * out_h * out_w) + 
                            oc * (out_h * out_w) + 
@@ -204,38 +180,71 @@ __global__ void weighted_conv_kernel(
         relevance_wts[oc] = relevance_y[relevance_idx];
     }
     
-    // WEIGHTED_CONV_UNIT: Call the weighted convolution unit computation
-    calculate_wt_conv_unit_cuda(
-        patch, relevance_wts, w, b,
-        kernel_h, kernel_w, in_channels, out_channels,
-        act_type, act_range_l, act_range_u, act_func_int,
-        output_patch
-    );
-    
-    // BOUNDARY_SAFE_WRITEBACK: Write results back with boundary checking
-    for (int ky = 0; ky < kernel_h; ky++) {
-        for (int kx = 0; kx < kernel_w; kx++) {
-            // Calculate actual output coordinates
-            int output_y = in_y_start + ky;
-            int output_x = in_x_start + kx;
-            
-            // Only write back if within bounds
-            if (output_y >= 0 && output_y < in_h && output_x >= 0 && output_x < in_w) {
-                for (int ic = 0; ic < in_channels; ic += blockDim.x) {
-                    int channel_idx = ic + threadIdx.x;
-                    if (channel_idx < in_channels) {
-                        int output_idx = batch_idx * (in_channels * in_h * in_w) + 
-                                        channel_idx * (in_h * in_w) + 
-                                        output_y * in_w + output_x;
-                        int patch_idx = (ky * kernel_w + kx) * in_channels + channel_idx;
-                        
-                        atomicAdd(&relevance_x[output_idx], output_patch[patch_idx]);
+    // CHANNEL_CHUNKING: Process channels in chunks to optimize memory usage
+    for (int channel_start = 0; channel_start < in_channels; channel_start += MAX_LOCAL_CHANNELS) {
+        int channel_end = min(channel_start + MAX_LOCAL_CHANNELS, in_channels);
+        int current_chunk_size = channel_end - channel_start;
+        
+        // Initialize current chunk
+        for (int i = 0; i < kernel_h * kernel_w * current_chunk_size; i++) {
+            patch_chunk[i] = 0.0f;
+            output_chunk[i] = 0.0f;
+        }
+        
+        // BOUNDARY_SAFE_LOAD: Load current channel chunk
+        for (int ky = 0; ky < kernel_h; ky++) {
+            for (int kx = 0; kx < kernel_w; kx++) {
+                int input_y = in_y_start + ky;
+                int input_x = in_x_start + kx;
+                
+                if (input_y >= 0 && input_y < in_h && input_x >= 0 && input_x < in_w) {
+                    for (int ic = 0; ic < current_chunk_size; ic += blockDim.x) {
+                        int local_channel_idx = ic + threadIdx.x;
+                        if (local_channel_idx < current_chunk_size) {
+                            int global_channel_idx = channel_start + local_channel_idx;
+                            int input_idx = batch_idx * (in_channels * in_h * in_w) + 
+                                           global_channel_idx * (in_h * in_w) + 
+                                           input_y * in_w + input_x;
+                            int patch_idx = (ky * kernel_w + kx) * current_chunk_size + local_channel_idx;
+                            patch_chunk[patch_idx] = input_array[input_idx];
+                        }
                     }
                 }
             }
-            // If out of bounds, skip writeback (don't write to invalid memory)
         }
-    }
+        
+        // CHUNKED_CONV_UNIT: Process current channel chunk
+        calculate_wt_conv_unit_cuda_chunked(
+            patch_chunk, relevance_wts, w, b,
+            kernel_h, kernel_w, current_chunk_size, out_channels, in_channels,
+            channel_start, // offset for weight indexing
+            act_type, act_range_l, act_range_u, act_func_int,
+            output_chunk
+        );
+        
+        // CHUNKED_WRITEBACK: Write chunk results back to global memory
+        for (int ky = 0; ky < kernel_h; ky++) {
+            for (int kx = 0; kx < kernel_w; kx++) {
+                int output_y = in_y_start + ky;
+                int output_x = in_x_start + kx;
+                
+                if (output_y >= 0 && output_y < in_h && output_x >= 0 && output_x < in_w) {
+                    for (int ic = 0; ic < current_chunk_size; ic += blockDim.x) {
+                        int local_channel_idx = ic + threadIdx.x;
+                        if (local_channel_idx < current_chunk_size) {
+                            int global_channel_idx = channel_start + local_channel_idx;
+                            int output_idx = batch_idx * (in_channels * in_h * in_w) + 
+                                            global_channel_idx * (in_h * in_w) + 
+                                            output_y * in_w + output_x;
+                            int chunk_idx = (ky * kernel_w + kx) * current_chunk_size + local_channel_idx;
+                            
+                            atomicAdd(&relevance_x[output_idx], output_chunk[chunk_idx]);
+                        }
+                    }
+                }
+            }
+        }
+    } // End channel chunking loop
 }
 
 // HOST_LAUNCHER: PyTorch integration function
@@ -298,8 +307,8 @@ torch::Tensor weighted_conv_cuda(
     TORCH_CHECK(out_w > 0, "output width must be positive, got ", out_w);
     TORCH_CHECK(kernel_h > 0 && kernel_h <= MAX_KERNEL_SIZE, "kernel_h must be positive and <= ", MAX_KERNEL_SIZE, ", got ", kernel_h);
     TORCH_CHECK(kernel_w > 0 && kernel_w <= MAX_KERNEL_SIZE, "kernel_w must be positive and <= ", MAX_KERNEL_SIZE, ", got ", kernel_w);
-    TORCH_CHECK(in_channels <= 32, "in_channels must be <= 32 for current implementation, got ", in_channels);
-    TORCH_CHECK(out_channels <= 32, "out_channels must be <= 32 for current implementation, got ", out_channels);
+    TORCH_CHECK(in_channels <= 1024, "in_channels must be <= 1024 for current implementation, got ", in_channels);
+    TORCH_CHECK(out_channels <= 1024, "out_channels must be <= 1024 for current implementation, got ", out_channels);
     
     // COMPATIBILITY_VALIDATION: Check tensor dimension compatibility
     TORCH_CHECK(input_array.size(0) == relevance_y.size(0), "Batch size mismatch");
@@ -422,7 +431,14 @@ def get_cuda_arch_flags():
     arch_flag = f"--generate-code=arch=compute_{major}{minor},code=sm_{major}{minor}"
     return [arch_flag]
 
-extra_flags = ['-O3', '--use_fast_math', '-Xcompiler', '-fPIC']
+extra_flags = [
+    '-O3', 
+    '--use_fast_math', 
+    '-Xcompiler', '-fPIC',
+    '-Xptxas', '-dlcm=cg',
+    '-Xptxas', '-dscm=wt',
+]
+
 extra_flags.extend(get_cuda_arch_flags())
 
 custom_conv2d_cuda_ops = load_inline(
@@ -569,7 +585,101 @@ def calculate_wt_conv_cuda(relevance_y, input_array, w, b, padding, strides, act
             act_type, act_lower, act_upper, act_func_int
         )
         # Convert back to numpy for consistency with PyTorch version
-        return result.cpu().numpy()
+        return result
     except Exception as e:
         raise RuntimeError(f"CUDA kernel execution failed: {str(e)}")
 
+
+#SCRAPPED WT_CONV_UNIT_CUDA
+
+# // DEVICE_FUNCTION: Calculate weighted convolution unit
+# __device__ void calculate_wt_conv_unit_cuda(
+#     const float* patch,           // Input patch [kernel_h * kernel_w * in_channels]
+#     const float* relevance_wts,   // Relevance weights [out_channels] 
+#     const float* w,               // Kernel weights [kernel_h * kernel_w * in_channels * out_channels]
+#     const float* b,               // Bias [out_channels]
+#     int kernel_h, int kernel_w, int in_channels, int out_channels,
+#     int act_type, float act_range_l, float act_range_u, int act_func_int,
+#     float* output_patch           // Output [kernel_h * kernel_w * in_channels]
+# ) {
+#     // VECTORIZED_COMPUTATION: Process multiple output channels per thread
+#     for (int oc = threadIdx.x; oc < out_channels; oc += blockDim.x) {
+#         float p_sum = 0.0f, n_sum = 0.0f;
+        
+#         // MEMORY_COALESCING: Sequential access pattern for convolution computation  
+#         for (int i = 0; i < kernel_h; i++) {
+#             for (int j = 0; j < kernel_w; j++) {
+#                 for (int ic = 0; ic < in_channels; ic++) {
+#                     int patch_idx = (i * kernel_w + j) * in_channels + ic;
+#                     int weight_idx = ((i * kernel_w + j) * in_channels + ic) * out_channels + oc;
+                    
+#                     float conv_val = w[weight_idx] * patch[patch_idx];
+#                     p_sum += fmaxf(conv_val, 0.0f);
+#                     n_sum += fmaxf(-conv_val, 0.0f);
+#                 }
+#             }
+#         }
+        
+#         float t_sum = p_sum + n_sum;
+#         float bias_pos = (b != nullptr) ? fmaxf(b[oc], 0.0f) : 0.0f;
+#         float bias_neg = (b != nullptr) ? fmaxf(-b[oc], 0.0f) : 0.0f;
+#         float denom_bias_term = bias_pos + bias_neg;
+        
+#         // ACTIVATION_HANDLING: Process activation function constraints
+#         float p_saturate = (p_sum > 0.0f) ? 1.0f : 0.0f;
+#         float n_saturate = (n_sum > 0.0f) ? 1.0f : 0.0f;
+        
+#         if (act_type == 0) { // mono
+#             if (!isinf(act_range_l)) {
+#                 p_saturate = (t_sum > act_range_l) ? 1.0f : 0.0f;
+#             }
+#             if (!isinf(act_range_u)) {
+#                 n_saturate = (t_sum < act_range_u) ? 1.0f : 0.0f;
+#             }
+#         }
+#         else if (act_type == 1) { // non-mono
+#             float t_act = apply_activation(t_sum, act_func_int);
+#             float p_act = apply_activation(p_sum + bias_pos, act_func_int);
+#             float n_act = apply_activation(-(n_sum + bias_neg), act_func_int);
+            
+#             // Apply range constraints if specified (like PyTorch)
+#             if (!isinf(act_range_l)) {
+#                 float temp_ind = (t_sum > act_range_l) ? 1.0f : 0.0f;
+#                 p_saturate = p_saturate * temp_ind;
+#             }
+#             if (!isinf(act_range_u)) {
+#                 float temp_ind = (t_sum < act_range_u) ? 1.0f : 0.0f;
+#                 n_saturate = n_saturate * temp_ind;
+#             }
+            
+#             // Apply activation function difference thresholding (corrected order)
+#             n_saturate = n_saturate * (fabsf(t_act - p_act) > 1e-5f);
+#             p_saturate = p_saturate * (fabsf(t_act - n_act) > 1e-5f);
+#         }
+        
+#         // NUMERICAL_STABILIZATION: Prevent division by zero
+#         float denom = p_sum + n_sum + denom_bias_term;
+#         denom = (denom == 0.0f) ? 1e-12f : denom;
+        
+#         float inv_denom = 1.0f / denom;
+#         float relevance_wt = relevance_wts[oc];
+#         float p_agg_wt = inv_denom * relevance_wt * p_saturate;
+#         float n_agg_wt = inv_denom * relevance_wt * n_saturate;
+        
+#         // WEIGHT_ACCUMULATION: Apply weighted updates to output patch
+#         for (int i = 0; i < kernel_h; i++) {
+#             for (int j = 0; j < kernel_w; j++) {
+#                 for (int ic = 0; ic < in_channels; ic++) {
+#                     int patch_idx = (i * kernel_w + j) * in_channels + ic;
+#                     int weight_idx = ((i * kernel_w + j) * in_channels + ic) * out_channels + oc;
+                    
+#                     float conv_val = w[weight_idx] * patch[patch_idx];
+#                     float p_part = fmaxf(conv_val, 0.0f);
+#                     float n_part = fmaxf(-conv_val, 0.0f);
+                    
+#                     atomicAdd(&output_patch[patch_idx], p_part * p_agg_wt - n_part * n_agg_wt);
+#                 }
+#             }
+#         }
+#     }
+# }
