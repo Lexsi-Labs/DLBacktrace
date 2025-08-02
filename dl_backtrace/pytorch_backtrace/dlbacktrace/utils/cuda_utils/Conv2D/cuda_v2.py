@@ -142,6 +142,13 @@ __global__ void weighted_conv_kernel(
     int out_y = blockIdx.y * blockDim.y + threadIdx.y;
     int out_x = blockIdx.x * blockDim.x + threadIdx.x;
     
+    // DEBUG: Print from first thread only to avoid spam
+    if (threadIdx.x == 0 && threadIdx.y == 0 && blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0) {
+        printf("[KERNEL] Entered weighted_conv_kernel: batch=%d, out_ch=%d, in_ch=%d\\n", batch_size, out_channels, in_channels);
+        printf("[KERNEL] Grid: (%d,%d,%d), Block: (%d,%d), Thread: (%d,%d)\\n", 
+               gridDim.x, gridDim.y, gridDim.z, blockDim.x, blockDim.y, threadIdx.x, threadIdx.y);
+    }
+    
     if (batch_idx >= batch_size || out_y >= out_h || out_x >= out_w) return;
     
     // MEMORY_TILE: Calculate input region bounds with padding
@@ -164,19 +171,24 @@ __global__ void weighted_conv_kernel(
     if (actual_patch_h <= 0 || actual_patch_w <= 0) return;
     
     // OPTIMIZED_CHANNEL_HANDLING: Use chunking for large channel counts
-    const int MAX_LOCAL_CHANNELS = 64;  // Reduced for memory safety
+    const int MAX_LOCAL_CHANNELS = 4;  // Minimal to prevent stack overflow
     
-    // Use reasonably sized local memory (always <= 64 channels per chunk)
-    float patch_chunk[MAX_KERNEL_SIZE * MAX_KERNEL_SIZE * 64];
-    float output_chunk[MAX_KERNEL_SIZE * MAX_KERNEL_SIZE * 64];
+    // Use minimal local memory to avoid stack overflow (4 channels max)
+    float patch_chunk[MAX_KERNEL_SIZE * MAX_KERNEL_SIZE * 4];
+    float output_chunk[MAX_KERNEL_SIZE * MAX_KERNEL_SIZE * 4];
     
     // RELEVANCE_LOAD: Load relevance weights for current output position
-    float relevance_wts[256]; // Reduced for memory safety
-    for (int oc = 0; oc < out_channels; oc++) {
+    float relevance_wts[128]; // Support up to 128 output channels
+    for (int oc = 0; oc < out_channels && oc < 128; oc++) {
         int relevance_idx = batch_idx * (out_channels * out_h * out_w) + 
                            oc * (out_h * out_w) + 
                            out_y * out_w + out_x;
         relevance_wts[oc] = relevance_y[relevance_idx];
+    }
+    
+    // DEBUG: Print channel chunking info from first thread
+    if (threadIdx.x == 0 && threadIdx.y == 0 && blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0) {
+        printf("[KERNEL] Starting channel chunking: in_channels=%d, MAX_LOCAL_CHANNELS=%d\\n", in_channels, MAX_LOCAL_CHANNELS);
     }
     
     // CHANNEL_CHUNKING: Process channels in chunks to optimize memory usage
@@ -184,6 +196,11 @@ __global__ void weighted_conv_kernel(
         int channel_end = min(channel_start + MAX_LOCAL_CHANNELS, in_channels);
         int current_chunk_size = channel_end - channel_start;
         int patch_chunk_size = kernel_h * kernel_w * current_chunk_size;
+        
+        // DEBUG: Print chunk processing info from first thread
+        if (threadIdx.x == 0 && threadIdx.y == 0 && blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0) {
+            printf("[KERNEL] Processing chunk %d-%d (size=%d)\\n", channel_start, channel_end-1, current_chunk_size);
+        }
         
         // Initialize current chunk
         for (int i = 0; i < patch_chunk_size; i++) {
@@ -213,6 +230,11 @@ __global__ void weighted_conv_kernel(
             }
         }
         
+        // DEBUG: Print before device function call
+        if (threadIdx.x == 0 && threadIdx.y == 0 && blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0) {
+            printf("[KERNEL] About to call calculate_wt_conv_unit_cuda_chunked\\n");
+        }
+        
         // CHUNKED_CONV_UNIT: Process current channel chunk
         calculate_wt_conv_unit_cuda_chunked(
             patch_chunk, relevance_wts, w, b,
@@ -221,6 +243,11 @@ __global__ void weighted_conv_kernel(
             act_type, act_range_l, act_range_u, act_func_int,
             output_chunk
         );
+        
+        // DEBUG: Print after device function call
+        if (threadIdx.x == 0 && threadIdx.y == 0 && blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0) {
+            printf("[KERNEL] Finished calculate_wt_conv_unit_cuda_chunked\\n");
+        }
         
         // CHUNKED_WRITEBACK: Write chunk results back to global memory
         for (int ky = 0; ky < kernel_h; ky++) {
@@ -261,6 +288,15 @@ torch::Tensor weighted_conv_cuda(
     float act_range_u,
     int act_func_int
 ) {
+    std::cout << "=== CUDA Conv2D Kernel Launch Debug ===" << std::endl;
+    std::cout << "Input dimensions: batch=" << relevance_y.size(0) << ", in_ch=" << input_array.size(1) << ", in_h=" << input_array.size(2) << ", in_w=" << input_array.size(3) << std::endl;
+    std::cout << "Output dimensions: out_ch=" << relevance_y.size(1) << ", out_h=" << relevance_y.size(2) << ", out_w=" << relevance_y.size(3) << std::endl;
+    std::cout << "Kernel: kernel_h=" << w.size(2) << ", kernel_w=" << w.size(3) << ", stride_h=" << strides[0] << ", stride_w=" << strides[1] << std::endl;
+    std::cout << "Padding: pad_h=" << custom_padding[0] << ", pad_w=" << custom_padding[1] << std::endl;
+    std::cout << "Activation: type=" << act_type << ", range_l=" << act_range_l << ", range_u=" << act_range_u << ", func=" << act_func_int << std::endl;
+    
+    std::cout << "Launching weighted_conv_kernel..." << std::endl;
+    
     // TENSOR_VALIDATION: Ensure tensors are on CUDA and contiguous
     TORCH_CHECK(relevance_y.is_cuda(), "relevance_y must be on CUDA");
     TORCH_CHECK(input_array.is_cuda(), "input_array must be on CUDA");
@@ -308,7 +344,7 @@ torch::Tensor weighted_conv_cuda(
     TORCH_CHECK(kernel_h > 0 && kernel_h <= MAX_KERNEL_SIZE, "kernel_h must be positive and <= ", MAX_KERNEL_SIZE, ", got ", kernel_h);
     TORCH_CHECK(kernel_w > 0 && kernel_w <= MAX_KERNEL_SIZE, "kernel_w must be positive and <= ", MAX_KERNEL_SIZE, ", got ", kernel_w);
     TORCH_CHECK(in_channels <= 1024, "in_channels must be <= 1024 for current implementation, got ", in_channels);
-    TORCH_CHECK(out_channels <= 256, "out_channels must be <= 256 for current implementation, got ", out_channels);
+    TORCH_CHECK(out_channels <= 128, "out_channels must be <= 128 for current implementation, got ", out_channels);
     
     // COMPATIBILITY_VALIDATION: Check tensor dimension compatibility
     TORCH_CHECK(input_array.size(0) == relevance_y.size(0), "Batch size mismatch");
@@ -379,7 +415,15 @@ torch::Tensor weighted_conv_cuda(
     );
     
     // DEBUG_INFO: Print kernel launch parameters
-    // std::cout << "Launching kernel: grid=(" << grid_size.x << "," << grid_size.y << "," << grid_size.z << "), block=(" << block_size.x << "," << block_size.y << ")" << std::endl;
+    std::cout << "=== CUDA Conv2D Kernel Launch Debug ===" << std::endl;
+    std::cout << "Input dimensions: batch=" << batch_size << ", in_ch=" << in_channels << ", in_h=" << in_h << ", in_w=" << in_w << std::endl;
+    std::cout << "Output dimensions: out_ch=" << out_channels << ", out_h=" << out_h << ", out_w=" << out_w << std::endl;
+    std::cout << "Kernel: kernel_h=" << kernel_h << ", kernel_w=" << kernel_w << ", stride_h=" << stride_h << ", stride_w=" << stride_w << std::endl;
+    std::cout << "Padding: pad_h=" << pad_h << ", pad_w=" << pad_w << std::endl;
+    std::cout << "Activation: type=" << act_type << ", range_l=" << act_range_l << ", range_u=" << act_range_u << ", func=" << act_func_int << std::endl;
+    std::cout << "Grid size: (" << grid_size.x << "," << grid_size.y << "," << grid_size.z << ")" << std::endl;
+    std::cout << "Block size: (" << block_size.x << "," << block_size.y << ")" << std::endl;
+    std::cout << "Launching weighted_conv_kernel..." << std::endl;
     
     // KERNEL_LAUNCH: Launch the weighted convolution kernel
     weighted_conv_kernel<<<grid_size, block_size>>>(
@@ -395,12 +439,24 @@ torch::Tensor weighted_conv_cuda(
         act_type, act_range_l, act_range_u, act_func_int
     );
     
+    std::cout << "Kernel launched, checking for errors..." << std::endl;
+    
     // ERROR_CHECK: Check for kernel launch errors
     cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        std::cout << "CUDA kernel launch error: " << cudaGetErrorString(err) << std::endl;
+    } else {
+        std::cout << "Kernel launch successful, synchronizing..." << std::endl;
+    }
     TORCH_CHECK(err == cudaSuccess, "CUDA kernel launch failed: ", cudaGetErrorString(err));
     
     // SYNCHRONIZE: Wait for kernel completion and check for runtime errors
     err = cudaDeviceSynchronize();
+    if (err != cudaSuccess) {
+        std::cout << "CUDA kernel execution error: " << cudaGetErrorString(err) << std::endl;
+    } else {
+        std::cout << "Kernel execution completed successfully!" << std::endl;
+    }
     TORCH_CHECK(err == cudaSuccess, "CUDA kernel execution failed: ", cudaGetErrorString(err));
     
     return relevance_x;
