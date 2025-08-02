@@ -83,7 +83,7 @@ def launch_conv2d(version, wts, inp, w, b, padding, strides, act):
         return calculate_wt_conv_pytorch(wts, inp, w, b, padding, strides, act)
     
     elif version == 'cuda':
-        return calculate_wt_conv_cuda(wts, inp, w, b, padding, strides, act).cpu().numpy()
+        return calculate_wt_conv_cuda(wts, inp, w, b, padding, strides, act)
 
     else:
         raise ValueError(f"Unknown version for Conv2D layer: {version}")

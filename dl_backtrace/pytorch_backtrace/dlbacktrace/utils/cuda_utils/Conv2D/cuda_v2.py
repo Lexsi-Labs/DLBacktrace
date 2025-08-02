@@ -6,6 +6,7 @@ conv2d_cuda_source = r"""
 #include <torch/extension.h>
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
+#include <cstdio>
 
 #define MAX_KERNEL_SIZE 7
 
@@ -163,14 +164,14 @@ __global__ void weighted_conv_kernel(
     if (actual_patch_h <= 0 || actual_patch_w <= 0) return;
     
     // OPTIMIZED_CHANNEL_HANDLING: Use chunking for large channel counts
-    const int MAX_LOCAL_CHANNELS = 256;
+    const int MAX_LOCAL_CHANNELS = 64;  // Reduced for memory safety
     
-    // Use reasonably sized local memory (always <= 256 channels per chunk)
-    float patch_chunk[MAX_KERNEL_SIZE * MAX_KERNEL_SIZE * 256];
-    float output_chunk[MAX_KERNEL_SIZE * MAX_KERNEL_SIZE * 256];
+    // Use reasonably sized local memory (always <= 64 channels per chunk)
+    float patch_chunk[MAX_KERNEL_SIZE * MAX_KERNEL_SIZE * 64];
+    float output_chunk[MAX_KERNEL_SIZE * MAX_KERNEL_SIZE * 64];
     
     // RELEVANCE_LOAD: Load relevance weights for current output position
-    float relevance_wts[1024]; // Still need full relevance array
+    float relevance_wts[256]; // Reduced for memory safety
     for (int oc = 0; oc < out_channels; oc++) {
         int relevance_idx = batch_idx * (out_channels * out_h * out_w) + 
                            oc * (out_h * out_w) + 
@@ -307,7 +308,7 @@ torch::Tensor weighted_conv_cuda(
     TORCH_CHECK(kernel_h > 0 && kernel_h <= MAX_KERNEL_SIZE, "kernel_h must be positive and <= ", MAX_KERNEL_SIZE, ", got ", kernel_h);
     TORCH_CHECK(kernel_w > 0 && kernel_w <= MAX_KERNEL_SIZE, "kernel_w must be positive and <= ", MAX_KERNEL_SIZE, ", got ", kernel_w);
     TORCH_CHECK(in_channels <= 1024, "in_channels must be <= 1024 for current implementation, got ", in_channels);
-    TORCH_CHECK(out_channels <= 1024, "out_channels must be <= 1024 for current implementation, got ", out_channels);
+    TORCH_CHECK(out_channels <= 256, "out_channels must be <= 256 for current implementation, got ", out_channels);
     
     // COMPATIBILITY_VALIDATION: Check tensor dimension compatibility
     TORCH_CHECK(input_array.size(0) == relevance_y.size(0), "Batch size mismatch");
@@ -377,6 +378,9 @@ torch::Tensor weighted_conv_cuda(
         batch_size
     );
     
+    // DEBUG_INFO: Print kernel launch parameters
+    // std::cout << "Launching kernel: grid=(" << grid_size.x << "," << grid_size.y << "," << grid_size.z << "), block=(" << block_size.x << "," << block_size.y << ")" << std::endl;
+    
     // KERNEL_LAUNCH: Launch the weighted convolution kernel
     weighted_conv_kernel<<<grid_size, block_size>>>(
         relevance_y.data_ptr<float>(),
@@ -393,9 +397,11 @@ torch::Tensor weighted_conv_cuda(
     
     // ERROR_CHECK: Check for kernel launch errors
     cudaError_t err = cudaGetLastError();
-    TORCH_CHECK(err == cudaSuccess, "CUDA kernel failed: ", cudaGetErrorString(err));
+    TORCH_CHECK(err == cudaSuccess, "CUDA kernel launch failed: ", cudaGetErrorString(err));
     
-    cudaDeviceSynchronize();
+    // SYNCHRONIZE: Wait for kernel completion and check for runtime errors
+    err = cudaDeviceSynchronize();
+    TORCH_CHECK(err == cudaSuccess, "CUDA kernel execution failed: ", cudaGetErrorString(err));
     
     return relevance_x;
 }
