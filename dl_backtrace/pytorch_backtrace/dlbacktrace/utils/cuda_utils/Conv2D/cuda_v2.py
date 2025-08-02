@@ -61,9 +61,20 @@ __device__ void calculate_wt_conv_unit_cuda_single_channel(
     }
     
     float t_sum = p_sum + n_sum;
-    float bias_pos = fmaxf(bias_val, 0.0f);
-    float bias_neg = fmaxf(-bias_val, 0.0f);
-    float denom_bias_term = bias_pos + bias_neg;
+    float denom_bias_term = 0.0f;
+    float bias_pos = 0.0f;
+    float bias_neg = 0.0f;
+    
+    if (bias_val != 0.0f) {
+        bias_pos = fmaxf(bias_val, 0.0f);
+        bias_neg = fmaxf(-bias_val, 0.0f);
+        denom_bias_term = bias_pos + bias_neg;
+    }
+    else {
+        bias_pos = 0.0f;
+        bias_neg = 0.0f;
+        denom_bias_term = 0.0f;
+    }
     
     // Activation handling
     float p_saturate = (p_sum > 0.0f) ? 1.0f : 0.0f;
