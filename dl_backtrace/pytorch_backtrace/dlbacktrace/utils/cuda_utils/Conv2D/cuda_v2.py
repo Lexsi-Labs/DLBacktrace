@@ -42,8 +42,8 @@ __device__ void calculate_wt_conv_unit_cuda_chunked(
     int act_type, float act_range_l, float act_range_u, int act_func_int,
     float* output_chunk           // Output chunk [kernel_h * kernel_w * chunk_size]
 ) {
-    // Process multiple output channels per thread
-    for (int oc = threadIdx.x; oc < out_channels; oc += blockDim.x) {
+    // Process all output channels sequentially (each thread handles all channels)
+    for (int oc = 0; oc < out_channels; oc++) {
         float p_sum = 0.0f, n_sum = 0.0f;
         
         // Compute convolution for current chunk and output channel
@@ -117,7 +117,7 @@ __device__ void calculate_wt_conv_unit_cuda_chunked(
                     float p_part = fmaxf(conv_val, 0.0f);
                     float n_part = fmaxf(-conv_val, 0.0f);
                     
-                    atomicAdd(&output_chunk[chunk_patch_idx], p_part * p_agg_wt - n_part * n_agg_wt);
+                    output_chunk[chunk_patch_idx] += p_part * p_agg_wt - n_part * n_agg_wt;
                 }
             }
         }
