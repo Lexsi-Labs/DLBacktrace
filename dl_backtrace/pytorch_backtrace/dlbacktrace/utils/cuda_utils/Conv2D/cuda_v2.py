@@ -9,6 +9,7 @@ conv2d_cuda_source = r"""
 #include <cstdio>
 
 #define MAX_KERNEL_SIZE 7
+#define MAX_LOCAL_MEMORY (MAX_KERNEL_SIZE * MAX_KERNEL_SIZE * 1024)
 
 __device__ __forceinline__ float apply_activation(float x, int act_func) {
     switch (act_func) {
@@ -31,112 +32,13 @@ __device__ __forceinline__ float apply_activation(float x, int act_func) {
     }
 }
 
-// SIMPLIFIED_DEVICE_FUNCTION: Process one output channel at a time to avoid race conditions
-__device__ void calculate_wt_conv_unit_cuda_single_channel(
-    const float* patch_chunk,     // Input patch chunk [kernel_h * kernel_w * chunk_size]
-    float relevance_wt,           // Relevance weight for this output channel
-    const float* w,               // Full kernel weights [kernel_h * kernel_w * in_channels * out_channels]
-    float bias_val,               // Bias for this output channel
-    int kernel_h, int kernel_w, int chunk_size, int in_channels, int out_channels,
-    int channel_offset,           // Starting channel index for this chunk
-    int oc,                       // Current output channel index
-    int act_type, float act_range_l, float act_range_u, int act_func_int,
-    float* output_chunk           // Output chunk [kernel_h * kernel_w * chunk_size]
-) {
-    float p_sum = 0.0f, n_sum = 0.0f;
-    
-    // Compute convolution for current chunk and this output channel
-    for (int i = 0; i < kernel_h; i++) {
-        for (int j = 0; j < kernel_w; j++) {
-            for (int ic = 0; ic < chunk_size; ic++) {
-                int chunk_patch_idx = (i * kernel_w + j) * chunk_size + ic;
-                int global_ic = channel_offset + ic;
-                int weight_idx = ((i * kernel_w + j) * in_channels + global_ic) * out_channels + oc;
-                
-                float conv_val = w[weight_idx] * patch_chunk[chunk_patch_idx];
-                p_sum += fmaxf(conv_val, 0.0f);
-                n_sum += fmaxf(-conv_val, 0.0f);
-            }
-        }
-    }
-    
-    float t_sum = p_sum + n_sum;
-    float denom_bias_term = 0.0f;
-    float bias_pos = 0.0f;
-    float bias_neg = 0.0f;
-    
-    if (bias_val != 0.0f) {
-        bias_pos = fmaxf(bias_val, 0.0f);
-        bias_neg = fmaxf(-bias_val, 0.0f);
-        denom_bias_term = bias_pos + bias_neg;
-    }
-    else {
-        bias_pos = 0.0f;
-        bias_neg = 0.0f;
-        denom_bias_term = 0.0f;
-    }
-    
-    // Activation handling
-    float p_saturate = (p_sum > 0.0f) ? 1.0f : 0.0f;
-    float n_saturate = (n_sum > 0.0f) ? 1.0f : 0.0f;
-    
-    if (act_type == 0) { // mono
-        if (!isinf(act_range_l)) {
-            p_saturate = (t_sum > act_range_l) ? 1.0f : 0.0f;
-        }
-        if (!isinf(act_range_u)) {
-            n_saturate = (t_sum < act_range_u) ? 1.0f : 0.0f;
-        }
-    }
-    else if (act_type == 1) { // non-mono
-        float t_act = apply_activation(t_sum, act_func_int);
-        float p_act = apply_activation(p_sum + bias_pos, act_func_int);
-        float n_act = apply_activation(-(n_sum + bias_neg), act_func_int);
-        
-        if (!isinf(act_range_l)) {
-            float temp_ind = (t_sum > act_range_l) ? 1.0f : 0.0f;
-            p_saturate = p_saturate * temp_ind;
-        }
-        if (!isinf(act_range_u)) {
-            float temp_ind = (t_sum < act_range_u) ? 1.0f : 0.0f;
-            n_saturate = n_saturate * temp_ind;
-        }
-        
-        n_saturate = n_saturate * (fabsf(t_act - p_act) > 1e-5f);
-        p_saturate = p_saturate * (fabsf(t_act - n_act) > 1e-5f);
-    }
-    
-    // Numerical stabilization
-    float denom = p_sum + n_sum + denom_bias_term;
-    denom = (denom == 0.0f) ? 1e-12f : denom;
-    
-    float inv_denom = 1.0f / denom;
-    float p_agg_wt = inv_denom * relevance_wt * p_saturate;
-    float n_agg_wt = inv_denom * relevance_wt * n_saturate;
-    
-    // Apply weighted updates to output chunk (no race condition now)
-    for (int i = 0; i < kernel_h; i++) {
-        for (int j = 0; j < kernel_w; j++) {
-            for (int ic = 0; ic < chunk_size; ic++) {
-                int chunk_patch_idx = (i * kernel_w + j) * chunk_size + ic;
-                int global_ic = channel_offset + ic;
-                int weight_idx = ((i * kernel_w + j) * in_channels + global_ic) * out_channels + oc;
-                
-                float conv_val = w[weight_idx] * patch_chunk[chunk_patch_idx];
-                float p_part = fmaxf(conv_val, 0.0f);
-                float n_part = fmaxf(-conv_val, 0.0f);
-                
-                output_chunk[chunk_patch_idx] += p_part * p_agg_wt - n_part * n_agg_wt;
-            }
-        }
-    }
-}
 
-// MAIN_KERNEL: Fused weighted convolution kernel with channel chunking optimization
+
+// SEQUENTIAL_KERNEL: Process one output location per thread to avoid race conditions
 __global__ void weighted_conv_kernel(
     const float* relevance_y,     // [batch_size, out_channels, out_h, out_w]
     const float* input_array,     // [batch_size, in_channels, in_h, in_w]
-    const float* w,               // [out_channels, in_channels, kernel_h, kernel_w] -> transposed to [kernel_h, kernel_w, in_channels, out_channels]
+    const float* w,               // [kernel_h, kernel_w, in_channels, out_channels] (already transposed)
     const float* b,               // [out_channels]
     float* relevance_x,           // [batch_size, in_channels, in_h, in_w]
     int batch_size, int in_channels, int out_channels,
@@ -155,30 +57,8 @@ __global__ void weighted_conv_kernel(
     // MEMORY_TILE: Calculate input region bounds with padding
     int in_y_start = out_y * stride_h - pad_h;
     int in_x_start = out_x * stride_w - pad_w;
-    int in_y_end = in_y_start + kernel_h;
-    int in_x_end = in_x_start + kernel_w;
     
-    // BOUNDARY_HANDLING: Clamp to valid input bounds and handle partial patches
-    int actual_y_start = max(0, in_y_start);
-    int actual_x_start = max(0, in_x_start);
-    int actual_y_end = min(in_h, in_y_end);
-    int actual_x_end = min(in_w, in_x_end);
-    
-    // Calculate actual patch dimensions (may be smaller than kernel at boundaries)
-    int actual_patch_h = actual_y_end - actual_y_start;
-    int actual_patch_w = actual_x_end - actual_x_start;
-    
-    // Skip if patch is empty
-    if (actual_patch_h <= 0 || actual_patch_w <= 0) return;
-    
-    // OPTIMIZED_CHANNEL_HANDLING: Use chunking for large channel counts
-    const int MAX_LOCAL_CHANNELS = 4;  // Minimal to prevent stack overflow
-    
-    // Use minimal local memory to avoid stack overflow (4 channels max)
-    float patch_chunk[MAX_KERNEL_SIZE * MAX_KERNEL_SIZE * 4];
-    float output_chunk[MAX_KERNEL_SIZE * MAX_KERNEL_SIZE * 4];
-    
-    // RELEVANCE_LOAD: Load relevance weights for current output position
+    // Load relevance weights for this output position
     float relevance_wts[512]; // Support up to 512 output channels
     for (int oc = 0; oc < out_channels && oc < 512; oc++) {
         int relevance_idx = batch_idx * (out_channels * out_h * out_w) + 
@@ -187,78 +67,140 @@ __global__ void weighted_conv_kernel(
         relevance_wts[oc] = relevance_y[relevance_idx];
     }
     
-    // CHANNEL_CHUNKING: Process channels in chunks to optimize memory usage
-    for (int channel_start = 0; channel_start < in_channels; channel_start += MAX_LOCAL_CHANNELS) {
-        int channel_end = min(channel_start + MAX_LOCAL_CHANNELS, in_channels);
-        int current_chunk_size = channel_end - channel_start;
-        int patch_chunk_size = kernel_h * kernel_w * current_chunk_size;
-        
-        // Initialize current chunk
-        for (int i = 0; i < patch_chunk_size; i++) {
-            patch_chunk[i] = 0.0f;
-            output_chunk[i] = 0.0f;
-        }
-        
-        // BOUNDARY_SAFE_LOAD: Load current channel chunk
+    // Validate memory requirements
+    if (kernel_h * kernel_w * in_channels > MAX_LOCAL_MEMORY) {
+        return; // Skip this thread if memory requirements exceed limits
+    }
+    
+    // Load input patch with boundary checking
+    float patch_data[MAX_LOCAL_MEMORY];
+    
     for (int ky = 0; ky < kernel_h; ky++) {
         for (int kx = 0; kx < kernel_w; kx++) {
-                int input_y = in_y_start + ky;
-                int input_x = in_x_start + kx;
+            int input_y = in_y_start + ky;
+            int input_x = in_x_start + kx;
+            
+            for (int ic = 0; ic < in_channels; ic++) {
+                int patch_idx = (ky * kernel_w + kx) * in_channels + ic;
                 
                 if (input_y >= 0 && input_y < in_h && input_x >= 0 && input_x < in_w) {
-                    for (int ic = 0; ic < current_chunk_size; ic += blockDim.x) {
-                        int local_channel_idx = ic + threadIdx.x;
-                        if (local_channel_idx < current_chunk_size) {
-                            int global_channel_idx = channel_start + local_channel_idx;
-                            int input_idx = batch_idx * (in_channels * in_h * in_w) + 
-                                           global_channel_idx * (in_h * in_w) + 
-                                           input_y * in_w + input_x;
-                            int patch_idx = (ky * kernel_w + kx) * current_chunk_size + local_channel_idx;
-                            patch_chunk[patch_idx] = input_array[input_idx];
-                        }
-                    }
+                    int input_idx = batch_idx * (in_channels * in_h * in_w) + 
+                                   ic * (in_h * in_w) + 
+                                   input_y * in_w + input_x;
+                    patch_data[patch_idx] = input_array[input_idx];
+                } else {
+                    patch_data[patch_idx] = 0.0f; // Padding
                 }
             }
         }
+    }
+    
+    // Process each output channel sequentially to match PyTorch behavior
+    float output_updates[MAX_LOCAL_MEMORY];
+    
+    // Initialize output updates
+    for (int i = 0; i < kernel_h * kernel_w * in_channels; i++) {
+        output_updates[i] = 0.0f;
+    }
+    
+    for (int oc = 0; oc < out_channels; oc++) {
+        float relevance_wt = relevance_wts[oc];
+        float bias_val = (b != nullptr) ? b[oc] : 0.0f;
         
-        // CHUNKED_CONV_UNIT: Process current channel chunk for each output channel
-        for (int oc = 0; oc < out_channels; oc++) {
-            float relevance_wt = relevance_wts[oc];
-            float bias_val = (b != nullptr) ? b[oc] : 0.0f;
-            
-            calculate_wt_conv_unit_cuda_single_channel(
-                patch_chunk, relevance_wt, w, bias_val,
-                kernel_h, kernel_w, current_chunk_size, in_channels, out_channels,
-                channel_start, // offset for weight indexing
-                oc, // current output channel
-                act_type, act_range_l, act_range_u, act_func_int,
-                output_chunk
-            );
-        }
+        // Compute convolution sums for this output channel
+        float p_sum = 0.0f, n_sum = 0.0f;
         
-        // CHUNKED_WRITEBACK: Write chunk results back to global memory
         for (int ky = 0; ky < kernel_h; ky++) {
             for (int kx = 0; kx < kernel_w; kx++) {
-                int output_y = in_y_start + ky;
-                int output_x = in_x_start + kx;
-                
-                if (output_y >= 0 && output_y < in_h && output_x >= 0 && output_x < in_w) {
-                    for (int ic = 0; ic < current_chunk_size; ic += blockDim.x) {
-                        int local_channel_idx = ic + threadIdx.x;
-                        if (local_channel_idx < current_chunk_size) {
-                            int global_channel_idx = channel_start + local_channel_idx;
-                            int output_idx = batch_idx * (in_channels * in_h * in_w) + 
-                                            global_channel_idx * (in_h * in_w) + 
-                                            output_y * in_w + output_x;
-                            int chunk_idx = (ky * kernel_w + kx) * current_chunk_size + local_channel_idx;
-                            
-                            atomicAdd(&relevance_x[output_idx], output_chunk[chunk_idx]);
-                        }
-                    }
+                for (int ic = 0; ic < in_channels; ic++) {
+                    int patch_idx = (ky * kernel_w + kx) * in_channels + ic;
+                    int weight_idx = (ky * kernel_w + kx) * in_channels * out_channels + ic * out_channels + oc;
+                    
+                    float conv_val = w[weight_idx] * patch_data[patch_idx];
+                    p_sum += fmaxf(conv_val, 0.0f);
+                    n_sum += fmaxf(-conv_val, 0.0f);
                 }
             }
         }
-    } // End channel chunking loop
+        
+        float t_sum = p_sum + n_sum;
+        float bias_pos = fmaxf(bias_val, 0.0f);
+        float bias_neg = fmaxf(-bias_val, 0.0f);
+        float denom_bias_term = bias_pos + bias_neg;
+        
+        // Activation handling
+        float p_saturate = (p_sum > 0.0f) ? 1.0f : 0.0f;
+        float n_saturate = (n_sum > 0.0f) ? 1.0f : 0.0f;
+        
+        if (act_type == 0) { // mono
+            if (!isinf(act_range_l)) {
+                p_saturate = (t_sum > act_range_l) ? 1.0f : 0.0f;
+            }
+            if (!isinf(act_range_u)) {
+                n_saturate = (t_sum < act_range_u) ? 1.0f : 0.0f;
+            }
+        }
+        else if (act_type == 1) { // non-mono
+            float t_act = apply_activation(t_sum, act_func_int);
+            float p_act = apply_activation(p_sum + bias_pos, act_func_int);
+            float n_act = apply_activation(-(n_sum + bias_neg), act_func_int);
+            
+            if (!isinf(act_range_l)) {
+                float temp_ind = (t_sum > act_range_l) ? 1.0f : 0.0f;
+                p_saturate = p_saturate * temp_ind;
+            }
+            if (!isinf(act_range_u)) {
+                float temp_ind = (t_sum < act_range_u) ? 1.0f : 0.0f;
+                n_saturate = n_saturate * temp_ind;
+            }
+            
+            n_saturate = n_saturate * (fabsf(t_act - p_act) > 1e-5f);
+            p_saturate = p_saturate * (fabsf(t_act - n_act) > 1e-5f);
+        }
+        
+        // Numerical stabilization
+        float denom = p_sum + n_sum + denom_bias_term;
+        denom = (denom == 0.0f) ? 1e-9f : denom; // Use larger epsilon for stability
+        
+        float inv_denom = 1.0f / denom;
+        float p_agg_wt = inv_denom * relevance_wt * p_saturate;
+        float n_agg_wt = inv_denom * relevance_wt * n_saturate;
+        
+        // Accumulate updates for this output channel
+        for (int ky = 0; ky < kernel_h; ky++) {
+            for (int kx = 0; kx < kernel_w; kx++) {
+                for (int ic = 0; ic < in_channels; ic++) {
+                    int patch_idx = (ky * kernel_w + kx) * in_channels + ic;
+                    int weight_idx = (ky * kernel_w + kx) * in_channels * out_channels + ic * out_channels + oc;
+                    
+                    float conv_val = w[weight_idx] * patch_data[patch_idx];
+                    float p_part = fmaxf(conv_val, 0.0f);
+                    float n_part = fmaxf(-conv_val, 0.0f);
+                    
+                    output_updates[patch_idx] += p_part * p_agg_wt - n_part * n_agg_wt;
+                }
+            }
+        }
+    }
+    
+    // Write final results back to global memory (no race conditions)
+    for (int ky = 0; ky < kernel_h; ky++) {
+        for (int kx = 0; kx < kernel_w; kx++) {
+            int output_y = in_y_start + ky;
+            int output_x = in_x_start + kx;
+            
+            if (output_y >= 0 && output_y < in_h && output_x >= 0 && output_x < in_w) {
+                for (int ic = 0; ic < in_channels; ic++) {
+                    int patch_idx = (ky * kernel_w + kx) * in_channels + ic;
+                    int output_idx = batch_idx * (in_channels * in_h * in_w) + 
+                                    ic * (in_h * in_w) + 
+                                    output_y * in_w + output_x;
+                    
+                    atomicAdd(&relevance_x[output_idx], output_updates[patch_idx]);
+                }
+            }
+        }
+    }
 }
 
 // HOST_LAUNCHER: PyTorch integration function
