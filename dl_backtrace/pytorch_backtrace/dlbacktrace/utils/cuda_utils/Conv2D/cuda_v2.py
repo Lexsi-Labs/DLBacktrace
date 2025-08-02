@@ -434,8 +434,8 @@ extra_flags = [
     '-O3', 
     '--use_fast_math', 
     '-Xcompiler', '-fPIC',
-    '-Xptxas', '-dlcm=cg',
-    '-Xptxas', '-dscm=wt',
+    # '-Xptxas', '-dlcm=cg',
+    # '-Xptxas', '-dscm=wt',
 ]
 
 extra_flags.extend(get_cuda_arch_flags())
@@ -584,7 +584,7 @@ def calculate_wt_conv_cuda(relevance_y, input_array, w, b, padding, strides, act
             act_type, act_lower, act_upper, act_func_int
         )
         # Convert back to numpy for consistency with PyTorch version
-        return result
+        return result.cpu().numpy()
     except Exception as e:
         raise RuntimeError(f"CUDA kernel execution failed: {str(e)}")
 

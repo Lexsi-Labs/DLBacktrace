@@ -56,7 +56,7 @@ def launch_linear(version, wts, inp, w, b, act):
     
     if version == 'pytorch':
         wts_t, inp_t, w_t, b_t = _prepare_tensors(device, wts, inp, w, b)
-        return calculate_wt_fc_pytorch_linear(wts_t, inp_t, w_t, b_t, act).cpu().numpy()
+        return calculate_wt_fc_pytorch_linear(wts_t, inp_t, w_t, b_t, act)
     elif version == 'cuda':
         try:
             # Try CUDA implementation with error handling

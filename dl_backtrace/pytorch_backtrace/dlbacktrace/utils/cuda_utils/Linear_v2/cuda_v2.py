@@ -252,8 +252,8 @@ extra_flags = [
     '-O3', 
     '--use_fast_math', 
     '-Xcompiler', '-fPIC',
-    '-Xptxas', '-dlcm=cg',
-    '-Xptxas', '-dscm=wt',
+    # '-Xptxas', '-dlcm=cg',
+    # '-Xptxas', '-dscm=wt',
 ]
 
 extra_flags.extend(get_cuda_arch_flags())
