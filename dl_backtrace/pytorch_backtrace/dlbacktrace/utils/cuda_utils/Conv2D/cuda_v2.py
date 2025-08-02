@@ -178,8 +178,8 @@ __global__ void weighted_conv_kernel(
     float output_chunk[MAX_KERNEL_SIZE * MAX_KERNEL_SIZE * 4];
     
     // RELEVANCE_LOAD: Load relevance weights for current output position
-    float relevance_wts[128]; // Support up to 128 output channels
-    for (int oc = 0; oc < out_channels && oc < 128; oc++) {
+    float relevance_wts[512]; // Support up to 512 output channels
+    for (int oc = 0; oc < out_channels && oc < 512; oc++) {
         int relevance_idx = batch_idx * (out_channels * out_h * out_w) + 
                            oc * (out_h * out_w) + 
                            out_y * out_w + out_x;
@@ -288,14 +288,6 @@ torch::Tensor weighted_conv_cuda(
     float act_range_u,
     int act_func_int
 ) {
-    std::cout << "=== CUDA Conv2D Kernel Launch Debug ===" << std::endl;
-    std::cout << "Input dimensions: batch=" << relevance_y.size(0) << ", in_ch=" << input_array.size(1) << ", in_h=" << input_array.size(2) << ", in_w=" << input_array.size(3) << std::endl;
-    std::cout << "Output dimensions: out_ch=" << relevance_y.size(1) << ", out_h=" << relevance_y.size(2) << ", out_w=" << relevance_y.size(3) << std::endl;
-    std::cout << "Kernel: kernel_h=" << w.size(2) << ", kernel_w=" << w.size(3) << ", stride_h=" << strides[0] << ", stride_w=" << strides[1] << std::endl;
-    std::cout << "Padding: pad_h=" << custom_padding[0] << ", pad_w=" << custom_padding[1] << std::endl;
-    std::cout << "Activation: type=" << act_type << ", range_l=" << act_range_l << ", range_u=" << act_range_u << ", func=" << act_func_int << std::endl;
-    
-    std::cout << "Launching weighted_conv_kernel..." << std::endl;
     
     // TENSOR_VALIDATION: Ensure tensors are on CUDA and contiguous
     TORCH_CHECK(relevance_y.is_cuda(), "relevance_y must be on CUDA");
@@ -344,7 +336,7 @@ torch::Tensor weighted_conv_cuda(
     TORCH_CHECK(kernel_h > 0 && kernel_h <= MAX_KERNEL_SIZE, "kernel_h must be positive and <= ", MAX_KERNEL_SIZE, ", got ", kernel_h);
     TORCH_CHECK(kernel_w > 0 && kernel_w <= MAX_KERNEL_SIZE, "kernel_w must be positive and <= ", MAX_KERNEL_SIZE, ", got ", kernel_w);
     TORCH_CHECK(in_channels <= 1024, "in_channels must be <= 1024 for current implementation, got ", in_channels);
-    TORCH_CHECK(out_channels <= 128, "out_channels must be <= 128 for current implementation, got ", out_channels);
+    TORCH_CHECK(out_channels <= 512, "out_channels must be <= 512 for current implementation, got ", out_channels);
     
     // COMPATIBILITY_VALIDATION: Check tensor dimension compatibility
     TORCH_CHECK(input_array.size(0) == relevance_y.size(0), "Batch size mismatch");
@@ -414,17 +406,6 @@ torch::Tensor weighted_conv_cuda(
         batch_size
     );
     
-    // DEBUG_INFO: Print kernel launch parameters
-    std::cout << "=== CUDA Conv2D Kernel Launch Debug ===" << std::endl;
-    std::cout << "Input dimensions: batch=" << batch_size << ", in_ch=" << in_channels << ", in_h=" << in_h << ", in_w=" << in_w << std::endl;
-    std::cout << "Output dimensions: out_ch=" << out_channels << ", out_h=" << out_h << ", out_w=" << out_w << std::endl;
-    std::cout << "Kernel: kernel_h=" << kernel_h << ", kernel_w=" << kernel_w << ", stride_h=" << stride_h << ", stride_w=" << stride_w << std::endl;
-    std::cout << "Padding: pad_h=" << pad_h << ", pad_w=" << pad_w << std::endl;
-    std::cout << "Activation: type=" << act_type << ", range_l=" << act_range_l << ", range_u=" << act_range_u << ", func=" << act_func_int << std::endl;
-    std::cout << "Grid size: (" << grid_size.x << "," << grid_size.y << "," << grid_size.z << ")" << std::endl;
-    std::cout << "Block size: (" << block_size.x << "," << block_size.y << ")" << std::endl;
-    std::cout << "Launching weighted_conv_kernel..." << std::endl;
-    
     // KERNEL_LAUNCH: Launch the weighted convolution kernel
     weighted_conv_kernel<<<grid_size, block_size>>>(
         relevance_y.data_ptr<float>(),
@@ -438,8 +419,6 @@ torch::Tensor weighted_conv_cuda(
         pad_h, pad_w,
         act_type, act_range_l, act_range_u, act_func_int
     );
-    
-    std::cout << "Kernel launched, checking for errors..." << std::endl;
     
     // ERROR_CHECK: Check for kernel launch errors
     cudaError_t err = cudaGetLastError();
