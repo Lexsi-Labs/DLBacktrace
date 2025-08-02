@@ -71,10 +71,10 @@ __device__ void calculate_wt_conv_unit_cuda_chunked(
         
         if (act_type == 0) { // mono
             if (!isinf(act_range_l)) {
-                p_saturate = (t_sum > act_range_l) ? 1.0f : 0.0f;
+            p_saturate = (t_sum > act_range_l) ? 1.0f : 0.0f;
             }
             if (!isinf(act_range_u)) {
-                n_saturate = (t_sum < act_range_u) ? 1.0f : 0.0f;
+            n_saturate = (t_sum < act_range_u) ? 1.0f : 0.0f;
             }
         }
         else if (act_type == 1) { // non-mono
@@ -142,7 +142,7 @@ __global__ void weighted_conv_kernel(
     int out_x = blockIdx.x * blockDim.x + threadIdx.x;
     
     if (batch_idx >= batch_size || out_y >= out_h || out_x >= out_w) return;
-
+    
     // MEMORY_TILE: Calculate input region bounds with padding
     int in_y_start = out_y * stride_h - pad_h;
     int in_x_start = out_x * stride_w - pad_w;
@@ -164,14 +164,12 @@ __global__ void weighted_conv_kernel(
     
     // OPTIMIZED_CHANNEL_HANDLING: Use chunking for large channel counts
     const int MAX_LOCAL_CHANNELS = 256;
-    const int chunk_size = min(in_channels, MAX_LOCAL_CHANNELS);
-    const int patch_chunk_size = kernel_h * kernel_w * chunk_size;
     
     // Use reasonably sized local memory (always <= 256 channels per chunk)
     float patch_chunk[MAX_KERNEL_SIZE * MAX_KERNEL_SIZE * 256];
     float output_chunk[MAX_KERNEL_SIZE * MAX_KERNEL_SIZE * 256];
     
-    // RELEVANCE_LOAD: Load relevance weights for current output position  
+    // RELEVANCE_LOAD: Load relevance weights for current output position
     float relevance_wts[1024]; // Still need full relevance array
     for (int oc = 0; oc < out_channels; oc++) {
         int relevance_idx = batch_idx * (out_channels * out_h * out_w) + 
@@ -184,16 +182,17 @@ __global__ void weighted_conv_kernel(
     for (int channel_start = 0; channel_start < in_channels; channel_start += MAX_LOCAL_CHANNELS) {
         int channel_end = min(channel_start + MAX_LOCAL_CHANNELS, in_channels);
         int current_chunk_size = channel_end - channel_start;
+        int patch_chunk_size = kernel_h * kernel_w * current_chunk_size;
         
         // Initialize current chunk
-        for (int i = 0; i < kernel_h * kernel_w * current_chunk_size; i++) {
+        for (int i = 0; i < patch_chunk_size; i++) {
             patch_chunk[i] = 0.0f;
             output_chunk[i] = 0.0f;
         }
         
         // BOUNDARY_SAFE_LOAD: Load current channel chunk
-        for (int ky = 0; ky < kernel_h; ky++) {
-            for (int kx = 0; kx < kernel_w; kx++) {
+    for (int ky = 0; ky < kernel_h; ky++) {
+        for (int kx = 0; kx < kernel_w; kx++) {
                 int input_y = in_y_start + ky;
                 int input_x = in_x_start + kx;
                 
