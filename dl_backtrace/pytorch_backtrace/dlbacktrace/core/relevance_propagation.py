@@ -497,13 +497,16 @@ def run_evaluation(
         inp_vals = info.get("input_values", [])
         if not isinstance(inp_vals, (list, tuple)):
             inp_vals = [inp_vals]
+        
         tensor_inputs = []
         for p, v in zip(parents, inp_vals):
             lt = node_io[p].get("layer_type", "")
-            if lt in ("Weight", "Bias", "bn_running_mean", "bn_running_var", "bn_num_batches_tracked", 'future_use'):
+            if lt in ("Weight", "Bias", "bn_running_mean", "bn_running_var", "bn_num_batches_tracked"):
+                continue
+            if func_name == "addmm" and lt == 'future_use':  # Special case: skip 'future_use' type for addmm  
                 continue
             if isinstance(v, (torch.Tensor, np.ndarray)):
-                tensor_inputs.append(v)
+                tensor_inputs.append(v) 
 
         if not tensor_inputs:
             # fallback to output shape
