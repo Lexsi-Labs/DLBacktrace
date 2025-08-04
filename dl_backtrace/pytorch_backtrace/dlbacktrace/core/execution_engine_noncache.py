@@ -1208,6 +1208,30 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             print(f"[{node_name}] ✅ index_select(dim={dim}) on input shape {input_tensor.shape} with index shape {index_tensor.shape}")
             return aten_op(input_tensor, dim, index_tensor)
 
+        elif func_name == "addmm":
+            if isinstance(layer_in, (list, tuple)):
+                for idx, item in enumerate(layer_in):
+                    print(f"idx: {idx}, item: {item.shape}") 
+            else:
+                print(f"layer_in shape: {layer_in.shape}")
+
+            if isinstance(layer_in, list) and len(layer_in) == 3:
+                bias, mat1, mat2 = layer_in
+                print(f"bias: {bias.shape}, mat1: {mat1.shape}, mat2: {mat2.shape}") 
+
+                if not all(isinstance(x, torch.Tensor) for x in (bias, mat1, mat2)):
+                    raise TypeError(f"[{node_name}] ❌ Expected Tensors for `addmm`, got {[type(x) for x in layer_in]}")
+
+                try:
+                    return torch.addmm(bias, mat1, mat2)
+                except Exception as e:
+                    raise RuntimeError(
+                        f"[{node_name}] ❌ torch.addmm failed with shapes: "
+                        f"bias={bias.shape}, mat1={mat1.shape}, mat2={mat2.shape}. Error: {e}"
+                    )
+            else:
+                raise RuntimeError(f"[{node_name}] ❌ `addmm` expects 3 input tensors (bias, mat1, mat2), got: {layer_in}")
+        
         else:
             inputs = layer_in if isinstance(layer_in, (list, tuple)) else [layer_in]
             output = aten_op(*inputs, *method_args)
@@ -1300,6 +1324,11 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
                             continue
                         else:
                             layer_in.append(node_io[node_x]['output_values'])
+                elif func_name == "addmm":
+                    # ✅ For addmm, include all parent outputs, including weight/bias
+                    for node_x in parents:
+                        layer_in.append(node_io[node_x]['output_values'])
+
                 else:
                     for node_x in parents:
                         if func_name == "_native_batch_norm_legit_no_training":
@@ -1310,7 +1339,10 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
                         else:
                             layer_in.append(node_io[node_x]['output_values']) 
 
-                layer_in, _ = _process_layer_input(layer_in)
+                if func_name == "addmm":
+                    pass  # ⛔ Don't process or unwrap inputs
+                else:
+                    layer_in, _ = _process_layer_input(layer_in)
 
                 output = execute_aten_operation(func_name, layer, layer_in, layer_hyperparams, method_args, parents, node_io, node_name,tensor_map, children=children)
                 
