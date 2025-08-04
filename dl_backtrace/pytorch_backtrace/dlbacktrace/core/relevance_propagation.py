@@ -500,7 +500,7 @@ def run_evaluation(
         tensor_inputs = []
         for p, v in zip(parents, inp_vals):
             lt = node_io[p].get("layer_type", "")
-            if lt in ("Weight", "Bias", "bn_running_mean", "bn_running_var", "bn_num_batches_tracked"):
+            if lt in ("Weight", "Bias", "bn_running_mean", "bn_running_var", "bn_num_batches_tracked", 'future_use'):
                 continue
             if isinstance(v, (torch.Tensor, np.ndarray)):
                 tensor_inputs.append(v)
@@ -601,27 +601,49 @@ def run_evaluation(
 
         # — MLP (linear) —
         if layer == "MLP_Layer":
-            hp = info["layer_hyperparams"]
-            W  = hp["weight"].detach().cpu().numpy()
-            B  = None if isinstance(hp["bias"], bool) else hp["bias"].detach().cpu().numpy()
-            X  = process_input_for_eval(info["input_values"])
-            
-            if DEBUG:
-                log(f"  [MLP] X={X.shape}, W={W.shape}, B={'none' if B is None else B.shape}")
-            
-            for c in children:
-                R = get_relevance_from_child(c, name, all_wt, node_io)
+            if func == "addmm":
+                hp = info["layer_hyperparams"]
+                print(f"hp: {hp}")
+                bias, mat1, mat2 = info["input_values"]
+
+                # Convert all to numpy
+                X = process_input_for_eval(mat1)
+                W = process_input_for_eval(mat2).T  # 🔄 Transpose for consistency with FC layer
+                B = None if isinstance(bias, bool) else process_input_for_eval(bias)
+
                 if DEBUG:
-                    log(f"relevance from child: {np.sum(R):.8f}, shape: {R.shape}")
-                if R is not None:
-                    impl = get_layer_implementation("MLP_Layer")
+                    log(f"  [addmm] X={X.shape}, W={W.shape}, B={'none' if B is None else B.shape}")
+
+                for c in children:
+                    R = get_relevance_from_child(c, name, all_wt, node_io)
                     if DEBUG:
-                        log(f"Using {impl} implementation for linear layer {name}")
-                    δ = UD2.launch_linear(impl, R, X, W, B, activation_master[activation_dict[name]])
+                        log(f"relevance from child: {np.sum(R):.8f}, shape: {R.shape}") 
+                    if R is not None:
+                        δ = UD.calculate_wt_fc(R, X, W, B, activation_master[activation_dict[name]])
+                        if DEBUG: 
+                            log(f"relevance at {name}: {np.sum(δ):.8f}, shape: {δ.shape}") 
+                        add_rel(δ)
+                continue
+            
+            else:
+                hp = info["layer_hyperparams"]
+                W  = hp["weight"].detach().cpu().numpy()
+                B  = None if isinstance(hp["bias"], bool) else hp["bias"].detach().cpu().numpy()
+                X  = process_input_for_eval(info["input_values"])
+                
+                if DEBUG:
+                    log(f"  [MLP] X={X.shape}, W={W.shape}, B={'none' if B is None else B.shape}")
+
+                for c in children:
+                    R = get_relevance_from_child(c, name, all_wt, node_io)
                     if DEBUG:
-                        log(f"relevance at {name}: {np.sum(δ):.8f}, shape: {δ.shape}") 
-                    add_rel(δ)
-            continue
+                        log(f"relevance from child: {np.sum(R):.8f}, shape: {R.shape}")
+                    if R is not None:
+                        δ = UD.calculate_wt_fc(R, X, W, B, activation_master[activation_dict[name]]) 
+                        if DEBUG:
+                            log(f"relevance at {name}: {np.sum(δ):.8f}, shape: {δ.shape}") 
+                        add_rel(δ)
+                continue
 
         # — Conv2d —
         if layer == "DL_Layer" and func == "conv2d":
