@@ -4,9 +4,13 @@
 def extract_placeholders(exported_program):
     fx_placeholders = [
             spec.arg.name for spec in exported_program.graph_signature.input_specs
-            if hasattr(spec.arg, 'name') and (spec.arg.name.startswith("p_") or spec.arg.name.startswith("b_"))
+            if hasattr(spec.arg, 'name') and (
+                spec.arg.name.startswith("p_") or 
+                spec.arg.name.startswith("b_") or
+                spec.arg.name.startswith("c_")
+            )
         ]
-    return fx_placeholders
+    return fx_placeholders  
 
 
 def map_placeholders_to_state_dict(exported_program, model):
