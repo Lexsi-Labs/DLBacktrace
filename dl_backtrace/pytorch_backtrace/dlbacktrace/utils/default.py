@@ -646,7 +646,10 @@ def calculate_wt_avgpool(relevance_y, input_array, pool_size, pad, stride):
     return np.array(relevance_x)
 
 def stabilize(matrix, epsilon=1e-6):
-    return matrix + epsilon * np.sign(matrix) 
+    # If abs(val) < epsilon, set to epsilon (keeping original sign or + for zeros)
+    return np.where(np.abs(matrix) < epsilon,
+                    epsilon * np.sign(matrix + (matrix == 0)),
+                    matrix)
 
 def calculate_wt_self_attention(R_out, Q, K, V, masked_fill=None, scale=None, epsilon=1e-9):
     """
