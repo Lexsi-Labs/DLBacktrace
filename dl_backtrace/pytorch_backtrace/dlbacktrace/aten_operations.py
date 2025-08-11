@@ -11,6 +11,7 @@ ATEN_HYPERPARAMS: dict[str, Any] = {
             "conv_transpose3d": ["weight","bias","stride", "padding", "output_padding", "groups", "dilation"],
             # Fully Connected (Linear)
             "linear": ["weight","bias"],
+            "addmm": ["beta", "alpha"],
             "lstm": ["hx", "params", "has_biases", "num_layers", "dropout", "train", "bidirectional", "batch_first"],
             "embedding": ["weight", "indices", "padding_idx", "scale_grad_by_freq", "sparse"],
             # Normalization Layers
@@ -154,6 +155,8 @@ ATEN_DEFAULTS: dict[str, Any] = {
             "index": 0,  # Default index for select operations
             # Reduction Defaults
             "alpha": 1.0,  # Default scaling factor for add/sub/mul operations
+            # for addmm
+            "beta" : 1.0,
             # Dropout
             "p": 0.5,  # Default dropout probability
             "train": True,  # Apply dropout only in training mode
