@@ -7,6 +7,7 @@ def np_swish(x, beta=0.75):
     return x * z 
 
 def process_single_relevance_router_logits(wts, input, W_router):
+    print("Running original version of process_single_relevance_router_logits")
     wt_mat_total = np.zeros(input.shape)
     
     for i in range(wts.shape[0]):
@@ -46,6 +47,7 @@ def process_single_relevance_router_logits(wts, input, W_router):
     return wt_mat_total
 
 def process_single_relevance_gated_proj(wts, input):
+    print("Running original version of process_single_relevance_gated_proj")
     wt_mat_total = np.zeros(input.shape)
     
     for i in range(wts.shape[0]):
@@ -64,8 +66,6 @@ def process_single_relevance_gated_proj(wts, input):
 
             if t_sum < -6:
                 p_sum = 0
-            if t_sum > None:
-                n_sum = 0
             if p_sum > 0 and n_sum > 0:
                 if t_act == p_act:
                     n_sum = 0
@@ -89,6 +89,7 @@ def process_single_relevance_gated_proj(wts, input):
     return wt_mat_total
 
 def process_single_relevance_proj(wts, output):
+    print("Running original version of process_single_relevance_proj")
     wt_mat_total = np.zeros(output.shape)
     
     for i in range(wts.shape[0]):
@@ -117,6 +118,7 @@ def process_single_relevance_proj(wts, output):
     return wt_mat_total
 
 def olmoe_mlp_forward(inp, w, model):
+    print("Running original version of olmoe_mlp_forward")
     intermediate_outputs = {}
 
     _, hidden_dim = inp.shape
@@ -162,6 +164,7 @@ def olmoe_mlp_forward(inp, w, model):
     return intermediate_outputs
 
 def calculate_wt_olmoe_feed_forward_parallel(wts, inp, w, model):
+    print("Running original version of calculate_wt_olmoe_feed_forward_parallel")
     num_experts = model.config.num_experts
     intermediate_outputs = olmoe_mlp_forward(inp, w, model)
 

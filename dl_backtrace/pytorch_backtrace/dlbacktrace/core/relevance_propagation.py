@@ -622,7 +622,10 @@ def run_evaluation(
                     if DEBUG:
                         log(f"relevance from child: {np.sum(R):.8f}, shape: {R.shape}") 
                     if R is not None:
-                        δ = UD.calculate_wt_fc(R, X, W, B, activation_master[activation_dict[name]])
+                        impl = get_layer_implementation("MLP_Layer")
+                        if DEBUG:
+                            log(f"Using {impl} implementation for MLP layer {name}")
+                        δ = UD2.launch_linear(impl, R, X, W, B, activation_master[activation_dict[name]])
                         if DEBUG: 
                             log(f"relevance at {name}: {np.sum(δ):.8f}, shape: {δ.shape}") 
                         add_rel(δ)
@@ -642,7 +645,10 @@ def run_evaluation(
                     if DEBUG:
                         log(f"relevance from child: {np.sum(R):.8f}, shape: {R.shape}")
                     if R is not None:
-                        δ = UD.calculate_wt_fc(R, X, W, B, activation_master[activation_dict[name]]) 
+                        impl = get_layer_implementation("MLP_Layer")
+                        if DEBUG:
+                            log(f"Using {impl} implementation for MLP layer {name}")
+                        δ = UD2.launch_linear(impl, R, X, W, B, activation_master[activation_dict[name]]) 
                         if DEBUG:
                             log(f"relevance at {name}: {np.sum(δ):.8f}, shape: {δ.shape}") 
                         add_rel(δ)

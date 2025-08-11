@@ -26,7 +26,7 @@ def process_single_relevance_router_logits(
     Returns:
         torch.Tensor: Processed relevance logits with same shape as input_tensor[0]
     """
-    
+    print("Running pytorch version of process_single_relevance_router_logits")
     # Vectorized computation across all samples
     # Reshape for broadcasting: (n_samples, n_features, 1) * (n_samples, 1, input_dim)
     contribution_matrix = W_router.unsqueeze(0) * input_tensor.unsqueeze(1)  # (n_samples, n_features, input_dim)
@@ -84,6 +84,7 @@ def process_single_relevance_gated_proj(
     Returns:
         torch.Tensor: Processed tensor of same shape as output
     """
+    print("Running pytorch version of process_single_relevance_gated_proj")
     # Initialize result tensor
     wt_mat_total = torch.zeros_like(output)
     
@@ -150,6 +151,7 @@ def process_single_relevance_proj(
     Returns:
         torch.Tensor: Weighted relevance projection result with same shape as output
     """
+    print("Running pytorch version of process_single_relevance_proj")
     # Pre-compute masks for positive and negative values
     positive_mask = output > 0
     negative_mask = output < 0
@@ -203,6 +205,7 @@ def olmoe_mlp_forward(
     Returns:
         Dict containing intermediate outputs and expert data
     """
+    print("Running pytorch version of olmoe_mlp_forward")
     intermediate_outputs = {}
 
     _, hidden_dim = inp.shape
@@ -289,6 +292,7 @@ def calculate_wt_olmoe_feed_forward_parallel(
             - final_relevance_input: Final relevance tensor with same shape as inp
             - relevance_expert: Per-expert relevance scores of shape (num_experts,)
     """
+    print("Running pytorch version of calculate_wt_olmoe_feed_forward_parallel")
     num_experts = model.config.num_experts
     intermediate_outputs = olmoe_mlp_forward(inp, w, model)
 

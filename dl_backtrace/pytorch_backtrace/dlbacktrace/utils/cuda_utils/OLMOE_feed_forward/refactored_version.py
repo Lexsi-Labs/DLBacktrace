@@ -26,6 +26,7 @@ def process_single_relevance_router_logits(wts: np.ndarray, input: np.ndarray, W
         - Handles positive and negative components with separate aggregation weights
         - Replicates original division-by-zero handling by setting zero sums to 1
     """
+    print("Running refactored version of process_single_relevance_router_logits")
     n_samples, n_features = wts.shape
     wt_mat_total = np.zeros(input.shape[1:])  # More efficient initialization
     
@@ -91,6 +92,7 @@ def process_single_relevance_gated_proj(wts: np.ndarray, output: np.ndarray) -> 
         Processed array of same shape as output, containing weighted contributions
         from all weight matrix elements
     """
+    print("Running refactored version of process_single_relevance_gated_proj")
     # Initialize result array
     wt_mat_total = np.zeros_like(output)
     
@@ -170,6 +172,7 @@ def process_single_relevance_proj(wts: np.ndarray, output: np.ndarray) -> np.nda
         - Negative values are normalized by their absolute sum and weighted by n_agg_wt
         - Division by zero is handled by setting denominators to 1 when sums are 0
     """
+    print("Running refactored version of process_single_relevance_proj")
     # Pre-compute masks for positive and negative values (done once)
     positive_mask = output > 0
     negative_mask = output < 0
@@ -218,6 +221,7 @@ def process_single_relevance_proj(wts: np.ndarray, output: np.ndarray) -> np.nda
     return wt_mat_total    
 
 def olmoe_mlp_forward(inp, w, model):
+    print("Running refactored version of olmoe_mlp_forward")
     intermediate_outputs = {}
 
     _, hidden_dim = inp.shape
@@ -263,6 +267,7 @@ def olmoe_mlp_forward(inp, w, model):
     return intermediate_outputs
 
 def calculate_wt_olmoe_feed_forward_parallel(wts, inp, w, model):
+    print("Running refactored version of calculate_wt_olmoe_feed_forward_parallel")
     num_experts = model.config.num_experts
     intermediate_outputs = olmoe_mlp_forward(inp, w, model)
 
