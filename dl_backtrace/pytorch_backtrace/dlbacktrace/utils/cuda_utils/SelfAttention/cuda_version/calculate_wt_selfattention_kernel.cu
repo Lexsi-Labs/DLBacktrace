@@ -3,8 +3,15 @@
 #include <math_constants.h>
 #include <torch/extension.h>
 
-__device__ __forceinline__ float stable_sign(float x) {
-    return (x > 0.0f) ? 1.0f : ((x < 0.0f) ? -1.0f : 0.0f);
+__device__ __forceinline__ float stabilize_value(float x, float epsilon) {
+    float abs_x = fabsf(x);
+    if (abs_x < epsilon) {
+        // Handle the sign logic: sign(x + (x == 0))
+        // This means: if x == 0, use +1, otherwise use sign(x)
+        float sign_val = (x == 0.0f) ? 1.0f : ((x > 0.0f) ? 1.0f : -1.0f);
+        return epsilon * sign_val;
+    }
+    return x;
 }
 
 __device__ void warp_reduce_max(float& val) {
@@ -146,7 +153,7 @@ __global__ void fused_attention_relevance_kernel(
     // ==================== 4. Stabilize attention output ====================
     for (int d = tid; d < D; d += blockDim.x) {
         float attn_out = s_attention_out[d] * 2.0f;
-        float stab_attn = attn_out + epsilon * stable_sign(attn_out);
+        float stab_attn = stabilize_value(attn_out, epsilon);
         s_rel_norm_attn[d] = R_out[base_offset + d] / stab_attn;
     }
     __syncthreads();
@@ -168,7 +175,7 @@ __global__ void fused_attention_relevance_kernel(
     // Stabilize QK output
     for (int t_k = tid; t_k < T_k; t_k += blockDim.x) {
         float qk_val = s_qk_raw[t_k] * 2.0f;
-        float stab_qk = qk_val + epsilon * stable_sign(qk_val);
+        float stab_qk = stabilize_value(qk_val, epsilon);
         s_rel_norm_QK[t_k] = s_R_QK[t_k] / stab_qk;
     }
     __syncthreads();

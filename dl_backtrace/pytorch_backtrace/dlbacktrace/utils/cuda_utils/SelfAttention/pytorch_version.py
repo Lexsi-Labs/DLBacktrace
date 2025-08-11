@@ -3,17 +3,10 @@ import torch.nn.functional as F
 from typing import Optional, Tuple
 
 def stabilize(matrix: torch.Tensor, epsilon: float = 1e-6) -> torch.Tensor:
-    """
-    Stabilize matrix by adding small epsilon with sign preservation.
-    
-    Args:
-        matrix: Input tensor to stabilize
-        epsilon: Small constant for numerical stability
-        
-    Returns:
-        Stabilized tensor
-    """
-    return matrix + epsilon * torch.sign(matrix)
+    # If abs(val) < epsilon, set to epsilon (keeping original sign or + for zeros)
+    return torch.where(torch.abs(matrix) < epsilon, 
+                      epsilon * torch.sign(matrix + (matrix == 0)), 
+                      matrix)
 
 @torch.compile
 def calculate_wt_self_attention(
