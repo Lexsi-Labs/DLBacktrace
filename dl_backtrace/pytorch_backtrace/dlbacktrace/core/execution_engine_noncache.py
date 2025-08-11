@@ -808,21 +808,42 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             return aten_op(layer_in, *method_args)
 
         elif func_name == "where":
-            cond, x, y = layer_in
-            try:
-                cond_, x_, y_ = torch.broadcast_tensors(cond, x, y)
-                return aten_op(cond_, x_, y_)
-            except Exception as e:
-                # Safe fallback: expand cond to match if it's missing a dimension
-                if cond.ndim == x.ndim - 1 and cond.shape[0] == x.shape[0] and cond.shape[-2:] == x.shape[-2:]:
-                    cond_expanded = cond.unsqueeze(1).expand_as(x)
-                    print(f"[{node_name}] ⚠️ Expanded cond to shape {cond_expanded.shape}")
-                    return aten_op(cond_expanded, x, y)
-                raise RuntimeError(
-                    f"[{node_name}] ❌ Shape mismatch in `where`: "
-                    f"cond: {cond.shape}, x: {x.shape}, y: {y.shape}. Error: {e}"
-                )
+            if len(layer_in) == 3:
+                cond, x, y = layer_in
+                try:
+                    cond_, x_, y_ = torch.broadcast_tensors(cond, x, y)
+                    return aten_op(cond_, x_, y_)
+                except Exception as e:
+                    # Safe fallback: expand cond to match if it's missing a dimension
+                    if cond.ndim == x.ndim - 1 and cond.shape[0] == x.shape[0] and cond.shape[-2:] == x.shape[-2:]:
+                        cond_expanded = cond.unsqueeze(1).expand_as(x)
+                        print(f"[{node_name}] ⚠️ Expanded cond to shape {cond_expanded.shape}")
+                        return aten_op(cond_expanded, x, y)
+                    raise RuntimeError(
+                        f"[{node_name}] ❌ Shape mismatch in `where`: "
+                        f"cond: {cond.shape}, x: {x.shape}, y: {y.shape}. Error: {e}"
+                    )
+            
+            elif len(layer_in) == 2:
+                # Handle aten.where.ScalarSelf variant: x.where(cond)
+                x, cond = layer_in
 
+                if cond.dtype != torch.bool:
+                    print(f"[{node_name}] ⚠️ Converting cond from {cond.dtype} to bool")
+                    cond = cond.to(torch.bool)
+
+                try:
+                    cond_, x_ = torch.broadcast_tensors(cond, x)
+                    return torch.where(cond_, x_, torch.zeros_like(x_))  # Default y = 0
+                except Exception as e:
+                    raise RuntimeError(
+                        f"[{node_name}] ❌ Shape mismatch in `where.ScalarSelf`: x: {x.shape}, cond: {cond.shape}. Error: {e}"
+                    )
+
+            else:
+                raise RuntimeError(
+                    f"[{node_name}] ❌ Unexpected number of inputs for `where`: got {len(layer_in)} → {layer_in}"
+                )
 
         elif func_name == "contiguous":
             return aten_op(layer_in)
@@ -1232,6 +1253,38 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             else:
                 raise RuntimeError(f"[{node_name}] ❌ `addmm` expects 3 input tensors (bias, mat1, mat2), got: {layer_in}")
         
+        elif func_name == "index": 
+            input_tensor = layer_in[0]
+            index_tensors = layer_in[1:]
+
+            # Cast all index tensors to long
+            index_tensors = [
+                idx.to(dtype=torch.long) if isinstance(idx, torch.Tensor) and not idx.dtype in (torch.long, torch.int, torch.bool, torch.uint8) else idx
+                for idx in index_tensors
+            ]
+
+            # 🛡️ Validate and inject index at correct dimension
+            input_rank = input_tensor.dim()
+            indices = [slice(None)] * input_rank  # default: [:, :, :, ...]
+
+            for idx in index_tensors:
+                # Dynamically find dimension that matches index shape
+                inserted = False
+                for i in range(input_rank):
+                    if idx.dim() == 1 and input_tensor.shape[i] == idx.shape[0]:
+                        indices[i] = idx
+                        inserted = True
+                        break
+                if not inserted:
+                    raise RuntimeError(f"[{node_name}] ❌ Could not find matching dimension for index with shape {idx.shape} in input_tensor of shape {input_tensor.shape}")
+
+            try:
+                return input_tensor[tuple(indices)]
+            except Exception as e:
+                raise RuntimeError(
+                    f"[{node_name}] ❌ Failed to apply `index` with shape {input_tensor.shape} and indices {[idx.shape for idx in index_tensors]}: {e}"
+                )
+
         else:
             inputs = layer_in if isinstance(layer_in, (list, tuple)) else [layer_in]
             output = aten_op(*inputs, *method_args)
@@ -1274,6 +1327,13 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
         # Handle embedding function
         if func_name == "embedding":
             pass
+
+        # ✅ Register lifted_tensor constants early (before parent check)
+        if layer_type == "Placeholder" and "lifted_tensor" in node_name:
+            output = extracted_weights.get(node_name, None)
+            if output is None:
+                print(f"[WARN] Lifted tensor node `{node_name}` missing in extracted_weights")
+                continue
                     
         try:
             if layer_type == "Placeholder":
