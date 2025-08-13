@@ -433,7 +433,7 @@ launch_multi_kernel_attention_relevance(
     const torch::Tensor& K,
     const torch::Tensor& V,
     const torch::optional<torch::Tensor>& mask,
-    const torch::optional<double>& scale
+    const torch::optional<float>& scale
 );
 """
 
@@ -503,7 +503,7 @@ def calculate_wt_self_attention_multi_kernel(R_out, Q, K, V, mask, scale):
             - R_mask: Mask relevance tensor, same shape as mask (or zeros)
     """
     D = Q.size(3)
-    device = R_out.device
+    device = torch.device("cuda")
     scale = torch.sqrt(torch.tensor(D, dtype=torch.float32, device=device)) if scale is None else scale
 
     return multi_kernel_attention_cuda_ops.launch_multi_kernel_attention_relevance(
