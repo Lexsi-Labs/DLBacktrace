@@ -135,7 +135,7 @@ __global__ void wt_embedding_mean_kernel(
 }
 
 // Host function with optimized kernel selection
-torch::Tensor wt_embedding_cuda(
+torch::Tensor wt_embedding_cuda_v2(
     const torch::Tensor& R_out,
     const torch::Tensor& input_ids, 
     const int vocab_size,
@@ -223,7 +223,7 @@ torch::Tensor wt_embedding_cuda(
 """
 
 embedding_cuda_declaration = r"""
-torch::Tensor wt_embedding_cuda(
+torch::Tensor wt_embedding_cuda_v2(
     const torch::Tensor& R_out,
     const torch::Tensor& input_ids, 
     const int vocab_size,
@@ -252,10 +252,10 @@ extra_flags = [
 extra_flags.extend(get_cuda_arch_flags())
 
 embedding_cuda_ops = load_inline(
-    name="embedding_cuda",
+    name="custom_embedding_layer_cuda_v2",
     cpp_sources=embedding_cuda_declaration,
     cuda_sources=embedding_cuda_source,
-    functions=["wt_embedding_cuda"],
+    functions=["wt_embedding_cuda_v2"],
     extra_cuda_cflags=extra_flags,
     verbose=True
 )
@@ -282,4 +282,4 @@ def calculate_wt_embedding_cuda(R_out, input_ids, vocab_size, aggregate):
                      returns [vocab_size] tensor with mean relevance per token.
     """
 
-    return embedding_cuda_ops.wt_embedding_cuda(R_out, input_ids, vocab_size, aggregate)
+    return embedding_cuda_ops.wt_embedding_cuda_v2(R_out, input_ids, vocab_size, aggregate)
