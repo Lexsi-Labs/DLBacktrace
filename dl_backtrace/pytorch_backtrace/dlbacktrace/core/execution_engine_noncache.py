@@ -495,8 +495,35 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             a = to_safe_tensor(a, b)
             b = to_safe_tensor(b, a)
 
+            def expand_to_match(a, b):
+                if not isinstance(a, torch.Tensor) or not isinstance(b, torch.Tensor):
+                    return a, b
+
+                if a.shape == b.shape:
+                    return a, b
+
+                if a.ndim == 2 and b.ndim == 2:
+                    if a.shape[0] == b.shape[0]:
+                        if b.shape[1] == 1:
+                            b = b.expand(-1, a.shape[1])
+                        elif b.shape[1] < a.shape[1]:
+                            # Allow repeating with crop
+                            repeat_factor = (a.shape[1] + b.shape[1] - 1) // b.shape[1]  # Ceiling division
+                            b = b.repeat(1, repeat_factor)[:, :a.shape[1]]  # Trim to match a
+                        else:
+                            raise RuntimeError(f"[Shape Mismatch] b.shape[1] > a.shape[1]")
+                    else:
+                        raise RuntimeError(f"[Batch Mismatch] Cannot align batch dims: a={a.shape}, b={b.shape}")
+
+                return a, b
+
             # Execute op
             try:
+                if isinstance(a, torch.Tensor) and isinstance(b, torch.Tensor):
+                    print(f"Before ---  a: {a.shape}, b: {b.shape}")
+                    print("Aligning the shapes")
+                    a, b = expand_to_match(a, b)
+                    print(f"After ---  a: {a.shape}, b: {b.shape}")
                 output = aten_op(a, b)
             except Exception as e:
                 raise RuntimeError(
@@ -504,7 +531,7 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                     f"shapes: {getattr(a, 'shape', None)}, {getattr(b, 'shape', None)}. Error: {e}"
                 )
 
-            print(f"node_name: {node_name}, mul shape: {output.shape}")
+            # print(f"node_name: {node_name}, mul shape: {output.shape}")
             return output
 
         elif func_name in {"add", "add_", "sub", "div", "rsub", "pow", "gt", "ge", "lt", "eq"}:
