@@ -137,13 +137,14 @@ def launch_embedding(version, R_out, inp, vocab_size, aggregate):
     else:
         raise ValueError(f"Unknown version for Embedding layer: {version}")
 
-def launch_self_attention(version, R_out, Q, K, V, masked_fill=None, scale=None, epsilon=1e-9):
+def launch_self_attention(version, R_out, Q, K, V, masked_fill, scale, epsilon=1e-9):
     if version == 'original':
         return calculate_wt_self_attention_original(R_out, Q, K, V, masked_fill, scale, epsilon)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    R_out_t, Q_t, K_t, V_t, scale_t = _prepare_tensors(device, R_out, Q, K, V, scale, epsilon)
+    R_out_t, Q_t, K_t, V_t = _prepare_tensors(device, R_out, Q, K, V)
     masked_fill_t = torch.tensor(masked_fill, dtype=torch.float32, device=device) if masked_fill is not None else None
+    scale_t = torch.tensor(scale, dtype=torch.float32, device=device) if scale is not None else None
     
     if version == 'pytorch':
         result_torch = calculate_wt_self_attention_pytorch(R_out_t, Q_t, K_t, V_t, masked_fill_t, scale_t, epsilon)
