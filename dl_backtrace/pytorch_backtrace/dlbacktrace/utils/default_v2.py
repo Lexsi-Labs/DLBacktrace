@@ -137,7 +137,7 @@ def launch_embedding(version, R_out, inp, vocab_size, aggregate):
     else:
         raise ValueError(f"Unknown version for Embedding layer: {version}")
 
-def launch_self_attention(version, R_out, Q, K, V, masked_fill, scale, epsilon=1e-9):
+def launch_self_attention(version, R_out, Q, K, V, masked_fill, scale = None, epsilon=1e-9):
     if version == 'original':
         return calculate_wt_self_attention_original(R_out, Q, K, V, masked_fill, scale, epsilon)
 
