@@ -228,7 +228,7 @@ torch::Tensor wt_embedding_cuda_v2(
     const torch::Tensor& input_ids, 
     const int vocab_size,
     const std::string& aggregate
-)
+);
 """
 
 def get_cuda_arch_flags():
