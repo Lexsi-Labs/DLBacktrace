@@ -316,7 +316,8 @@ __global__ void compute_relevance_kernel(
     }
 }
 
-torch::Tensor launch_multi_kernel_attention_relevance(
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::optional<torch::Tensor>> 
+launch_multi_kernel_attention_relevance(
     const torch::Tensor& R_out,
     const torch::Tensor& Q,
     const torch::Tensor& K,
@@ -425,7 +426,8 @@ torch::Tensor launch_multi_kernel_attention_relevance(
 """
 
 attention_cuda_declaration = r"""
-torch::Tensor launch_multi_kernel_attention_relevance(
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::optional<torch::Tensor>> 
+launch_multi_kernel_attention_relevance(
     const torch::Tensor& R_out,
     const torch::Tensor& Q,
     const torch::Tensor& K,
