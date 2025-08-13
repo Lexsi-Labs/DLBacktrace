@@ -8,6 +8,8 @@ attention_cuda_source = r"""
 #include <math_constants.h>
 #include <torch/extension.h>
 #include <cstdio>
+#include <tuple>
+#include <vector>
 
 __device__ __forceinline__ float stabilize_value(float x, float epsilon) {
     float abs_x = fabsf(x);
@@ -423,7 +425,7 @@ torch::Tensor launch_multi_kernel_attention_relevance(
 """
 
 attention_cuda_declaration = r"""
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor> launch_multi_kernel_attention_relevance(
+torch::Tensor launch_multi_kernel_attention_relevance(
     const torch::Tensor& R_out,
     const torch::Tensor& Q,
     const torch::Tensor& K,
