@@ -27,12 +27,12 @@ from .cuda_utils.AdaptiveAvgPool2D.pytorch_version import calculate_wt_gavgpool 
 from .cuda_utils.Embedded.original_version import calculate_wt_embedding as calculate_wt_embedding_original
 from .cuda_utils.Embedded.refactored_version import calculate_wt_embedding as calculate_wt_embedding_refactored
 from .cuda_utils.Embedded.pytorch_version import calculate_wt_embedding as calculate_wt_embedding_pytorch
-#from .cuda_utils.Embedded.cuda_version.wt_embedding_ops import wt_embedding_cuda as calculate_wt_embedding_cuda
+from .cuda_utils.Embedded.cuda_v2 import calculate_wt_embedding_cuda as calculate_wt_embedding_cuda
 
-# SelfAttention Layer - Under Development
+# SelfAttention Layer
 from .cuda_utils.SelfAttention.original_version import calculate_wt_self_attention as calculate_wt_self_attention_original
 from .cuda_utils.SelfAttention.pytorch_version import calculate_wt_self_attention as calculate_wt_self_attention_pytorch
-#from .cuda_utils.SelfAttention.cuda_version.wt_selfattention_ops import wt_selfattention_cuda as calculate_wt_self_attention_cuda
+from .cuda_utils.SelfAttention.cuda_v2 import calculate_wt_self_attention_multi_kernel as calculate_wt_self_attention_cuda
 
 # Wt_add_equal Layer
 from .cuda_utils.Wt_add_equal.original_version import calculate_wt_add_equal as calculate_wt_add_original
@@ -132,8 +132,8 @@ def launch_embedding(version, R_out, inp, vocab_size, aggregate):
     if version == 'pytorch':
         return calculate_wt_embedding_pytorch(R_out_t, inp_t, vocab_size, aggregate)[0].cpu().numpy()
     elif version == 'cuda':
-        #return calculate_wt_embedding_cuda(R_out_t, inp_t, vocab_size, aggregate)[0].cpu().numpy()
-        return None
+        return calculate_wt_embedding_cuda(R_out_t, inp_t, vocab_size, aggregate)[0].cpu().numpy()
+        #return None
     else:
         raise ValueError(f"Unknown version for Embedding layer: {version}")
 
@@ -150,9 +150,9 @@ def launch_self_attention(version, R_out, Q, K, V, masked_fill=None, scale=None,
         result_torch = calculate_wt_self_attention_pytorch(R_out_t, Q_t, K_t, V_t, masked_fill_t, scale_t, epsilon)
         return [arr.cpu().numpy() for arr in result_torch]
     elif version == 'cuda':
-        #result_cuda = calculate_wt_self_attention_cuda(R_out_t, Q_t, K_t, V_t, masked_fill_t, scale_t, epsilon)
-        #return [arr.cpu().numpy() for arr in result_cuda]
-        return None
+        result_cuda = calculate_wt_self_attention_cuda(R_out_t, Q_t, K_t, V_t, masked_fill_t, scale_t)
+        return [arr.cpu().numpy() for arr in result_cuda]
+        #return None
     else:
         raise ValueError(f"Unknown version for SelfAttention layer: {version}")
 
