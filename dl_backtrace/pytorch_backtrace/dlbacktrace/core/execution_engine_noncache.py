@@ -4,6 +4,12 @@ import inspect
 import torch
 import numpy as np
 
+# Toggle debug prints
+DEBUG = False  # Changed to False by default for performance
+def log(*args, **kwargs):
+    if DEBUG:
+        print("[DEBUG]", *args, **kwargs)
+
 def _load_if_path(val, cache_manager):
     if isinstance(val, str) and val.endswith(".pt.zstd") and os.path.isfile(val):
         return cache_manager.load_tensor(val)
@@ -121,7 +127,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                             ip.append(tensor_map[p])
                         if len(ip)==1:
                             layer_in = ip[0]
-                print("nodename layerin",node_name,len(layer_in),parents)
+                if DEBUG:
+                    print("nodename layerin",node_name,len(layer_in),parents)
 
             if isinstance(layer_hyperparams["bias"],bool):
                 output = aten_op(layer_in, layer_hyperparams["weight"])
@@ -269,7 +276,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             if not shape or any(s is None for s in shape):
                 if method_args and isinstance(method_args[0], (list, tuple)):
                     shape = method_args[0]
-                    print(f"[view] ⛑️ Fallback to shape from method_args: {shape}")
+                    if DEBUG:
+                        print(f"[view] ⛑️ Fallback to shape from method_args: {shape}")
 
             def resolve_param_view(p):
                 try:
@@ -375,14 +383,16 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                     # code here
                     layer_hyperparams['end'] = layer_in[1]
                     layer_in = layer_in[0]
-                    print(f"[{node_name}] layer_in shape: {layer_in.shape}")
+                    if DEBUG:
+                        print(f"[{node_name}] layer_in shape: {layer_in.shape}")
 
                 if not isinstance(layer_in, torch.Tensor):
                     raise RuntimeError(f"[{node_name}] ❌ `slice` expected Tensor input, got {type(layer_in)}: {layer_in}")
             
              # ✅ Print unconditionally here if it's a tensor
             elif isinstance(layer_in, torch.Tensor):
-                print(f"[{node_name}] layer_in shape: {layer_in.shape}")
+                if DEBUG:
+                    print(f"[{node_name}] layer_in shape: {layer_in.shape}")
 
             output = aten_op(
                 layer_in,
@@ -391,7 +401,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                 layer_hyperparams["end"],
                 layer_hyperparams.get("step", 1)
             )
-            print(f"[{node_name}] output shape: {output.shape}") 
+            if DEBUG:
+                print(f"[{node_name}] output shape: {output.shape}") 
             return output
         
         elif func_name == "sym_size":
@@ -402,7 +413,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
 
         elif func_name == "_assert_tensor_metadata":
             # Skip or pass-through this op, as it's only a debug consistency check
-            print(f"[{node_name}] ℹ️ Skipping `_assert_tensor_metadata` (no-op).")
+            if DEBUG:
+                print(f"[{node_name}] ℹ️ Skipping `_assert_tensor_metadata` (no-op).")
             if isinstance(layer_in, list) and len(layer_in) > 0:
                 return layer_in[0]
             return layer_in
@@ -537,7 +549,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
         elif func_name in {"add", "add_", "sub", "div", "rsub", "pow", "gt", "ge", "lt", "eq"}:
             output = None
             layer_in = layer_in if isinstance(layer_in, list) else [layer_in]
-            print(f"[{node_name}] 🔍 `{func_name}` with {[x.shape if isinstance(x, torch.Tensor) else type(x) for x in layer_in]}")
+            if DEBUG:
+                print(f"[{node_name}] 🔍 `{func_name}` with {[x.shape if isinstance(x, torch.Tensor) else type(x) for x in layer_in]}")
 
             # Ensure exactly 2 inputs
             if len(layer_in) != 2:
@@ -621,9 +634,10 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             # NaN check
             if isinstance(output, torch.Tensor):
                 has_nan = torch.isnan(output).any().item()
-                print(f"[{node_name}] ✅ {func_name} output shape: {output.shape}, NaN: {has_nan}")
-                if has_nan:
-                    print(f"[ERROR:NaN] {node_name} produced NaNs in `{func_name}`")
+                if DEBUG:
+                    print(f"[{node_name}] ✅ {func_name} output shape: {output.shape}, NaN: {has_nan}")
+                    if has_nan:
+                        print(f"[ERROR:NaN] {node_name} produced NaNs in `{func_name}`")
 
             return output
 
@@ -779,14 +793,17 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             # --- 3) Unwrap single-element lists for the input tensor ---
             if isinstance(layer_in, (list, tuple)):
                 layer_in = layer_in[0]
-                print(f"layer_in: {layer_in.shape}")
+                if DEBUG:
+                    print(f"layer_in: {layer_in.shape}")
 
-            print(f"initial sizes: {sizes}")
+            if DEBUG:
+                print(f"initial sizes: {sizes}")
 
             # --- 4) If we still don't have all sizes, fall back to method args ---
             if not sizes or any(s is None for s in sizes):
                 if method_args and isinstance(method_args[0], (list, tuple)):
-                    print(f"[expand] ⛑️ Falling back to method_args: {method_args[0]}")
+                    if DEBUG:
+                        print(f"[expand] ⛑️ Falling back to method_args: {method_args[0]}")
                     sizes = [resolve_param(x) for x in method_args[0]]
                 else:
                     raise RuntimeError(f"[expand] ❌ Cannot resolve sizes for node `{node_name}`")
@@ -794,13 +811,15 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             # --- 5) Final resolution of each size element ---
             resolved_sizes = []
             for idx, s in enumerate(sizes):
-                print(f"idx: {idx}, raw size: {s}")
+                if DEBUG:
+                    print(f"idx: {idx}, raw size: {s}")
                 try:
                     resolved_sizes.append(resolve_param(s))
                 except Exception as e:
                     raise RuntimeError(f"[expand] ❌ Error resolving size at index {idx}: {e}")
 
-            print(f"resolved_sizes: {resolved_sizes}, implicit: {layer_hyperparams.get('implicit', False)}")
+            if DEBUG:
+                print(f"resolved_sizes: {resolved_sizes}, implicit: {layer_hyperparams.get('implicit', False)}")
 
             # --- 6) Call through to the ATen expand operation ---
             return aten_op(
@@ -844,7 +863,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                     # Safe fallback: expand cond to match if it's missing a dimension
                     if cond.ndim == x.ndim - 1 and cond.shape[0] == x.shape[0] and cond.shape[-2:] == x.shape[-2:]:
                         cond_expanded = cond.unsqueeze(1).expand_as(x)
-                        print(f"[{node_name}] ⚠️ Expanded cond to shape {cond_expanded.shape}")
+                        if DEBUG:
+                            print(f"[{node_name}] ⚠️ Expanded cond to shape {cond_expanded.shape}")
                         return aten_op(cond_expanded, x, y)
                     raise RuntimeError(
                         f"[{node_name}] ❌ Shape mismatch in `where`: "
@@ -856,7 +876,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                 x, cond = layer_in
 
                 if cond.dtype != torch.bool:
-                    print(f"[{node_name}] ⚠️ Converting cond from {cond.dtype} to bool")
+                    if DEBUG:
+                        print(f"[{node_name}] ⚠️ Converting cond from {cond.dtype} to bool")
                     cond = cond.to(torch.bool)
 
                 try:
@@ -926,9 +947,12 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
         elif func_name == "mm":
             # Ensure `layer_in` is a list of exactly two tensors
             if isinstance(layer_in, list):
-                print(f"  ↪ Number of inputs: {len(layer_in)}")
-                for i, inp in enumerate(layer_in):
-                    print(f"    ↪ Input {i}: shape={getattr(inp, 'shape', 'N/A')}, type={type(inp)}")
+                if DEBUG:
+                    print(f"  ↪ Number of inputs: {len(layer_in)}")
+
+                if DEBUG:
+                    for i, inp in enumerate(layer_in):
+                        print(f"    ↪ Input {i}: shape={getattr(inp, 'shape', 'N/A')}, type={type(inp)}")
                 
                 if len(layer_in) != 2:
                     raise RuntimeError(f"[{node_name}] ❌ `mm` expects 2 tensor inputs, got {len(layer_in)}")
@@ -982,8 +1006,9 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                 except Exception as e:
                     raise RuntimeError(f"[{node_name}] ❌ Invalid dim value `{dim}`: {e}")
 
-            for i, t in enumerate(tensors):
-                print(f"  ↪ Tensor {i}: shape={t.shape}, dtype={t.dtype}")
+            if DEBUG:
+                for i, t in enumerate(tensors):
+                    print(f"  ↪ Tensor {i}: shape={t.shape}, dtype={t.dtype}")
 
             try:
                 output = aten_op(tensors, dim)
@@ -1110,16 +1135,19 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
 
             # Fix symbolic placeholder for start/end
             if isinstance(start, int) and start >= INT64_MAX:
-                print(f"[{node_name}] ⚠️ Detected symbolic placeholder for `start` ({start}) → resetting to 0")
+                if DEBUG:
+                    print(f"[{node_name}] ⚠️ Detected symbolic placeholder for `start` ({start}) → resetting to 0")
                 start = 0
 
             if isinstance(end, int) and end >= INT64_MAX:
                 end = self_tensor.shape[dim]
-                print(f"[{node_name}] ⚠️ Detected symbolic placeholder for `end` ({INT64_MAX}) → using {end}")
+                if DEBUG:
+                    print(f"[{node_name}] ⚠️ Detected symbolic placeholder for `end` ({INT64_MAX}) → using {end}")
 
             if end is None:
                 end = self_tensor.shape[dim]
-                print(f"[{node_name}] ℹ️ `end` not specified → using {end}")
+                if DEBUG:
+                    print(f"[{node_name}] ℹ️ `end` not specified → using {end}")
 
             # Step 3: Validate dimensions
             try:
@@ -1128,21 +1156,24 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                 self_size = self_tensor.shape[dim]
 
                 if slice_size != src_size:
-                    print(f"[{node_name}] ⚠️ Shape mismatch: src[{dim}] = {src_size} != target slice length = {slice_size}")
+                    if DEBUG:
+                        print(f"[{node_name}] ⚠️ Shape mismatch: src[{dim}] = {src_size} != target slice length = {slice_size}")
             except Exception as e:
                 print(f"[{node_name}] ⚠️ Failed to inspect shapes: {e}")
 
             # Optional: Show small slice for verification
             try:
                 preview = self_tensor.narrow(dim, start, min(end - start, self_tensor.shape[dim] - start))
-                print(f"[{node_name}] 🔍 self_tensor slice preview (dim={dim}, start={start}, end={end}): shape={preview.shape}")
+                if DEBUG:
+                    print(f"[{node_name}] 🔍 self_tensor slice preview (dim={dim}, start={start}, end={end}): shape={preview.shape}")
             except Exception as e:
                 print(f"[{node_name}] ⚠️ Could not preview slice: {e}")
 
             # Step 4: Execute
             try:
                 output = aten_op(self_tensor, src_tensor, dim, start, end, step)
-                print(f"[{node_name}] ✅ `slice_scatter` success → output shape: {output.shape}")
+                if DEBUG:
+                    print(f"[{node_name}] ✅ `slice_scatter` success → output shape: {output.shape}")
             except Exception as e:
                 raise RuntimeError(
                     f"[{node_name}] ❌ `slice_scatter` failed: self={type(self_tensor)}, src={type(src_tensor)}, "
@@ -1190,7 +1221,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             # ✅ Step 3: Execute
             try:
                 output = aten_op(input_tensor, resolved_shape)
-                print(f"[{node_name}] ✅ `_unsafe_view` success → output shape: {output.shape}")
+                if DEBUG:
+                    print(f"[{node_name}] ✅ `_unsafe_view` success → output shape: {output.shape}")
             except Exception as e:
                 raise RuntimeError(
                     f"[{node_name}] ❌ `_unsafe_view` failed: input={getattr(input_tensor, 'shape', None)}, "
@@ -1209,17 +1241,19 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             if not isinstance(layer_in, (list, tuple)):
                 layer_in = [layer_in]
 
-            print(f"[{node_name}] 🧪 einsum equation: {equation}")
-            for i, t in enumerate(layer_in):
-                if isinstance(t, torch.Tensor):
-                    print(f"[{node_name}] ↪ Input {i} shape: {t.shape}")
-                else:
-                    print(f"[{node_name}] ⚠️ Input {i} is not a tensor: {type(t)}")
+            if DEBUG: 
+                print(f"[{node_name}] 🧪 einsum equation: {equation}")
+                for i, t in enumerate(layer_in):
+                    if isinstance(t, torch.Tensor):
+                        print(f"[{node_name}] ↪ Input {i} shape: {t.shape}")
+                    else:
+                        print(f"[{node_name}] ⚠️ Input {i} is not a tensor: {type(t)}")
 
             try:
                 # Don't unpack the tensor list — pass it as a list
                 output = aten_op(equation, layer_in)
-                print(f"[{node_name}] ✅ einsum output shape: {output.shape}")
+                if DEBUG:
+                    print(f"[{node_name}] ✅ einsum output shape: {output.shape}")
             except Exception as e:
                 raise RuntimeError(
                     f"[{node_name}] ❌ `einsum` failed with equation '{equation}' and inputs: {layer_in}. Error: {e}"
@@ -1250,22 +1284,26 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             if isinstance(peer_shape, torch.Tensor):
                 expected_dim_size = peer_shape.shape[dim]
                 if index_tensor.shape[0] > expected_dim_size:
-                    print(f"[{node_name}] ⚠️ Trimming index_tensor from {index_tensor.shape[0]} to {expected_dim_size} to match einsum_5 shape")
+                    if DEBUG:
+                        print(f"[{node_name}] ⚠️ Trimming index_tensor from {index_tensor.shape[0]} to {expected_dim_size} to match einsum_5 shape")
                     index_tensor = index_tensor[:expected_dim_size]
 
-            print(f"[{node_name}] ✅ index_select(dim={dim}) on input shape {input_tensor.shape} with index shape {index_tensor.shape}")
+            if DEBUG:
+                print(f"[{node_name}] ✅ index_select(dim={dim}) on input shape {input_tensor.shape} with index shape {index_tensor.shape}")
             return aten_op(input_tensor, dim, index_tensor)
 
         elif func_name == "addmm":
-            if isinstance(layer_in, (list, tuple)):
-                for idx, item in enumerate(layer_in):
-                    print(f"idx: {idx}, item: {item.shape}") 
-            else:
-                print(f"layer_in shape: {layer_in.shape}")
+            if DEBUG:
+                if isinstance(layer_in, (list, tuple)):
+                    for idx, item in enumerate(layer_in):
+                        print(f"idx: {idx}, item: {item.shape}") 
+                else:
+                    print(f"layer_in shape: {layer_in.shape}")
 
             if isinstance(layer_in, list) and len(layer_in) == 3:
                 bias, mat1, mat2 = layer_in
-                print(f"bias: {bias.shape}, mat1: {mat1.shape}, mat2: {mat2.shape}") 
+                if DEBUG:
+                    print(f"bias: {bias.shape}, mat1: {mat1.shape}, mat2: {mat2.shape}") 
 
                 if not all(isinstance(x, torch.Tensor) for x in (bias, mat1, mat2)):
                     raise TypeError(f"[{node_name}] ❌ Expected Tensors for `addmm`, got {[type(x) for x in layer_in]}")
@@ -1440,8 +1478,9 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
         # At the end of node execution
         processed_output = _process_output_tuple(output)
 
-        if isinstance(processed_output, torch.Tensor) and torch.isnan(processed_output).any():
-            print(f"[ERROR:NaN] Node `{node_name}` produced NaNs → shape: {processed_output.shape}")
+        if DEBUG:
+            if isinstance(processed_output, torch.Tensor) and torch.isnan(processed_output).any():
+                print(f"[ERROR:NaN] Node `{node_name}` produced NaNs → shape: {processed_output.shape}")
 
         # Accept both single-tensor and tensor-tuples
         if isinstance(processed_output, (torch.Tensor, int)):
@@ -1486,12 +1525,14 @@ class ExecutionEngineNoCache:
         self.tracer = tracer
         self.exported_program = exported_program
 
-    def run(self, inputs):
+    def run(self, inputs, debug=False,):
+        global DEBUG
+        DEBUG = debug
         return run_execution_nocache(
             graph=self.graph,
             layer_stack=self.layer_stack,
             model=self.model,
             extracted_weights=self.extracted_weights,
             inputs=inputs,
-            tracer=self.tracer
+            tracer=self.tracer,
         )
