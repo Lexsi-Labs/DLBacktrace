@@ -443,11 +443,19 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             else:
                 indices = indices.long()
         
-            return aten_op(layer_hyperparams["weight"],
+            # 🔧 Ensure device compatibility between weight and indices
+            weight = layer_hyperparams["weight"]
+            if isinstance(weight, torch.Tensor) and isinstance(indices, torch.Tensor):
+                if weight.device != indices.device:
+                    # Move indices to the same device as weight
+                    indices = indices.to(weight.device)
+                    print(f"[{node_name}] ⚡ Moved indices to device {weight.device} to match weight")
+        
+            return aten_op(weight,
                     indices,
                     layer_hyperparams["padding_idx"],
                     layer_hyperparams["scale_grad_by_freq"],
-                    layer_hyperparams["sparse"]) 
+                    layer_hyperparams["sparse"])
 
         elif func_name in ("mul", "mul_"):
 
