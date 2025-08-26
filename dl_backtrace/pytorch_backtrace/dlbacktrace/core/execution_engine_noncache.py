@@ -1,5 +1,5 @@
 # DL-Backtrace/dl_backtrace/pytorch_backtrace/dlbacktrace/core/execution_engine_noncache.py
-
+import os
 import inspect
 import torch
 import numpy as np
@@ -449,7 +449,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                 if weight.device != indices.device:
                     # Move indices to the same device as weight
                     indices = indices.to(weight.device)
-                    print(f"[{node_name}] ⚡ Moved indices to device {weight.device} to match weight")
+                    if DEBUG:
+                        print(f"[{node_name}] ⚡ Moved indices to device {weight.device} to match weight")
         
             return aten_op(weight,
                     indices,
@@ -540,10 +541,12 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             # Execute op
             try:
                 if isinstance(a, torch.Tensor) and isinstance(b, torch.Tensor):
-                    print(f"Before ---  a: {a.shape}, b: {b.shape}")
-                    print("Aligning the shapes")
+                    if DEBUG:
+                        print(f"Before ---  a: {a.shape}, b: {b.shape}")
+                        print("Aligning the shapes")
                     a, b = expand_to_match(a, b)
-                    print(f"After ---  a: {a.shape}, b: {b.shape}")
+                    if DEBUG:
+                        print(f"After ---  a: {a.shape}, b: {b.shape}") 
                 output = aten_op(a, b)
             except Exception as e:
                 raise RuntimeError(
@@ -852,10 +855,12 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             if isinstance(layer_in, list) and len(layer_in) == 1:
                 output = aten_op(layer_in[0], *method_args)
             elif isinstance(layer_in, torch.Tensor):
-                print(node_name)
-                print(layer_in.shape,"rsqrt shape input")
+                if DEBUG:
+                    print(node_name)
+                    print(layer_in.shape,"rsqrt shape input")
                 output = aten_op(layer_in, *method_args)
-                print(output.shape,"rsqrt shape")
+                if DEBUG:
+                    print(output.shape,"rsqrt shape")
             else:
                 raise RuntimeError(f"[DLBacktraceFX] rsqrt expects 1 input, got {type(layer_in)}: {layer_in}")
             return output
