@@ -167,7 +167,7 @@ class DLBacktraceFX:
 
         self.tracer = self.exported_program.graph_module
 
-    def predict(self, *inputs):
+    def predict(self, *inputs, debug=False):
         if self.use_disk_cache:
             executor = ExecutionEngine(
                 model=self.model,
@@ -185,9 +185,9 @@ class DLBacktraceFX:
                 fx_graph=self.graph,
                 layer_stack=self.layer_stack,
                 tracer=self.tracer,
-                exported_program=self.exported_program
+                exported_program=self.exported_program,
             )
-        self.node_io = executor.run(inputs)
+        self.node_io = executor.run(inputs, debug=debug)
         return self.node_io
 
     def evaluation(self, mode="default", start_wt=[], multiplier=100.0, scaler=1.0, thresholding=0.5, task="binary-classification", debug=False):
