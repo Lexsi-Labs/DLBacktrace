@@ -1,7 +1,9 @@
 import numpy as np
 
 def stabilize(matrix, epsilon=1e-6):
-    return matrix + epsilon * np.sign(matrix) 
+    return np.where(np.abs(matrix) < epsilon,
+                    epsilon * np.sign(matrix + (matrix == 0)),
+                    matrix) 
 
 def calculate_wt_self_attention(R_out, Q, K, V, masked_fill=None, scale=None, epsilon=1e-9):
     """
@@ -27,6 +29,7 @@ def calculate_wt_self_attention(R_out, Q, K, V, masked_fill=None, scale=None, ep
     A = A / (np.sum(A, axis=-1, keepdims=True) + epsilon) 
 
     # Step 3: Apply additive attention mask (optional)
+    masked_fill = None
     if masked_fill is not None:
         logits_masked = logits_unmasked + masked_fill  # [B, H, T, T] + [B, 1, T, T]
     else:
