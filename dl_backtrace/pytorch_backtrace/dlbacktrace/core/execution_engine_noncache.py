@@ -555,98 +555,15 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             return output
 
         elif func_name in {"add", "add_", "sub", "div", "rsub", "pow", "gt", "ge", "lt", "eq"}:
-            output = None
-            layer_in = layer_in if isinstance(layer_in, list) else [layer_in]
-            if DEBUG:
-                print(f"[{node_name}] 🔍 `{func_name}` with {[x.shape if isinstance(x, torch.Tensor) else type(x) for x in layer_in]}")
-
-            # Ensure exactly 2 inputs
-            if len(layer_in) != 2:
-                recovered_inputs = [tensor_map[p] for p in parents if p in tensor_map]
-                for inp in recovered_inputs:
-                    if len(layer_in) < 2:
-                        layer_in.append(inp)
-                if len(layer_in) < 2 and func_name in {"rsub", "pow"} and method_args:
-                    layer_in.append(method_args[0])
-                if len(layer_in) != 2:
-                    raise RuntimeError(f"[{node_name}] ❌ `{func_name}` requires exactly 2 inputs, got {len(layer_in)}")
-
-            # ✅ Safe unpacking before branching
-            arg0, arg1 = layer_in[0], layer_in[1] if len(layer_in) > 1 else None
-            arg0 = sanitize(arg0)
-            arg1 = sanitize(arg1)
-
-            try:
-                # Handle special ops manually
-                if func_name == "add_":
-                    alpha = method_args[0] if method_args else 1
-                    output = arg0.add_(arg1 * alpha if alpha != 1 else arg1)
-
-                elif func_name == "add":
-                    alpha = method_args[0] if method_args else 1
-                    output = torch.add(arg0, arg1, alpha=alpha)
-
-                elif func_name == "sub":
-                    alpha = method_args[0] if method_args else 1
-                    output = torch.sub(arg0, arg1, alpha=alpha)
-
-                elif func_name == "div":
-                    eps = 1e-6
-                    if isinstance(arg1, torch.Tensor):
-                        arg1 = torch.where(arg1 == 0, torch.full_like(arg1, eps), arg1)
-                    elif isinstance(arg1, (int, float)) and arg1 == 0:
-                        arg1 = eps
-                    output = arg0 / arg1
-
-                elif func_name == "rsub":
-                    if arg1 is None and method_args:
-                        minuend = method_args[0]
-                        minuend = minuend.item() if isinstance(minuend, torch.Tensor) else minuend
-                        output = torch.sub(minuend, arg0)
-                    else:
-                        output = torch.sub(arg1, arg0)
-
-                elif func_name == "pow":
-                    base, exponent = arg0, arg1
-                    if base is None and method_args:
-                        base = method_args[0]
-                        base = base.item() if isinstance(base, torch.Tensor) else base
-                    # Clamp base to avoid NaNs from negative fractional exponents
-                    if isinstance(base, torch.Tensor):
-                        base = torch.clamp(base, min=1e-6)
-                    output = torch.pow(base, exponent)
-
-                # === Scalar comparison ops (gt, ge, lt, eq) ===
-                elif func_name in {"gt", "ge", "lt", "le", "eq"}:
-                    # Direct PyTorch comparison ops (avoid aten_op)
-                    if func_name == "gt":
-                        output = arg0 > arg1
-                    elif func_name == "ge":
-                        output = arg0 >= arg1
-                    elif func_name == "lt":
-                        output = arg0 < arg1
-                    elif func_name == "eq":
-                        output = arg0 == arg1
-
-                # === Fallback for unknown cases ===
+            if isinstance(layer_in,list):
+                if len(layer_in) == 2:
+                    output = aten_op(layer_in[0],layer_in[1],*method_args)
+                elif len(layer_in) == 3:
+                    output = aten_op(layer_in[0],layer_in[1],layer_in[2],*method_args)
                 else:
-                    # Fallback for rare ops
-                    output = aten_op(arg0, arg1, *method_args) if arg1 is not None else aten_op(arg0, *method_args)
-
-            except Exception as e:
-                raise RuntimeError(f"[{node_name}] ❌ `{func_name}` failed in aten_op: {e}")
-
-            if output is None:
-                raise RuntimeError(f"[{node_name}] ❌ `{func_name}` did not compute output")
-
-            # NaN check
-            if isinstance(output, torch.Tensor):
-                has_nan = torch.isnan(output).any().item()
-                if DEBUG:
-                    print(f"[{node_name}] ✅ {func_name} output shape: {output.shape}, NaN: {has_nan}")
-                    if has_nan:
-                        print(f"[ERROR:NaN] {node_name} produced NaNs in `{func_name}`")
-
+                    output = aten_op(layer_in,*method_args)
+            else:
+                output = aten_op(layer_in,*method_args)
             return output
 
         elif "scalar_tensor" in func_name:
