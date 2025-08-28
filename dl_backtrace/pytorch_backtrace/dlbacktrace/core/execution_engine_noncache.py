@@ -558,15 +558,56 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             return output
 
         elif func_name in {"add", "add_", "sub", "div", "rsub", "pow", "gt", "ge", "lt", "eq"}:
-            if isinstance(layer_in,list):
+            if DEBUG:
+                print(f"DEBUG: Processing func_name = {func_name}")
+                print(f"DEBUG: layer_in type = {type(layer_in)}")
+                print(f"DEBUG: method_args = {method_args}")
+            
+            if isinstance(layer_in, list):
+                if DEBUG:
+                    print(f"DEBUG: layer_in is list, length = {len(layer_in)}")
                 if len(layer_in) == 2:
-                    output = aten_op(layer_in[0],layer_in[1],*method_args)
+                    output = aten_op(layer_in[0], layer_in[1], *method_args)
                 elif len(layer_in) == 3:
-                    output = aten_op(layer_in[0],layer_in[1],layer_in[2],*method_args)
+                    output = aten_op(layer_in[0], layer_in[1], layer_in[2], *method_args)
                 else:
-                    output = aten_op(layer_in,*method_args)
+                    output = aten_op(layer_in, *method_args)
             else:
-                output = aten_op(layer_in,*method_args)
+                if DEBUG:
+                    print(f"DEBUG: layer_in is not list") 
+                
+                # Only try input collection if we detect missing arguments
+                if func_name in {"add", "add_", "sub", "div"} and not method_args:
+                    if DEBUG:
+                        print(f"DEBUG: Collecting inputs from parents: {parents}")
+                    recovered_inputs = [tensor_map[p] for p in parents if p in tensor_map]
+                    if len(recovered_inputs) >= 2:
+                        if DEBUG:
+                            print(f"DEBUG: Found {len(recovered_inputs)} inputs, using first 2")
+                        output = aten_op(recovered_inputs[0], recovered_inputs[1])
+                        return output
+                
+                # Handle single tensor cases
+                if func_name == "pow":
+                    if DEBUG:
+                        print(f"DEBUG: pow operation with single tensor")
+                        print(f"DEBUG: aten_op = {aten_op}")
+                    if method_args and len(method_args) > 0:
+                        scalar_val = method_args[0]
+                        if 'Tensor_Scalar' in str(aten_op):
+                            # Albert case: aten.pow.Tensor_Scalar(Tensor self, Scalar exponent)
+                            if DEBUG:
+                                print(f"DEBUG: Using Tensor_Scalar order: (tensor, scalar)")
+                            output = aten_op(layer_in, scalar_val)
+                        else:
+                            # XLNet case: aten.pow.Scalar(Scalar self, Tensor exponent)
+                            if DEBUG:
+                                print(f"DEBUG: Using Scalar order: (scalar, tensor)")
+                            output = aten_op(scalar_val, layer_in)
+                    else:
+                        output = aten_op(-1.0, layer_in)
+                else:
+                    output = aten_op(layer_in, *method_args)
             return output
 
         elif "scalar_tensor" in func_name:
