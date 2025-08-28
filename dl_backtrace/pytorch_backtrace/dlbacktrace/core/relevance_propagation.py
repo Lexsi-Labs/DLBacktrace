@@ -663,7 +663,7 @@ def run_evaluation(
             X = process_input_for_eval(info["input_values"])
             
             if DEBUG:
-                log(f"  [Conv2d] X={X.shape}, W={W.shape}, B={B.shape}, pad={pad}, stride={stride}, activation_master: {activation_master[activation_dict[name]]}")
+                log(f"  [Conv2d] X={X.shape}, W={W.shape}, B={None if B is None else B.shape}, pad={pad}, stride={stride}, activation_master: {activation_master[activation_dict[name]]}")
             
             for c in children:
                 R = get_relevance_from_child(c, name, all_wt, node_io)
