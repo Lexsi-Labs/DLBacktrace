@@ -130,7 +130,9 @@ def calculate_start_wt(arg, scaler=1,*args, **kwargs):
 
         elif task == "generation":
             # code here
+            print("======arg.shape=====",arg.shape)
             x = np.argmax(arg, axis=2)
+            print("===x.shape============",x.shape)
             y = np.zeros_like(arg)
             value = 1 / arg.shape[1]
 
@@ -138,6 +140,8 @@ def calculate_start_wt(arg, scaler=1,*args, **kwargs):
             for i in range(batch_size):
                 for j in range(seq_len):
                     y[i, j, x[i, j]] = value 
+
+            print("====y.shape=======",y.shape)
 
     else:
         print(arg.shape)

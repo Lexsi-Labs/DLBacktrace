@@ -168,6 +168,27 @@ class DLBacktraceFX:
         self.tracer = self.exported_program.graph_module
 
     def predict(self, *inputs, debug=False):
+        """
+        Execute the model with the given inputs and return node I/O data.
+        
+        Args:
+            *inputs: Input tensors for the model
+            debug (bool): Enable debug mode for detailed execution logging
+            
+        Returns:
+            dict: Node I/O data containing execution results
+        """
+        if debug:
+            print(f"🔧 DLB Predict: Debug mode enabled")
+            print(f"   Input count: {len(inputs)}")
+            for i, inp in enumerate(inputs):
+                if isinstance(inp, torch.Tensor):
+                    print(f"   Input {i}: {inp.shape} on {inp.device}, dtype: {inp.dtype}")
+                else:
+                    print(f"   Input {i}: {type(inp)}")
+            print(f"   Use disk cache: {self.use_disk_cache}")
+            print(f"   Layer stack length: {len(self.layer_stack)}")
+        
         if self.use_disk_cache:
             executor = ExecutionEngine(
                 model=self.model,
@@ -176,7 +197,7 @@ class DLBacktraceFX:
                 layer_stack=self.layer_stack,
                 tracer=self.tracer,
                 exported_program=self.exported_program,
-                cache_manager=self.cache_manager  # ✅ ADD THIS
+                cache_manager=self.cache_manager
             )
         else:
             executor = ExecutionEngineNoCache(
@@ -187,7 +208,16 @@ class DLBacktraceFX:
                 tracer=self.tracer,
                 exported_program=self.exported_program,
             )
+        
+        if debug:
+            print(f"🔧 Starting execution with {type(executor).__name__}")
+        
         self.node_io = executor.run(inputs, debug=debug)
+        
+        if debug:
+            print(f"🔧 Execution completed successfully")
+            print(f"   Output nodes: {len(self.node_io)}")
+        
         return self.node_io
 
     def evaluation(self, mode="default", start_wt=[], multiplier=100.0, scaler=1.0, thresholding=0.5, task="binary-classification", debug=False):
@@ -233,3 +263,83 @@ class DLBacktraceFX:
 
     def visualize_dlbacktrace(self, output_path="backtrace_graph", top_k=None, relevance_threshold=None):
         visualize_relevance(self.graph, self.all_wt, output_path, top_k, relevance_threshold)
+    
+    def verify_model_consistency(self, test_inputs, tolerance=1e-6):
+        """
+        Verify that DLB predict produces identical results to direct model inference.
+        
+        Args:
+            test_inputs: Input tensors for testing
+            tolerance: Numerical tolerance for comparison
+            
+        Returns:
+            dict: Comparison results with max difference and success status
+        """
+        print("🔍 Verifying model consistency...")
+        
+        # Ensure model is in eval mode
+        self.model.eval()
+        torch.set_grad_enabled(False)
+        
+        # Get direct model output
+        with torch.no_grad():
+            direct_output = self.model(*test_inputs)
+            if isinstance(direct_output, (list, tuple)):
+                direct_output = direct_output[0]  # Take first output for comparison
+        
+        # Get DLB predict output
+        dlb_node_io = self.predict(*test_inputs, debug=False)
+        
+        # Find the final output node
+        final_output = None
+        for node_name, node_data in dlb_node_io.items():
+            if node_data.get('layer_type') == 'Output' or 'output' in node_name.lower():
+                final_output = node_data['output_values']
+                break
+        
+        if final_output is None:
+            # Fallback: use the last node's output
+            last_node = list(dlb_node_io.keys())[-1]
+            final_output = dlb_node_io[last_node]['output_values']
+        
+        # Ensure both outputs are tensors
+        if isinstance(final_output, (list, tuple)):
+            final_output = final_output[0]
+        
+        # Compare outputs
+        if isinstance(direct_output, torch.Tensor) and isinstance(final_output, torch.Tensor):
+            # Ensure same device and dtype for comparison
+            if direct_output.device != final_output.device:
+                final_output = final_output.to(device=direct_output.device)
+            if direct_output.dtype != final_output.dtype:
+                final_output = final_output.to(dtype=direct_output.dtype)
+            
+            # Calculate differences
+            max_diff = torch.max(torch.abs(direct_output - final_output)).item()
+            mean_diff = torch.mean(torch.abs(direct_output - final_output)).item()
+            
+            # Check if outputs are identical within tolerance
+            is_consistent = max_diff < tolerance
+            
+            result = {
+                'consistent': is_consistent,
+                'max_difference': max_diff,
+                'mean_difference': mean_diff,
+                'tolerance': tolerance,
+                'direct_output_shape': direct_output.shape,
+                'dlb_output_shape': final_output.shape,
+                'direct_output_sum': torch.sum(direct_output).item(),
+                'dlb_output_sum': torch.sum(final_output).item()
+            }
+            
+            if is_consistent:
+                print(f"✅ Model consistency verified! Max difference: {max_diff:.2e}")
+            else:
+                print(f"❌ Model inconsistency detected! Max difference: {max_diff:.2e} (tolerance: {tolerance:.2e})")
+                print(f"   Direct output sum: {result['direct_output_sum']:.6f}")
+                print(f"   DLB output sum: {result['dlb_output_sum']:.6f}")
+            
+            return result
+        else:
+            print(f"❌ Cannot compare outputs: direct={type(direct_output)}, dlb={type(final_output)}")
+            return {'consistent': False, 'error': 'Output type mismatch'}
