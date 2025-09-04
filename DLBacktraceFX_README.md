@@ -9,7 +9,7 @@
 ## 🚀 Key Features
 
 - 🔍 **Model Tracing** — Capture detailed graph metadata from PyTorch models.
-- 💾 **Disk & In-Memory Execution** — Choose performance or flexibility via `ExecutionEngine` or `ExecutionEngineNoCache`.
+- 💾 **In-Memory Execution** — Fast, memory-efficient execution via `ExecutionEngineNoCache`.
 - 📈 **Graph Visualization** — Visualize the full forward graph or relevance-weighted graphs.
 - 🧩 **ATen Operation Support** — Supports 100+ traced operations including conv, norm, reshape, attention, masking, etc.
 - 🧠 **Layer-wise XAI** — Interpret how much each part of the model contributes to predictions.
@@ -29,8 +29,7 @@ graph TD
     F --> G[Weight Mapping]
 
     B --> H[Execution Engine]
-    H -->|Cache ON| I[DiskCacheManager]
-    H -->|Cache OFF| J[ExecutionEngineNoCache]
+    H --> J[ExecutionEngineNoCache]
 
     H --> K[Node I/O]
 
@@ -74,7 +73,7 @@ model = models.resnet18(pretrained=False)
 dummy_input = torch.randn(1, 3, 224, 224)
 
 # Initialize tracer
-dbg = DLBacktraceFX(model, (dummy_input,), use_disk_cache=False)
+dbg = DLBacktraceFX(model, (dummy_input,))
 
 # Run forward pass
 dbg.predict(dummy_input)

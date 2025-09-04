@@ -1,7 +1,6 @@
 # DL-Backtrace/dl_backtrace/pytorch_backtrace/dlbacktrace/dlbacktrace.py
 
 from .core.graph_builder import build_graph
-from .core.execution_engine import ExecutionEngine, DiskCacheManager
 from .core.execution_engine_noncache import ExecutionEngineNoCache
 from .core.trace_utils import (
     extract_placeholders,
@@ -18,7 +17,7 @@ import torch
 from torch.export import export, default_decompositions, export_for_training
 
 class DLBacktraceFX:
-    def __init__(self, model, input_for_graph, dynamic_shapes=None, use_disk_cache=False, layer_implementation="original"):
+    def __init__(self, model, input_for_graph, dynamic_shapes=None, layer_implementation="original"):
         """
         Initialize DL-Backtrace FX for model tracing and explainability.
         
@@ -26,7 +25,6 @@ class DLBacktraceFX:
             model: PyTorch model to trace
             input_for_graph: Sample input for graph tracing
             dynamic_shapes: Optional dynamic shape constraints
-            use_disk_cache: Whether to use disk caching for execution
             layer_implementation: Choice of layer implementation. Can be:
                 - String: Global implementation ("original", "cuda", "pytorch", "refactored")
                 - Dict: Layer-specific implementations, e.g.:
@@ -41,7 +39,6 @@ class DLBacktraceFX:
         print("---------------------------v1------------------------------------------")
         self.input_for_graph = input_for_graph
         self.dynamic_shapes = dynamic_shapes
-        self.use_disk_cache = use_disk_cache
         
         # Handle both string and dict layer implementation configurations
         self.layer_implementation = self._parse_layer_implementation(layer_implementation)
@@ -54,10 +51,7 @@ class DLBacktraceFX:
             for layer_type, impl in self.layer_implementation.items():
                 print(f"     {layer_type}: {impl.upper()}")
         
-        if self.use_disk_cache:
-            self.cache_manager = DiskCacheManager()
-        else:
-            self.cache_manager = None  # not used
+        # Cache manager removed - using non-cache execution only
         print("---------------------------v2------------------------------------------")
         # Export and trace model
         self._trace_model()
@@ -186,28 +180,20 @@ class DLBacktraceFX:
                     print(f"   Input {i}: {inp.shape} on {inp.device}, dtype: {inp.dtype}")
                 else:
                     print(f"   Input {i}: {type(inp)}")
-            print(f"   Use disk cache: {self.use_disk_cache}")
+            print(f"   Execution engine: Non-cache (ExecutionEngineNoCache)")
             print(f"   Layer stack length: {len(self.layer_stack)}")
         
-        if self.use_disk_cache:
-            executor = ExecutionEngine(
-                model=self.model,
-                extracted_weights=self.extracted_weights,
-                fx_graph=self.graph,
-                layer_stack=self.layer_stack,
-                tracer=self.tracer,
-                exported_program=self.exported_program,
-                cache_manager=self.cache_manager
-            )
-        else:
-            executor = ExecutionEngineNoCache(
-                model=self.model,
-                extracted_weights=self.extracted_weights,
-                fx_graph=self.graph,
-                layer_stack=self.layer_stack,
-                tracer=self.tracer,
-                exported_program=self.exported_program,
-            )
+        # Always use non-cache execution engine
+        executor = ExecutionEngineNoCache(
+            model=self.model,
+            extracted_weights=self.extracted_weights,
+            fx_graph=self.graph,
+            layer_stack=self.layer_stack,
+            tracer=self.tracer,
+            exported_program=self.exported_program,
+            debug=debug,
+            log_level="DEBUG" if debug else "INFO"
+        )
         
         if debug:
             print(f"🔧 Starting execution with {type(executor).__name__}")
@@ -343,3 +329,69 @@ class DLBacktraceFX:
         else:
             print(f"❌ Cannot compare outputs: direct={type(direct_output)}, dlb={type(final_output)}")
             return {'consistent': False, 'error': 'Output type mismatch'}
+    
+    def debug_execution_differences(self, test_inputs):
+        """
+        Debug why DLB execution differs from direct model execution
+        """
+        print("🔍 Debugging execution differences...")
+        
+        # Get direct model output
+        with torch.no_grad():
+            direct_output = self.model(*test_inputs)
+            if isinstance(direct_output, (list, tuple)):
+                direct_output = direct_output[0]
+        
+        # Get DLB predict output with debug info
+        dlb_node_io = self.predict(*test_inputs, debug=True)
+        
+        # Find the final output node
+        final_output = None
+        final_node_name = None
+        for node_name, node_data in dlb_node_io.items():
+            if node_data.get('layer_type') == 'Output' or 'output' in node_name.lower():
+                final_output = node_data['output_values']
+                final_node_name = node_name
+                break
+        
+        if final_output is None:
+            # Fallback: use the last node's output
+            final_node_name = list(dlb_node_io.keys())[-1]
+            final_output = dlb_node_io[final_node_name]['output_values']
+        
+        # Ensure both outputs are tensors
+        if isinstance(final_output, (list, tuple)):
+            final_output = final_output[0]
+        
+        print(f"🔍 Final output analysis:")
+        print(f"   Direct model output: {direct_output.shape} on {direct_output.device}, dtype: {direct_output.dtype}")
+        print(f"   DLB output ({final_node_name}): {final_output.shape} on {final_output.device}, dtype: {final_output.dtype}")
+        
+        # Calculate differences
+        if isinstance(direct_output, torch.Tensor) and isinstance(final_output, torch.Tensor):
+            max_diff = torch.max(torch.abs(direct_output - final_output)).item()
+            mean_diff = torch.mean(torch.abs(direct_output - final_output)).item()
+            
+            print(f"   Max difference: {max_diff:.2e}")
+            print(f"   Mean difference: {mean_diff:.2e}")
+            
+            # Check for NaN or Inf values
+            if torch.isnan(direct_output).any():
+                print("   ⚠️  Direct output contains NaN values")
+            if torch.isnan(final_output).any():
+                print("   ⚠️  DLB output contains NaN values")
+            if torch.isinf(direct_output).any():
+                print("   ⚠️  Direct output contains Inf values")
+            if torch.isinf(final_output).any():
+                print("   ⚠️  DLB output contains Inf values")
+            
+            return {
+                'max_difference': max_diff,
+                'mean_difference': mean_diff,
+                'direct_output': direct_output,
+                'dlb_output': final_output,
+                'final_node_name': final_node_name
+            }
+        else:
+            print(f"   ❌ Type mismatch: direct={type(direct_output)}, dlb={type(final_output)}")
+            return {'error': 'Type mismatch'}
