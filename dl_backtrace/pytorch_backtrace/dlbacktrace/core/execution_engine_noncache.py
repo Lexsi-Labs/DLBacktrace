@@ -1130,13 +1130,12 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                     # 🔧 FIX: Use extracted tensor but preserve original hyperparameters
                     layer_in = input_tensor
                     
-                    # 🔧 FIX: Only update end if it's not already set in hyperparams
-                    if "end" not in layer_hyperparams or layer_hyperparams["end"] is None:
-                        logger.debug(f"[{node_name}] 🔧 slice: updating end parameter to {potential_end}")
-                        # Create a copy to avoid modifying original
-                        updated_hyperparams = dict(layer_hyperparams)
-                        updated_hyperparams["end"] = potential_end
-                        layer_hyperparams = updated_hyperparams
+                    # 🔧 CRITICAL FIX: Always use parent value when available (it's more accurate)
+                    logger.debug(f"[{node_name}] 🔧 slice: using parent value {potential_end} as end parameter (overriding hyperparams)")
+                    # Create a copy to avoid modifying original
+                    updated_hyperparams = dict(layer_hyperparams)
+                    updated_hyperparams["end"] = potential_end
+                    layer_hyperparams = updated_hyperparams
                 else:
                     raise RuntimeError(f"[{node_name}] ❌ slice: expected list with [tensor, int] or single tensor, got {layer_in}")
             
@@ -1156,7 +1155,7 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             step = layer_hyperparams.get("step", 1)
             
             logger.debug(f"[{node_name}] ✅ slice: input shape={layer_in.shape}, dim={dim}, start={start}, end={end}, step={step}")
-            
+            print("slice",dim,start,end,step)
             try:
                 output = aten_op(layer_in, dim, start, end, step)
                 logger.debug(f"[{node_name}] ✅ slice output shape: {output.shape}")
