@@ -438,27 +438,30 @@ class DLBacktraceFX:
         # Also disable matmul TF32 explicitly
         torch.backends.cuda.matmul.allow_tf32 = False
         
-        # Be conservative: warn_only=True avoids hard failures from unsupported det. ops
-        torch.use_deterministic_algorithms(True, warn_only=True)
-        
-        # Set random seeds
-        torch.manual_seed(42)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(42)
-        
-        np.random.seed(42)
-        torch.set_default_dtype(torch.float32)
-        
-        # Set environment variables (use setdefault to avoid overriding if already set)
-        os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG', ':4096:8')
-        os.environ.setdefault('PYTHONHASHSEED', '42')
-        
-        # Force deterministic SDPA path if attention is used
+        # Import and use exact reproducibility setup from core
         try:
-            from torch.backends.cuda import sdp_kernel
-            sdp_kernel(enable_flash=False, enable_mem_efficient=False, enable_math=True)
-        except Exception:
-            pass
+            from dl_backtrace.pytorch_backtrace.dlbacktrace.core.reproducibility import setup_exact_reproducibility
+            
+            # Set up exact PyTorch reproducibility
+            setup_exact_reproducibility(seed=42, disable_optimizations=True)
+            
+        except ImportError:
+            # Fallback to manual setup if reproducibility module is not available
+            torch.use_deterministic_algorithms(True, warn_only=True)
+            torch.manual_seed(42)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(42)
+            np.random.seed(42)
+            torch.set_default_dtype(torch.float32)
+            os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG', ':4096:8')
+            os.environ.setdefault('PYTHONHASHSEED', '42')
+            
+            # Force deterministic SDPA path if attention is used
+            try:
+                from torch.backends.cuda import sdp_kernel
+                sdp_kernel(enable_flash=False, enable_mem_efficient=False, enable_math=True)
+            except Exception:
+                pass
         
         # 🔧 ENHANCED: Memory management for consistent performance
         try:
