@@ -1669,7 +1669,10 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             
             if hasattr(output, 'shape'):
                 logger.debug(f"[{node_name}] ✅ {func_name} output shape: {output.shape}")
-            print(node_name, output.shape,"output shape")
+                print(node_name, output.shape,"output shape")
+            else:
+                logger.debug(f"[{node_name}] ✅ {func_name} output type: {type(output)}")
+                print(node_name, type(output),"output (non-tensor)")
             
             return output
 
@@ -3163,8 +3166,10 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
                 # 🔧 FIX: Only print shape if output is a tensor
                 if isinstance(output, int):
                     print("[outerloop]",node_name, type(output), output,"output (non-tensor)")
-                else:
+                elif hasattr(output, 'shape'):
                     print("[outerloop]",node_name, output.shape,"output shape")
+                else:
+                    print("[outerloop]",node_name, type(output),"output (non-tensor)")
         except Exception as e:
             logger.error(f"[Execution Error - NoCache] Node `{node_name}` failed in `{func_name}`: {e}")
             output = layer_in

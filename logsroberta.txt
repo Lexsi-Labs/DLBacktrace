@@ -1,0 +1,1596 @@
+Using /home/zeus/.cache/torch_extensions/py310_cu126 as PyTorch extensions root...
+Detected CUDA files, patching ldflags
+Emitting ninja build file /home/zeus/.cache/torch_extensions/py310_cu126/custom_linear_layer_cuda_v2/build.ninja...
+Building extension module custom_linear_layer_cuda_v2...
+Allowing ninja to set a default number of workers... (overridable by setting the environment variable MAX_JOBS=N)
+ninja: no work to do.
+Loading extension module custom_linear_layer_cuda_v2...
+Using /home/zeus/.cache/torch_extensions/py310_cu126 as PyTorch extensions root...
+Detected CUDA files, patching ldflags
+Emitting ninja build file /home/zeus/.cache/torch_extensions/py310_cu126/custom_conv2d_cuda_v2/build.ninja...
+Building extension module custom_conv2d_cuda_v2...
+Allowing ninja to set a default number of workers... (overridable by setting the environment variable MAX_JOBS=N)
+ninja: no work to do.
+Loading extension module custom_conv2d_cuda_v2...
+Using /home/zeus/.cache/torch_extensions/py310_cu126 as PyTorch extensions root...
+Detected CUDA files, patching ldflags
+Emitting ninja build file /home/zeus/.cache/torch_extensions/py310_cu126/custom_embedding_layer_cuda_v2/build.ninja...
+Building extension module custom_embedding_layer_cuda_v2...
+Allowing ninja to set a default number of workers... (overridable by setting the environment variable MAX_JOBS=N)
+ninja: no work to do.
+Loading extension module custom_embedding_layer_cuda_v2...
+Using /home/zeus/.cache/torch_extensions/py310_cu126 as PyTorch extensions root...
+Detected CUDA files, patching ldflags
+Emitting ninja build file /home/zeus/.cache/torch_extensions/py310_cu126/multi_kernel_attention_cuda/build.ninja...
+Building extension module multi_kernel_attention_cuda...
+Allowing ninja to set a default number of workers... (overridable by setting the environment variable MAX_JOBS=N)
+ninja: no work to do.
+Loading extension module multi_kernel_attention_cuda...
+Testing model: JeremiahZ/roberta-base-sst2
+Input IDs shape: torch.Size([1, 7])
+Input IDs dtype: torch.int64
+Attention mask dtype: torch.int64
+
+=== Test 1: Direct Model Execution ===
+Real logits: tensor([[-3.4872,  2.8789]])
+Real logits dtype: torch.float32
+
+=== Test 2: DL-Backtrace Execution ===
+🔧 Setting up deterministic execution environment...
+✅ CUDA device: NVIDIA L4
+✅ CUDA memory: 23.6 GB
+✅ Deterministic environment setup complete!
+---------------------------v1------------------------------------------
+🚀 Layer Implementation Configuration:
+   Global: PYTORCH
+---------------------------v2------------------------------------------
+---------------------------v3------------------------------------------
+---------------------------v4------------------------------------------
+---------------------------v5------------------------------------------
+---------------------------v6------------------------------------------
+---------------------------v7------------------------------------------
+---------------------------v8------------------------------------------
+2025-09-05 05:34:06 - dlbacktrace.execution_engine - INFO - ExecutionEngineNoCache initialized with debug=False, log_level=INFO
+2025-09-05 05:34:06 - dlbacktrace.execution_engine - INFO - Starting execution with 2 inputs
+2025-09-05 05:34:06 - dlbacktrace.execution_engine - INFO - Executing `run_execution_nocache` ...!
+🔧 Executing aten operation: slice
+🔧 Node name: slice_1
+🔧 Children: ['slice_2']
+🔧 Parents: ['b_bert_roberta_embeddings_token_type_ids']
+slice 0 0 9223372036854775807 1
+[outerloop] slice_1 torch.Size([1, 514]) output shape
+🔧 Executing aten operation: ne
+🔧 Node name: ne
+🔧 Children: ['_to_copy']
+🔧 Parents: ['input_ids']
+[outerloop] ne torch.Size([1, 7]) output shape
+🔧 Executing aten operation: embedding
+🔧 Node name: embedding
+🔧 Children: ['add_2']
+🔧 Parents: ['p_bert_roberta_embeddings_word_embeddings_weight', 'input_ids']
+[outerloop] embedding torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: slice
+🔧 Node name: slice_3
+🔧 Children: ['unsqueeze']
+🔧 Parents: ['attention_mask']
+slice 0 0 9223372036854775807 1
+[outerloop] slice_3 torch.Size([1, 7]) output shape
+🔧 Executing aten operation: slice
+🔧 Node name: slice_2
+🔧 Children: ['expand']
+🔧 Parents: ['slice_1']
+slice 1 0 7 1
+[outerloop] slice_2 torch.Size([1, 7]) output shape
+🔧 Executing aten operation: _to_copy
+🔧 Node name: _to_copy
+🔧 Children: ['cumsum', 'type_as', 'mul']
+🔧 Parents: ['ne']
+[outerloop] _to_copy torch.Size([1, 7]) output shape
+🔧 Executing aten operation: unsqueeze
+🔧 Node name: unsqueeze
+🔧 Children: ['unsqueeze_1']
+🔧 Parents: ['slice_3']
+[outerloop] unsqueeze torch.Size([1, 1, 7]) output shape
+🔧 Executing aten operation: expand
+🔧 Node name: expand
+🔧 Children: ['embedding_1']
+🔧 Parents: ['slice_2']
+[outerloop] expand torch.Size([1, 7]) output shape
+🔧 Executing aten operation: cumsum
+🔧 Node name: cumsum
+🔧 Children: ['type_as']
+🔧 Parents: ['_to_copy']
+[outerloop] cumsum torch.Size([1, 7]) output shape
+🔧 Executing aten operation: unsqueeze
+🔧 Node name: unsqueeze_1
+🔧 Children: ['slice_4']
+🔧 Parents: ['unsqueeze']
+[outerloop] unsqueeze_1 torch.Size([1, 1, 1, 7]) output shape
+🔧 Executing aten operation: embedding
+🔧 Node name: embedding_1
+🔧 Children: ['add_2']
+🔧 Parents: ['p_bert_roberta_embeddings_token_type_embeddings_weight', 'expand']
+[outerloop] embedding_1 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: type_as
+🔧 Node name: type_as
+🔧 Children: ['add']
+🔧 Parents: ['cumsum', '_to_copy']
+[outerloop] type_as torch.Size([1, 7]) output shape
+🔧 Executing aten operation: slice
+🔧 Node name: slice_4
+🔧 Children: ['expand_1']
+🔧 Parents: ['unsqueeze_1']
+slice 3 0 9223372036854775807 1
+[outerloop] slice_4 torch.Size([1, 1, 1, 7]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_2
+🔧 Children: ['add_3']
+🔧 Parents: ['embedding', 'embedding_1']
+add_2 torch.Size([1, 7, 768]) output shape
+[outerloop] add_2 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add
+🔧 Children: ['mul']
+🔧 Parents: ['type_as']
+add torch.Size([1, 7]) output shape
+[outerloop] add torch.Size([1, 7]) output shape
+🔧 Executing aten operation: expand
+🔧 Node name: expand_1
+🔧 Children: ['_to_copy_2']
+🔧 Parents: ['slice_4']
+[outerloop] expand_1 torch.Size([1, 1, 7, 7]) output shape
+🔧 Executing aten operation: mul
+🔧 Node name: mul
+🔧 Children: ['_to_copy_1']
+🔧 Parents: ['add', '_to_copy']
+[outerloop] mul torch.Size([1, 7]) output shape
+🔧 Executing aten operation: _to_copy
+🔧 Node name: _to_copy_2
+🔧 Children: ['rsub']
+🔧 Parents: ['expand_1']
+[outerloop] _to_copy_2 torch.Size([1, 1, 7, 7]) output shape
+🔧 Executing aten operation: _to_copy
+🔧 Node name: _to_copy_1
+🔧 Children: ['add_1']
+🔧 Parents: ['mul']
+[outerloop] _to_copy_1 torch.Size([1, 7]) output shape
+🔧 Executing aten operation: rsub
+🔧 Node name: rsub
+🔧 Children: ['_to_copy_3', 'masked_fill']
+🔧 Parents: ['_to_copy_2']
+rsub torch.Size([1, 1, 7, 7]) output shape
+[outerloop] rsub torch.Size([1, 1, 7, 7]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_1
+🔧 Children: ['embedding_2']
+🔧 Parents: ['_to_copy_1']
+add_1 torch.Size([1, 7]) output shape
+[outerloop] add_1 torch.Size([1, 7]) output shape
+🔧 Executing aten operation: _to_copy
+🔧 Node name: _to_copy_3
+🔧 Children: ['masked_fill']
+🔧 Parents: ['rsub']
+[outerloop] _to_copy_3 torch.Size([1, 1, 7, 7]) output shape
+🔧 Executing aten operation: embedding
+🔧 Node name: embedding_2
+🔧 Children: ['add_3']
+🔧 Parents: ['p_bert_roberta_embeddings_position_embeddings_weight', 'add_1']
+[outerloop] embedding_2 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: masked_fill
+🔧 Node name: masked_fill
+🔧 Children: ['scaled_dot_product_attention', 'scaled_dot_product_attention_1', 'scaled_dot_product_attention_2', 'scaled_dot_product_attention_3', 'scaled_dot_product_attention_4', 'scaled_dot_product_attention_5', 'scaled_dot_product_attention_6', 'scaled_dot_product_attention_7', 'scaled_dot_product_attention_8', 'scaled_dot_product_attention_9', 'scaled_dot_product_attention_10', 'scaled_dot_product_attention_11']
+🔧 Parents: ['rsub', '_to_copy_3']
+[outerloop] masked_fill torch.Size([1, 1, 7, 7]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_3
+🔧 Children: ['layer_norm']
+🔧 Parents: ['add_2', 'embedding_2']
+add_3 torch.Size([1, 7, 768]) output shape
+[outerloop] add_3 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: layer_norm
+🔧 Node name: layer_norm
+🔧 Children: ['clone']
+🔧 Parents: ['add_3', 'p_bert_roberta_embeddings_layernorm_weight', 'p_bert_roberta_embeddings_layernorm_bias']
+[outerloop] layer_norm torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone
+🔧 Children: ['linear', 'linear_1', 'linear_2', 'add_4']
+🔧 Parents: ['layer_norm']
+[outerloop] clone torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear
+🔧 Children: ['view']
+🔧 Parents: ['clone', 'p_bert_roberta_encoder_layer_0_attention_self_query_weight', 'p_bert_roberta_encoder_layer_0_attention_self_query_bias']
+[outerloop] linear torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_1
+🔧 Children: ['view_1']
+🔧 Parents: ['clone', 'p_bert_roberta_encoder_layer_0_attention_self_key_weight', 'p_bert_roberta_encoder_layer_0_attention_self_key_bias']
+[outerloop] linear_1 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_2
+🔧 Children: ['view_2']
+🔧 Parents: ['clone', 'p_bert_roberta_encoder_layer_0_attention_self_value_weight', 'p_bert_roberta_encoder_layer_0_attention_self_value_bias']
+[outerloop] linear_2 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view
+🔧 Children: ['permute']
+🔧 Parents: ['linear']
+[outerloop] view torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_1
+🔧 Children: ['permute_1']
+🔧 Parents: ['linear_1']
+[outerloop] view_1 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_2
+🔧 Children: ['permute_2']
+🔧 Parents: ['linear_2']
+[outerloop] view_2 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute
+🔧 Children: ['scaled_dot_product_attention']
+🔧 Parents: ['view']
+[outerloop] permute torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_1
+🔧 Children: ['scaled_dot_product_attention']
+🔧 Parents: ['view_1']
+[outerloop] permute_1 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_2
+🔧 Children: ['scaled_dot_product_attention']
+🔧 Parents: ['view_2']
+[outerloop] permute_2 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: scaled_dot_product_attention
+🔧 Node name: scaled_dot_product_attention
+🔧 Children: ['transpose']
+🔧 Parents: ['permute', 'permute_1', 'permute_2', 'masked_fill']
+[outerloop] scaled_dot_product_attention torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: transpose
+🔧 Node name: transpose
+🔧 Children: ['view_3']
+🔧 Parents: ['scaled_dot_product_attention']
+[outerloop] transpose torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_3
+🔧 Children: ['linear_3']
+🔧 Parents: ['transpose']
+[outerloop] view_3 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_3
+🔧 Children: ['clone_1']
+🔧 Parents: ['view_3', 'p_bert_roberta_encoder_layer_0_attention_output_dense_weight', 'p_bert_roberta_encoder_layer_0_attention_output_dense_bias']
+[outerloop] linear_3 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_1
+🔧 Children: ['add_4']
+🔧 Parents: ['linear_3']
+[outerloop] clone_1 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_4
+🔧 Children: ['layer_norm_1']
+🔧 Parents: ['clone_1', 'clone']
+add_4 torch.Size([1, 7, 768]) output shape
+[outerloop] add_4 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: layer_norm
+🔧 Node name: layer_norm_1
+🔧 Children: ['linear_4', 'add_5']
+🔧 Parents: ['add_4', 'p_bert_roberta_encoder_layer_0_attention_output_layernorm_weight', 'p_bert_roberta_encoder_layer_0_attention_output_layernorm_bias']
+[outerloop] layer_norm_1 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_4
+🔧 Children: ['gelu']
+🔧 Parents: ['layer_norm_1', 'p_bert_roberta_encoder_layer_0_intermediate_dense_weight', 'p_bert_roberta_encoder_layer_0_intermediate_dense_bias']
+[outerloop] linear_4 torch.Size([1, 7, 3072]) output shape
+🔧 Executing aten operation: gelu
+🔧 Node name: gelu
+🔧 Children: ['linear_5']
+🔧 Parents: ['linear_4']
+[outerloop] gelu torch.Size([1, 7, 3072]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_5
+🔧 Children: ['clone_2']
+🔧 Parents: ['gelu', 'p_bert_roberta_encoder_layer_0_output_dense_weight', 'p_bert_roberta_encoder_layer_0_output_dense_bias']
+[outerloop] linear_5 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_2
+🔧 Children: ['add_5']
+🔧 Parents: ['linear_5']
+[outerloop] clone_2 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_5
+🔧 Children: ['layer_norm_2']
+🔧 Parents: ['clone_2', 'layer_norm_1']
+add_5 torch.Size([1, 7, 768]) output shape
+[outerloop] add_5 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: layer_norm
+🔧 Node name: layer_norm_2
+🔧 Children: ['linear_6', 'linear_7', 'linear_8', 'add_6']
+🔧 Parents: ['add_5', 'p_bert_roberta_encoder_layer_0_output_layernorm_weight', 'p_bert_roberta_encoder_layer_0_output_layernorm_bias']
+[outerloop] layer_norm_2 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_6
+🔧 Children: ['view_4']
+🔧 Parents: ['layer_norm_2', 'p_bert_roberta_encoder_layer_1_attention_self_query_weight', 'p_bert_roberta_encoder_layer_1_attention_self_query_bias']
+[outerloop] linear_6 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_7
+🔧 Children: ['view_5']
+🔧 Parents: ['layer_norm_2', 'p_bert_roberta_encoder_layer_1_attention_self_key_weight', 'p_bert_roberta_encoder_layer_1_attention_self_key_bias']
+[outerloop] linear_7 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_8
+🔧 Children: ['view_6']
+🔧 Parents: ['layer_norm_2', 'p_bert_roberta_encoder_layer_1_attention_self_value_weight', 'p_bert_roberta_encoder_layer_1_attention_self_value_bias']
+[outerloop] linear_8 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_4
+🔧 Children: ['permute_3']
+🔧 Parents: ['linear_6']
+[outerloop] view_4 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_5
+🔧 Children: ['permute_4']
+🔧 Parents: ['linear_7']
+[outerloop] view_5 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_6
+🔧 Children: ['permute_5']
+🔧 Parents: ['linear_8']
+[outerloop] view_6 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_3
+🔧 Children: ['scaled_dot_product_attention_1']
+🔧 Parents: ['view_4']
+[outerloop] permute_3 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_4
+🔧 Children: ['scaled_dot_product_attention_1']
+🔧 Parents: ['view_5']
+[outerloop] permute_4 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_5
+🔧 Children: ['scaled_dot_product_attention_1']
+🔧 Parents: ['view_6']
+[outerloop] permute_5 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: scaled_dot_product_attention
+🔧 Node name: scaled_dot_product_attention_1
+🔧 Children: ['transpose_1']
+🔧 Parents: ['permute_3', 'permute_4', 'permute_5', 'masked_fill']
+[outerloop] scaled_dot_product_attention_1 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: transpose
+🔧 Node name: transpose_1
+🔧 Children: ['view_7']
+🔧 Parents: ['scaled_dot_product_attention_1']
+[outerloop] transpose_1 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_7
+🔧 Children: ['linear_9']
+🔧 Parents: ['transpose_1']
+[outerloop] view_7 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_9
+🔧 Children: ['clone_3']
+🔧 Parents: ['view_7', 'p_bert_roberta_encoder_layer_1_attention_output_dense_weight', 'p_bert_roberta_encoder_layer_1_attention_output_dense_bias']
+[outerloop] linear_9 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_3
+🔧 Children: ['add_6']
+🔧 Parents: ['linear_9']
+[outerloop] clone_3 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_6
+🔧 Children: ['layer_norm_3']
+🔧 Parents: ['clone_3', 'layer_norm_2']
+add_6 torch.Size([1, 7, 768]) output shape
+[outerloop] add_6 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: layer_norm
+🔧 Node name: layer_norm_3
+🔧 Children: ['linear_10', 'add_7']
+🔧 Parents: ['add_6', 'p_bert_roberta_encoder_layer_1_attention_output_layernorm_weight', 'p_bert_roberta_encoder_layer_1_attention_output_layernorm_bias']
+[outerloop] layer_norm_3 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_10
+🔧 Children: ['gelu_1']
+🔧 Parents: ['layer_norm_3', 'p_bert_roberta_encoder_layer_1_intermediate_dense_weight', 'p_bert_roberta_encoder_layer_1_intermediate_dense_bias']
+[outerloop] linear_10 torch.Size([1, 7, 3072]) output shape
+🔧 Executing aten operation: gelu
+🔧 Node name: gelu_1
+🔧 Children: ['linear_11']
+🔧 Parents: ['linear_10']
+[outerloop] gelu_1 torch.Size([1, 7, 3072]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_11
+🔧 Children: ['clone_4']
+🔧 Parents: ['gelu_1', 'p_bert_roberta_encoder_layer_1_output_dense_weight', 'p_bert_roberta_encoder_layer_1_output_dense_bias']
+[outerloop] linear_11 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_4
+🔧 Children: ['add_7']
+🔧 Parents: ['linear_11']
+[outerloop] clone_4 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_7
+🔧 Children: ['layer_norm_4']
+🔧 Parents: ['clone_4', 'layer_norm_3']
+add_7 torch.Size([1, 7, 768]) output shape
+[outerloop] add_7 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: layer_norm
+🔧 Node name: layer_norm_4
+🔧 Children: ['linear_12', 'linear_13', 'linear_14', 'add_8']
+🔧 Parents: ['add_7', 'p_bert_roberta_encoder_layer_1_output_layernorm_weight', 'p_bert_roberta_encoder_layer_1_output_layernorm_bias']
+[outerloop] layer_norm_4 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_12
+🔧 Children: ['view_8']
+🔧 Parents: ['layer_norm_4', 'p_bert_roberta_encoder_layer_2_attention_self_query_weight', 'p_bert_roberta_encoder_layer_2_attention_self_query_bias']
+[outerloop] linear_12 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_13
+🔧 Children: ['view_9']
+🔧 Parents: ['layer_norm_4', 'p_bert_roberta_encoder_layer_2_attention_self_key_weight', 'p_bert_roberta_encoder_layer_2_attention_self_key_bias']
+[outerloop] linear_13 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_14
+🔧 Children: ['view_10']
+🔧 Parents: ['layer_norm_4', 'p_bert_roberta_encoder_layer_2_attention_self_value_weight', 'p_bert_roberta_encoder_layer_2_attention_self_value_bias']
+[outerloop] linear_14 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_8
+🔧 Children: ['permute_6']
+🔧 Parents: ['linear_12']
+[outerloop] view_8 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_9
+🔧 Children: ['permute_7']
+🔧 Parents: ['linear_13']
+[outerloop] view_9 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_10
+🔧 Children: ['permute_8']
+🔧 Parents: ['linear_14']
+[outerloop] view_10 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_6
+🔧 Children: ['scaled_dot_product_attention_2']
+🔧 Parents: ['view_8']
+[outerloop] permute_6 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_7
+🔧 Children: ['scaled_dot_product_attention_2']
+🔧 Parents: ['view_9']
+[outerloop] permute_7 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_8
+🔧 Children: ['scaled_dot_product_attention_2']
+🔧 Parents: ['view_10']
+[outerloop] permute_8 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: scaled_dot_product_attention
+🔧 Node name: scaled_dot_product_attention_2
+🔧 Children: ['transpose_2']
+🔧 Parents: ['permute_6', 'permute_7', 'permute_8', 'masked_fill']
+[outerloop] scaled_dot_product_attention_2 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: transpose
+🔧 Node name: transpose_2
+🔧 Children: ['view_11']
+🔧 Parents: ['scaled_dot_product_attention_2']
+[outerloop] transpose_2 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_11
+🔧 Children: ['linear_15']
+🔧 Parents: ['transpose_2']
+[outerloop] view_11 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_15
+🔧 Children: ['clone_5']
+🔧 Parents: ['view_11', 'p_bert_roberta_encoder_layer_2_attention_output_dense_weight', 'p_bert_roberta_encoder_layer_2_attention_output_dense_bias']
+[outerloop] linear_15 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_5
+🔧 Children: ['add_8']
+🔧 Parents: ['linear_15']
+[outerloop] clone_5 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_8
+🔧 Children: ['layer_norm_5']
+🔧 Parents: ['clone_5', 'layer_norm_4']
+add_8 torch.Size([1, 7, 768]) output shape
+[outerloop] add_8 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: layer_norm
+🔧 Node name: layer_norm_5
+🔧 Children: ['linear_16', 'add_9']
+🔧 Parents: ['add_8', 'p_bert_roberta_encoder_layer_2_attention_output_layernorm_weight', 'p_bert_roberta_encoder_layer_2_attention_output_layernorm_bias']
+[outerloop] layer_norm_5 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_16
+🔧 Children: ['gelu_2']
+🔧 Parents: ['layer_norm_5', 'p_bert_roberta_encoder_layer_2_intermediate_dense_weight', 'p_bert_roberta_encoder_layer_2_intermediate_dense_bias']
+[outerloop] linear_16 torch.Size([1, 7, 3072]) output shape
+🔧 Executing aten operation: gelu
+🔧 Node name: gelu_2
+🔧 Children: ['linear_17']
+🔧 Parents: ['linear_16']
+[outerloop] gelu_2 torch.Size([1, 7, 3072]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_17
+🔧 Children: ['clone_6']
+🔧 Parents: ['gelu_2', 'p_bert_roberta_encoder_layer_2_output_dense_weight', 'p_bert_roberta_encoder_layer_2_output_dense_bias']
+[outerloop] linear_17 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_6
+🔧 Children: ['add_9']
+🔧 Parents: ['linear_17']
+[outerloop] clone_6 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_9
+🔧 Children: ['layer_norm_6']
+🔧 Parents: ['clone_6', 'layer_norm_5']
+add_9 torch.Size([1, 7, 768]) output shape
+[outerloop] add_9 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: layer_norm
+🔧 Node name: layer_norm_6
+🔧 Children: ['linear_18', 'linear_19', 'linear_20', 'add_10']
+🔧 Parents: ['add_9', 'p_bert_roberta_encoder_layer_2_output_layernorm_weight', 'p_bert_roberta_encoder_layer_2_output_layernorm_bias']
+[outerloop] layer_norm_6 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_18
+🔧 Children: ['view_12']
+🔧 Parents: ['layer_norm_6', 'p_bert_roberta_encoder_layer_3_attention_self_query_weight', 'p_bert_roberta_encoder_layer_3_attention_self_query_bias']
+[outerloop] linear_18 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_19
+🔧 Children: ['view_13']
+🔧 Parents: ['layer_norm_6', 'p_bert_roberta_encoder_layer_3_attention_self_key_weight', 'p_bert_roberta_encoder_layer_3_attention_self_key_bias']
+[outerloop] linear_19 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_20
+🔧 Children: ['view_14']
+🔧 Parents: ['layer_norm_6', 'p_bert_roberta_encoder_layer_3_attention_self_value_weight', 'p_bert_roberta_encoder_layer_3_attention_self_value_bias']
+[outerloop] linear_20 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_12
+🔧 Children: ['permute_9']
+🔧 Parents: ['linear_18']
+[outerloop] view_12 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_13
+🔧 Children: ['permute_10']
+🔧 Parents: ['linear_19']
+[outerloop] view_13 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_14
+🔧 Children: ['permute_11']
+🔧 Parents: ['linear_20']
+[outerloop] view_14 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_9
+🔧 Children: ['scaled_dot_product_attention_3']
+🔧 Parents: ['view_12']
+[outerloop] permute_9 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_10
+🔧 Children: ['scaled_dot_product_attention_3']
+🔧 Parents: ['view_13']
+[outerloop] permute_10 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_11
+🔧 Children: ['scaled_dot_product_attention_3']
+🔧 Parents: ['view_14']
+[outerloop] permute_11 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: scaled_dot_product_attention
+🔧 Node name: scaled_dot_product_attention_3
+🔧 Children: ['transpose_3']
+🔧 Parents: ['permute_9', 'permute_10', 'permute_11', 'masked_fill']
+[outerloop] scaled_dot_product_attention_3 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: transpose
+🔧 Node name: transpose_3
+🔧 Children: ['view_15']
+🔧 Parents: ['scaled_dot_product_attention_3']
+[outerloop] transpose_3 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_15
+🔧 Children: ['linear_21']
+🔧 Parents: ['transpose_3']
+[outerloop] view_15 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_21
+🔧 Children: ['clone_7']
+🔧 Parents: ['view_15', 'p_bert_roberta_encoder_layer_3_attention_output_dense_weight', 'p_bert_roberta_encoder_layer_3_attention_output_dense_bias']
+[outerloop] linear_21 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_7
+🔧 Children: ['add_10']
+🔧 Parents: ['linear_21']
+[outerloop] clone_7 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_10
+🔧 Children: ['layer_norm_7']
+🔧 Parents: ['clone_7', 'layer_norm_6']
+add_10 torch.Size([1, 7, 768]) output shape
+[outerloop] add_10 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: layer_norm
+🔧 Node name: layer_norm_7
+🔧 Children: ['linear_22', 'add_11']
+🔧 Parents: ['add_10', 'p_bert_roberta_encoder_layer_3_attention_output_layernorm_weight', 'p_bert_roberta_encoder_layer_3_attention_output_layernorm_bias']
+[outerloop] layer_norm_7 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_22
+🔧 Children: ['gelu_3']
+🔧 Parents: ['layer_norm_7', 'p_bert_roberta_encoder_layer_3_intermediate_dense_weight', 'p_bert_roberta_encoder_layer_3_intermediate_dense_bias']
+[outerloop] linear_22 torch.Size([1, 7, 3072]) output shape
+🔧 Executing aten operation: gelu
+🔧 Node name: gelu_3
+🔧 Children: ['linear_23']
+🔧 Parents: ['linear_22']
+[outerloop] gelu_3 torch.Size([1, 7, 3072]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_23
+🔧 Children: ['clone_8']
+🔧 Parents: ['gelu_3', 'p_bert_roberta_encoder_layer_3_output_dense_weight', 'p_bert_roberta_encoder_layer_3_output_dense_bias']
+[outerloop] linear_23 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_8
+🔧 Children: ['add_11']
+🔧 Parents: ['linear_23']
+[outerloop] clone_8 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_11
+🔧 Children: ['layer_norm_8']
+🔧 Parents: ['clone_8', 'layer_norm_7']
+add_11 torch.Size([1, 7, 768]) output shape
+[outerloop] add_11 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: layer_norm
+🔧 Node name: layer_norm_8
+🔧 Children: ['linear_24', 'linear_25', 'linear_26', 'add_12']
+🔧 Parents: ['add_11', 'p_bert_roberta_encoder_layer_3_output_layernorm_weight', 'p_bert_roberta_encoder_layer_3_output_layernorm_bias']
+[outerloop] layer_norm_8 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_24
+🔧 Children: ['view_16']
+🔧 Parents: ['layer_norm_8', 'p_bert_roberta_encoder_layer_4_attention_self_query_weight', 'p_bert_roberta_encoder_layer_4_attention_self_query_bias']
+[outerloop] linear_24 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_25
+🔧 Children: ['view_17']
+🔧 Parents: ['layer_norm_8', 'p_bert_roberta_encoder_layer_4_attention_self_key_weight', 'p_bert_roberta_encoder_layer_4_attention_self_key_bias']
+[outerloop] linear_25 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_26
+🔧 Children: ['view_18']
+🔧 Parents: ['layer_norm_8', 'p_bert_roberta_encoder_layer_4_attention_self_value_weight', 'p_bert_roberta_encoder_layer_4_attention_self_value_bias']
+[outerloop] linear_26 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_16
+🔧 Children: ['permute_12']
+🔧 Parents: ['linear_24']
+[outerloop] view_16 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_17
+🔧 Children: ['permute_13']
+🔧 Parents: ['linear_25']
+[outerloop] view_17 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_18
+🔧 Children: ['permute_14']
+🔧 Parents: ['linear_26']
+[outerloop] view_18 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_12
+🔧 Children: ['scaled_dot_product_attention_4']
+🔧 Parents: ['view_16']
+[outerloop] permute_12 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_13
+🔧 Children: ['scaled_dot_product_attention_4']
+🔧 Parents: ['view_17']
+[outerloop] permute_13 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_14
+🔧 Children: ['scaled_dot_product_attention_4']
+🔧 Parents: ['view_18']
+[outerloop] permute_14 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: scaled_dot_product_attention
+🔧 Node name: scaled_dot_product_attention_4
+🔧 Children: ['transpose_4']
+🔧 Parents: ['permute_12', 'permute_13', 'permute_14', 'masked_fill']
+[outerloop] scaled_dot_product_attention_4 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: transpose
+🔧 Node name: transpose_4
+🔧 Children: ['view_19']
+🔧 Parents: ['scaled_dot_product_attention_4']
+[outerloop] transpose_4 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_19
+🔧 Children: ['linear_27']
+🔧 Parents: ['transpose_4']
+[outerloop] view_19 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_27
+🔧 Children: ['clone_9']
+🔧 Parents: ['view_19', 'p_bert_roberta_encoder_layer_4_attention_output_dense_weight', 'p_bert_roberta_encoder_layer_4_attention_output_dense_bias']
+[outerloop] linear_27 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_9
+🔧 Children: ['add_12']
+🔧 Parents: ['linear_27']
+[outerloop] clone_9 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_12
+🔧 Children: ['layer_norm_9']
+🔧 Parents: ['clone_9', 'layer_norm_8']
+add_12 torch.Size([1, 7, 768]) output shape
+[outerloop] add_12 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: layer_norm
+🔧 Node name: layer_norm_9
+🔧 Children: ['linear_28', 'add_13']
+🔧 Parents: ['add_12', 'p_bert_roberta_encoder_layer_4_attention_output_layernorm_weight', 'p_bert_roberta_encoder_layer_4_attention_output_layernorm_bias']
+[outerloop] layer_norm_9 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_28
+🔧 Children: ['gelu_4']
+🔧 Parents: ['layer_norm_9', 'p_bert_roberta_encoder_layer_4_intermediate_dense_weight', 'p_bert_roberta_encoder_layer_4_intermediate_dense_bias']
+[outerloop] linear_28 torch.Size([1, 7, 3072]) output shape
+🔧 Executing aten operation: gelu
+🔧 Node name: gelu_4
+🔧 Children: ['linear_29']
+🔧 Parents: ['linear_28']
+[outerloop] gelu_4 torch.Size([1, 7, 3072]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_29
+🔧 Children: ['clone_10']
+🔧 Parents: ['gelu_4', 'p_bert_roberta_encoder_layer_4_output_dense_weight', 'p_bert_roberta_encoder_layer_4_output_dense_bias']
+[outerloop] linear_29 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_10
+🔧 Children: ['add_13']
+🔧 Parents: ['linear_29']
+[outerloop] clone_10 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_13
+🔧 Children: ['layer_norm_10']
+🔧 Parents: ['clone_10', 'layer_norm_9']
+add_13 torch.Size([1, 7, 768]) output shape
+[outerloop] add_13 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: layer_norm
+🔧 Node name: layer_norm_10
+🔧 Children: ['linear_30', 'linear_31', 'linear_32', 'add_14']
+🔧 Parents: ['add_13', 'p_bert_roberta_encoder_layer_4_output_layernorm_weight', 'p_bert_roberta_encoder_layer_4_output_layernorm_bias']
+[outerloop] layer_norm_10 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_30
+🔧 Children: ['view_20']
+🔧 Parents: ['layer_norm_10', 'p_bert_roberta_encoder_layer_5_attention_self_query_weight', 'p_bert_roberta_encoder_layer_5_attention_self_query_bias']
+[outerloop] linear_30 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_31
+🔧 Children: ['view_21']
+🔧 Parents: ['layer_norm_10', 'p_bert_roberta_encoder_layer_5_attention_self_key_weight', 'p_bert_roberta_encoder_layer_5_attention_self_key_bias']
+[outerloop] linear_31 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_32
+🔧 Children: ['view_22']
+🔧 Parents: ['layer_norm_10', 'p_bert_roberta_encoder_layer_5_attention_self_value_weight', 'p_bert_roberta_encoder_layer_5_attention_self_value_bias']
+[outerloop] linear_32 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_20
+🔧 Children: ['permute_15']
+🔧 Parents: ['linear_30']
+[outerloop] view_20 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_21
+🔧 Children: ['permute_16']
+🔧 Parents: ['linear_31']
+[outerloop] view_21 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_22
+🔧 Children: ['permute_17']
+🔧 Parents: ['linear_32']
+[outerloop] view_22 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_15
+🔧 Children: ['scaled_dot_product_attention_5']
+🔧 Parents: ['view_20']
+[outerloop] permute_15 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_16
+🔧 Children: ['scaled_dot_product_attention_5']
+🔧 Parents: ['view_21']
+[outerloop] permute_16 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_17
+🔧 Children: ['scaled_dot_product_attention_5']
+🔧 Parents: ['view_22']
+[outerloop] permute_17 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: scaled_dot_product_attention
+🔧 Node name: scaled_dot_product_attention_5
+🔧 Children: ['transpose_5']
+🔧 Parents: ['permute_15', 'permute_16', 'permute_17', 'masked_fill']
+[outerloop] scaled_dot_product_attention_5 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: transpose
+🔧 Node name: transpose_5
+🔧 Children: ['view_23']
+🔧 Parents: ['scaled_dot_product_attention_5']
+[outerloop] transpose_5 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_23
+🔧 Children: ['linear_33']
+🔧 Parents: ['transpose_5']
+[outerloop] view_23 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_33
+🔧 Children: ['clone_11']
+🔧 Parents: ['view_23', 'p_bert_roberta_encoder_layer_5_attention_output_dense_weight', 'p_bert_roberta_encoder_layer_5_attention_output_dense_bias']
+[outerloop] linear_33 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_11
+🔧 Children: ['add_14']
+🔧 Parents: ['linear_33']
+[outerloop] clone_11 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_14
+🔧 Children: ['layer_norm_11']
+🔧 Parents: ['clone_11', 'layer_norm_10']
+add_14 torch.Size([1, 7, 768]) output shape
+[outerloop] add_14 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: layer_norm
+🔧 Node name: layer_norm_11
+🔧 Children: ['linear_34', 'add_15']
+🔧 Parents: ['add_14', 'p_bert_roberta_encoder_layer_5_attention_output_layernorm_weight', 'p_bert_roberta_encoder_layer_5_attention_output_layernorm_bias']
+[outerloop] layer_norm_11 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_34
+🔧 Children: ['gelu_5']
+🔧 Parents: ['layer_norm_11', 'p_bert_roberta_encoder_layer_5_intermediate_dense_weight', 'p_bert_roberta_encoder_layer_5_intermediate_dense_bias']
+[outerloop] linear_34 torch.Size([1, 7, 3072]) output shape
+🔧 Executing aten operation: gelu
+🔧 Node name: gelu_5
+🔧 Children: ['linear_35']
+🔧 Parents: ['linear_34']
+[outerloop] gelu_5 torch.Size([1, 7, 3072]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_35
+🔧 Children: ['clone_12']
+🔧 Parents: ['gelu_5', 'p_bert_roberta_encoder_layer_5_output_dense_weight', 'p_bert_roberta_encoder_layer_5_output_dense_bias']
+[outerloop] linear_35 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_12
+🔧 Children: ['add_15']
+🔧 Parents: ['linear_35']
+[outerloop] clone_12 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_15
+🔧 Children: ['layer_norm_12']
+🔧 Parents: ['clone_12', 'layer_norm_11']
+add_15 torch.Size([1, 7, 768]) output shape
+[outerloop] add_15 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: layer_norm
+🔧 Node name: layer_norm_12
+🔧 Children: ['linear_36', 'linear_37', 'linear_38', 'add_16']
+🔧 Parents: ['add_15', 'p_bert_roberta_encoder_layer_5_output_layernorm_weight', 'p_bert_roberta_encoder_layer_5_output_layernorm_bias']
+[outerloop] layer_norm_12 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_36
+🔧 Children: ['view_24']
+🔧 Parents: ['layer_norm_12', 'p_bert_roberta_encoder_layer_6_attention_self_query_weight', 'p_bert_roberta_encoder_layer_6_attention_self_query_bias']
+[outerloop] linear_36 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_37
+🔧 Children: ['view_25']
+🔧 Parents: ['layer_norm_12', 'p_bert_roberta_encoder_layer_6_attention_self_key_weight', 'p_bert_roberta_encoder_layer_6_attention_self_key_bias']
+[outerloop] linear_37 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_38
+🔧 Children: ['view_26']
+🔧 Parents: ['layer_norm_12', 'p_bert_roberta_encoder_layer_6_attention_self_value_weight', 'p_bert_roberta_encoder_layer_6_attention_self_value_bias']
+[outerloop] linear_38 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_24
+🔧 Children: ['permute_18']
+🔧 Parents: ['linear_36']
+[outerloop] view_24 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_25
+🔧 Children: ['permute_19']
+🔧 Parents: ['linear_37']
+[outerloop] view_25 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_26
+🔧 Children: ['permute_20']
+🔧 Parents: ['linear_38']
+[outerloop] view_26 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_18
+🔧 Children: ['scaled_dot_product_attention_6']
+🔧 Parents: ['view_24']
+[outerloop] permute_18 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_19
+🔧 Children: ['scaled_dot_product_attention_6']
+🔧 Parents: ['view_25']
+[outerloop] permute_19 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_20
+🔧 Children: ['scaled_dot_product_attention_6']
+🔧 Parents: ['view_26']
+[outerloop] permute_20 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: scaled_dot_product_attention
+🔧 Node name: scaled_dot_product_attention_6
+🔧 Children: ['transpose_6']
+🔧 Parents: ['permute_18', 'permute_19', 'permute_20', 'masked_fill']
+[outerloop] scaled_dot_product_attention_6 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: transpose
+🔧 Node name: transpose_6
+🔧 Children: ['view_27']
+🔧 Parents: ['scaled_dot_product_attention_6']
+[outerloop] transpose_6 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_27
+🔧 Children: ['linear_39']
+🔧 Parents: ['transpose_6']
+[outerloop] view_27 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_39
+🔧 Children: ['clone_13']
+🔧 Parents: ['view_27', 'p_bert_roberta_encoder_layer_6_attention_output_dense_weight', 'p_bert_roberta_encoder_layer_6_attention_output_dense_bias']
+[outerloop] linear_39 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_13
+🔧 Children: ['add_16']
+🔧 Parents: ['linear_39']
+[outerloop] clone_13 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_16
+🔧 Children: ['layer_norm_13']
+🔧 Parents: ['clone_13', 'layer_norm_12']
+add_16 torch.Size([1, 7, 768]) output shape
+[outerloop] add_16 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: layer_norm
+🔧 Node name: layer_norm_13
+🔧 Children: ['linear_40', 'add_17']
+🔧 Parents: ['add_16', 'p_bert_roberta_encoder_layer_6_attention_output_layernorm_weight', 'p_bert_roberta_encoder_layer_6_attention_output_layernorm_bias']
+[outerloop] layer_norm_13 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_40
+🔧 Children: ['gelu_6']
+🔧 Parents: ['layer_norm_13', 'p_bert_roberta_encoder_layer_6_intermediate_dense_weight', 'p_bert_roberta_encoder_layer_6_intermediate_dense_bias']
+[outerloop] linear_40 torch.Size([1, 7, 3072]) output shape
+🔧 Executing aten operation: gelu
+🔧 Node name: gelu_6
+🔧 Children: ['linear_41']
+🔧 Parents: ['linear_40']
+[outerloop] gelu_6 torch.Size([1, 7, 3072]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_41
+🔧 Children: ['clone_14']
+🔧 Parents: ['gelu_6', 'p_bert_roberta_encoder_layer_6_output_dense_weight', 'p_bert_roberta_encoder_layer_6_output_dense_bias']
+[outerloop] linear_41 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_14
+🔧 Children: ['add_17']
+🔧 Parents: ['linear_41']
+[outerloop] clone_14 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_17
+🔧 Children: ['layer_norm_14']
+🔧 Parents: ['clone_14', 'layer_norm_13']
+add_17 torch.Size([1, 7, 768]) output shape
+[outerloop] add_17 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: layer_norm
+🔧 Node name: layer_norm_14
+🔧 Children: ['linear_42', 'linear_43', 'linear_44', 'add_18']
+🔧 Parents: ['add_17', 'p_bert_roberta_encoder_layer_6_output_layernorm_weight', 'p_bert_roberta_encoder_layer_6_output_layernorm_bias']
+[outerloop] layer_norm_14 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_42
+🔧 Children: ['view_28']
+🔧 Parents: ['layer_norm_14', 'p_bert_roberta_encoder_layer_7_attention_self_query_weight', 'p_bert_roberta_encoder_layer_7_attention_self_query_bias']
+[outerloop] linear_42 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_43
+🔧 Children: ['view_29']
+🔧 Parents: ['layer_norm_14', 'p_bert_roberta_encoder_layer_7_attention_self_key_weight', 'p_bert_roberta_encoder_layer_7_attention_self_key_bias']
+[outerloop] linear_43 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_44
+🔧 Children: ['view_30']
+🔧 Parents: ['layer_norm_14', 'p_bert_roberta_encoder_layer_7_attention_self_value_weight', 'p_bert_roberta_encoder_layer_7_attention_self_value_bias']
+[outerloop] linear_44 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_28
+🔧 Children: ['permute_21']
+🔧 Parents: ['linear_42']
+[outerloop] view_28 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_29
+🔧 Children: ['permute_22']
+🔧 Parents: ['linear_43']
+[outerloop] view_29 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_30
+🔧 Children: ['permute_23']
+🔧 Parents: ['linear_44']
+[outerloop] view_30 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_21
+🔧 Children: ['scaled_dot_product_attention_7']
+🔧 Parents: ['view_28']
+[outerloop] permute_21 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_22
+🔧 Children: ['scaled_dot_product_attention_7']
+🔧 Parents: ['view_29']
+[outerloop] permute_22 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_23
+🔧 Children: ['scaled_dot_product_attention_7']
+🔧 Parents: ['view_30']
+[outerloop] permute_23 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: scaled_dot_product_attention
+🔧 Node name: scaled_dot_product_attention_7
+🔧 Children: ['transpose_7']
+🔧 Parents: ['permute_21', 'permute_22', 'permute_23', 'masked_fill']
+[outerloop] scaled_dot_product_attention_7 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: transpose
+🔧 Node name: transpose_7
+🔧 Children: ['view_31']
+🔧 Parents: ['scaled_dot_product_attention_7']
+[outerloop] transpose_7 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_31
+🔧 Children: ['linear_45']
+🔧 Parents: ['transpose_7']
+[outerloop] view_31 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_45
+🔧 Children: ['clone_15']
+🔧 Parents: ['view_31', 'p_bert_roberta_encoder_layer_7_attention_output_dense_weight', 'p_bert_roberta_encoder_layer_7_attention_output_dense_bias']
+[outerloop] linear_45 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_15
+🔧 Children: ['add_18']
+🔧 Parents: ['linear_45']
+[outerloop] clone_15 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_18
+🔧 Children: ['layer_norm_15']
+🔧 Parents: ['clone_15', 'layer_norm_14']
+add_18 torch.Size([1, 7, 768]) output shape
+[outerloop] add_18 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: layer_norm
+🔧 Node name: layer_norm_15
+🔧 Children: ['linear_46', 'add_19']
+🔧 Parents: ['add_18', 'p_bert_roberta_encoder_layer_7_attention_output_layernorm_weight', 'p_bert_roberta_encoder_layer_7_attention_output_layernorm_bias']
+[outerloop] layer_norm_15 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_46
+🔧 Children: ['gelu_7']
+🔧 Parents: ['layer_norm_15', 'p_bert_roberta_encoder_layer_7_intermediate_dense_weight', 'p_bert_roberta_encoder_layer_7_intermediate_dense_bias']
+[outerloop] linear_46 torch.Size([1, 7, 3072]) output shape
+🔧 Executing aten operation: gelu
+🔧 Node name: gelu_7
+🔧 Children: ['linear_47']
+🔧 Parents: ['linear_46']
+[outerloop] gelu_7 torch.Size([1, 7, 3072]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_47
+🔧 Children: ['clone_16']
+🔧 Parents: ['gelu_7', 'p_bert_roberta_encoder_layer_7_output_dense_weight', 'p_bert_roberta_encoder_layer_7_output_dense_bias']
+[outerloop] linear_47 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_16
+🔧 Children: ['add_19']
+🔧 Parents: ['linear_47']
+[outerloop] clone_16 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_19
+🔧 Children: ['layer_norm_16']
+🔧 Parents: ['clone_16', 'layer_norm_15']
+add_19 torch.Size([1, 7, 768]) output shape
+[outerloop] add_19 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: layer_norm
+🔧 Node name: layer_norm_16
+🔧 Children: ['linear_48', 'linear_49', 'linear_50', 'add_20']
+🔧 Parents: ['add_19', 'p_bert_roberta_encoder_layer_7_output_layernorm_weight', 'p_bert_roberta_encoder_layer_7_output_layernorm_bias']
+[outerloop] layer_norm_16 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_48
+🔧 Children: ['view_32']
+🔧 Parents: ['layer_norm_16', 'p_bert_roberta_encoder_layer_8_attention_self_query_weight', 'p_bert_roberta_encoder_layer_8_attention_self_query_bias']
+[outerloop] linear_48 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_49
+🔧 Children: ['view_33']
+🔧 Parents: ['layer_norm_16', 'p_bert_roberta_encoder_layer_8_attention_self_key_weight', 'p_bert_roberta_encoder_layer_8_attention_self_key_bias']
+[outerloop] linear_49 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_50
+🔧 Children: ['view_34']
+🔧 Parents: ['layer_norm_16', 'p_bert_roberta_encoder_layer_8_attention_self_value_weight', 'p_bert_roberta_encoder_layer_8_attention_self_value_bias']
+[outerloop] linear_50 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_32
+🔧 Children: ['permute_24']
+🔧 Parents: ['linear_48']
+[outerloop] view_32 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_33
+🔧 Children: ['permute_25']
+🔧 Parents: ['linear_49']
+[outerloop] view_33 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_34
+🔧 Children: ['permute_26']
+🔧 Parents: ['linear_50']
+[outerloop] view_34 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_24
+🔧 Children: ['scaled_dot_product_attention_8']
+🔧 Parents: ['view_32']
+[outerloop] permute_24 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_25
+🔧 Children: ['scaled_dot_product_attention_8']
+🔧 Parents: ['view_33']
+[outerloop] permute_25 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_26
+🔧 Children: ['scaled_dot_product_attention_8']
+🔧 Parents: ['view_34']
+[outerloop] permute_26 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: scaled_dot_product_attention
+🔧 Node name: scaled_dot_product_attention_8
+🔧 Children: ['transpose_8']
+🔧 Parents: ['permute_24', 'permute_25', 'permute_26', 'masked_fill']
+[outerloop] scaled_dot_product_attention_8 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: transpose
+🔧 Node name: transpose_8
+🔧 Children: ['view_35']
+🔧 Parents: ['scaled_dot_product_attention_8']
+[outerloop] transpose_8 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_35
+🔧 Children: ['linear_51']
+🔧 Parents: ['transpose_8']
+[outerloop] view_35 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_51
+🔧 Children: ['clone_17']
+🔧 Parents: ['view_35', 'p_bert_roberta_encoder_layer_8_attention_output_dense_weight', 'p_bert_roberta_encoder_layer_8_attention_output_dense_bias']
+[outerloop] linear_51 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_17
+🔧 Children: ['add_20']
+🔧 Parents: ['linear_51']
+[outerloop] clone_17 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_20
+🔧 Children: ['layer_norm_17']
+🔧 Parents: ['clone_17', 'layer_norm_16']
+add_20 torch.Size([1, 7, 768]) output shape
+[outerloop] add_20 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: layer_norm
+🔧 Node name: layer_norm_17
+🔧 Children: ['linear_52', 'add_21']
+🔧 Parents: ['add_20', 'p_bert_roberta_encoder_layer_8_attention_output_layernorm_weight', 'p_bert_roberta_encoder_layer_8_attention_output_layernorm_bias']
+[outerloop] layer_norm_17 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_52
+🔧 Children: ['gelu_8']
+🔧 Parents: ['layer_norm_17', 'p_bert_roberta_encoder_layer_8_intermediate_dense_weight', 'p_bert_roberta_encoder_layer_8_intermediate_dense_bias']
+[outerloop] linear_52 torch.Size([1, 7, 3072]) output shape
+🔧 Executing aten operation: gelu
+🔧 Node name: gelu_8
+🔧 Children: ['linear_53']
+🔧 Parents: ['linear_52']
+[outerloop] gelu_8 torch.Size([1, 7, 3072]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_53
+🔧 Children: ['clone_18']
+🔧 Parents: ['gelu_8', 'p_bert_roberta_encoder_layer_8_output_dense_weight', 'p_bert_roberta_encoder_layer_8_output_dense_bias']
+[outerloop] linear_53 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_18
+🔧 Children: ['add_21']
+🔧 Parents: ['linear_53']
+[outerloop] clone_18 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_21
+🔧 Children: ['layer_norm_18']
+🔧 Parents: ['clone_18', 'layer_norm_17']
+add_21 torch.Size([1, 7, 768]) output shape
+[outerloop] add_21 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: layer_norm
+🔧 Node name: layer_norm_18
+🔧 Children: ['linear_54', 'linear_55', 'linear_56', 'add_22']
+🔧 Parents: ['add_21', 'p_bert_roberta_encoder_layer_8_output_layernorm_weight', 'p_bert_roberta_encoder_layer_8_output_layernorm_bias']
+[outerloop] layer_norm_18 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_54
+🔧 Children: ['view_36']
+🔧 Parents: ['layer_norm_18', 'p_bert_roberta_encoder_layer_9_attention_self_query_weight', 'p_bert_roberta_encoder_layer_9_attention_self_query_bias']
+[outerloop] linear_54 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_55
+🔧 Children: ['view_37']
+🔧 Parents: ['layer_norm_18', 'p_bert_roberta_encoder_layer_9_attention_self_key_weight', 'p_bert_roberta_encoder_layer_9_attention_self_key_bias']
+[outerloop] linear_55 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_56
+🔧 Children: ['view_38']
+🔧 Parents: ['layer_norm_18', 'p_bert_roberta_encoder_layer_9_attention_self_value_weight', 'p_bert_roberta_encoder_layer_9_attention_self_value_bias']
+[outerloop] linear_56 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_36
+🔧 Children: ['permute_27']
+🔧 Parents: ['linear_54']
+[outerloop] view_36 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_37
+🔧 Children: ['permute_28']
+🔧 Parents: ['linear_55']
+[outerloop] view_37 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_38
+🔧 Children: ['permute_29']
+🔧 Parents: ['linear_56']
+[outerloop] view_38 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_27
+🔧 Children: ['scaled_dot_product_attention_9']
+🔧 Parents: ['view_36']
+[outerloop] permute_27 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_28
+🔧 Children: ['scaled_dot_product_attention_9']
+🔧 Parents: ['view_37']
+[outerloop] permute_28 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_29
+🔧 Children: ['scaled_dot_product_attention_9']
+🔧 Parents: ['view_38']
+[outerloop] permute_29 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: scaled_dot_product_attention
+🔧 Node name: scaled_dot_product_attention_9
+🔧 Children: ['transpose_9']
+🔧 Parents: ['permute_27', 'permute_28', 'permute_29', 'masked_fill']
+[outerloop] scaled_dot_product_attention_9 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: transpose
+🔧 Node name: transpose_9
+🔧 Children: ['view_39']
+🔧 Parents: ['scaled_dot_product_attention_9']
+[outerloop] transpose_9 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_39
+🔧 Children: ['linear_57']
+🔧 Parents: ['transpose_9']
+[outerloop] view_39 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_57
+🔧 Children: ['clone_19']
+🔧 Parents: ['view_39', 'p_bert_roberta_encoder_layer_9_attention_output_dense_weight', 'p_bert_roberta_encoder_layer_9_attention_output_dense_bias']
+[outerloop] linear_57 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_19
+🔧 Children: ['add_22']
+🔧 Parents: ['linear_57']
+[outerloop] clone_19 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_22
+🔧 Children: ['layer_norm_19']
+🔧 Parents: ['clone_19', 'layer_norm_18']
+add_22 torch.Size([1, 7, 768]) output shape
+[outerloop] add_22 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: layer_norm
+🔧 Node name: layer_norm_19
+🔧 Children: ['linear_58', 'add_23']
+🔧 Parents: ['add_22', 'p_bert_roberta_encoder_layer_9_attention_output_layernorm_weight', 'p_bert_roberta_encoder_layer_9_attention_output_layernorm_bias']
+[outerloop] layer_norm_19 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_58
+🔧 Children: ['gelu_9']
+🔧 Parents: ['layer_norm_19', 'p_bert_roberta_encoder_layer_9_intermediate_dense_weight', 'p_bert_roberta_encoder_layer_9_intermediate_dense_bias']
+[outerloop] linear_58 torch.Size([1, 7, 3072]) output shape
+🔧 Executing aten operation: gelu
+🔧 Node name: gelu_9
+🔧 Children: ['linear_59']
+🔧 Parents: ['linear_58']
+[outerloop] gelu_9 torch.Size([1, 7, 3072]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_59
+🔧 Children: ['clone_20']
+🔧 Parents: ['gelu_9', 'p_bert_roberta_encoder_layer_9_output_dense_weight', 'p_bert_roberta_encoder_layer_9_output_dense_bias']
+[outerloop] linear_59 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_20
+🔧 Children: ['add_23']
+🔧 Parents: ['linear_59']
+[outerloop] clone_20 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_23
+🔧 Children: ['layer_norm_20']
+🔧 Parents: ['clone_20', 'layer_norm_19']
+add_23 torch.Size([1, 7, 768]) output shape
+[outerloop] add_23 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: layer_norm
+🔧 Node name: layer_norm_20
+🔧 Children: ['linear_60', 'linear_61', 'linear_62', 'add_24']
+🔧 Parents: ['add_23', 'p_bert_roberta_encoder_layer_9_output_layernorm_weight', 'p_bert_roberta_encoder_layer_9_output_layernorm_bias']
+[outerloop] layer_norm_20 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_60
+🔧 Children: ['view_40']
+🔧 Parents: ['layer_norm_20', 'p_bert_roberta_encoder_layer_10_attention_self_query_weight', 'p_bert_roberta_encoder_layer_10_attention_self_query_bias']
+[outerloop] linear_60 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_61
+🔧 Children: ['view_41']
+🔧 Parents: ['layer_norm_20', 'p_bert_roberta_encoder_layer_10_attention_self_key_weight', 'p_bert_roberta_encoder_layer_10_attention_self_key_bias']
+[outerloop] linear_61 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_62
+🔧 Children: ['view_42']
+🔧 Parents: ['layer_norm_20', 'p_bert_roberta_encoder_layer_10_attention_self_value_weight', 'p_bert_roberta_encoder_layer_10_attention_self_value_bias']
+[outerloop] linear_62 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_40
+🔧 Children: ['permute_30']
+🔧 Parents: ['linear_60']
+[outerloop] view_40 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_41
+🔧 Children: ['permute_31']
+🔧 Parents: ['linear_61']
+[outerloop] view_41 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_42
+🔧 Children: ['permute_32']
+🔧 Parents: ['linear_62']
+[outerloop] view_42 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_30
+🔧 Children: ['scaled_dot_product_attention_10']
+🔧 Parents: ['view_40']
+[outerloop] permute_30 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_31
+🔧 Children: ['scaled_dot_product_attention_10']
+🔧 Parents: ['view_41']
+[outerloop] permute_31 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_32
+🔧 Children: ['scaled_dot_product_attention_10']
+🔧 Parents: ['view_42']
+[outerloop] permute_32 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: scaled_dot_product_attention
+🔧 Node name: scaled_dot_product_attention_10
+🔧 Children: ['transpose_10']
+🔧 Parents: ['permute_30', 'permute_31', 'permute_32', 'masked_fill']
+[outerloop] scaled_dot_product_attention_10 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: transpose
+🔧 Node name: transpose_10
+🔧 Children: ['view_43']
+🔧 Parents: ['scaled_dot_product_attention_10']
+[outerloop] transpose_10 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_43
+🔧 Children: ['linear_63']
+🔧 Parents: ['transpose_10']
+[outerloop] view_43 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_63
+🔧 Children: ['clone_21']
+🔧 Parents: ['view_43', 'p_bert_roberta_encoder_layer_10_attention_output_dense_weight', 'p_bert_roberta_encoder_layer_10_attention_output_dense_bias']
+[outerloop] linear_63 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_21
+🔧 Children: ['add_24']
+🔧 Parents: ['linear_63']
+[outerloop] clone_21 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_24
+🔧 Children: ['layer_norm_21']
+🔧 Parents: ['clone_21', 'layer_norm_20']
+add_24 torch.Size([1, 7, 768]) output shape
+[outerloop] add_24 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: layer_norm
+🔧 Node name: layer_norm_21
+🔧 Children: ['linear_64', 'add_25']
+🔧 Parents: ['add_24', 'p_bert_roberta_encoder_layer_10_attention_output_layernorm_weight', 'p_bert_roberta_encoder_layer_10_attention_output_layernorm_bias']
+[outerloop] layer_norm_21 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_64
+🔧 Children: ['gelu_10']
+🔧 Parents: ['layer_norm_21', 'p_bert_roberta_encoder_layer_10_intermediate_dense_weight', 'p_bert_roberta_encoder_layer_10_intermediate_dense_bias']
+[outerloop] linear_64 torch.Size([1, 7, 3072]) output shape
+🔧 Executing aten operation: gelu
+🔧 Node name: gelu_10
+🔧 Children: ['linear_65']
+🔧 Parents: ['linear_64']
+[outerloop] gelu_10 torch.Size([1, 7, 3072]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_65
+🔧 Children: ['clone_22']
+🔧 Parents: ['gelu_10', 'p_bert_roberta_encoder_layer_10_output_dense_weight', 'p_bert_roberta_encoder_layer_10_output_dense_bias']
+[outerloop] linear_65 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_22
+🔧 Children: ['add_25']
+🔧 Parents: ['linear_65']
+[outerloop] clone_22 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_25
+🔧 Children: ['layer_norm_22']
+🔧 Parents: ['clone_22', 'layer_norm_21']
+add_25 torch.Size([1, 7, 768]) output shape
+[outerloop] add_25 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: layer_norm
+🔧 Node name: layer_norm_22
+🔧 Children: ['linear_66', 'linear_67', 'linear_68', 'add_26']
+🔧 Parents: ['add_25', 'p_bert_roberta_encoder_layer_10_output_layernorm_weight', 'p_bert_roberta_encoder_layer_10_output_layernorm_bias']
+[outerloop] layer_norm_22 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_66
+🔧 Children: ['view_44']
+🔧 Parents: ['layer_norm_22', 'p_bert_roberta_encoder_layer_11_attention_self_query_weight', 'p_bert_roberta_encoder_layer_11_attention_self_query_bias']
+[outerloop] linear_66 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_67
+🔧 Children: ['view_45']
+🔧 Parents: ['layer_norm_22', 'p_bert_roberta_encoder_layer_11_attention_self_key_weight', 'p_bert_roberta_encoder_layer_11_attention_self_key_bias']
+[outerloop] linear_67 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_68
+🔧 Children: ['view_46']
+🔧 Parents: ['layer_norm_22', 'p_bert_roberta_encoder_layer_11_attention_self_value_weight', 'p_bert_roberta_encoder_layer_11_attention_self_value_bias']
+[outerloop] linear_68 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_44
+🔧 Children: ['permute_33']
+🔧 Parents: ['linear_66']
+[outerloop] view_44 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_45
+🔧 Children: ['permute_34']
+🔧 Parents: ['linear_67']
+[outerloop] view_45 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_46
+🔧 Children: ['permute_35']
+🔧 Parents: ['linear_68']
+[outerloop] view_46 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_33
+🔧 Children: ['scaled_dot_product_attention_11']
+🔧 Parents: ['view_44']
+[outerloop] permute_33 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_34
+🔧 Children: ['scaled_dot_product_attention_11']
+🔧 Parents: ['view_45']
+[outerloop] permute_34 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: permute
+🔧 Node name: permute_35
+🔧 Children: ['scaled_dot_product_attention_11']
+🔧 Parents: ['view_46']
+[outerloop] permute_35 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: scaled_dot_product_attention
+🔧 Node name: scaled_dot_product_attention_11
+🔧 Children: ['transpose_11']
+🔧 Parents: ['permute_33', 'permute_34', 'permute_35', 'masked_fill']
+[outerloop] scaled_dot_product_attention_11 torch.Size([1, 12, 7, 64]) output shape
+🔧 Executing aten operation: transpose
+🔧 Node name: transpose_11
+🔧 Children: ['view_47']
+🔧 Parents: ['scaled_dot_product_attention_11']
+[outerloop] transpose_11 torch.Size([1, 7, 12, 64]) output shape
+🔧 Executing aten operation: view
+🔧 Node name: view_47
+🔧 Children: ['linear_69']
+🔧 Parents: ['transpose_11']
+[outerloop] view_47 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_69
+🔧 Children: ['clone_23']
+🔧 Parents: ['view_47', 'p_bert_roberta_encoder_layer_11_attention_output_dense_weight', 'p_bert_roberta_encoder_layer_11_attention_output_dense_bias']
+[outerloop] linear_69 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_23
+🔧 Children: ['add_26']
+🔧 Parents: ['linear_69']
+[outerloop] clone_23 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_26
+🔧 Children: ['layer_norm_23']
+🔧 Parents: ['clone_23', 'layer_norm_22']
+add_26 torch.Size([1, 7, 768]) output shape
+[outerloop] add_26 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: layer_norm
+🔧 Node name: layer_norm_23
+🔧 Children: ['linear_70', 'add_27']
+🔧 Parents: ['add_26', 'p_bert_roberta_encoder_layer_11_attention_output_layernorm_weight', 'p_bert_roberta_encoder_layer_11_attention_output_layernorm_bias']
+[outerloop] layer_norm_23 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_70
+🔧 Children: ['gelu_11']
+🔧 Parents: ['layer_norm_23', 'p_bert_roberta_encoder_layer_11_intermediate_dense_weight', 'p_bert_roberta_encoder_layer_11_intermediate_dense_bias']
+[outerloop] linear_70 torch.Size([1, 7, 3072]) output shape
+🔧 Executing aten operation: gelu
+🔧 Node name: gelu_11
+🔧 Children: ['linear_71']
+🔧 Parents: ['linear_70']
+[outerloop] gelu_11 torch.Size([1, 7, 3072]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_71
+🔧 Children: ['clone_24']
+🔧 Parents: ['gelu_11', 'p_bert_roberta_encoder_layer_11_output_dense_weight', 'p_bert_roberta_encoder_layer_11_output_dense_bias']
+[outerloop] linear_71 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_24
+🔧 Children: ['add_27']
+🔧 Parents: ['linear_71']
+[outerloop] clone_24 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: add
+🔧 Node name: add_27
+🔧 Children: ['layer_norm_24']
+🔧 Parents: ['clone_24', 'layer_norm_23']
+add_27 torch.Size([1, 7, 768]) output shape
+[outerloop] add_27 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: layer_norm
+🔧 Node name: layer_norm_24
+🔧 Children: ['slice_5']
+🔧 Parents: ['add_27', 'p_bert_roberta_encoder_layer_11_output_layernorm_weight', 'p_bert_roberta_encoder_layer_11_output_layernorm_bias']
+[outerloop] layer_norm_24 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: slice
+🔧 Node name: slice_5
+🔧 Children: ['select']
+🔧 Parents: ['layer_norm_24']
+slice 0 0 9223372036854775807 1
+[outerloop] slice_5 torch.Size([1, 7, 768]) output shape
+🔧 Executing aten operation: select
+🔧 Node name: select
+🔧 Children: ['slice_6']
+🔧 Parents: ['slice_5']
+[outerloop] select torch.Size([1, 768]) output shape
+🔧 Executing aten operation: slice
+🔧 Node name: slice_6
+🔧 Children: ['clone_25']
+🔧 Parents: ['select']
+slice 1 0 9223372036854775807 1
+[outerloop] slice_6 torch.Size([1, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_25
+🔧 Children: ['linear_72']
+🔧 Parents: ['slice_6']
+[outerloop] clone_25 torch.Size([1, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_72
+🔧 Children: ['tanh']
+🔧 Parents: ['clone_25', 'p_bert_classifier_dense_weight', 'p_bert_classifier_dense_bias']
+[outerloop] linear_72 torch.Size([1, 768]) output shape
+🔧 Executing aten operation: tanh
+🔧 Node name: tanh
+🔧 Children: ['clone_26']
+🔧 Parents: ['linear_72']
+[outerloop] tanh torch.Size([1, 768]) output shape
+🔧 Executing aten operation: clone
+🔧 Node name: clone_26
+🔧 Children: ['linear_73']
+🔧 Parents: ['tanh']
+[outerloop] clone_26 torch.Size([1, 768]) output shape
+🔧 Executing aten operation: linear
+🔧 Node name: linear_73
+🔧 Children: ['output']
+🔧 Parents: ['clone_26', 'p_bert_classifier_out_proj_weight', 'p_bert_classifier_out_proj_bias']
+[outerloop] linear_73 torch.Size([1, 2]) output shape
+Traced logits: tensor([[ 0.2876, -0.4276]])
+Traced logits dtype: torch.float32
+
+=== Comparison ===
+Real logits:    tensor([[-3.4872,  2.8789]])
+Traced logits:  tensor([[ 0.2876, -0.4276]])
+Difference:     tensor([[3.7748, 3.3065]])
+Max difference: 3.7747528553009033
+Real prediction:   tensor([1])
+Traced prediction: tensor([0])
+Predictions match: False
