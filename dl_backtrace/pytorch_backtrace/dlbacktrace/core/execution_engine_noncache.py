@@ -509,10 +509,10 @@ def flatten_paths(val):
 
 def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, method_args, parents, node_io, node_name,tensor_map, children=None):
     logger = get_logger()
-    print(f"🔧 Executing aten operation: {func_name}")
-    print(f"🔧 Node name: {node_name}")
-    print(f"🔧 Children: {children}")
-    print(f"🔧 Parents: {parents}")
+    logger.debug(f"🔧 Executing aten operation: {func_name}")
+    logger.debug(f"🔧 Node name: {node_name}")
+    logger.debug(f"🔧 Children: {children}")
+    logger.debug(f"🔧 Parents: {parents}")
     try:
         # 🔧 MINIMAL FIX: Only convert FakeTensors to real tensors, don't modify properties
         if isinstance(layer_in, (list, tuple)):
@@ -962,10 +962,10 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             return output
 
         elif func_name in ("masked_fill", "masked_fill_"):
-            #print(f"\n[{node_name}] ➕ Executing `{func_name}`")
-            #print(f"[{node_name}] Parents: {parents}")
-            #print(f"[{node_name}] method_args: {method_args}")
-            #print(f"[{node_name}] layer_hyperparams: {layer_hyperparams}")
+            logger.debug(f"[{node_name}] ➕ Executing `{func_name}`")
+            logger.debug(f"[{node_name}] Parents: {parents}")
+            logger.debug(f"[{node_name}] method_args: {method_args}")
+            logger.debug(f"[{node_name}] layer_hyperparams: {layer_hyperparams}")
 
             if isinstance(layer_in, list) and len(layer_in) > 1:
                 mask = layer_in[1]
@@ -989,13 +989,13 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             if value == float('-inf'):
                 value = -torch.finfo(layer_in.dtype).max  # Use max negative finite value
 
-            #print(f"[{node_name}] input shape: {getattr(layer_in, 'shape', None)}, dtype: {getattr(layer_in, 'dtype', None)}")
-            #print(f"[{node_name}] mask shape: {getattr(mask, 'shape', None)}, dtype: {getattr(mask, 'dtype', None)}")
-            #print(f"[{node_name}] fill value: {value}")
+            logger.debug(f"[{node_name}] input shape: {getattr(layer_in, 'shape', None)}, dtype: {getattr(layer_in, 'dtype', None)}")
+            logger.debug(f"[{node_name}] mask shape: {getattr(mask, 'shape', None)}, dtype: {getattr(mask, 'dtype', None)}")
+            logger.debug(f"[{node_name}] fill value: {value}")
 
             try:
                 output = aten_op(layer_in, mask, value)
-                #print(f"[{node_name}] ✅ `masked_fill` success → output shape: {output.shape}")
+                logger.debug(f"[{node_name}] ✅ `masked_fill` success → output shape: {output.shape}")
             except Exception as e:
                 raise RuntimeError(f"[{node_name}] ❌ `masked_fill` failed with shapes: input={layer_in.shape}, mask={mask.shape}, value={value}. Error: {e}")
 
@@ -1251,7 +1251,7 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                 raise ValueError(f"[{node_name}] ❌ slice: dimension {layer_hyperparams['dim']} out of range for tensor of rank {tensor_rank}")
             
             logger.debug(f"[{node_name}] ✅ slice: input shape={layer_in.shape}, dim={dim}, start={start}, end={end}, step={step}")
-            print("slice",dim,start,end,step)
+            logger.debug(f"slice: dim={dim}, start={start}, end={end}, step={step}")
             try:
                 output = aten_op(layer_in, dim, start, end, step)
                 logger.debug(f"[{node_name}] ✅ slice output shape: {output.shape}")
@@ -1262,12 +1262,12 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                                 f"dim={dim}, start={start}, end={end}, step={step}. Error: {e}")
         
         elif func_name == "sym_size":
-            print("sym_size")
-            print("input layer_in",layer_in)
+            logger.debug("sym_size operation")
+            logger.debug(f"input layer_in: {layer_in}")
             if isinstance(layer_in,(tuple,list)):
                 layer_in = layer_in[0]
             output = aten_op(layer_in,layer_hyperparams['dim'])
-            print("output",output)
+            logger.debug(f"output: {output}")
             return output
 
         elif func_name == "_assert_tensor_metadata":
@@ -1562,7 +1562,7 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                     f"shapes: {getattr(a, 'shape', None)}, {getattr(b, 'shape', None)}. Error: {e}"
                 )
 
-            # print(f"node_name: {node_name}, mul shape: {output.shape}")
+            logger.debug(f"node_name: {node_name}, mul output shape: {output.shape}")
             return output
 
         elif func_name in {"add", "add_", "sub", "div", "rsub", "pow", "gt", "ge", "lt", "eq"}:
@@ -1669,10 +1669,10 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             
             if hasattr(output, 'shape'):
                 logger.debug(f"[{node_name}] ✅ {func_name} output shape: {output.shape}")
-                print(node_name, output.shape,"output shape")
+                logger.debug(f"{node_name} output shape: {output.shape}")
             else:
                 logger.debug(f"[{node_name}] ✅ {func_name} output type: {type(output)}")
-                print(node_name, type(output),"output (non-tensor)")
+                logger.debug(f"{node_name} output type: {type(output)} (non-tensor)")
             
             return output
 
@@ -2314,10 +2314,10 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             if isinstance(layer_in, list) and len(layer_in) == 1:
                 output = aten_op(layer_in[0], *method_args)
             elif isinstance(layer_in, torch.Tensor):
-                logger.debug(node_name)
-                print(layer_in.shape,"rsqrt shape input")
+                logger.debug(f"rsqrt operation on node: {node_name}")
+                logger.debug(f"rsqrt input shape: {layer_in.shape}")
                 output = aten_op(layer_in, *method_args)
-                logger.debug(output.shape,"rsqrt shape")
+                logger.debug(f"rsqrt output shape: {output.shape}")
             else:
                 raise RuntimeError(f"[DLBacktraceFX] rsqrt expects 1 input, got {type(layer_in)}: {layer_in}")
             return output
@@ -2329,8 +2329,9 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                 layer_in = layer_in[0]
             if not isinstance(layer_in, torch.Tensor):
                 raise TypeError(f"`triu` expects a tensor input but got: {type(layer_in)}")
-            print(aten_op(layer_in, layer_hyperparams.get("diagonal", 0)).shape,"triu shape")
-            return aten_op(layer_in, layer_hyperparams.get("diagonal", 0))
+            output = aten_op(layer_in, layer_hyperparams.get("diagonal", 0))
+            logger.debug(f"triu output shape: {output.shape}")
+            return output
 
         elif func_name == "mm":
             # Ensure `layer_in` is a list of exactly two tensors
@@ -2518,7 +2519,7 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                 raise TypeError(f"[{node_name}] ❌ copy: expected 'src' to be Tensor but got {type(src_tensor)}")
             
             logger.debug(f"[{node_name}] 🔧 copy: self shape={self_tensor.shape}, src shape={src_tensor.shape}")
-            print(f"[{node_name}] 🔧 copy: self device={self_tensor.device}, src device={src_tensor.device}")
+            logger.debug(f"[{node_name}] 🔧 copy: self device={self_tensor.device}, src device={src_tensor.device}")
             
             # 🔧 FIX: Create copies to avoid modifying original tensors
             self_tensor_copy = self_tensor.clone()
@@ -2592,14 +2593,14 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                 if slice_size != src_size:
                     logger.debug(f"[{node_name}] ⚠️ Shape mismatch: src[{dim}] = {src_size} != target slice length = {slice_size}")
             except Exception as e:
-                print(f"[{node_name}] ⚠️ Failed to inspect shapes: {e}")
+                logger.debug(f"[{node_name}] ⚠️ Failed to inspect shapes: {e}")
 
             # Optional: Show small slice for verification
             try:
                 preview = self_tensor.narrow(dim, start, min(end - start, self_tensor.shape[dim] - start))
                 logger.debug(f"[{node_name}] 🔍 self_tensor slice preview (dim={dim}, start={start}, end={end}): shape={preview.shape}")
             except Exception as e:
-                print(f"[{node_name}] ⚠️ Could not preview slice: {e}")
+                logger.debug(f"[{node_name}] ⚠️ Could not preview slice: {e}")
 
             # Step 4: Execute
             try:
@@ -2889,13 +2890,47 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                     f"[{node_name}] ❌ Failed to apply `index` with shape {input_tensor.shape} and indices {[idx.shape for idx in index_tensors]}: {e}"
                 )
 
+        elif func_name == "cumsum":
+            # 🔧 NEW OPERATION: Cumulative sum with precision consistency
+            if isinstance(layer_in, (list, tuple)):
+                layer_in = layer_in[0] 
+            layer_in = enforce_precision_consistency(layer_in)
+            
+            # Extract dimension from method_args
+            dim = method_args[0] if method_args else 0
+            
+            try:
+                output = aten_op(layer_in, dim)
+                logger.debug(f"[{node_name}] ✅ cumsum: input shape={layer_in.shape}, output shape={output.shape}")
+                return output
+            except Exception as e:
+                raise RuntimeError(f"[{node_name}] ❌ cumsum failed with input shape={layer_in.shape}, dim={dim}. Error: {e}")
+
+        elif func_name == "type_as":
+            # 🔧 NEW OPERATION: Type conversion with precision consistency
+            if isinstance(layer_in, (list, tuple)) and len(layer_in) >= 2:
+                input_tensor, target_tensor = layer_in[0], layer_in[1]
+            else:
+                raise RuntimeError(f"[{node_name}] ❌ type_as expects 2 inputs, got {len(layer_in) if isinstance(layer_in, (list, tuple)) else 1}")
+            
+            # Apply precision consistency to both tensors
+            input_tensor = enforce_precision_consistency(input_tensor)
+            target_tensor = enforce_precision_consistency(target_tensor)
+            
+            try:
+                output = aten_op(input_tensor, target_tensor)
+                logger.debug(f"[{node_name}] ✅ type_as: input shape={input_tensor.shape}, target shape={target_tensor.shape}, output shape={output.shape}")
+                return output
+            except Exception as e:
+                raise RuntimeError(f"[{node_name}] ❌ type_as failed with input shape={input_tensor.shape}, target shape={target_tensor.shape}. Error: {e}")
+
         else:
             inputs = layer_in if isinstance(layer_in, (list, tuple)) else [layer_in]
             output = aten_op(*inputs, *method_args)
             return output 
             
     except Exception as e:
-        print(f"[Execution Error] Node `{node_name}` failed in `{func_name}`: {e}")
+        logger.error(f"[Execution Error] Node `{node_name}` failed in `{func_name}`: {e}")
         #return layer_in
 
 def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, tracer, exported_program=None):
@@ -3163,13 +3198,13 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
                     logger.debug(f"🔧 After processing: {type(layer_in)}, length: {len(layer_in) if isinstance(layer_in, (list, tuple)) else 'single'}")
 
                 output = execute_aten_operation(func_name, layer, layer_in, layer_hyperparams, method_args, parents, node_io, node_name,tensor_map, children=children)
-                # 🔧 FIX: Only print shape if output is a tensor
+                # 🔧 FIX: Only log shape if output is a tensor
                 if isinstance(output, int):
-                    print("[outerloop]",node_name, type(output), output,"output (non-tensor)")
+                    logger.debug(f"[outerloop] {node_name} output type: {type(output)}, value: {output} (non-tensor)")
                 elif hasattr(output, 'shape'):
-                    print("[outerloop]",node_name, output.shape,"output shape")
+                    logger.debug(f"[outerloop] {node_name} output shape: {output.shape}")
                 else:
-                    print("[outerloop]",node_name, type(output),"output (non-tensor)")
+                    logger.debug(f"[outerloop] {node_name} output type: {type(output)} (non-tensor)")
         except Exception as e:
             logger.error(f"[Execution Error - NoCache] Node `{node_name}` failed in `{func_name}`: {e}")
             output = layer_in
