@@ -174,8 +174,10 @@ def enforce_precision_consistency(tensors, target_dtype=None, preserve_original_
             if isinstance(t, torch.Tensor):
                 # Check if it's a FakeTensor and convert to real tensor if needed
                 if 'FakeTensor' in str(type(t)):
-                    # Create a real tensor with the EXACT same properties
-                    real_tensor = torch.zeros_like(t, dtype=t.dtype, device=t.device)
+                    # 🔧 CRITICAL FIX: Preserve original tensor values, don't create zeros!
+                    # FakeTensors should already have the correct values from the forward pass
+                    # Just ensure they're real tensors by detaching and cloning
+                    real_tensor = t.detach().clone()
                     get_logger().debug(f"🔧 Converted FakeTensor to real tensor: {real_tensor.shape}")
                     result.append(real_tensor)
                 else:
@@ -187,8 +189,10 @@ def enforce_precision_consistency(tensors, target_dtype=None, preserve_original_
     elif isinstance(tensors, torch.Tensor):
         # Ensure real tensor (not FakeTensor) is returned
         if 'FakeTensor' in str(type(tensors)):
-            # Create a real tensor with the EXACT same properties
-            real_tensor = torch.zeros_like(tensors, dtype=tensors.dtype, device=tensors.device)
+            # 🔧 CRITICAL FIX: Preserve original tensor values, don't create zeros!
+            # FakeTensors should already have the correct values from the forward pass
+            # Just ensure they're real tensors by detaching and cloning
+            real_tensor = tensors.detach().clone()
             get_logger().debug(f"🔧 Converted FakeTensor to real tensor: {real_tensor.shape}")
             return real_tensor
         else:
@@ -910,23 +914,77 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             if not isinstance(layer_in, torch.Tensor):
                 raise RuntimeError(f"[{node_name}] ❌ `layer_norm` expected Tensor input, got {type(layer_in)}")
         
-            # 🔧 DEVICE CONSISTENCY FIX: Ensure all tensors are on the same device
-            target_device = layer_in.device
+            # 🔧 VALIDATION: Check required parameters exist
+            if "weight" not in layer_hyperparams:
+                raise RuntimeError(f"[{node_name}] ❌ `layer_norm` missing weight parameter")
+            if "bias" not in layer_hyperparams:
+                raise RuntimeError(f"[{node_name}] ❌ `layer_norm` missing bias parameter")
+            if "normalized_shape" not in layer_hyperparams:
+                raise RuntimeError(f"[{node_name}] ❌ `layer_norm` missing normalized_shape parameter")
+            
             weight = layer_hyperparams["weight"]
             bias = layer_hyperparams["bias"]
+            normalized_shape = layer_hyperparams["normalized_shape"]
+            
+            # 🔧 VALIDATION: Check parameter types
+            if not isinstance(weight, torch.Tensor):
+                raise RuntimeError(f"[{node_name}] ❌ `layer_norm` weight must be Tensor, got {type(weight)}")
+            if not isinstance(bias, torch.Tensor):
+                raise RuntimeError(f"[{node_name}] ❌ `layer_norm` bias must be Tensor, got {type(bias)}")
+            
+            # 🔧 VALIDATION: Check parameter shapes
+            if weight.shape != bias.shape:
+                raise RuntimeError(f"[{node_name}] ❌ `layer_norm` weight shape {weight.shape} != bias shape {bias.shape}")
+            
+            # 🔧 VALIDATION: Check normalized_shape matches input dimensions
+            if isinstance(normalized_shape, (list, tuple)):
+                expected_shape = tuple(normalized_shape)
+            else:
+                expected_shape = tuple(normalized_shape.tolist()) if hasattr(normalized_shape, 'tolist') else (normalized_shape,)
+            
+            if layer_in.shape[-len(expected_shape):] != expected_shape:
+                raise RuntimeError(f"[{node_name}] ❌ `layer_norm` input shape {layer_in.shape} doesn't match normalized_shape {expected_shape}")
+            
+            # 🔧 DEVICE CONSISTENCY FIX: Ensure all tensors are on the same device
+            target_device = layer_in.device
             if weight.device != target_device:
                 weight = weight.to(device=target_device)
             if bias.device != target_device:
                 bias = bias.to(device=target_device)
+            
+            # 🔧 DTYPE CONSISTENCY FIX: Ensure all tensors have the same dtype
+            target_dtype = layer_in.dtype
+            if weight.dtype != target_dtype:
+                weight = weight.to(dtype=target_dtype)
+            if bias.dtype != target_dtype:
+                bias = bias.to(dtype=target_dtype)
         
-            # 🔧 CONSISTENCY FIX: Use consistent epsilon value
-            eps = 1e-5  # Standard value instead of variable
-            return aten_op(layer_in,
-                           layer_hyperparams["normalized_shape"],
-                           weight,
-                           bias,
-                           eps,
-                           False)
+            # 🔧 EPSILON: Allow override from hyperparams while having a default
+            eps = layer_hyperparams.get("eps", 1e-5)
+            
+            # 🔧 DEBUGGING: Log parameter shapes/values for debugging
+            logger.debug(f"🔧 layer_norm parameters:")
+            logger.debug(f"  Input shape: {layer_in.shape}")
+            logger.debug(f"  Weight shape: {weight.shape}")
+            logger.debug(f"  Bias shape: {bias.shape}")
+            logger.debug(f"  Normalized shape: {normalized_shape}")
+            logger.debug(f"  Epsilon: {eps}")
+            logger.debug(f"  Input sample: {layer_in.flatten()[:5]}")
+            logger.debug(f"  Weight sample: {weight[:5]}")
+            logger.debug(f"  Bias sample: {bias[:5]}")
+            
+            # 🔧 ERROR HANDLING: Try/catch around the actual operation
+            try:
+                output = aten_op(layer_in, normalized_shape, weight, bias, eps)
+                logger.debug(f"  Output sample: {output.flatten()[:5]}")
+                return output
+            except Exception as e:
+                logger.error(f"[{node_name}] ❌ `layer_norm` execution failed: {e}")
+                logger.error(f"  Input shape: {layer_in.shape}")
+                logger.error(f"  Weight shape: {weight.shape}")
+                logger.error(f"  Bias shape: {bias.shape}")
+                logger.error(f"  Normalized shape: {normalized_shape}")
+                raise
 
         elif func_name == "batch_norm":
             # 🔧 CONSISTENCY FIX: Use standardized input processing
@@ -959,7 +1017,7 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                            bias,
                            running_mean,
                            running_var,
-                           False,  # Always False for training
+                           True,
                            layer_hyperparams["momentum"],
                            eps,
                            False)
@@ -1000,10 +1058,42 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             k = enforce_precision_consistency(k)
             v = enforce_precision_consistency(v)
             
+            # 🔧 ATTENTION MASK FIX: Handle attention mask shape for multi-head attention
+            attn_mask = layer_hyperparams.get("attn_mask", None)
+            
+            # If attention mask is provided, ensure it has the correct shape
+            if attn_mask is not None:
+                # Convert to float and ensure proper shape
+                if attn_mask.dtype != torch.float32:
+                    attn_mask = attn_mask.float()
+                
+                # If mask is 2D [batch, seq_len], expand to 4D [batch, heads, seq_len, seq_len]
+                if attn_mask.dim() == 2:
+                    batch_size, seq_len = attn_mask.shape
+                    num_heads = q.shape[1]
+                    
+                    # Create 4D mask by expanding the 2D mask
+                    attn_mask_4d = attn_mask.unsqueeze(1).unsqueeze(2)  # [batch, 1, 1, seq_len]
+                    attn_mask_4d = attn_mask_4d.expand(batch_size, num_heads, seq_len, seq_len)
+                    attn_mask = attn_mask_4d
+                
+                # Ensure mask is on the same device as query
+                if attn_mask.device != q.device:
+                    attn_mask = attn_mask.to(device=q.device)
+            
+            # 🔧 DEBUGGING: Log attention mask info
+            logger.debug(f"🔧 scaled_dot_product_attention parameters:")
+            logger.debug(f"  Query shape: {q.shape}")
+            logger.debug(f"  Key shape: {k.shape}")
+            logger.debug(f"  Value shape: {v.shape}")
+            logger.debug(f"  Attention mask shape: {attn_mask.shape if attn_mask is not None else 'None'}")
+            logger.debug(f"  Dropout p: {layer_hyperparams.get('dropout_p', 0.0)}")
+            logger.debug(f"  Is causal: {layer_hyperparams.get('is_causal', False)}")
+            
             return aten_op(q, k, v,
-                           layer_hyperparams["attn_mask"],
-                           layer_hyperparams["dropout_p"],
-                           layer_hyperparams["is_causal"])
+                           attn_mask,
+                           layer_hyperparams.get("dropout_p", 0.0),
+                           layer_hyperparams.get("is_causal", False))
 
         elif func_name == "lstm":
             return aten_op(layer_in[0],
