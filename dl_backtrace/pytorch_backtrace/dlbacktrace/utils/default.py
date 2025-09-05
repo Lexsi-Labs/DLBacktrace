@@ -91,63 +91,63 @@ def np_tanh(x):
 def calculate_start_wt(arg, scaler=1,*args, **kwargs):
     task = kwargs.get('task', None)  # Access 'task' from kwargs, default to None if not provided
     
-    if arg.ndim == 1:
-        arg = arg.reshape(1,-1)
+    if task == "binary-classification":
+        # x = np.argmax(arg, axis=2)  # max along features
+        # m = np.max(arg, axis=2)
+        # y = np.zeros_like(arg)
 
-    elif arg.ndim == 2:
-        if task == "binary-classification":
-            x = np.argmax(arg, axis=1)  # Get the index of the max value for each row
-            m = np.max(arg, axis=1)  # Get the max value for each row
-            y = np.zeros_like(arg)  # Initialize output array with zeros
+        # batch_size, seq_len, _ = arg.shape
+        # for i in range(batch_size):
+        #     for j in range(seq_len):
+        #         if scaler:
+        #             y[i, j, x[i, j]] = scaler
+        #         else:
+        #             y[i, j, x[i, j]] = m[i, j]
+        # log(y.shape,"y")
+        predicted_class = np.argmax(arg, axis=-1, keepdims=True)  # [B, 1] 
+        print(f"predicted_class: {predicted_class}")
 
-            if scaler:
-                y[np.arange(arg.shape[0]), x] = scaler  # Set the max index to scaler
-            else:
-                y[np.arange(arg.shape[0]), x] = m  # Set the max index to max value
+        # Create sparse relevance: only 1 class matters
+        target_relevance = np.zeros_like(arg, dtype=np.float32)
 
-        elif task == "generation":
-            x = np.argmax(arg, axis=1) 
-            y = np.zeros_like(arg)
-            value = 1 / arg.shape[0]
+        # Set the 1.0 at predicted indices
+        for b, t in enumerate(predicted_class):
+            print(f"batch: {b}, predicted_class: {t.item()}") 
+            target_relevance[b, t] = 1.0
+        
+        print(f"target_relevance --- original array: {target_relevance}, value: {np.sum(target_relevance):.4f}, shape: {target_relevance.shape}")
 
-            y[np.arange(arg.shape[0]), x] = value
+    elif task == "generation":
+        # code here
+        print("======arg.shape=====",arg.shape)
+        # x = np.argmax(arg, axis=2)
+        # print("===x.shape============",x.shape)
+        # y = np.zeros_like(arg)
+        # value = 1 / arg.shape[1]
 
-    elif arg.ndim == 3:
-        # Shape: (batch, sequence, features)
-        if task == "binary-classification":
-            x = np.argmax(arg, axis=2)  # max along features
-            m = np.max(arg, axis=2)
-            y = np.zeros_like(arg)
+        # batch_size, seq_len, _ = arg.shape
+        # for i in range(batch_size):
+        #     for j in range(seq_len):
+        #         y[i, j, x[i, j]] = value 
 
-            batch_size, seq_len, _ = arg.shape
-            for i in range(batch_size):
-                for j in range(seq_len):
-                    if scaler:
-                        y[i, j, x[i, j]] = scaler
-                    else:
-                        y[i, j, x[i, j]] = m[i, j]
-            log(y.shape,"y")
+        # print("====y.shape=======",y.shape)
 
-        elif task == "generation":
-            # code here
-            print("======arg.shape=====",arg.shape)
-            x = np.argmax(arg, axis=2)
-            print("===x.shape============",x.shape)
-            y = np.zeros_like(arg)
-            value = 1 / arg.shape[1]
+        next_token_logit = arg[:, -1, :]
+        print(f"next_token_logit: {next_token_logit.shape}")
+        predicted_token = np.argmax(next_token_logit, axis=-1, keepdims=True)  # [B, 1]
+        print(f"predicted_token: {predicted_token}")
 
-            batch_size, seq_len, _ = arg.shape
-            for i in range(batch_size):
-                for j in range(seq_len):
-                    y[i, j, x[i, j]] = value 
+        # Create target relevance
+        target_relevance = np.zeros_like(arg, dtype=np.float32)
 
-            print("====y.shape=======",y.shape)
+        # Set the 1.0 at predicted indices
+        for b, t in enumerate(predicted_token):
+            print(f"batch: {b}, token: {t}")
+            target_relevance[b, -1, t] = 1.0
+        
+        print(f"target_relevance --- value: {np.sum(target_relevance):.4f}, shape: {target_relevance.shape}")
 
-    else:
-        print(arg.shape)
-
-
-    return y
+    return target_relevance
 
 
 def calculate_wt_add(wts, inp=None):
