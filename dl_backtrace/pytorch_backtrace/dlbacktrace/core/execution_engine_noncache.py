@@ -174,8 +174,10 @@ def enforce_precision_consistency(tensors, target_dtype=None, preserve_original_
             if isinstance(t, torch.Tensor):
                 # Check if it's a FakeTensor and convert to real tensor if needed
                 if 'FakeTensor' in str(type(t)):
-                    # Create a real tensor with the EXACT same properties
-                    real_tensor = torch.zeros_like(t, dtype=t.dtype, device=t.device)
+                    # 🔧 CRITICAL FIX: Preserve original tensor values, don't create zeros!
+                    # FakeTensors should already have the correct values from the forward pass
+                    # Just ensure they're real tensors by detaching and cloning
+                    real_tensor = t.detach().clone()
                     get_logger().debug(f"🔧 Converted FakeTensor to real tensor: {real_tensor.shape}")
                     result.append(real_tensor)
                 else:
@@ -187,8 +189,10 @@ def enforce_precision_consistency(tensors, target_dtype=None, preserve_original_
     elif isinstance(tensors, torch.Tensor):
         # Ensure real tensor (not FakeTensor) is returned
         if 'FakeTensor' in str(type(tensors)):
-            # Create a real tensor with the EXACT same properties
-            real_tensor = torch.zeros_like(tensors, dtype=tensors.dtype, device=tensors.device)
+            # 🔧 CRITICAL FIX: Preserve original tensor values, don't create zeros!
+            # FakeTensors should already have the correct values from the forward pass
+            # Just ensure they're real tensors by detaching and cloning
+            real_tensor = tensors.detach().clone()
             get_logger().debug(f"🔧 Converted FakeTensor to real tensor: {real_tensor.shape}")
             return real_tensor
         else:

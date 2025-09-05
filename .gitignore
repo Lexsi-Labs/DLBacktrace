@@ -22,3 +22,4 @@ _templates
 
 # package version file
 version.py
+benchmarks/debug_experiments/*
