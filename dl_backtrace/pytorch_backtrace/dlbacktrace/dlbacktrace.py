@@ -150,18 +150,18 @@ class DLBacktraceFX:
             return self.layer_implementation.get(mapped_type, self.layer_implementation["default"])
 
     def _trace_model(self):
-        # Keep using export_for_training as requested
-        if self.dynamic_shapes:
-            program = export_for_training(
-                self.model,
-                self.input_for_graph,
-                dynamic_shapes=self.dynamic_shapes,
-            )
-            self.exported_program = program.run_decompositions(
-                decomp_table={}
-            )
-        else:
-            self.exported_program = export_for_training(self.model, self.input_for_graph)
+        #if self.dynamic_shapes:
+        program = export_for_training(
+            self.model,
+            self.input_for_graph,
+            dynamic_shapes=self.dynamic_shapes,
+        )
+        self.exported_program = program.run_decompositions(
+            decomp_table={}
+            #default_decompositions()
+        )
+        #else:
+        #self.exported_program = export(self.model, self.input_for_graph)
 
         self.tracer = self.exported_program.graph_module
 
