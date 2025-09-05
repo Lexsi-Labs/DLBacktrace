@@ -770,6 +770,19 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             if dim is None:
                 raise RuntimeError(f"[{node_name}] ❌ unsqueeze: 'dim' parameter is required")
             
+            # 🔧 ENHANCED: Handle negative indexing for unsqueeze
+            if not isinstance(dim, int):
+                raise TypeError(f"[{node_name}] ❌ unsqueeze: dimension must be integer, got {type(dim)}")
+            
+            # Handle negative indexing (PyTorch standard behavior)
+            tensor_rank = layer_in.dim()
+            if dim < 0:
+                dim = tensor_rank + 1 + dim  # For unsqueeze, -1 means last+1 position
+            
+            # Validate converted dimension
+            if dim < 0 or dim > tensor_rank:
+                raise ValueError(f"[{node_name}] ❌ unsqueeze: dimension {layer_hyperparams.get('dim')} out of range for tensor of rank {tensor_rank}")
+            
             logger.debug(f"✅ unsqueeze: input shape={layer_in.shape}, dim={dim}")
             
             try:
@@ -781,12 +794,43 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                 raise RuntimeError(f"[{node_name}] ❌ unsqueeze failed: input shape={layer_in.shape}, dim={dim}. Error: {e}")
             
         elif "squeeze" in func_name :
+            # 🔧 ENHANCED: Robust squeeze operation with negative indexing support
+            logger = get_logger()
+            logger.debug(f"[{node_name}] 🔧 squeeze: input type={type(layer_in)}")
+            
             # 🔧 CONSISTENCY FIX: Apply precision consistency
             if isinstance(layer_in, (list, tuple)):
                 layer_in = layer_in[0] 
             layer_in = enforce_precision_consistency(layer_in)
             
-            return aten_op(layer_in, layer_hyperparams["dim"])
+            # 🔧 FIX: Validate input
+            if not isinstance(layer_in, torch.Tensor):
+                raise TypeError(f"[{node_name}] ❌ squeeze: expected tensor input, got {type(layer_in)}")
+            
+            # 🔧 FIX: Get and validate dimension
+            dim = layer_hyperparams.get("dim")
+            if dim is None:
+                raise RuntimeError(f"[{node_name}] ❌ squeeze: 'dim' parameter is required")
+            
+            # 🔧 ENHANCED: Handle negative indexing for squeeze
+            if not isinstance(dim, int):
+                raise TypeError(f"[{node_name}] ❌ squeeze: dimension must be integer, got {type(dim)}")
+            
+            # Handle negative indexing (PyTorch standard behavior)
+            tensor_rank = layer_in.dim()
+            if dim < 0:
+                dim = tensor_rank + dim
+            
+            # Validate converted dimension
+            if dim < 0 or dim >= tensor_rank:
+                raise ValueError(f"[{node_name}] ❌ squeeze: dimension {layer_hyperparams.get('dim')} out of range for tensor of rank {tensor_rank}")
+            
+            logger.debug(f"[{node_name}] ✅ squeeze: input shape={layer_in.shape}, dim={dim}")
+            
+            try:
+                return aten_op(layer_in, dim)
+            except Exception as e:
+                raise RuntimeError(f"[{node_name}] ❌ squeeze: execution failed: {e}")
 
         elif func_name == "layer_norm":
             # 🔧 CONSISTENCY FIX: Use standardized input processing
@@ -1196,6 +1240,15 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             start = layer_hyperparams["start"]
             end = layer_hyperparams["end"]
             step = layer_hyperparams.get("step", 1)
+            
+            # 🔧 ENHANCED: Handle negative indexing for slice
+            tensor_rank = layer_in.dim()
+            if isinstance(dim, int) and dim < 0:
+                dim = tensor_rank + dim
+            
+            # Validate converted dimension
+            if isinstance(dim, int) and (dim < 0 or dim >= tensor_rank):
+                raise ValueError(f"[{node_name}] ❌ slice: dimension {layer_hyperparams['dim']} out of range for tensor of rank {tensor_rank}")
             
             logger.debug(f"[{node_name}] ✅ slice: input shape={layer_in.shape}, dim={dim}, start={start}, end={end}, step={step}")
             print("slice",dim,start,end,step)
@@ -2340,6 +2393,16 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                     dim = int(dim)
                 except Exception as e:
                     raise RuntimeError(f"[{node_name}] ❌ Invalid dim value `{dim}`: {e}")
+            
+            # 🔧 ENHANCED: Handle negative indexing for cat
+            if len(tensors) > 0:
+                tensor_rank = tensors[0].dim()
+                if dim < 0:
+                    dim = tensor_rank + dim
+                
+                # Validate converted dimension
+                if dim < 0 or dim >= tensor_rank:
+                    raise ValueError(f"[{node_name}] ❌ cat: dimension {method_args[1] if len(method_args) > 1 else layer_hyperparams.get('dim', 0)} out of range for tensor of rank {tensor_rank}")
 
             for i, t in enumerate(tensors):
                 logger.debug(f"  ↪ Tensor {i}: shape={t.shape}, dtype={t.dtype}")
@@ -2730,6 +2793,15 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                 dim = int(dim.item())
             elif not isinstance(dim, int):
                 raise TypeError(f"[{node_name}] ❌ `dim` must be int, got {type(dim)}: {dim}")
+            
+            # 🔧 ENHANCED: Handle negative indexing for index_select
+            tensor_rank = input_tensor.dim()
+            if dim < 0:
+                dim = tensor_rank + dim
+            
+            # Validate converted dimension
+            if dim < 0 or dim >= tensor_rank:
+                raise ValueError(f"[{node_name}] ❌ index_select: dimension {method_args[0]} out of range for tensor of rank {tensor_rank}")
 
             if index_tensor.dtype not in (torch.int32, torch.int64):
                 index_tensor = index_tensor.to(dtype=torch.int64)

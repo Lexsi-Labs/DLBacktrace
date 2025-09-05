@@ -292,6 +292,13 @@ class DLBacktraceFX:
             last_node = list(dlb_node_io.keys())[-1]
             final_output = dlb_node_io[last_node]['output_values']
         
+        # 🔧 FIX: Ensure final_output is a tensor, not a dict
+        if isinstance(final_output, dict):
+            if 'output_values' in final_output:
+                final_output = final_output['output_values']
+            else:
+                raise ValueError(f"Expected tensor in final_output, got dict with keys: {list(final_output.keys())}")
+        
         # Ensure both outputs are tensors
         if isinstance(final_output, (list, tuple)):
             final_output = final_output[0]
@@ -362,6 +369,13 @@ class DLBacktraceFX:
             # Fallback: use the last node's output
             final_node_name = list(dlb_node_io.keys())[-1]
             final_output = dlb_node_io[final_node_name]['output_values']
+        
+        # 🔧 FIX: Ensure final_output is a tensor, not a dict
+        if isinstance(final_output, dict):
+            if 'output_values' in final_output:
+                final_output = final_output['output_values']
+            else:
+                raise ValueError(f"Expected tensor in final_output, got dict with keys: {list(final_output.keys())}")
         
         # Ensure both outputs are tensors
         if isinstance(final_output, (list, tuple)):
