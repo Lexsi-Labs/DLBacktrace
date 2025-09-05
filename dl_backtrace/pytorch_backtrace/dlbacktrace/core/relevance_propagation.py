@@ -982,6 +982,46 @@ def run_evaluation(
                             elif R.shape[0] != reg.shape[0] and R.shape[0] == 1 and reg.shape[0] > 1:
                                 R = np.broadcast_to(R, reg.shape)
 
+                            # Handle dimension size mismatch by truncating or padding
+                            if R.shape != reg.shape and R.ndim == reg.ndim:
+                                if DEBUG:
+                                    log(f"[DEBUG][slice] Handling dimension mismatch: {R.shape} → {reg.shape}")
+                                
+                                # Check if we can align by truncating or padding
+                                aligned = True
+                                new_R = np.zeros(reg.shape, dtype=R.dtype)
+                                
+                                for i in range(min(R.ndim, reg.ndim)):
+                                    if R.shape[i] > reg.shape[i]:
+                                        # Truncate R to fit reg
+                                        if i == 0:
+                                            new_R = R[:reg.shape[i]]
+                                        elif i == 1:
+                                            new_R = R[:, :reg.shape[i]]
+                                        else:
+                                            # For higher dimensions, use slicing
+                                            slices = [slice(None)] * R.ndim
+                                            slices[i] = slice(0, reg.shape[i])
+                                            new_R = R[tuple(slices)]
+                                        R = new_R
+                                        break
+                                    elif R.shape[i] < reg.shape[i]:
+                                        # Pad R to match reg
+                                        if i == 0:
+                                            new_R[:R.shape[i]] = R
+                                        elif i == 1:
+                                            new_R[:, :R.shape[i]] = R
+                                        else:
+                                            # For higher dimensions, use slicing
+                                            slices = [slice(None)] * reg.ndim
+                                            slices[i] = slice(0, R.shape[i])
+                                            new_R[tuple(slices)] = R
+                                        R = new_R
+                                        break
+                                
+                                if DEBUG:
+                                    log(f"[DEBUG][slice] After alignment: {R.shape}")
+
                             if R.shape != reg.shape:
                                 raise ValueError(f"[slice] ❌ Cannot align R shape {R.shape} to reg shape {reg.shape}")
 

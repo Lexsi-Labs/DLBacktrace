@@ -6,46 +6,114 @@ import torch
 import numpy as np
 from typing import Dict, List, Optional, Union, Any
 
-# Configure logging
-def setup_logging(debug: bool = False, log_level: str = "INFO") -> logging.Logger:
-    """Setup logging configuration for the execution engine"""
-    logger = logging.getLogger("dlbacktrace.execution_engine")
+# Centralized logging configuration
+class LoggingManager:
+    """Centralized logging manager to ensure consistent configuration"""
+    _instance = None
+    _logger = None
+    _configured = False
     
-    # Clear any existing handlers
-    logger.handlers.clear()
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(LoggingManager, cls).__new__(cls)
+        return cls._instance
     
-    # Set log level
-    level = logging.DEBUG if debug else getattr(logging, log_level.upper(), logging.INFO)
-    logger.setLevel(level)
+    def configure_logging(self, debug: bool = False, log_level: str = "INFO", force_reconfigure: bool = False):
+        """Configure logging with proper handler management"""
+        # Get the logger instance
+        logger_name = "dlbacktrace.execution_engine"
+        logger = logging.getLogger(logger_name)
+        
+        # Only reconfigure if not already configured or if forced
+        if self._configured and not force_reconfigure:
+            return logger
+        
+        # Clear any existing handlers to prevent duplication
+        logger.handlers.clear()
+        
+        # Set log level
+        level = logging.DEBUG if debug else getattr(logging, log_level.upper(), logging.INFO)
+        logger.setLevel(level)
+        
+        # Create formatter
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        
+        # Create console handler
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(level)
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
+        
+        # Add file handler when debug is enabled
+        if debug:
+            import datetime
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            log_filename = f"dlbacktrace_debug_{timestamp}.log"
+            
+            # Create logs directory if it doesn't exist
+            log_dir = "dlbacktrace_logs"
+            os.makedirs(log_dir, exist_ok=True)
+            log_filepath = os.path.join(log_dir, log_filename)
+            
+            file_handler = logging.FileHandler(log_filepath)
+            file_handler.setLevel(level)
+            file_handler.setFormatter(formatter)
+            logger.addHandler(file_handler)
+            
+            # Store file handler for later flushing
+            self._file_handler = file_handler
+            self._log_filepath = log_filepath
+            
+            logger.info(f"Debug logging enabled - logs will be saved to: {log_filepath}")
+            logger.debug("Debug logging test - this should appear in the log file")
+        else:
+            self._file_handler = None
+            self._log_filepath = None
+        
+        # Prevent propagation to root logger
+        logger.propagate = False
+        
+        # Mark as configured
+        self._configured = True
+        self._logger = logger
+        
+        return logger
     
-    # Create console handler
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(level)
+    def get_logger(self) -> logging.Logger:
+        """Get the configured logger instance"""
+        if not self._configured:
+            # Configure with default settings if not already configured
+            return self.configure_logging()
+        return self._logger
     
-    # Create formatter
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-    console_handler.setFormatter(formatter)
+    def flush_logs(self):
+        """Flush all log handlers"""
+        if self._logger:
+            for handler in self._logger.handlers:
+                if hasattr(handler, 'flush'):
+                    handler.flush()
     
-    # Add handler to logger
-    logger.addHandler(console_handler)
-    
-    # Prevent propagation to root logger
-    logger.propagate = False
-    
-    return logger
+    def get_log_filepath(self):
+        """Get the current log file path if debug logging is enabled"""
+        return getattr(self, '_log_filepath', None)
 
-# Global logger instance
-_logger = None
+# Global logging manager instance
+_logging_manager = LoggingManager()
+
+def setup_logging(debug: bool = False, log_level: str = "INFO", force_reconfigure: bool = False) -> logging.Logger:
+    """Setup logging configuration for the execution engine"""
+    return _logging_manager.configure_logging(debug, log_level, force_reconfigure)
 
 def get_logger() -> logging.Logger:
     """Get the global logger instance"""
-    global _logger
-    if _logger is None:
-        _logger = setup_logging()
-    return _logger
+    return _logging_manager.get_logger()
+
+def flush_logs():
+    """Flush all log handlers"""
+    _logging_manager.flush_logs()
 
 # Legacy compatibility - will be removed
 def log(*args, **kwargs):
@@ -3038,7 +3106,11 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
         layer_hyperparams = node_data["layer_hyperparams"]
         children = node_data["children"]
 
+        # Log node execution for debugging
+        logger.debug(f"🔧 Processing node: {node_name}, func: {func_name}, layer_type: {layer_type}")
+
         if any(p not in tensor_map for p in parents):
+            logger.debug(f"⚠️ Skipping {node_name} - missing parents: {[p for p in parents if p not in tensor_map]}")
             continue
         
         layer_in = [_sanitize_input_tensor(tensor_map[p]) for p in parents]
@@ -3278,8 +3350,8 @@ class ExecutionEngineNoCache:
         self.debug = debug
         self.log_level = log_level
         
-        # Setup logging for this instance
-        self.logger = setup_logging(debug=debug, log_level=log_level)
+        # Setup logging for this instance with force_reconfigure to ensure proper setup
+        self.logger = setup_logging(debug=debug, log_level=log_level, force_reconfigure=True)
         self.logger.info(f"ExecutionEngineNoCache initialized with debug={debug}, log_level={log_level}")
 
     def run(self, inputs, debug=None, log_level=None):
@@ -3290,16 +3362,16 @@ class ExecutionEngineNoCache:
         if log_level is None:
             log_level = self.log_level
             
-        # Update global logger if parameters changed
+        # Update global logger if parameters changed - force reconfigure to ensure consistency
         if debug != self.debug or log_level != self.log_level:
-            self.logger = setup_logging(debug=debug, log_level=log_level)
+            self.logger = setup_logging(debug=debug, log_level=log_level, force_reconfigure=True)
             self.debug = debug
             self.log_level = log_level
             
-        # Legacy compatibility - no longer needed with proper logging
-        
         self.logger.info(f"Starting execution with {len(inputs)} inputs")
-        return run_execution_nocache(
+        
+        # Run the execution
+        result = run_execution_nocache(
             graph=self.graph,
             layer_stack=self.layer_stack,
             model=self.model,
@@ -3308,3 +3380,8 @@ class ExecutionEngineNoCache:
             tracer=self.tracer,
             exported_program=self.exported_program,
         )
+        
+        # Flush logs at the end of execution to ensure all debug statements are captured
+        flush_logs()
+        
+        return result
