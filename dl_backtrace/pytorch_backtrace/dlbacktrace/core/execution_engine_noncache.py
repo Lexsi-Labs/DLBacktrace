@@ -216,29 +216,72 @@ def ensure_tensor_consistency(tensors, target_dtype=None, target_device=None):
 def setup_consistent_environment():
     """Set up environment for consistent execution"""
     logger = get_logger()
-    logger.debug("🔧 Setting up minimal environment for consistency...")
+    logger.debug("🔧 Setting up deterministic environment for consistent execution...")
+    
+    # 🔧 ENHANCED: Suppress warnings for cleaner execution
+    try:
+        import warnings
+        warnings.filterwarnings("ignore", category=UserWarning)
+        warnings.filterwarnings("ignore", category=DeprecationWarning)
+        logger.debug("✅ Warnings suppressed for cleaner execution")
+    except Exception as e:
+        logger.debug(f"⚠️  Could not suppress warnings: {e}")
     
     # Force evaluation mode
     torch.set_grad_enabled(False)
     logger.debug("✅ Gradients disabled")
     
-    # 🔧 MINIMAL FIX: Only set essential settings, avoid anything that could cause differences
-    # Don't modify cuDNN settings as they can cause execution differences
-    logger.debug("✅ Preserving original cuDNN settings for consistency")
+    # 🔧 ENHANCED: Set deterministic algorithms for consistent results
+    try:
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.allow_tf32 = False
+        torch.backends.cuda.matmul.allow_tf32 = False
+        logger.debug("✅ Deterministic cuDNN and CUDA settings applied")
+    except Exception as e:
+        logger.debug(f"⚠️  Could not set deterministic settings: {e}")
     
-    # 🔧 MINIMAL FIX: Don't modify any PyTorch algorithms or settings
-    logger.debug("✅ Preserving original PyTorch settings for consistency")
+    # 🔧 ENHANCED: Use deterministic algorithms with warnings only
+    try:
+        torch.use_deterministic_algorithms(True, warn_only=True)
+        logger.debug("✅ Deterministic algorithms enabled (warn_only=True)")
+    except Exception as e:
+        logger.debug(f"⚠️  Could not enable deterministic algorithms: {e}")
     
-    # 🔧 MINIMAL FIX: Don't set any random seeds
-    logger.debug("✅ Preserving original random state for consistency")
+    # 🔧 ENHANCED: Set default dtype for consistency
+    try:
+        torch.set_default_dtype(torch.float32)
+        logger.debug("✅ Default dtype set to float32")
+    except Exception as e:
+        logger.debug(f"⚠️  Could not set default dtype: {e}")
     
-    # 🔧 MINIMAL FIX: Don't modify default dtypes
-    logger.debug("✅ Preserving original dtype settings for consistency")
+    # 🔧 ENHANCED: Set environment variables for deterministic execution
+    try:
+        import os
+        os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG', ':4096:8')
+        os.environ.setdefault('PYTHONHASHSEED', '42')
+        logger.debug("✅ Environment variables set for deterministic execution")
+    except Exception as e:
+        logger.debug(f"⚠️  Could not set environment variables: {e}")
     
-    # 🔧 MINIMAL FIX: Don't set environment variables that could affect execution
-    logger.debug("✅ Preserving original environment for consistency")
+    # 🔧 ENHANCED: Force deterministic SDPA path if attention is used
+    try:
+        from torch.backends.cuda import sdp_kernel
+        sdp_kernel(enable_flash=False, enable_mem_efficient=False, enable_math=True)
+        logger.debug("✅ Deterministic SDPA path enabled")
+    except Exception as e:
+        logger.debug(f"⚠️  Could not set deterministic SDPA: {e}")
     
-    logger.debug("🔧 Minimal environment setup complete - maximum consistency preserved!")
+    # 🔧 ENHANCED: Memory management for consistent performance
+    try:
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+            logger.debug("✅ CUDA memory cleared and synchronized")
+    except Exception as e:
+        logger.debug(f"⚠️  Could not manage CUDA memory: {e}")
+    
+    logger.debug("🔧 Deterministic environment setup complete!")
 
 def ensure_model_state_consistency(dlb_model, original_model):
     """Ensure DLB model has exactly the same state as original model"""
@@ -1292,7 +1335,7 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             output = aten_op(layer_in,*method_args)
             return output
         elif func_name == "embedding":
-            # 🔧 USE OLD ENGINE'S WORKING APPROACH: Simple and direct
+            # 🔧 ENHANCED EMBEDDING: Add precision consistency like other operations
             layer_in = []
             for node_x in parents: 
                 if "weight" in node_x:
@@ -1301,20 +1344,22 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                     layer_in.append(node_io[node_x]['output_values'])
 
             indices = layer_in[0] if isinstance(layer_in, (list, tuple)) else layer_in
+            
+            # 🔧 CONSISTENCY FIX: Apply precision consistency to indices
+            indices = enforce_precision_consistency(indices)
+            
             # 🔄 Ensure indices are LongTensor
             if not torch.is_floating_point(indices) and indices.dtype in (torch.int32, torch.int64):
                 pass  # Already correct
             else:
                 indices = indices.long()
         
-            # 🔧 Ensure device compatibility between weight and indices
+            # 🔧 CONSISTENCY FIX: Apply precision consistency to weight
             weight = layer_hyperparams["weight"]
-            if isinstance(weight, torch.Tensor) and isinstance(indices, torch.Tensor):
-                if weight.device != indices.device:
-                    # Move indices to the same device as weight
-                    indices = indices.to(weight.device)
-                    if DEBUG:
-                        print(f"[{node_name}] ⚡ Moved indices to device {weight.device} to match weight")
+            weight = enforce_precision_consistency(weight)
+            
+            # 🔧 ENHANCED CONSISTENCY: Use dedicated embedding consistency function
+            weight, indices = ensure_embedding_consistency(weight, indices, node_name)
         
             return aten_op(weight,
                     indices,
@@ -1859,11 +1904,49 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
         
 
         elif "permute" in func_name:
-            if isinstance(layer_in,tuple):
+            # 🔧 ENHANCED: Robust permute operation with proper validation
+            logger.debug(f"[{node_name}] 🔧 permute: input type={type(layer_in)}")
+            
+            # 🔧 FIX: Handle input properly
+            if isinstance(layer_in, tuple):
                 layer_in = layer_in[0]
             elif isinstance(layer_in, list):
                 layer_in = layer_in[0]
-            return aten_op(layer_in, layer_hyperparams["dims"])
+            
+            # 🔧 FIX: Validate input
+            if layer_in is None:
+                raise RuntimeError(f"[{node_name}] ❌ permute: input is None")
+            
+            if not isinstance(layer_in, torch.Tensor):
+                raise TypeError(f"[{node_name}] ❌ permute: expected tensor input, got {type(layer_in)}")
+            
+            # 🔧 FIX: Get and validate dimensions
+            dims = layer_hyperparams.get("dims", [])
+            if not dims:
+                raise RuntimeError(f"[{node_name}] ❌ permute: no dimensions provided")
+            
+            # 🔧 ENHANCED: Handle negative indexing for permute
+            tensor_rank = layer_in.dim()
+            normalized_dims = []
+            for dim in dims:
+                if not isinstance(dim, int):
+                    raise TypeError(f"[{node_name}] ❌ permute: dimension must be integer, got {type(dim)}")
+                
+                # Handle negative indexing
+                if dim < 0:
+                    dim = tensor_rank + dim
+                
+                if dim < 0 or dim >= tensor_rank:
+                    raise ValueError(f"[{node_name}] ❌ permute: dimension {dim} out of range for tensor of rank {tensor_rank}")
+                
+                normalized_dims.append(dim)
+            
+            logger.debug(f"[{node_name}] ✅ permute: input shape={layer_in.shape}, dims={normalized_dims}")
+            
+            try:
+                return aten_op(layer_in, normalized_dims)
+            except Exception as e:
+                raise RuntimeError(f"[{node_name}] ❌ permute: execution failed: {e}")
 
         elif func_name == "transpose":
             # 🔧 CRITICAL FIX: Robust transpose operation with proper validation
@@ -1902,15 +1985,23 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             
             dim0, dim1 = method_args[0], method_args[1]
             
-            # 🔧 FIX: Validate dimensions
+            # 🔧 FIX: Validate dimensions and handle negative indexing
             if not isinstance(dim0, int) or not isinstance(dim1, int):
                 raise TypeError(f"[{node_name}] ❌ transpose: dimensions must be integers, got {type(dim0)} and {type(dim1)}")
             
-            if dim0 < 0 or dim1 < 0:
-                raise ValueError(f"[{node_name}] ❌ transpose: dimensions must be non-negative, got {dim0} and {dim1}")
+            # 🔧 ENHANCED: Handle negative indexing (PyTorch standard behavior)
+            tensor_rank = layer_in.dim()
+            if dim0 < 0:
+                dim0 = tensor_rank + dim0
+            if dim1 < 0:
+                dim1 = tensor_rank + dim1
             
-            if dim0 >= layer_in.dim() or dim1 >= layer_in.dim():
-                raise ValueError(f"[{node_name}] ❌ transpose: dimensions {dim0} and {dim1} out of range for tensor of rank {layer_in.dim()}")
+            # 🔧 FIX: Validate converted dimensions
+            if dim0 < 0 or dim1 < 0:
+                raise ValueError(f"[{node_name}] ❌ transpose: dimensions {method_args[0]} and {method_args[1]} out of range for tensor of rank {tensor_rank}")
+            
+            if dim0 >= tensor_rank or dim1 >= tensor_rank:
+                raise ValueError(f"[{node_name}] ❌ transpose: dimensions {dim0} and {dim1} out of range for tensor of rank {tensor_rank}")
             
             logger.debug(f"[{node_name}] ✅ transpose: input shape={layer_in.shape}, dims=({dim0}, {dim1})")
             

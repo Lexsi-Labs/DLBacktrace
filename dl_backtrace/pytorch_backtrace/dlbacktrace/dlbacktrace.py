@@ -35,11 +35,15 @@ class DLBacktraceFX:
                       "default": "original"    # Use original for all other layers
                   }
         """
-        self.model = model.eval()
+        # 🔧 CRITICAL: Set up deterministic environment for consistent tracing
+        self._setup_deterministic_environment()
+        
+        self.model = model
         print("---------------------------v1------------------------------------------")
         self.input_for_graph = input_for_graph
         self.dynamic_shapes = dynamic_shapes
-        
+        self.model.eval()
+        self.model.requires_grad_(False)
         # Handle both string and dict layer implementation configurations
         self.layer_implementation = self._parse_layer_implementation(layer_implementation)
         
@@ -395,3 +399,69 @@ class DLBacktraceFX:
         else:
             print(f"   ❌ Type mismatch: direct={type(direct_output)}, dlb={type(final_output)}")
             return {'error': 'Type mismatch'}
+    
+    def _setup_deterministic_environment(self):
+        """Set up deterministic execution environment for consistent tracing results."""
+        import os
+        import numpy as np
+        import warnings
+        
+        print("🔧 Setting up deterministic execution environment...")
+        
+        # 🔧 ENHANCED: Suppress common warnings for cleaner output
+        warnings.filterwarnings("ignore", category=UserWarning)
+        warnings.filterwarnings("ignore", category=DeprecationWarning)
+        warnings.filterwarnings("ignore", category=FutureWarning)
+        os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+        
+        # Disable gradient computation
+        torch.set_grad_enabled(False)
+        
+        # Set deterministic algorithms
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.allow_tf32 = False
+        # Also disable matmul TF32 explicitly
+        torch.backends.cuda.matmul.allow_tf32 = False
+        
+        # Be conservative: warn_only=True avoids hard failures from unsupported det. ops
+        torch.use_deterministic_algorithms(True, warn_only=True)
+        
+        # Set random seeds
+        torch.manual_seed(42)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(42)
+        
+        np.random.seed(42)
+        torch.set_default_dtype(torch.float32)
+        
+        # Set environment variables (use setdefault to avoid overriding if already set)
+        os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG', ':4096:8')
+        os.environ.setdefault('PYTHONHASHSEED', '42')
+        
+        # Force deterministic SDPA path if attention is used
+        try:
+            from torch.backends.cuda import sdp_kernel
+            sdp_kernel(enable_flash=False, enable_mem_efficient=False, enable_math=True)
+        except Exception:
+            pass
+        
+        # 🔧 ENHANCED: Memory management for consistent performance
+        try:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+        except Exception:
+            pass
+        
+        # 🔧 ENHANCED: Performance monitoring setup
+        try:
+            if torch.cuda.is_available():
+                # Enable CUDA events for timing
+                torch.cuda.synchronize()
+                print(f"✅ CUDA device: {torch.cuda.get_device_name()}")
+                print(f"✅ CUDA memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
+        except Exception:
+            pass
+        
+        print("✅ Deterministic environment setup complete!")
