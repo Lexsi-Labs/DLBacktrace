@@ -2378,6 +2378,71 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
         elif func_name in {"flatten", "unflatten"}:
             return aten_op(layer_in, *method_args)
 
+        elif func_name in {"ne", "eq", "lt", "le", "gt", "ge"}:
+            # 🔧 NEW OPERATION: Comparison operations with consistency checks
+            logger.debug(f"[{node_name}] 🔧 {func_name}: processing inputs, layer_in type={type(layer_in)}")
+            
+            # Handle different input scenarios
+            if isinstance(layer_in, (list, tuple)):
+                logger.debug(f"[{node_name}] 🔧 {func_name}: got list/tuple with {len(layer_in)} inputs")
+                if len(layer_in) == 2:
+                    a, b = layer_in
+                elif len(layer_in) == 1:
+                    # Single input - might be comparing with a scalar or need to get second input from parents
+                    a = layer_in[0]
+                    # Try to get second input from method_args or layer_hyperparams
+                    if method_args:
+                        b = method_args[0]
+                    elif "other" in layer_hyperparams:
+                        b = layer_hyperparams["other"]
+                    else:
+                        # Try to get from parents
+                        logger.debug(f"[{node_name}] 🔧 {func_name}: trying to get second input from parents")
+                        raise RuntimeError(f"[{node_name}] ❌ {func_name} needs 2 inputs, got 1 input and no second input found")
+                else:
+                    raise RuntimeError(f"[{node_name}] ❌ {func_name} expects 1-2 inputs, got {len(layer_in)}")
+            elif isinstance(layer_in, torch.Tensor):
+                # Single tensor input - try to get second input from method_args or layer_hyperparams
+                a = layer_in
+                if method_args:
+                    b = method_args[0]
+                elif "other" in layer_hyperparams:
+                    b = layer_hyperparams["other"]
+                else:
+                    raise RuntimeError(f"[{node_name}] ❌ {func_name} needs 2 inputs, got 1 tensor and no second input found")
+            else:
+                raise RuntimeError(f"[{node_name}] ❌ {func_name} expects tensor inputs, got {type(layer_in)}")
+            
+            logger.debug(f"[{node_name}] 🔧 {func_name}: inputs resolved - a={type(a)}, b={type(b)}")
+            
+            # Handle scalar vs tensor comparisons properly
+            # aten::ne.Scalar expects (Tensor, Scalar) or (Scalar, Tensor)
+            if isinstance(a, torch.Tensor) and not isinstance(b, torch.Tensor):
+                # Tensor vs scalar - use aten::ne.Scalar
+                output = aten_op(a, b)
+            elif not isinstance(a, torch.Tensor) and isinstance(b, torch.Tensor):
+                # Scalar vs tensor - convert scalar to tensor and use tensor comparison
+                a_tensor = torch.tensor(a, dtype=b.dtype, device=b.device)
+                output = aten_op(a_tensor, b)
+            elif isinstance(a, torch.Tensor) and isinstance(b, torch.Tensor):
+                # Tensor vs tensor - ensure consistency and compare
+                a, b = ensure_tensor_consistency([a, b])
+                output = aten_op(a, b)
+            else:
+                # Both scalars - convert to tensors and compare
+                a_tensor = torch.tensor(a)
+                b_tensor = torch.tensor(b)
+                a_tensor, b_tensor = ensure_tensor_consistency([a_tensor, b_tensor])
+                output = aten_op(a_tensor, b_tensor)
+            
+            # Safe logging - handle both tensor and scalar inputs
+            a_shape = a.shape if hasattr(a, 'shape') else f"scalar({a})"
+            b_shape = b.shape if hasattr(b, 'shape') else f"scalar({b})"
+            output_shape = output.shape if hasattr(output, 'shape') else f"scalar({output})"
+            
+            logger.debug(f"[{node_name}] ✅ {func_name}: input shapes={a_shape}, {b_shape}, output shape={output_shape}")
+            return output
+
         elif func_name == "rsqrt":
             if isinstance(layer_in, list) and len(layer_in) == 1:
                 output = aten_op(layer_in[0], *method_args)
@@ -2993,6 +3058,21 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                 raise RuntimeError(f"[{node_name}] ❌ type_as failed with input shape={input_tensor.shape}, target shape={target_tensor.shape}. Error: {e}")
 
         else:
+            # 🔧 UNHANDLED OPERATION: Print with emojis for easy identification
+            logger.warning(f"🚨 UNHANDLED OPERATION: `{func_name}` - needs implementation!")
+            logger.warning(f"📝 Operation: {func_name}")
+            logger.warning(f"📊 Input type: {type(layer_in)}")
+            logger.warning(f"📋 Method args: {method_args}")
+            logger.warning(f"🏷️  Node: {node_name}")
+            logger.warning(f"🔧 Add this operation to the execution engine!")
+            
+            print(f"🚨 UNHANDLED OPERATION: `{func_name}` - needs implementation!")
+            print(f"📝 Operation: {func_name}")
+            print(f"📊 Input type: {type(layer_in)}")
+            print(f"📋 Method args: {method_args}")
+            print(f"🏷️  Node: {node_name}")
+            print(f"🔧 Add this operation to the execution engine!")
+            # Fallback to generic execution
             inputs = layer_in if isinstance(layer_in, (list, tuple)) else [layer_in]
             output = aten_op(*inputs, *method_args)
             return output 

@@ -492,6 +492,67 @@ If you need to modify these operations, please:
 4. **Verify no regression** in existing functionality
 5. **Update this document** with any changes made
 
-**Last Updated**: 2025-01-04  
-**Version**: 1.0  
+## 🔧 **NEW ADDITION: Comparison Operations (ne, eq, lt, le, gt, ge)**
+
+**Date**: 2025-01-05  
+**Issue**: Comparison operations (ne, eq, lt, le, gt, ge) were handled by generic fallback without consistency checks  
+**Solution**: Added specific implementation with proper consistency checks for exact reproducibility
+
+### **Implementation Details**:
+```python
+elif func_name in {"ne", "eq", "lt", "le", "gt", "ge"}:
+    # 🔧 NEW OPERATION: Comparison operations with consistency checks
+    logger.debug(f"[{node_name}] 🔧 {func_name}: processing inputs, layer_in type={type(layer_in)}")
+    
+    # Handle different input scenarios
+    if isinstance(layer_in, (list, tuple)):
+        if len(layer_in) == 2:
+            a, b = layer_in
+        elif len(layer_in) == 1:
+            # Single input - get second input from method_args or layer_hyperparams
+            a = layer_in[0]
+            if method_args:
+                b = method_args[0]
+            elif "other" in layer_hyperparams:
+                b = layer_hyperparams["other"]
+            else:
+                raise RuntimeError(f"[{node_name}] ❌ {func_name} needs 2 inputs, got 1 input and no second input found")
+        else:
+            raise RuntimeError(f"[{node_name}] ❌ {func_name} expects 1-2 inputs, got {len(layer_in)}")
+    elif isinstance(layer_in, torch.Tensor):
+        # Single tensor input - get second input from method_args or layer_hyperparams
+        a = layer_in
+        if method_args:
+            b = method_args[0]
+        elif "other" in layer_hyperparams:
+            b = layer_hyperparams["other"]
+        else:
+            raise RuntimeError(f"[{node_name}] ❌ {func_name} needs 2 inputs, got 1 tensor and no second input found")
+    else:
+        raise RuntimeError(f"[{node_name}] ❌ {func_name} expects tensor inputs, got {type(layer_in)}")
+    
+    # Apply consistency checks for exact reproducibility
+    a, b = ensure_tensor_consistency([a, b])
+    
+    # Execute operation - aten::ne() expects exactly 2 arguments (input, other)
+    output = aten_op(a, b)
+    logger.debug(f"[{node_name}] ✅ {func_name}: input shapes={a.shape}, {b.shape}, output shape={output.shape}")
+    return output
+```
+
+### **Benefits**:
+- ✅ **Exact Reproducibility**: Ensures consistent dtype and device handling
+- ✅ **Input Validation**: Proper validation for 2-input operations
+- ✅ **Error Handling**: Clear error messages for debugging
+- ✅ **Logging**: Detailed logging for operation tracking
+- ✅ **Flexible Input Handling**: Supports both 2-input and 1-input scenarios
+- ✅ **Correct ATen API Usage**: Uses exactly 2 arguments for `aten::ne()` operations
+
+### **Fix Applied**:
+- **Issue**: `aten::ne() expected at most 2 argument(s) but received 3 argument(s)`
+- **Solution**: Removed `*method_args` from `aten_op(a, b, *method_args)` to `aten_op(a, b)`
+- **Reason**: Comparison operations like `aten::ne()` expect exactly 2 arguments (input, other)
+
+**Last Updated**: 2025-01-05  
+**Version**: 1.1  
 **Status**: ✅ CRITICAL FIXES IN PLACE - DO NOT MODIFY WITHOUT EXTENSIVE TESTING
