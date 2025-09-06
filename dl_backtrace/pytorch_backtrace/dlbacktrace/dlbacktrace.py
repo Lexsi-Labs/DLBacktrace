@@ -7,14 +7,12 @@ from .core.trace_utils import (
     map_placeholders_to_state_dict,
     get_weight_from_placeholder
 )
-from .core.config import ATEN_HYPERPARAMS, ATEN_DEFAULTS, activation_master
+from .core.config import activation_master
 from .core.relevance_propagation import RelevancePropagator
 from .core.visualization import visualize_graph, visualize_relevance
-from .core.io_utils import tensor_to_numpy
 
 import numpy as np 
 import torch
-from torch.export import export, default_decompositions, export_for_training
 
 class DLBacktraceFX:
     def __init__(self, model, input_for_graph, dynamic_shapes=None, layer_implementation="original"):
@@ -82,7 +80,6 @@ class DLBacktraceFX:
         # I/O and bookkeeping
         self.node_io = {}
         self.activation_dict = {}
-        self.model_resource = {}
         print("---------------------------v8------------------------------------------")
     
     def _parse_layer_implementation(self, layer_implementation):
@@ -150,19 +147,17 @@ class DLBacktraceFX:
             return self.layer_implementation.get(mapped_type, self.layer_implementation["default"])
 
     def _trace_model(self):
-        #if self.dynamic_shapes:
-        program = export_for_training(
-            self.model,
-            self.input_for_graph,
+        """Export model deterministically using the reproducibility module."""
+        from dl_backtrace.pytorch_backtrace.dlbacktrace.core.reproducibility import export_model_deterministically
+        
+        # Use the deterministic export function
+        self.exported_program = export_model_deterministically(
+            model=self.model,
+            sample_inputs=self.input_for_graph,
             dynamic_shapes=self.dynamic_shapes,
+            seed=42
         )
-        self.exported_program = program.run_decompositions(
-            decomp_table={}
-            #default_decompositions()
-        )
-        #else:
-        #self.exported_program = export(self.model, self.input_for_graph)
-
+        
         self.tracer = self.exported_program.graph_module
 
     def predict(self, *inputs, debug=False):
@@ -254,94 +249,7 @@ class DLBacktraceFX:
     def visualize_dlbacktrace(self, output_path="backtrace_graph", top_k=None, relevance_threshold=None):
         visualize_relevance(self.graph, self.all_wt, output_path, top_k, relevance_threshold)
     
-    def verify_model_consistency(self, test_inputs, tolerance=1e-6):
-        """
-        Verify that DLB predict produces identical results to direct model inference.
-        
-        Args:
-            test_inputs: Input tensors for testing
-            tolerance: Numerical tolerance for comparison
-            
-        Returns:
-            dict: Comparison results with max difference and success status
-        """
-        print("🔍 Verifying model consistency...")
-        
-        # Ensure model is in eval mode
-        self.model.eval()
-        torch.set_grad_enabled(False)
-        
-        # Get direct model output
-        with torch.no_grad():
-            direct_output = self.model(*test_inputs)
-            if isinstance(direct_output, (list, tuple)):
-                direct_output = direct_output[0]  # Take first output for comparison
-        
-        # Get DLB predict output
-        dlb_node_io = self.predict(*test_inputs, debug=False)
-        
-        # Find the final output node
-        final_output = None
-        for node_name, node_data in dlb_node_io.items():
-            if node_data.get('layer_type') == 'Output' or 'output' in node_name.lower():
-                final_output = node_data['output_values']
-                break
-        
-        if final_output is None:
-            # Fallback: use the last node's output
-            last_node = list(dlb_node_io.keys())[-1]
-            final_output = dlb_node_io[last_node]['output_values']
-        
-        # 🔧 FIX: Ensure final_output is a tensor, not a dict
-        if isinstance(final_output, dict):
-            if 'output_values' in final_output:
-                final_output = final_output['output_values']
-            else:
-                raise ValueError(f"Expected tensor in final_output, got dict with keys: {list(final_output.keys())}")
-        
-        # Ensure both outputs are tensors
-        if isinstance(final_output, (list, tuple)):
-            final_output = final_output[0]
-        
-        # Compare outputs
-        if isinstance(direct_output, torch.Tensor) and isinstance(final_output, torch.Tensor):
-            # Ensure same device and dtype for comparison
-            if direct_output.device != final_output.device:
-                final_output = final_output.to(device=direct_output.device)
-            if direct_output.dtype != final_output.dtype:
-                final_output = final_output.to(dtype=direct_output.dtype)
-            
-            # Calculate differences
-            max_diff = torch.max(torch.abs(direct_output - final_output)).item()
-            mean_diff = torch.mean(torch.abs(direct_output - final_output)).item()
-            
-            # Check if outputs are identical within tolerance
-            is_consistent = max_diff < tolerance
-            
-            result = {
-                'consistent': is_consistent,
-                'max_difference': max_diff,
-                'mean_difference': mean_diff,
-                'tolerance': tolerance,
-                'direct_output_shape': direct_output.shape,
-                'dlb_output_shape': final_output.shape,
-                'direct_output_sum': torch.sum(direct_output).item(),
-                'dlb_output_sum': torch.sum(final_output).item()
-            }
-            
-            if is_consistent:
-                print(f"✅ Model consistency verified! Max difference: {max_diff:.2e}")
-            else:
-                print(f"❌ Model inconsistency detected! Max difference: {max_diff:.2e} (tolerance: {tolerance:.2e})")
-                print(f"   Direct output sum: {result['direct_output_sum']:.6f}")
-                print(f"   DLB output sum: {result['dlb_output_sum']:.6f}")
-            
-            return result
-        else:
-            print(f"❌ Cannot compare outputs: direct={type(direct_output)}, dlb={type(final_output)}")
-            return {'consistent': False, 'error': 'Output type mismatch'}
-    
-    def debug_execution_differences(self, test_inputs):
+    def debug_execution_differences(self, *test_inputs):
         """
         Debug why DLB execution differs from direct model execution
         """
@@ -431,22 +339,16 @@ class DLBacktraceFX:
         # Disable gradient computation
         torch.set_grad_enabled(False)
         
-        # Set deterministic algorithms
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
-        torch.backends.cudnn.allow_tf32 = False
-        # Also disable matmul TF32 explicitly
-        torch.backends.cuda.matmul.allow_tf32 = False
-        
         # Import and use exact reproducibility setup from core
         try:
             from dl_backtrace.pytorch_backtrace.dlbacktrace.core.reproducibility import setup_exact_reproducibility
             
-            # Set up exact PyTorch reproducibility
-            setup_exact_reproducibility(seed=42, disable_optimizations=True)
+            # Set up exact PyTorch reproducibility (this handles all the deterministic settings)
+            setup_exact_reproducibility(seed=42, disable_optimizations=True, verbose=True)
             
         except ImportError:
             # Fallback to manual setup if reproducibility module is not available
+            print("⚠️  Reproducibility module not available, using fallback setup")
             torch.use_deterministic_algorithms(True, warn_only=True)
             torch.manual_seed(42)
             if torch.cuda.is_available():
@@ -455,6 +357,12 @@ class DLBacktraceFX:
             torch.set_default_dtype(torch.float32)
             os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG', ':4096:8')
             os.environ.setdefault('PYTHONHASHSEED', '42')
+            
+            # Set deterministic algorithms
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+            torch.backends.cudnn.allow_tf32 = False
+            torch.backends.cuda.matmul.allow_tf32 = False
             
             # Force deterministic SDPA path if attention is used
             try:
