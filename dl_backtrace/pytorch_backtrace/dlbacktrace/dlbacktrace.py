@@ -207,7 +207,7 @@ class DLBacktraceFX:
             model=self.model,
             extracted_weights=self.extracted_weights,
             fx_graph=self.graph,
-            layer_stack=self.layer_stack,
+cd             layer_stack=self.layer_stack,
             tracer=self.tracer,
             exported_program=self.exported_program,
             debug=debug,
