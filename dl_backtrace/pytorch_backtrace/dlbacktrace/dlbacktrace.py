@@ -15,7 +15,7 @@ import numpy as np
 import torch
 
 class DLBacktraceFX:
-    def __init__(self, model, input_for_graph, dynamic_shapes=None, layer_implementation="original"):
+    def __init__(self, model, input_for_graph, dynamic_shapes=None, layer_implementation="original", verbose=False, strict_cpu=True):
         """
         Initialize DL-Backtrace FX for model tracing and explainability.
         
@@ -32,55 +32,73 @@ class DLBacktraceFX:
                       "attention": "cuda",     # Use CUDA for attention layers
                       "default": "original"    # Use original for all other layers
                   }
+            verbose (bool): Enable verbose initialization logs.
+            strict_cpu (bool): When running on CPU, disable MKL-DNN and pin threads for stricter determinism.
         """
         # 🔧 CRITICAL: Set up deterministic environment for consistent tracing
-        self._setup_deterministic_environment()
+        self.verbose = verbose
+        self.strict_cpu = strict_cpu
+        self._setup_deterministic_environment(seed=42, verbose=self.verbose, strict_cpu=self.strict_cpu)
         
         self.model = model
-        print("---------------------------v1------------------------------------------")
+        if self.verbose:
+            print("---------------------------v1------------------------------------------")
         self.input_for_graph = input_for_graph
+        # Normalize sample inputs to a tuple for exporter compatibility
+        if isinstance(self.input_for_graph, torch.Tensor):
+            self.input_for_graph = (self.input_for_graph,)
+        elif not isinstance(self.input_for_graph, (tuple, list)):
+            self.input_for_graph = (self.input_for_graph,)
         self.dynamic_shapes = dynamic_shapes
         self.model.eval()
         self.model.requires_grad_(False)
         # Handle both string and dict layer implementation configurations
         self.layer_implementation = self._parse_layer_implementation(layer_implementation)
         
-        print(f"🚀 Layer Implementation Configuration:")
-        if isinstance(self.layer_implementation, str):
-            print(f"   Global: {self.layer_implementation.upper()}")
-        else:
-            print(f"   Layer-specific configuration:")
-            for layer_type, impl in self.layer_implementation.items():
-                print(f"     {layer_type}: {impl.upper()}")
+        if self.verbose:
+            print(f"🚀 Layer Implementation Configuration:")
+            if isinstance(self.layer_implementation, str):
+                print(f"   Global: {self.layer_implementation.upper()}")
+            else:
+                print(f"   Layer-specific configuration:")
+                for layer_type, impl in self.layer_implementation.items():
+                    print(f"     {layer_type}: {impl.upper()}")
         
         # Cache manager removed - using non-cache execution only
-        print("---------------------------v2------------------------------------------")
+        if self.verbose:
+            print("---------------------------v2------------------------------------------")
         # Export and trace model
         self._trace_model()
-        print("---------------------------v3------------------------------------------")
+        if self.verbose:
+            print("---------------------------v3------------------------------------------")
         # Placeholder mapping
         self.fx_placeholders = extract_placeholders(self.exported_program)
-        print("---------------------------v4------------------------------------------")
+        if self.verbose:
+            print("---------------------------v4------------------------------------------")
         self.placeholder_to_real_name = map_placeholders_to_state_dict(
             self.exported_program, self.model
         )
-        print("---------------------------v5------------------------------------------")
+        if self.verbose:
+            print("---------------------------v5------------------------------------------")
         self.extracted_weights = {
             p: get_weight_from_placeholder(
                 p, self.exported_program, self.model, self.placeholder_to_real_name
             ) for p in self.fx_placeholders
         }
-        print("---------------------------v6------------------------------------------")
+        if self.verbose:
+            print("---------------------------v6------------------------------------------")
 
         # Graph + metadata
         self.graph, self.layer_stack = build_graph(
             self.tracer, self.extracted_weights
         )
-        print("---------------------------v7------------------------------------------")
+        if self.verbose:
+            print("---------------------------v7------------------------------------------")
         # I/O and bookkeeping
         self.node_io = {}
         self.activation_dict = {}
-        print("---------------------------v8------------------------------------------")
+        if self.verbose:
+            print("---------------------------v8------------------------------------------")
     
     def _parse_layer_implementation(self, layer_implementation):
         """Parse and validate layer implementation configuration."""
@@ -160,17 +178,19 @@ class DLBacktraceFX:
         
         self.tracer = self.exported_program.graph_module
 
-    def predict(self, *inputs, debug=False):
+    def predict(self, *inputs, debug=None):
         """
         Execute the model with the given inputs and return node I/O data.
         
         Args:
             *inputs: Input tensors for the model
-            debug (bool): Enable debug mode for detailed execution logging
+            debug (bool | None): Enable debug logs. If None, defaults to self.verbose.
             
         Returns:
             dict: Node I/O data containing execution results
         """
+        if debug is None:
+            debug = bool(getattr(self, "verbose", False))
         if debug:
             print(f"🔧 DLB Predict: Debug mode enabled")
             print(f"   Input count: {len(inputs)}")
@@ -322,71 +342,76 @@ class DLBacktraceFX:
             print(f"   ❌ Type mismatch: direct={type(direct_output)}, dlb={type(final_output)}")
             return {'error': 'Type mismatch'}
     
-    def _setup_deterministic_environment(self):
-        """Set up deterministic execution environment for consistent tracing results."""
-        import os
+    def _setup_deterministic_environment(self, seed: int = 42, verbose: bool = True, strict_cpu: bool = True):
+        """
+        Deterministic environment for export/replay parity on CUDA *and* CPU.
+        - No global default dtype changes (let model dtype decide).
+        - No global grad mode changes (use torch.no_grad() at call sites).
+        - On CPU, pins threads and (optionally) disables MKL-DNN for stricter equality.
+        """
+        import os, warnings, random
         import numpy as np
-        import warnings
-        
-        print("🔧 Setting up deterministic execution environment...")
-        
-        # 🔧 ENHANCED: Suppress common warnings for cleaner output
+        import torch
+
+        if verbose:
+            print("🔧 Setting up deterministic execution environment...")
+
+        # Quiet some noise (don't hide RuntimeWarnings/NaNs)
         warnings.filterwarnings("ignore", category=UserWarning)
         warnings.filterwarnings("ignore", category=DeprecationWarning)
         warnings.filterwarnings("ignore", category=FutureWarning)
         os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-        
-        # Disable gradient computation
-        torch.set_grad_enabled(False)
-        
-        # Import and use exact reproducibility setup from core
-        try:
-            from dl_backtrace.pytorch_backtrace.dlbacktrace.core.reproducibility import setup_exact_reproducibility
-            
-            # Set up exact PyTorch reproducibility (this handles all the deterministic settings)
-            setup_exact_reproducibility(seed=42, disable_optimizations=True, verbose=True)
-            
-        except ImportError:
-            # Fallback to manual setup if reproducibility module is not available
-            print("⚠️  Reproducibility module not available, using fallback setup")
-            torch.use_deterministic_algorithms(True, warn_only=True)
-            torch.manual_seed(42)
-            if torch.cuda.is_available():
-                torch.cuda.manual_seed_all(42)
-            np.random.seed(42)
-            torch.set_default_dtype(torch.float32)
-            os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG', ':4096:8')
-            os.environ.setdefault('PYTHONHASHSEED', '42')
-            
-            # Set deterministic algorithms
-            torch.backends.cudnn.deterministic = True
-            torch.backends.cudnn.benchmark = False
-            torch.backends.cudnn.allow_tf32 = False
-            torch.backends.cuda.matmul.allow_tf32 = False
-            
-            # Force deterministic SDPA path if attention is used
+
+        # ---- Environment seeds (set env first where relevant) ----
+        os.environ.setdefault("PYTHONHASHSEED", str(seed))
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+
+        # ---- Determinism: fail if a nondeterministic kernel sneaks in ----
+        torch.use_deterministic_algorithms(True, warn_only=False)
+
+        # ---- Common precision policy ----
+        torch.backends.cudnn.allow_tf32 = False
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cuda.matmul.allow_tf32 = False
+
+        # ---- CUDA path ----
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+            # Force math SDPA (avoid Flash/ME drift)
             try:
-                from torch.backends.cuda import sdp_kernel
-                sdp_kernel(enable_flash=False, enable_mem_efficient=False, enable_math=True)
+                torch.backends.cuda.sdp_kernel(enable_flash=False, enable_mem_efficient=False, enable_math=True)
             except Exception:
                 pass
-        
-        # 🔧 ENHANCED: Memory management for consistent performance
-        try:
-            if torch.cuda.is_available():
+            try:
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
-        except Exception:
-            pass
-        
-        # 🔧 ENHANCED: Performance monitoring setup
-        try:
-            if torch.cuda.is_available():
-                # Enable CUDA events for timing
-                torch.cuda.synchronize()
-                print(f"✅ CUDA device: {torch.cuda.get_device_name()}")
-                print(f"✅ CUDA memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
-        except Exception:
-            pass
-        
-        print("✅ Deterministic environment setup complete!")
+                if verbose:
+                    print(f"✅ CUDA device: {torch.cuda.get_device_name(0)}")
+            except Exception:
+                pass
+
+        # ---- CPU path ----
+        else:
+            # 1) Pin threads for all BLAS/OpenMP stacks to 1
+            os.environ.setdefault("OMP_NUM_THREADS", "1")
+            os.environ.setdefault("MKL_NUM_THREADS", "1")
+            os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+            os.environ.setdefault("VECLIB_MAXIMUM_THREADS", "1")
+            os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
+            try:
+                torch.set_num_threads(1)
+                torch.set_num_interop_threads(1)
+            except Exception:
+                pass
+            
+            if strict_cpu:
+                try:
+                    torch.backends.mkldnn.enabled = False
+                except Exception:
+                    pass
+
+        if verbose:
+            print("✅ Deterministic environment setup complete!")
