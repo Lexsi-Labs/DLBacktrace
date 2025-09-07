@@ -798,7 +798,7 @@ def run_evaluation(
                         # Neither parent is a weight node → split relevance normally
                         Rx, Ry = UD.calculate_wt_mul(R, X, Y)
                         if DEBUG:
-                            log(f"R: {np.sum(R):.8f}, shape: {R.shape}")
+                            log(f"R: {np.sum(R):.8f}, shape: {R.shape}, R_all: {R}")
                             log(f"X--- relevance: {np.sum(Rx):.8f}, shape: {Rx.shape}") 
                             log(f"Y--- relevance: {np.sum(Ry):.8f}, shape: {Ry.shape}") 
                         add_rel([Rx, Ry])
