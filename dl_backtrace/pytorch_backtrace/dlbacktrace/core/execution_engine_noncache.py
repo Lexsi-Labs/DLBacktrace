@@ -617,17 +617,10 @@ def _precheck_sdpa(q, k, v, attn_mask, dropout_p, is_causal, node_name, model_co
     if not all(x.dtype == model_compute_dtype for x in (q, k, v)):
         logger.warning(f"⚠️  SDPA dtype mismatch: q={q.dtype}, k={k.dtype}, v={v.dtype}, expected={model_compute_dtype}")
     
-    # Mask checks
+    # Mask checks (allow boolean or additive float masks)
     if attn_mask is not None:
-        if attn_mask.dtype != torch.bool:
-            logger.error(f"❌ SDPA mask must be bool, got {attn_mask.dtype}")
-            raise AssertionError(f"SDPA mask dtype mismatch: expected bool, got {attn_mask.dtype}")
-        
-        # Check for -inf values (don't replace with large negatives)
-        if torch.isinf(attn_mask).any():
-            logger.debug(f"✅ SDPA mask contains -inf values (correct)")
-        else:
-            logger.warning(f"⚠️  SDPA mask doesn't contain -inf values")
+        if not (attn_mask.dtype == torch.bool or torch.is_floating_point(attn_mask)):
+            logger.warning(f"⚠️  SDPA mask uncommon dtype: {attn_mask.dtype} (expected bool or floating)")
     
     # Eval mode checks
     if dropout_p != 0.0:
@@ -678,18 +671,26 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
     logger.debug(f"🔧 Parents: {parents}")
     
     try:
-        # 🔧 CRITICAL: Get model compute dtype for consistency checks
-        model_compute_dtype = None
+        # 🔧 CRITICAL: Infer model compute dtype without requiring model reference
+        model_compute_dtype = torch.float32
         try:
-            # Try to get from the model in tensor_map or node_io
-            for data in node_io.values():
-                if isinstance(data, dict) and 'output_values' in data:
-                    tensor = data['output_values']
-                    if isinstance(tensor, torch.Tensor) and tensor.is_floating_point():
-                        model_compute_dtype = tensor.dtype
+            if isinstance(layer_in, torch.Tensor) and layer_in.is_floating_point():
+                model_compute_dtype = layer_in.dtype
+            elif isinstance(layer_in, (list, tuple)):
+                for _x in layer_in:
+                    if isinstance(_x, torch.Tensor) and _x.is_floating_point():
+                        model_compute_dtype = _x.dtype
                         break
-        except:
-            model_compute_dtype = torch.float32  # fallback
+            else:
+                # Fallback: scan node_io for any floating tensor
+                for _data in node_io.values():
+                    if isinstance(_data, dict) and 'output_values' in _data:
+                        _t = _data['output_values']
+                        if isinstance(_t, torch.Tensor) and _t.is_floating_point():
+                            model_compute_dtype = _t.dtype
+                            break
+        except Exception:
+            pass
         
         # 🔧 MINIMAL FIX: Only convert FakeTensors to real tensors, don't modify properties
         if isinstance(layer_in, (list, tuple)):
@@ -1117,8 +1118,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             if running_var.device != target_device:
                 running_var = running_var.to(device=target_device)
             
-            # 🔧 CONSISTENCY FIX: Use consistent epsilon value
-            eps = 1e-5  # Standard value instead of variable
+            # 🔧 CONSISTENCY FIX: Use the layer's configured epsilon
+            eps = layer_hyperparams.get("eps", 1e-5)
             
             return aten_op(layer_in,
                            weight,
@@ -1166,29 +1167,19 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             k = enforce_precision_consistency(k)
             v = enforce_precision_consistency(v)
             
-            # 🔧 ATTENTION MASK FIX: Handle attention mask shape for multi-head attention
+            # 🔧 ATTENTION MASK FIX: Handle attention mask with minimal broadcast, preserve dtype
             attn_mask = layer_hyperparams.get("attn_mask", None)
-            
-            # If attention mask is provided, ensure it has the correct shape
             if attn_mask is not None:
-                # 🔧 CRITICAL: Keep mask as bool, don't convert to float
-                if attn_mask.dtype != torch.bool:
-                    logger.warning(f"⚠️  SDPA mask dtype conversion: {attn_mask.dtype} -> bool")
-                    attn_mask = attn_mask.bool()
-                
-                # If mask is 2D [batch, seq_len], expand to 4D [batch, heads, seq_len, seq_len]
-                if attn_mask.dim() == 2:
-                    batch_size, seq_len = attn_mask.shape
-                    num_heads = q.shape[1]
-                    
-                    # Create 4D mask by expanding the 2D mask
-                    attn_mask_4d = attn_mask.unsqueeze(1).unsqueeze(2)  # [batch, 1, 1, seq_len]
-                    attn_mask_4d = attn_mask_4d.expand(batch_size, num_heads, seq_len, seq_len)
-                    attn_mask = attn_mask_4d
-                
-                # Ensure mask is on the same device as query
+                # Keep mask dtype (bool/additive) exactly as provided
+                # Move to correct device if needed
                 if attn_mask.device != q.device:
                     attn_mask = attn_mask.to(device=q.device)
+
+                # Only reshape if strictly required for torch.sdpa; prefer minimal broadcast
+                # Acceptable shapes: [B, S], [B, 1, 1, S], [B, 1, S, S], [B, H, S, S]
+                if attn_mask.dim() == 2:
+                    # Convert [B, S] to [B, 1, 1, S]
+                    attn_mask = attn_mask.unsqueeze(1).unsqueeze(2)
             
             # 🔧 CRITICAL: Pre-execution checks for SDPA
             dropout_p = layer_hyperparams.get("dropout_p", 0.0)
@@ -3354,13 +3345,12 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
             consistent_inputs = []
             for i, inp in enumerate(inputs):
                 if isinstance(inp, torch.Tensor):
-                    # 🔧 SPECIAL HANDLING: input_ids and attention_mask must remain long/int
-                    if i == 0:  # First input is usually input_ids
-                        consistent_inp = inp.detach().to(dtype=torch.long)
-                    elif i == 1:  # Second input is usually attention_mask
+                    # 🔧 NAME-BASED CASTING: cast only input_ids/position_ids to long; keep attention_mask dtype
+                    arg_name = expected_input_names[i] if i < len(expected_input_names) else None
+                    if arg_name in ("input_ids", "position_ids"):
                         consistent_inp = inp.detach().to(dtype=torch.long)
                     else:
-                        consistent_inp = inp.detach().to(dtype=inp.dtype)  # Preserve original dtype
+                        consistent_inp = inp.detach()  # preserve original dtype
                     
                     # Ensure contiguous memory layout
                     if not consistent_inp.is_contiguous():
@@ -3373,8 +3363,8 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
             tensor_map[layer_stack[len(extracted_weights)]] = consistent_inputs
         else:
             if isinstance(inputs, torch.Tensor):
-                # For single tensor input, assume it's input_ids
-                consistent_input = inputs.detach().to(dtype=torch.long)
+                # For single tensor input, conservatively preserve dtype
+                consistent_input = inputs.detach()
                 if not consistent_input.is_contiguous():
                     consistent_input = consistent_input.contiguous()
                 tensor_map[layer_stack[len(extracted_weights)]] = consistent_input

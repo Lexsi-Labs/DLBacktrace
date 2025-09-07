@@ -376,6 +376,11 @@ class DLBacktraceFX:
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
         torch.backends.cuda.matmul.allow_tf32 = False
+        # ---- Autocast policy: force disabled for parity ----
+        try:
+            torch.set_autocast_enabled(False)
+        except Exception:
+            pass
 
         # ---- CUDA path ----
         if torch.cuda.is_available():
@@ -383,6 +388,11 @@ class DLBacktraceFX:
             # Force math SDPA (avoid Flash/ME drift)
             try:
                 torch.backends.cuda.sdp_kernel(enable_flash=False, enable_mem_efficient=False, enable_math=True)
+            except Exception:
+                pass
+            # Ensure CUDA autocast is disabled
+            try:
+                torch.set_autocast_enabled(False)
             except Exception:
                 pass
             try:
@@ -412,6 +422,11 @@ class DLBacktraceFX:
                     torch.backends.mkldnn.enabled = False
                 except Exception:
                     pass
+            # Ensure CPU autocast is disabled
+            try:
+                torch.set_autocast_enabled(False)
+            except Exception:
+                pass
 
         if verbose:
             print("✅ Deterministic environment setup complete!")
