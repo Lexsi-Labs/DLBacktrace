@@ -67,20 +67,20 @@ __global__ void calculate_wt_mul_kernel(
     }
 }
 
-torch::Tensor launch_calculate_wt_mul_kernel(torch::Tensor R) {
+torch::Tensor launch_calculate_wt_mul_kernel(const torch::Tensor& R) {
     // Ensure input is contiguous and on CUDA
     TORCH_CHECK(R.is_cuda(), "Input tensor must be on CUDA device");
     TORCH_CHECK(R.dtype() == torch::kFloat32, "Input tensor must be float32");
     
-    R = R.contiguous();
+    auto R_contiguous = R.contiguous();
     
     // Get tensor properties
-    int total_elements = R.numel();
+    int total_elements = R_contiguous.numel();
     
     // Create output tensors with same shape and properties as input
-    auto options = torch::TensorOptions().dtype(torch::kFloat32).device(R.device());
-    torch::Tensor R_x = torch::empty_like(R, options);
-    torch::Tensor R_y = torch::empty_like(R, options);
+    auto options = torch::TensorOptions().dtype(torch::kFloat32).device(R_contiguous.device());
+    torch::Tensor R_x = torch::empty_like(R_contiguous, options);
+    torch::Tensor R_y = torch::empty_like(R_contiguous, options);
     
     // Calculate grid and block dimensions
     int threads_needed = (total_elements + 3) / 4;  // Round up division
@@ -91,7 +91,7 @@ torch::Tensor launch_calculate_wt_mul_kernel(torch::Tensor R) {
     
     // Launch kernel
     calculate_wt_mul_kernel<<<grid_size, block_size>>>(
-        R.data_ptr<float>(),
+        R_contiguous.data_ptr<float>(),
         R_x.data_ptr<float>(),
         R_y.data_ptr<float>(),
         total_elements
