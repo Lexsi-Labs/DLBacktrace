@@ -3,13 +3,13 @@ import torch
 # Linear Layer
 from .cuda_utils.Linear_v2.original_version import calculate_wt_fc as calculate_wt_fc_original_linear
 from .cuda_utils.Linear_v2.pytorch_version import calculate_wt_fc as calculate_wt_fc_pytorch_linear
-from .cuda_utils.Linear_v2.cuda_v2 import calculate_wt_fc_cuda as calculate_wt_fc_cuda_linear
+from .cuda_utils.Linear_v3.cuda_v3 import calculate_wt_fc_cuda as calculate_wt_fc_cuda_linear
 
-# Conv2D Layer - Under Development
+# Conv2D Layer
 from .cuda_utils.Conv2D.original_version import calculate_wt_conv as calculate_wt_conv_original
 from .cuda_utils.Conv2D.refactored_version import calculate_wt_conv as calculate_wt_conv_refactored
 from .cuda_utils.Conv2D.pytorch_version import calculate_wt_conv as calculate_wt_conv_pytorch
-from .cuda_utils.Conv2D.cuda_v2 import calculate_wt_conv_cuda as calculate_wt_conv_cuda
+#from .cuda_utils.Conv2D.cuda_v2 import calculate_wt_conv_cuda as calculate_wt_conv_cuda
 
 # MaxPool2D Layer
 from .cuda_utils.MaxPool2D.original_version import calculate_wt_maxpool as calculate_wt_maxpool_original
@@ -32,7 +32,7 @@ from .cuda_utils.Embedded.cuda_v2 import calculate_wt_embedding_cuda as calculat
 # SelfAttention Layer
 from .cuda_utils.SelfAttention.original_version import calculate_wt_self_attention as calculate_wt_self_attention_original
 from .cuda_utils.SelfAttention.pytorch_version import calculate_wt_self_attention as calculate_wt_self_attention_pytorch
-from .cuda_utils.SelfAttention.cuda_v2 import calculate_wt_self_attention_multi_kernel as calculate_wt_self_attention_cuda
+#from .cuda_utils.SelfAttention.cuda_v2 import calculate_wt_self_attention_multi_kernel as calculate_wt_self_attention_cuda
 
 # Wt_add_equal Layer
 from .cuda_utils.Wt_add_equal.original_version import calculate_wt_add_equal as calculate_wt_add_original
@@ -83,7 +83,8 @@ def launch_conv2d(version, wts, inp, w, b, padding, strides, act):
         return calculate_wt_conv_pytorch(wts, inp, w, b, padding, strides, act)
     
     elif version == 'cuda':
-        return calculate_wt_conv_cuda(wts, inp, w, b, padding, strides, act)
+        #return calculate_wt_conv_cuda(wts, inp, w, b, padding, strides, act)
+        return None
 
     else:
         raise ValueError(f"Unknown version for Conv2D layer: {version}")
@@ -150,9 +151,9 @@ def launch_self_attention(version, R_out, Q, K, V, masked_fill, scale = None, ep
         result_torch = calculate_wt_self_attention_pytorch(R_out_t, Q_t, K_t, V_t, masked_fill_t, scale_t, epsilon)
         return [arr.cpu().numpy() for arr in result_torch]
     elif version == 'cuda':
-        result_cuda = calculate_wt_self_attention_cuda(R_out_t, Q_t, K_t, V_t, masked_fill_t, scale_t)
-        return [arr.cpu().numpy() for arr in result_cuda]
-        #return None
+        #result_cuda = calculate_wt_self_attention_cuda(R_out_t, Q_t, K_t, V_t, masked_fill_t, scale_t)
+        #return [arr.cpu().numpy() for arr in result_cuda]
+        return None
     else:
         raise ValueError(f"Unknown version for SelfAttention layer: {version}")
 
