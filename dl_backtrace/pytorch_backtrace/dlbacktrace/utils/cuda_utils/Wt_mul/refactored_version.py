@@ -3,11 +3,6 @@ import numpy as np
 
 def calculate_wt_mul(
     R: np.ndarray, 
-    X: np.ndarray, 
-    Y: np.ndarray, 
-    epsilon: float = 1e-12, 
-    clip_negative: bool = True, 
-    normalize: bool = True
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Stable and safe distribution of relevance for elementwise multiplication.
@@ -20,19 +15,6 @@ def calculate_wt_mul(
     ----------
     R : np.ndarray
         Relevance from the output. Will be converted to float32.
-    X : np.ndarray
-        First input to the multiplication. Will be converted to float32.
-    Y : np.ndarray
-        Second input to the multiplication. Will be converted to float32.
-    epsilon : float, optional
-        Small constant to avoid divide-by-zero (default: 1e-12).
-        Note: Currently unused in this implementation.
-    clip_negative : bool, optional
-        If True, clips negative relevance to zero (default: True).
-        Note: Currently unused in this implementation.
-    normalize : bool, optional
-        If True, ensures Rx + Ry ≈ sum(R) (default: True).
-        Note: Currently unused in this implementation.
     
     Returns
     -------

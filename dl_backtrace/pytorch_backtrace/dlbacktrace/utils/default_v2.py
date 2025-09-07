@@ -43,6 +43,7 @@ from .cuda_utils.Wt_add_equal.pytorch_version import calculate_wt_add_equal_vect
 # Wt_mul Layer
 from .cuda_utils.Wt_mul.original_version import calculate_wt_mul as calculate_wt_mul_original
 from .cuda_utils.Wt_mul.refactored_version import calculate_wt_mul as calculate_wt_mul_refactored
+from .cuda_utils.Wt_mul.pytorch_version import calculate_wt_mul_gpu as calculate_wt_mul_pytorch
 from .cuda_utils.Wt_mul.cuda_v1 import calculate_wt_mul as calculate_wt_mul_cuda
 
 def _prepare_tensors(device, *arrays):
@@ -178,6 +179,9 @@ def launch_wt_mul(version, R_out):
     if version in ['original', 'refactored']:
         func = calculate_wt_mul_original if version == 'original' else calculate_wt_mul_refactored
         return func(R_out)
+
+    elif version == 'pytorch':
+        return calculate_wt_mul_pytorch(R_out)
 
     elif version == 'cuda':
         return calculate_wt_mul_cuda(R_out)
