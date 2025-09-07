@@ -16,8 +16,6 @@ def calculate_wt_mul(R, X, Y, epsilon=1e-12, clip_negative=True, normalize=True)
     - R_y: Relevance assigned to Y
     """
     R = np.array(R, dtype=np.float64)
-    X = np.array(X, dtype=np.float64)
-    Y = np.array(Y, dtype=np.float64)
 
     Rx, Ry = R / 2, R / 2
     return Rx, Ry   

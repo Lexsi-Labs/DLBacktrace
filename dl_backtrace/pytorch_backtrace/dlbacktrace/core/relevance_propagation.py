@@ -795,10 +795,14 @@ def run_evaluation(
                             log(f"Y is a weight node '{parent_names[1]}', discarding its relevance.")
                         add_rel([R, np.zeros_like(Y)])  # Relevance only to X
                     else:
-                        # Neither parent is a weight node → split relevance normally
-                        Rx, Ry = UD.calculate_wt_mul(R, X, Y)
+
+                        impl = get_layer_implementation("Mathematical_Operation_mul")
                         if DEBUG:
-                            log(f"R: {np.sum(R):.8f}, shape: {R.shape}, R_all: {R}")
+                            log(f"Using {impl} implementation for mul operation {name}")
+                        # Neither parent is a weight node → split relevance normally
+                        Rx, Ry = UD2.launch_wt_mul(impl, R)
+                        if DEBUG:
+                            log(f"R: {np.sum(R):.8f}, shape: {R.shape}")
                             log(f"X--- relevance: {np.sum(Rx):.8f}, shape: {Rx.shape}") 
                             log(f"Y--- relevance: {np.sum(Ry):.8f}, shape: {Ry.shape}") 
                         add_rel([Rx, Ry])

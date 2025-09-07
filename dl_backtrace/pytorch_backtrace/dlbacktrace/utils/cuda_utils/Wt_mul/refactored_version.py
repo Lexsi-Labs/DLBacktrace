@@ -47,8 +47,6 @@ def calculate_wt_mul(
     """
     # Convert inputs to float32 arrays 
     R = np.asarray(R, dtype=np.float32)
-    X = np.asarray(X, dtype=np.float32)
-    Y = np.asarray(Y, dtype=np.float32)
     
     # Vectorized 50-50 relevance split using broadcasting
     relevance_half = R * 0.5

@@ -43,6 +43,7 @@ from .cuda_utils.Wt_add_equal.pytorch_version import calculate_wt_add_equal_vect
 # Wt_mul Layer
 from .cuda_utils.Wt_mul.original_version import calculate_wt_mul as calculate_wt_mul_original
 from .cuda_utils.Wt_mul.refactored_version import calculate_wt_mul as calculate_wt_mul_refactored
+from .cuda_utils.Wt_mul.cuda_v1 import calculate_wt_mul as calculate_wt_mul_cuda
 
 def _prepare_tensors(device, *arrays):
     return [torch.tensor(arr, dtype=torch.float32, device=device) for arr in arrays]
@@ -173,11 +174,14 @@ def launch_wt_add_equal(version, R_out, inp):
     else:
         raise ValueError(f"Unknown version for Wt_add_equal layer: {version}")
 
-def launch_wt_mul(version, R_out, X, Y):
+def launch_wt_mul(version, R_out):
     if version in ['original', 'refactored']:
         func = calculate_wt_mul_original if version == 'original' else calculate_wt_mul_refactored
-        return func(R_out, X, Y)
+        return func(R_out)
+
+    elif version == 'cuda':
+        return calculate_wt_mul_cuda(R_out)
     else:
         # Fallback to original for unsupported implementations
         print(f"⚠️  {version} implementation not available for Wt_mul, using original")
-        return calculate_wt_mul_original(R_out, X, Y)
+        return calculate_wt_mul_original(R_out)
