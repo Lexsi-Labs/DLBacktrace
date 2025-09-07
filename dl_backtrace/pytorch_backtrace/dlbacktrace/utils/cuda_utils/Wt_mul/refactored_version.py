@@ -27,10 +27,12 @@ def calculate_wt_mul(
     The current implementation performs a simple 50-50 split of relevance,
     ignoring the epsilon, clip_negative, and normalize parameters.
     """
-    # Convert inputs to float32 arrays 
-    R = np.asarray(R, dtype=np.float32)
+    # Ensure float32 without unnecessary copying
+    if R.dtype != np.float32:
+        R = R.astype(np.float32, copy=False)
     
-    # Vectorized 50-50 relevance split using broadcasting
-    relevance_half = R * 0.5
+    # In-place multiplication
+    R *= 0.5
     
-    return relevance_half, relevance_half
+    # Return two views of the same array (saves memory)
+    return R, R
