@@ -27,5 +27,5 @@ def calculate_wt_mul(
     The current implementation performs a simple 50-50 split of relevance,
     ignoring the epsilon, clip_negative, and normalize parameters.
     """
-    R_half = np.multiply(R.astype(np.float32), 0.5, dtype=np.float32)
+    R_half = np.multiply(R, 0.5, dtype=np.float32)
     return R_half, R_half
