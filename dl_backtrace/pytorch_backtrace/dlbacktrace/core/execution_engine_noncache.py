@@ -1168,7 +1168,12 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             v = enforce_precision_consistency(v)
             
             # 🔧 ATTENTION MASK FIX: Handle attention mask with minimal broadcast, preserve dtype
-            attn_mask = layer_hyperparams.get("attn_mask", None)
+            # Prefer the 4th positional input if present; fall back to hyperparams
+            attn_mask = None
+            if isinstance(layer_in, (list, tuple)) and len(layer_in) >= 4 and isinstance(layer_in[3], torch.Tensor):
+                attn_mask = layer_in[3]
+            else:
+                attn_mask = layer_hyperparams.get("attn_mask", None)
             if attn_mask is not None:
                 # Keep mask dtype (bool/additive) exactly as provided
                 # Move to correct device if needed
@@ -1183,7 +1188,39 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             
             # 🔧 CRITICAL: Pre-execution checks for SDPA
             dropout_p = layer_hyperparams.get("dropout_p", 0.0)
-            is_causal = layer_hyperparams.get("is_causal", False)
+            
+            # 🔧 CRITICAL FIX: Proper model type detection for RoBERTa/BERT vs GPT/Llama
+            if "is_causal" not in layer_hyperparams:
+                # DEFAULT to bidirectional (is_causal=False) since most transformer models are bidirectional
+                # Only use causal=True for explicitly detected causal models
+                is_bidirectional_model = True  # Default assumption
+                
+                # Check for RoBERTa/BERT patterns in ALL node names in node_io
+                model_type_indicators = []
+                if node_io:
+                    for existing_node in node_io.keys():
+                        if any(pattern in existing_node.lower() for pattern in ['roberta', 'bert', 'distilbert', 'electra', 'encoder']):
+                            model_type_indicators.append('bidirectional')
+                        elif any(pattern in existing_node.lower() for pattern in ['gpt', 'llama', 'opt', 'bloom', 'decoder']):
+                            model_type_indicators.append('causal')
+                
+                # Determine model type based on indicators
+                if 'bidirectional' in model_type_indicators:
+                    is_bidirectional_model = True
+                elif 'causal' in model_type_indicators:
+                    is_bidirectional_model = False
+                # else: keep default (bidirectional=True)
+                
+                # Set appropriate default based on model type
+                if is_bidirectional_model:
+                    is_causal = False
+                    logger.debug(f"🔧 Auto-detected bidirectional model → setting is_causal=False for {node_name}")
+                else:
+                    is_causal = True
+                    logger.debug(f"🔧 Auto-detected causal model → setting is_causal=True for {node_name}")
+            else:
+                is_causal = layer_hyperparams["is_causal"]
+            
             _precheck_sdpa(q, k, v, attn_mask, dropout_p, is_causal, node_name, model_compute_dtype)
             
             # 🔧 DEBUGGING: Log attention mask info
@@ -3254,6 +3291,200 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             except Exception as e:
                 raise RuntimeError(f"[{node_name}] ❌ type_as failed with input shape={input_tensor.shape}, target shape={target_tensor.shape}. Error: {e}")
 
+        elif func_name == "split":
+            # 🔧 NEW OPERATION: Split tensor into chunks (crucial for transformers)
+            if isinstance(layer_in, (list, tuple)):
+                layer_in = layer_in[0]
+            layer_in = enforce_precision_consistency(layer_in)
+            
+            if not isinstance(layer_in, torch.Tensor):
+                raise TypeError(f"[{node_name}] ❌ split: expected tensor input, got {type(layer_in)}")
+            
+            # Get split parameters
+            split_size_or_sections = layer_hyperparams.get("split_size_or_sections", 1)
+            dim = layer_hyperparams.get("dim", 0)
+            
+            # Handle negative indexing
+            tensor_rank = layer_in.dim()
+            if dim < 0:
+                dim = tensor_rank + dim
+            
+            try:
+                output = aten_op(layer_in, split_size_or_sections, dim)
+                logger.debug(f"[{node_name}] ✅ split: input shape={layer_in.shape}, output chunks={len(output)}")
+                return output
+            except Exception as e:
+                raise RuntimeError(f"[{node_name}] ❌ split failed with input shape={layer_in.shape}, split_size={split_size_or_sections}, dim={dim}. Error: {e}")
+
+        elif func_name == "chunk":
+            # 🔧 NEW OPERATION: Split tensor into equal chunks
+            if isinstance(layer_in, (list, tuple)):
+                layer_in = layer_in[0]
+            layer_in = enforce_precision_consistency(layer_in)
+            
+            if not isinstance(layer_in, torch.Tensor):
+                raise TypeError(f"[{node_name}] ❌ chunk: expected tensor input, got {type(layer_in)}")
+            
+            chunks = layer_hyperparams.get("chunks", 2)
+            dim = layer_hyperparams.get("dim", 0)
+            
+            # Handle negative indexing
+            tensor_rank = layer_in.dim()
+            if dim < 0:
+                dim = tensor_rank + dim
+            
+            try:
+                output = aten_op(layer_in, chunks, dim)
+                logger.debug(f"[{node_name}] ✅ chunk: input shape={layer_in.shape}, chunks={chunks}, dim={dim}")
+                return output
+            except Exception as e:
+                raise RuntimeError(f"[{node_name}] ❌ chunk failed with input shape={layer_in.shape}, chunks={chunks}, dim={dim}. Error: {e}")
+
+        elif func_name == "stack":
+            # 🔧 NEW OPERATION: Stack tensors along new dimension
+            if not isinstance(layer_in, (list, tuple)):
+                raise RuntimeError(f"[{node_name}] ❌ stack: expected list of tensors, got {type(layer_in)}")
+            
+            # Apply precision consistency to all tensors
+            tensors = [enforce_precision_consistency(t) for t in layer_in]
+            
+            # Ensure all are tensors and on same device
+            target_device = tensors[0].device
+            for i, t in enumerate(tensors):
+                if not isinstance(t, torch.Tensor):
+                    raise TypeError(f"[{node_name}] ❌ stack: all inputs must be tensors, got {type(t)} at index {i}")
+                if t.device != target_device:
+                    tensors[i] = t.to(device=target_device)
+            
+            dim = layer_hyperparams.get("dim", 0)
+            
+            try:
+                output = aten_op(tensors, dim)
+                logger.debug(f"[{node_name}] ✅ stack: {len(tensors)} tensors, output shape={output.shape}")
+                return output
+            except Exception as e:
+                raise RuntimeError(f"[{node_name}] ❌ stack failed with {len(tensors)} tensors, dim={dim}. Error: {e}")
+
+        elif func_name == "gather":
+            # 🔧 NEW OPERATION: Gather values along dimension (critical for attention)
+            if not isinstance(layer_in, (list, tuple)) or len(layer_in) != 2:
+                raise RuntimeError(f"[{node_name}] ❌ gather: expected 2 inputs (input, index), got {layer_in}")
+            
+            input_tensor, index_tensor = layer_in
+            input_tensor = enforce_precision_consistency(input_tensor)
+            index_tensor = enforce_precision_consistency(index_tensor)
+            
+            # Ensure index tensor is long
+            if index_tensor.dtype != torch.long:
+                index_tensor = index_tensor.long()
+            
+            # Ensure same device
+            if input_tensor.device != index_tensor.device:
+                index_tensor = index_tensor.to(device=input_tensor.device)
+            
+            dim = layer_hyperparams.get("dim", 0)
+            
+            try:
+                output = aten_op(input_tensor, dim, index_tensor)
+                logger.debug(f"[{node_name}] ✅ gather: input shape={input_tensor.shape}, index shape={index_tensor.shape}, output shape={output.shape}")
+                return output
+            except Exception as e:
+                raise RuntimeError(f"[{node_name}] ❌ gather failed with input shape={input_tensor.shape}, index shape={index_tensor.shape}, dim={dim}. Error: {e}")
+
+        elif func_name == "native_layer_norm":
+            # 🔧 NEW OPERATION: Native layer norm (optimized version)
+            layer_in = standardize_layer_input(layer_in, parents, node_io, tensor_map, func_name)
+            layer_in = enforce_precision_consistency(layer_in)
+            
+            if not isinstance(layer_in, torch.Tensor):
+                raise RuntimeError(f"[{node_name}] ❌ native_layer_norm: expected tensor input, got {type(layer_in)}")
+            
+            # Get parameters
+            normalized_shape = layer_hyperparams.get("normalized_shape")
+            weight = layer_hyperparams.get("weight")
+            bias = layer_hyperparams.get("bias")
+            eps = layer_hyperparams.get("eps", 1e-5)
+            
+            # Validate parameters
+            if not isinstance(weight, torch.Tensor) or not isinstance(bias, torch.Tensor):
+                raise RuntimeError(f"[{node_name}] ❌ native_layer_norm: weight and bias must be tensors")
+            
+            # Ensure device consistency
+            target_device = layer_in.device
+            if weight.device != target_device:
+                weight = weight.to(device=target_device)
+            if bias.device != target_device:
+                bias = bias.to(device=target_device)
+            
+            try:
+                output = aten_op(layer_in, normalized_shape, weight, bias, eps)
+                # native_layer_norm returns (output, mean, rstd) tuple
+                if isinstance(output, tuple):
+                    return output[0]  # Return just the normalized output
+                return output
+            except Exception as e:
+                raise RuntimeError(f"[{node_name}] ❌ native_layer_norm failed with input shape={layer_in.shape}. Error: {e}")
+
+        elif func_name == "baddbmm":
+            # 🔧 NEW OPERATION: Batch matrix multiplication with bias (critical for attention)
+            if not isinstance(layer_in, (list, tuple)) or len(layer_in) != 3:
+                raise RuntimeError(f"[{node_name}] ❌ baddbmm: expected 3 inputs (bias, batch1, batch2), got {layer_in}")
+            
+            bias, batch1, batch2 = layer_in
+            
+            # Apply precision consistency
+            bias = enforce_precision_consistency(bias)
+            batch1 = enforce_precision_consistency(batch1)
+            batch2 = enforce_precision_consistency(batch2)
+            
+            # Ensure device consistency
+            target_device = batch1.device
+            if bias.device != target_device:
+                bias = bias.to(device=target_device)
+            if batch2.device != target_device:
+                batch2 = batch2.to(device=target_device)
+            
+            # Get scaling factors
+            beta = layer_hyperparams.get("beta", 1.0)
+            alpha = layer_hyperparams.get("alpha", 1.0)
+            
+            try:
+                output = aten_op(bias, batch1, batch2, beta=beta, alpha=alpha)
+                logger.debug(f"[{node_name}] ✅ baddbmm: bias shape={bias.shape}, batch1 shape={batch1.shape}, batch2 shape={batch2.shape}, output shape={output.shape}")
+                return output
+            except Exception as e:
+                raise RuntimeError(f"[{node_name}] ❌ baddbmm failed with shapes: bias={bias.shape}, batch1={batch1.shape}, batch2={batch2.shape}. Error: {e}")
+
+        elif func_name == "addmv":
+            # 🔧 NEW OPERATION: Matrix-vector multiplication with bias
+            if not isinstance(layer_in, (list, tuple)) or len(layer_in) != 3:
+                raise RuntimeError(f"[{node_name}] ❌ addmv: expected 3 inputs (bias, mat, vec), got {layer_in}")
+            
+            bias, mat, vec = layer_in
+            
+            # Apply precision consistency
+            bias = enforce_precision_consistency(bias)
+            mat = enforce_precision_consistency(mat)
+            vec = enforce_precision_consistency(vec)
+            
+            # Ensure device consistency
+            target_device = mat.device
+            if bias.device != target_device:
+                bias = bias.to(device=target_device)
+            if vec.device != target_device:
+                vec = vec.to(device=target_device)
+            
+            # Get scaling factors
+            beta = layer_hyperparams.get("beta", 1.0)
+            alpha = layer_hyperparams.get("alpha", 1.0)
+            
+            try:
+                output = aten_op(bias, mat, vec, beta=beta, alpha=alpha)
+                logger.debug(f"[{node_name}] ✅ addmv: bias shape={bias.shape}, mat shape={mat.shape}, vec shape={vec.shape}, output shape={output.shape}")
+                return output
+            except Exception as e:
+                raise RuntimeError(f"[{node_name}] ❌ addmv failed with shapes: bias={bias.shape}, mat={mat.shape}, vec={vec.shape}. Error: {e}")
+
         else:
             # 🔧 UNHANDLED OPERATION: Print with emojis for easy identification
             logger.warning(f"🚨 UNHANDLED OPERATION: `{func_name}` - needs implementation!")
@@ -3560,8 +3791,36 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
         # At the end of node execution
         processed_output = _process_output_tuple(output)
 
-        if isinstance(processed_output, torch.Tensor) and torch.isnan(processed_output).any():
+        # 🔧 CRITICAL FIX: Only check for NaN in floating point tensors
+        if isinstance(processed_output, torch.Tensor) and torch.is_floating_point(processed_output) and torch.isnan(processed_output).any():
             logger.error(f"[ERROR:NaN] Node `{node_name}` produced NaNs → shape: {processed_output.shape}")
+        
+        # 🔧 DEBUG: Check for extreme values that could indicate precision issues
+        if isinstance(processed_output, torch.Tensor):
+            # 🔧 CRITICAL FIX: Only check abs for numeric tensors, not boolean tensors
+            if processed_output.dtype in [torch.bool]:
+                # For boolean tensors, just check basic properties
+                logger.debug(f"[DEBUG:BOOL] Node `{node_name}` produced boolean tensor → shape: {processed_output.shape}")
+            elif torch.is_floating_point(processed_output) or torch.is_complex(processed_output):
+                # Only apply abs() to floating point or complex tensors
+                max_val = torch.max(torch.abs(processed_output)).item()
+                if max_val > 1e6:
+                    logger.warning(f"[WARNING:EXTREME] Node `{node_name}` produced extreme values → max: {max_val:.2e}")
+                elif func_name in ["scaled_dot_product_attention", "layer_norm", "linear"] and max_val < 1e-6:
+                    logger.warning(f"[WARNING:SMALL] Node `{node_name}` produced very small values → max: {max_val:.2e}")
+                
+                # Log first few values for critical operations to help debug
+                if func_name in ["scaled_dot_product_attention", "layer_norm"] and logger.isEnabledFor(logging.DEBUG):
+                    flat_vals = processed_output.flatten()[:5].tolist()
+                    logger.debug(f"[DEBUG:VALUES] {node_name} first 5 values: {[f'{v:.6f}' for v in flat_vals]}")
+            elif processed_output.dtype in [torch.int8, torch.int16, torch.int32, torch.int64]:
+                # For integer tensors, use different approach
+                max_val = torch.max(processed_output).item()
+                min_val = torch.min(processed_output).item()
+                logger.debug(f"[DEBUG:INT] Node `{node_name}` → min: {min_val}, max: {max_val}")
+            else:
+                # For other dtypes, just log basic info
+                logger.debug(f"[DEBUG:OTHER] Node `{node_name}` → dtype: {processed_output.dtype}, shape: {processed_output.shape}")
 
         # 🔧 CRITICAL FIX: Ensure ALL tensor outputs maintain consistency without forcing float32
         if isinstance(processed_output, torch.Tensor):

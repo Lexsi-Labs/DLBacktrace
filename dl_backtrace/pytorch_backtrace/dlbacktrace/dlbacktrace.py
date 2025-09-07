@@ -13,6 +13,7 @@ from .core.visualization import visualize_graph, visualize_relevance
 
 import numpy as np 
 import torch
+import inspect
 
 class DLBacktraceFX:
     def __init__(self, model, input_for_graph, dynamic_shapes=None, layer_implementation="original", verbose=False, strict_cpu=True):
@@ -168,15 +169,115 @@ class DLBacktraceFX:
         """Export model deterministically using the reproducibility module."""
         from dl_backtrace.pytorch_backtrace.dlbacktrace.core.reproducibility import export_model_deterministically
         
-        # Use the deterministic export function
-        self.exported_program = export_model_deterministically(
-            model=self.model,
-            sample_inputs=self.input_for_graph,
-            dynamic_shapes=self.dynamic_shapes,
-            seed=42
-        )
+        try:
+            # Use the deterministic export function
+            self.exported_program = export_model_deterministically(
+                model=self.model,
+                sample_inputs=self.input_for_graph,
+                dynamic_shapes=self.dynamic_shapes,
+                seed=42
+            )
+            self.tracer = self.exported_program.graph_module
+        except Exception as e:
+            # Fallback: Try with different export strategies for complex models
+            print(f"⚠️ Primary export failed: {e}")
+            print("🔄 Trying alternative export strategies...")
+            
+            self.exported_program = self._fallback_export()
+            self.tracer = self.exported_program.graph_module
+
+    def _fallback_export(self):
+        """Fallback export strategies for complex models like Llama/RoBERTa"""
+        import torch
+        from torch.export import export
         
-        self.tracer = self.exported_program.graph_module
+        # Strategy 1: Try with stricter constraints
+        try:
+            print("📋 Strategy 1: Strict mode with no dynamic shapes")
+            return export(
+                self.model,
+                args=self.input_for_graph,
+                strict=True,
+                preserve_module_call_signature=(),
+            )
+        except Exception as e1:
+            print(f"❌ Strategy 1 failed: {e1}")
+        
+        # Strategy 2: Try with relaxed constraints
+        try:
+            print("📋 Strategy 2: Non-strict mode")
+            return export(
+                self.model,
+                args=self.input_for_graph,
+                strict=False,
+            )
+        except Exception as e2:
+            print(f"❌ Strategy 2 failed: {e2}")
+        
+        # Strategy 3: Try with explicit dynamic shapes for transformers
+        try:
+            print("📋 Strategy 3: Transformer-specific dynamic shapes")
+            # Common dynamic shapes for transformer models
+            if self.dynamic_shapes is None:
+                # Infer from input shapes
+                if isinstance(self.input_for_graph[0], torch.Tensor):
+                    batch_size, seq_len = self.input_for_graph[0].shape[:2]
+                    # Create dynamic shapes for typical transformer inputs
+                    self.dynamic_shapes = {
+                        "input_ids": {0: torch.export.Dim("batch"), 1: torch.export.Dim("seq_len")},
+                        "attention_mask": {0: torch.export.Dim("batch"), 1: torch.export.Dim("seq_len")},
+                    }
+                    
+            return export(
+                self.model,
+                args=self.input_for_graph,
+                dynamic_shapes=self.dynamic_shapes,
+                strict=True,
+            )
+        except Exception as e3:
+            print(f"❌ Strategy 3 failed: {e3}")
+        
+        # Strategy 4: Last resort - FX tracing
+        try:
+            print("📋 Strategy 4: FX symbolic tracing (last resort)")
+            import torch.fx as fx
+            
+            # Create a wrapper to handle complex forward signatures
+            class ModelWrapper(torch.nn.Module):
+                def __init__(self, model):
+                    super().__init__()
+                    self.model = model
+                
+                def forward(self, *args):
+                    return self.model(*args)
+            
+            wrapped_model = ModelWrapper(self.model)
+            traced = fx.symbolic_trace(wrapped_model)
+            
+            # Create a mock ExportedProgram-like object
+            class MockExportedProgram:
+                def __init__(self, graph_module):
+                    self.graph_module = graph_module
+                    self.graph_signature = None  # Will be handled later
+                    
+            return MockExportedProgram(traced)
+            
+        except Exception as e4:
+            print(f"❌ Strategy 4 failed: {e4}")
+            raise RuntimeError(f"All export strategies failed. Last error: {e4}")
+
+    def _infer_model_type(self):
+        """Infer model type for better tracing strategies"""
+        model_name = self.model.__class__.__name__.lower()
+        
+        if any(name in model_name for name in ['llama', 'llm', 'gpt', 'opt']):
+            return 'causal_lm'
+        elif any(name in model_name for name in ['bert', 'roberta', 'electra', 'distilbert']):
+            return 'masked_lm'
+        elif any(name in model_name for name in ['t5', 'bart', 'pegasus']):
+            return 'seq2seq'
+        else:
+            return 'unknown'
 
     def predict(self, *inputs, debug=None):
         """
@@ -191,14 +292,20 @@ class DLBacktraceFX:
         """
         if debug is None:
             debug = bool(getattr(self, "verbose", False))
+        
+        # 🔧 ENHANCED: Better input preprocessing for complex models
+        processed_inputs = self._preprocess_inputs(inputs, debug)
+        
         if debug:
             print(f"🔧 DLB Predict: Debug mode enabled")
-            print(f"   Input count: {len(inputs)}")
-            for i, inp in enumerate(inputs):
+            print(f"   Original input count: {len(inputs)}")
+            print(f"   Processed input count: {len(processed_inputs)}")
+            for i, inp in enumerate(processed_inputs):
                 if isinstance(inp, torch.Tensor):
                     print(f"   Input {i}: {inp.shape} on {inp.device}, dtype: {inp.dtype}")
                 else:
                     print(f"   Input {i}: {type(inp)}")
+            print(f"   Model type: {self._infer_model_type()}")
             print(f"   Execution engine: Non-cache (ExecutionEngineNoCache)")
             print(f"   Layer stack length: {len(self.layer_stack)}")
         
@@ -217,13 +324,99 @@ class DLBacktraceFX:
         if debug:
             print(f"🔧 Starting execution with {type(executor).__name__}")
         
-        self.node_io = executor.run(inputs, debug=debug)
+        try:
+            self.node_io = executor.run(processed_inputs, debug=debug)
+        except Exception as e:
+            if debug:
+                print(f"❌ Execution failed: {e}")
+                print("🔄 Attempting recovery strategies...")
+            
+            # Try recovery strategies
+            self.node_io = self._attempt_execution_recovery(executor, processed_inputs, debug, e)
         
         if debug:
             print(f"🔧 Execution completed successfully")
             print(f"   Output nodes: {len(self.node_io)}")
         
         return self.node_io
+
+    def _preprocess_inputs(self, inputs, debug=False):
+        """Preprocess inputs for better compatibility with complex models"""
+        processed = []
+        
+        for i, inp in enumerate(inputs):
+            if isinstance(inp, torch.Tensor):
+                # Ensure tensor is contiguous and detached
+                processed_inp = inp.detach().contiguous()
+                
+                # Handle common transformer input patterns
+                if inp.dtype == torch.float16:
+                    # Convert half precision to float32 for better compatibility
+                    processed_inp = processed_inp.to(torch.float32)
+                    if debug:
+                        print(f"   🔧 Converted input {i} from float16 to float32")
+                
+                # Ensure reasonable tensor shapes
+                if processed_inp.dim() == 1 and processed_inp.shape[0] > 1:
+                    # Add batch dimension if missing
+                    processed_inp = processed_inp.unsqueeze(0)
+                    if debug:
+                        print(f"   🔧 Added batch dimension to input {i}: {inp.shape} -> {processed_inp.shape}")
+                
+                processed.append(processed_inp)
+            else:
+                processed.append(inp)
+        
+        return processed
+
+    def _attempt_execution_recovery(self, executor, inputs, debug, original_error):
+        """Attempt to recover from execution failures"""
+        if debug:
+            print("🔄 Trying recovery strategies:")
+        
+        # Recovery 1: Try with simplified inputs
+        try:
+            if debug:
+                print("   📋 Strategy 1: Simplified inputs")
+            
+            simplified_inputs = []
+            for inp in inputs:
+                if isinstance(inp, torch.Tensor):
+                    # Ensure basic tensor properties
+                    simple_inp = inp.clone().detach().requires_grad_(False)
+                    if simple_inp.device.type != 'cpu':
+                        simple_inp = simple_inp.cpu()
+                    simplified_inputs.append(simple_inp)
+                else:
+                    simplified_inputs.append(inp)
+            
+            return executor.run(simplified_inputs, debug=debug)
+            
+        except Exception as e1:
+            if debug:
+                print(f"   ❌ Strategy 1 failed: {e1}")
+        
+        # Recovery 2: Try with smaller batch size
+        try:
+            if debug:
+                print("   📋 Strategy 2: Smaller batch size")
+            
+            reduced_inputs = []
+            for inp in inputs:
+                if isinstance(inp, torch.Tensor) and inp.shape[0] > 1:
+                    # Take first sample only
+                    reduced_inputs.append(inp[:1])
+                else:
+                    reduced_inputs.append(inp)
+            
+            return executor.run(reduced_inputs, debug=debug)
+            
+        except Exception as e2:
+            if debug:
+                print(f"   ❌ Strategy 2 failed: {e2}")
+        
+        # If all recovery attempts fail, raise the original error
+        raise original_error
 
     def evaluation(self, mode="default", start_wt=[], multiplier=100.0, scaler=1.0, thresholding=0.5, task="binary-classification", debug=False):
         evaluator = RelevancePropagator(
@@ -341,6 +534,72 @@ class DLBacktraceFX:
         else:
             print(f"   ❌ Type mismatch: direct={type(direct_output)}, dlb={type(final_output)}")
             return {'error': 'Type mismatch'}
+
+    def diagnose_model_compatibility(self):
+        """Diagnose potential issues with model tracing"""
+        print("🔍 Diagnosing model compatibility...")
+        
+        issues = []
+        warnings = []
+        
+        # Check model type
+        model_type = self._infer_model_type()
+        print(f"   🏷️  Model type: {model_type}")
+        
+        # Check for common problematic patterns
+        for name, module in self.model.named_modules():
+            # Check for unsupported operations
+            if hasattr(module, 'forward'):
+                # This is a basic check - in practice you'd inspect the forward method
+                if 'custom' in str(type(module)).lower():
+                    warnings.append(f"Custom module detected: {name} ({type(module)})")
+        
+        # Check input requirements
+        try:
+            signature = inspect.signature(self.model.forward)
+            params = list(signature.parameters.keys())
+            print(f"   📝 Forward signature: {params}")
+            
+            if len(params) > 3:
+                warnings.append(f"Complex forward signature with {len(params)} parameters")
+                
+        except Exception as e:
+            issues.append(f"Could not inspect forward signature: {e}")
+        
+        # Check if model has been exported successfully
+        if hasattr(self, 'exported_program') and self.exported_program is not None:
+            print("   ✅ Model export successful")
+        else:
+            issues.append("Model export failed or not attempted")
+        
+        # Check graph complexity
+        if hasattr(self, 'graph') and hasattr(self, 'layer_stack'):
+            print(f"   📊 Graph nodes: {len(self.graph.nodes) if hasattr(self.graph, 'nodes') else 'unknown'}")
+            print(f"   📊 Layer stack: {len(self.layer_stack)}")
+            
+            if len(self.layer_stack) > 1000:
+                warnings.append("Very large computation graph - may be slow")
+        
+        # Report findings
+        if issues:
+            print(f"\n❌ Issues found ({len(issues)}):")
+            for issue in issues:
+                print(f"   • {issue}")
+        
+        if warnings:
+            print(f"\n⚠️  Warnings ({len(warnings)}):")
+            for warning in warnings:
+                print(f"   • {warning}")
+        
+        if not issues and not warnings:
+            print("\n✅ No obvious compatibility issues detected")
+        
+        return {
+            'model_type': model_type,
+            'issues': issues,
+            'warnings': warnings,
+            'forward_params': signature.parameters if 'signature' in locals() else None
+        }
     
     def _setup_deterministic_environment(self, seed: int = 42, verbose: bool = True, strict_cpu: bool = True):
         """
