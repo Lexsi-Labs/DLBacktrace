@@ -184,7 +184,7 @@ def launch_wt_mul(version, R_out):
     R_out_t = torch.tensor(R_out, dtype=torch.float32, device=device)
 
     if version == 'pytorch':
-        return calculate_wt_mul_pytorch(R_out_t)
+        return calculate_wt_mul_pytorch(R_out_t).cpu().numpy()
 
     elif version == 'cuda':
         return calculate_wt_mul_cuda(R_out)
