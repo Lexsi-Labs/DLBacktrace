@@ -180,8 +180,11 @@ def launch_wt_mul(version, R_out):
         func = calculate_wt_mul_original if version == 'original' else calculate_wt_mul_refactored
         return func(R_out)
 
-    elif version == 'pytorch':
-        return calculate_wt_mul_pytorch(R_out)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    R_out_t = torch.tensor(R_out, dtype=torch.float32, device=device)
+
+    if version == 'pytorch':
+        return calculate_wt_mul_pytorch(R_out_t)
 
     elif version == 'cuda':
         return calculate_wt_mul_cuda(R_out)

@@ -1,11 +1,9 @@
-from typing import Tuple, Optional
+from typing import Tuple
 import torch
 
-
+@torch.compile
 def calculate_wt_mul_gpu(
     R: torch.Tensor,
-    device: Optional[torch.device] = None,
-    non_blocking: bool = True
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Ultra GPU-optimized version using in-place operations (use with caution for autograd).
@@ -25,16 +23,7 @@ def calculate_wt_mul_gpu(
         This function modifies the input tensor in-place. Do not use if R requires gradients
         or if you need to preserve the original values.
     """
-    # Determine optimal device
-    if device is None:
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    
-    # Move to GPU if not already there
-    if R.device != device:
-        R = R.to(device=device, dtype=torch.float32, non_blocking=non_blocking)
-    elif R.dtype != torch.float32:
-        R = R.to(dtype=torch.float32)
-    
+
     R.mul_(0.5)
     
     return R, R
