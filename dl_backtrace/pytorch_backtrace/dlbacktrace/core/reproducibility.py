@@ -3,284 +3,285 @@ Exact reproducibility utilities for PyTorch backtrace.
 This module ensures exact reproducibility for DL-Backtrace PyTorch operations.
 """
 
+# --- IMPORTANT: set env vars BEFORE importing torch ---------------------------
 import os
+
+# Ensure deterministic cuBLAS (CUDA >= 10.2). Must be set before importing torch.
+# Keep any user-provided value; otherwise default to ":4096:8".
+if "CUBLAS_WORKSPACE_CONFIG" not in os.environ:
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+
+# Optional: keep Python hash seeding stable if supplied later by setup()
+# (We don't set PYTHONHASHSEED here to avoid surprising global effects.)
+# -----------------------------------------------------------------------------
+
+
 import random
 import numpy as np
 import warnings
-from typing import Optional, Union, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple
+
 import torch
 
 # Suppress warnings for cleaner output
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
-def setup_exact_reproducibility(seed: int = 42, 
-                               disable_optimizations: bool = True,
-                               verbose: bool = True) -> None:
+
+def setup_exact_reproducibility(
+    seed: int = 42,
+    disable_optimizations: bool = True,
+    verbose: bool = True,
+) -> None:
     """
-    Set up exact reproducibility for PyTorch backtrace operations.
-    
+    Set up exact-ish reproducibility for PyTorch backtrace operations.
+
+    Notes:
+    - CUBLAS_WORKSPACE_CONFIG has already been set at import time to ensure
+      cuBLAS determinism before torch initializes CUDA handles.
+    - We keep torch.use_deterministic_algorithms(warn_only=True) by default to
+      avoid hard errors on unsupported kernels; switch to warn_only=False if you
+      want strict failures.
+
     Args:
-        seed: Random seed to use for all random number generators
-        disable_optimizations: Whether to disable optimizations for exact reproducibility
+        seed: Random seed to use for all RNGs.
+        disable_optimizations: Whether to disable speed-oriented features that
+            can introduce nondeterminism or numeric drift.
+        verbose: Print configuration summary.
     """
     if verbose:
         print(f"🔧 Setting up exact PyTorch reproducibility with seed={seed}")
-    
-    # Set Python random seed
+
+    # Python / NumPy seeds
     random.seed(seed)
-    
-    # Set NumPy random seed
     np.random.seed(seed)
-    
-    # Set environment variables for deterministic behavior
-    os.environ['PYTHONHASHSEED'] = str(seed)
-    os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
-    
-    # PyTorch reproducibility
+    os.environ["PYTHONHASHSEED"] = str(seed)
+
+    # PyTorch seeds
     torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+
     if disable_optimizations:
-        # Enable deterministic algorithms
+        # Enforce deterministic algorithms where supported.
+        # Use warn_only=True to log instead of raising on unsupported paths.
         torch.use_deterministic_algorithms(True, warn_only=True)
-        
-        # Set cuDNN to deterministic mode
+
+        # cuDNN determinism and autotuning
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
-        
-        # Disable TensorFloat-32 (TF32) for exact reproducibility
+
+        # Disable TF32 to reduce numeric divergence on Ampere+
         torch.backends.cudnn.allow_tf32 = False
-        torch.backends.cuda.matmul.allow_tf32 = False
-        
-        # Set default dtype to float32 for consistency
+        if hasattr(torch.backends, "cuda") and hasattr(torch.backends.cuda, "matmul"):
+            torch.backends.cuda.matmul.allow_tf32 = False
+
+        # Keep a consistent default dtype
         torch.set_default_dtype(torch.float32)
-        
-        # Force deterministic SDPA (Scaled Dot Product Attention) path
+
+        # Prefer math (deterministic) SDPA path; disable flash/mem-effic kernels
         try:
-            from torch.backends.cuda import sdp_kernel
+            from torch.backends.cuda import sdp_kernel  # PyTorch 2.x
             sdp_kernel(enable_flash=False, enable_mem_efficient=False, enable_math=True)
-        except ImportError:
+        except Exception:
             pass
-        
+
         if verbose:
             print("🔧 PyTorch optimizations disabled for exact reproducibility")
     else:
         if verbose:
-            print("⚠️  PyTorch optimizations enabled - results may not be exactly reproducible")
-    
-    # Traced model specific settings
+            print("⚠️  PyTorch optimizations enabled — results may not be exactly reproducible")
+
+    # Tracing / export-related toggles (only if we’re aiming for determinism)
     if disable_optimizations:
-        # Disable torch.export optimizations that can cause non-determinism
-        os.environ['TORCH_EXPORT_DISABLE_OPTIMIZATIONS'] = '1'
-        os.environ['TORCH_EXPORT_DETERMINISTIC'] = '1'
-        
-        # Disable FX graph optimizations
-        os.environ['TORCH_FX_DISABLE_OPTIMIZATIONS'] = '1'
-        
+        # Limit aggressive graph/execution rewrites that may vary by run/hardware
+        os.environ["TORCH_EXPORT_DISABLE_OPTIMIZATIONS"] = "1"
+        os.environ["TORCH_EXPORT_DETERMINISTIC"] = "1"
+        os.environ["TORCH_FX_DISABLE_OPTIMIZATIONS"] = "1"
         if verbose:
-            print("🔧 Torch.export optimizations disabled for exact reproducibility")
-    
-    # Set additional environment variables for traced models
-    os.environ['TORCH_LOGS'] = '+dynamic'  # Enable dynamic shape logging
-    os.environ['TORCH_DYNAMIC_SHAPES_DETERMINISTIC'] = '1'
-    
+            print("🔧 torch.export / FX optimizations constrained for reproducibility")
+
+    # Helpful logging for dynamic shapes (optional)
+    os.environ["TORCH_LOGS"] = os.environ.get("TORCH_LOGS", "+dynamic")
+    os.environ["TORCH_DYNAMIC_SHAPES_DETERMINISTIC"] = "1"
+
     if verbose:
         print("✅ Exact PyTorch reproducibility configured")
 
-def create_deterministic_dynamic_shapes(input_shapes: Dict[str, Tuple[int, ...]], 
-                                      seed: int = 42) -> Dict[str, Dict[int, 'Dim']]:
+
+def create_deterministic_dynamic_shapes(
+    input_shapes: Dict[str, Tuple[int, ...]],
+    seed: int = 42,
+) -> Dict[str, Dict[int, "Dim"]]:
     """
     Create deterministic dynamic shapes for torch.export.
-    
+
     Args:
-        input_shapes: Dictionary mapping input names to their shapes
-        seed: Seed for deterministic dimension creation
-        
+        input_shapes: Mapping input-name -> static shape tuple (ints).
+        seed: Seed used to generate deterministic Dim names/ranges.
+
     Returns:
-        Dictionary of dynamic shapes for torch.export
+        Mapping suitable for torch.export's dynamic_shapes argument.
     """
     from torch.export import Dim
-    
-    # Set seed for deterministic dimension creation
+
+    # Seed just to keep naming/ranges deterministic
     random.seed(seed)
     np.random.seed(seed)
-    
-    dynamic_shapes = {}
-    
+
+    dynamic_shapes: Dict[str, Dict[int, Dim]] = {}
+
     for input_name, shape in input_shapes.items():
         dynamic_shapes[input_name] = {}
-        
         for dim_idx, dim_size in enumerate(shape):
-            if dim_size > 1:  # Only make dimensions > 1 dynamic
-                # Create deterministic dimension names
+            # Only make dimensions >1 dynamic (size-1 dims usually act as constants)
+            if dim_size > 1:
                 dim_name = f"{input_name}_dim_{dim_idx}"
-                
-                # Use deterministic min/max values
+                # Provide conservative, deterministic bounds
                 min_val = max(1, dim_size // 2)
-                max_val = dim_size * 2
-                
-                dynamic_shapes[input_name][dim_idx] = Dim(
-                    dim_name, 
-                    min=min_val, 
-                    max=max_val
-                )
-    
+                max_val = max(dim_size * 2, min_val + 1)
+                dynamic_shapes[input_name][dim_idx] = Dim(dim_name, min=min_val, max=max_val)
+
     return dynamic_shapes
 
-def export_model_deterministically(model: torch.nn.Module, 
-                                 sample_inputs: Tuple[torch.Tensor, ...],
-                                 dynamic_shapes: Optional[Dict] = None,
-                                 seed: int = 42) -> 'torch.export.ExportedProgram':
+
+def export_model_deterministically(
+    model: torch.nn.Module,
+    sample_inputs: Tuple[torch.Tensor, ...],
+    dynamic_shapes: Optional[Dict] = None,
+    seed: int = 42,
+) -> "torch.export.ExportedProgram":
     """
     Export a model deterministically for reproducible tracing.
-    
+
     Args:
-        model: PyTorch model to export
-        sample_inputs: Sample inputs for tracing
-        dynamic_shapes: Optional dynamic shape constraints
-        seed: Seed for deterministic export
-        
+        model: PyTorch model to export.
+        sample_inputs: Inputs used for tracing/export.
+        dynamic_shapes: Optional dynamic shape constraints (from create_deterministic_dynamic_shapes).
+        seed: Seed to enforce before export.
+
     Returns:
-        Exported program with deterministic behavior
+        torch.export.ExportedProgram with deterministic configuration applied.
     """
     from torch.export import export, export_for_training
-    
-    # Set up reproducibility
-    setup_exact_reproducibility(seed)
-    
-    # Ensure model is in eval mode and deterministic
+
+    # Configure reproducibility (does not change CUBLAS_WORKSPACE_CONFIG order)
+    setup_exact_reproducibility(seed, disable_optimizations=True, verbose=False)
+
+    # Ensure deterministic evaluation mode
     model.eval()
     model.requires_grad_(False)
-    
-    # Set model to deterministic mode
     for module in model.modules():
-        if hasattr(module, 'training'):
+        if hasattr(module, "training"):
             module.training = False
-        if hasattr(module, 'eval'):
+        if hasattr(module, "eval"):
             module.eval()
-    
-    # Export with deterministic settings
+
     try:
         if dynamic_shapes:
-            exported_program = export_for_training(
-                model,
-                sample_inputs,
-                dynamic_shapes=dynamic_shapes
-            )
+            ep = export_for_training(model, sample_inputs, dynamic_shapes=dynamic_shapes)
         else:
-            exported_program = export(model, sample_inputs)
-        
-        # Run decompositions deterministically
-        exported_program = exported_program.run_decompositions(decomp_table={})
-        
+            ep = export_for_training(model, sample_inputs)
+
+        # Run decompositions with an explicit (empty) table to avoid hidden variance
+        if hasattr(ep, "run_decompositions"):
+            ep = ep.run_decompositions(decomp_table={})
+
         print("✅ Model exported deterministically")
-        return exported_program
-        
+        return ep
+
     except Exception as e:
         print(f"❌ Error during deterministic export: {e}")
         raise
 
-def verify_exact_reproducibility(test_function, 
-                                num_runs: int = 3, 
-                                tolerance: float = 1e-6,
-                                seed: int = 42) -> bool:
+
+def verify_exact_reproducibility(
+    test_function,
+    num_runs: int = 3,
+    tolerance: float = 1e-6,
+    seed: int = 42,
+) -> bool:
     """
-    Verify that a function produces exactly reproducible results.
-    
+    Verify that a function produces reproducible results across runs.
+
     Args:
-        test_function: Function to test for reproducibility
-        num_runs: Number of runs to test
-        tolerance: Tolerance for considering results identical
-        seed: Seed to use for testing
-        
+        test_function: Callable producing a numeric-like result (array/tensor/list).
+        num_runs: How many runs to compare.
+        tolerance: atol/rtol for equality; set to 0 for bitwise equality if feasible.
+        seed: Seed to reset before each run.
+
     Returns:
-        True if results are exactly reproducible, False otherwise
+        True if all runs are equal within tolerance; False otherwise.
     """
     results = []
-    
-    for run in range(num_runs):
-        # Reset reproducibility for each run
-        setup_exact_reproducibility(seed)
-        
-        # Run the test function
-        result = test_function()
-        results.append(result)
-    
-    # Check if all results are identical (within tolerance)
+    for _ in range(num_runs):
+        setup_exact_reproducibility(seed, disable_optimizations=True, verbose=False)
+        out = test_function()
+        # Normalize to numpy array
+        if isinstance(out, torch.Tensor):
+            out = out.detach().cpu().numpy()
+        elif not isinstance(out, np.ndarray):
+            out = np.asarray(out)
+        results.append(out)
+
     if len(results) < 2:
         return True
-    
-    # Convert results to numpy arrays for comparison
-    try:
-        results = [np.array(r) if not isinstance(r, np.ndarray) else r for r in results]
-        
-        # Check if all results are close to each other
-        for i in range(1, len(results)):
-            if not np.allclose(results[0], results[i], atol=tolerance, rtol=tolerance):
-                print(f"❌ Exact reproducibility test failed: results differ between runs")
-                print(f"   Run 0: {results[0]}")
-                print(f"   Run {i}: {results[i]}")
-                return False
-        
-        print(f"✅ Exact reproducibility test passed: {num_runs} runs produced identical results")
-        return True
-        
-    except Exception as e:
-        print(f"❌ Error during exact reproducibility test: {e}")
-        return False
+
+    ref = results[0]
+    for i in range(1, len(results)):
+        if not np.allclose(ref, results[i], atol=tolerance, rtol=tolerance):
+            print("❌ Exact reproducibility test failed: results differ between runs")
+            print(f"   Run 0: {ref}")
+            print(f"   Run {i}: {results[i]}")
+            return False
+
+    print(f"✅ Exact reproducibility test passed: {num_runs} runs matched (tol={tolerance})")
+    return True
+
 
 def get_reproducibility_info() -> Dict[str, Any]:
     """
-    Get information about current reproducibility settings.
-    
-    Returns:
-        Dictionary with reproducibility configuration info
+    Return current reproducibility-related configuration and runtime flags.
     """
-    info = {
-        'python_hash_seed': os.environ.get('PYTHONHASHSEED'),
-        'cublas_workspace_config': os.environ.get('CUBLAS_WORKSPACE_CONFIG'),
-        'torch_export_disable_optimizations': os.environ.get('TORCH_EXPORT_DISABLE_OPTIMIZATIONS'),
-        'torch_export_deterministic': os.environ.get('TORCH_EXPORT_DETERMINISTIC'),
-        'torch_fx_disable_optimizations': os.environ.get('TORCH_FX_DISABLE_OPTIMIZATIONS'),
-        'torch_logs': os.environ.get('TORCH_LOGS'),
-        'torch_dynamic_shapes_deterministic': os.environ.get('TORCH_DYNAMIC_SHAPES_DETERMINISTIC'),
+    info: Dict[str, Any] = {
+        "python_hash_seed": os.environ.get("PYTHONHASHSEED"),
+        "cublas_workspace_config": os.environ.get("CUBLAS_WORKSPACE_CONFIG"),
+        "torch_export_disable_optimizations": os.environ.get("TORCH_EXPORT_DISABLE_OPTIMIZATIONS"),
+        "torch_export_deterministic": os.environ.get("TORCH_EXPORT_DETERMINISTIC"),
+        "torch_fx_disable_optimizations": os.environ.get("TORCH_FX_DISABLE_OPTIMIZATIONS"),
+        "torch_logs": os.environ.get("TORCH_LOGS"),
+        "torch_dynamic_shapes_deterministic": os.environ.get("TORCH_DYNAMIC_SHAPES_DETERMINISTIC"),
+        "pytorch_version": torch.__version__,
+        "pytorch_cudnn_deterministic": torch.backends.cudnn.deterministic,
+        "pytorch_cudnn_benchmark": torch.backends.cudnn.benchmark,
+        "pytorch_cudnn_allow_tf32": torch.backends.cudnn.allow_tf32,
     }
-    
-    # PyTorch info
-    try:
-        info['pytorch_version'] = torch.__version__
-        info['pytorch_deterministic'] = torch.backends.cudnn.deterministic
-        info['pytorch_benchmark'] = torch.backends.cudnn.benchmark
-        info['pytorch_allow_tf32'] = torch.backends.cudnn.allow_tf32
-    except ImportError:
-        info['pytorch_available'] = False
-    
+    if hasattr(torch.backends, "cuda") and hasattr(torch.backends.cuda, "matmul"):
+        info["pytorch_matmul_allow_tf32"] = torch.backends.cuda.matmul.allow_tf32
     return info
+
 
 def print_reproducibility_info() -> None:
     """Print current reproducibility configuration."""
     info = get_reproducibility_info()
-    
-    print("🔍 Current Exact Reproducibility Configuration:")
+    print("🔍 Current Exact Reproducibility Configuration")
     print("=" * 60)
-    
-    for key, value in info.items():
-        if value is not None:
-            print(f"{key}: {value}")
-    
+    for k, v in info.items():
+        print(f"{k}: {v}")
     print("=" * 60)
 
-# Auto-setup when imported (can be disabled by setting environment variable)
-if os.environ.get('DL_BACKTRACE_AUTO_REPRODUCIBILITY', 'true').lower() == 'true':
+
+# Auto-setup when imported (can be disabled by env)
+if os.environ.get("DL_BACKTRACE_AUTO_REPRODUCIBILITY", "true").lower() == "true":
+    # Keep verbose=False to avoid noisy imports.
     setup_exact_reproducibility(verbose=False)
 
-# Export main functions
+
 __all__ = [
-    'setup_exact_reproducibility',
-    'create_deterministic_dynamic_shapes',
-    'export_model_deterministically',
-    'verify_exact_reproducibility',
-    'get_reproducibility_info',
-    'print_reproducibility_info'
+    "setup_exact_reproducibility",
+    "create_deterministic_dynamic_shapes",
+    "export_model_deterministically",
+    "verify_exact_reproducibility",
+    "get_reproducibility_info",
+    "print_reproducibility_info",
 ]

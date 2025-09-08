@@ -289,7 +289,7 @@ def ensure_tensor_consistency(tensors, target_dtype=None, target_device=None):
     
     return result[0] if len(result) == 1 else result
 
-def setup_consistent_environment():
+def setup_consistent_environment(model=None):
     """Set up environment for consistent execution"""
     logger = get_logger()
     logger.debug("🔧 Setting up deterministic environment for consistent execution...")
@@ -324,10 +324,34 @@ def setup_consistent_environment():
     except Exception as e:
         logger.debug(f"⚠️  Could not enable deterministic algorithms: {e}")
     
-    # 🔧 ENHANCED: Set default dtype for consistency
+    # 🔧 ENHANCED: Set CuBLAS workspace config for deterministic behavior
+    import os
+    if "CUBLAS_WORKSPACE_CONFIG" not in os.environ:
+        os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+        logger.debug("✅ CUBLAS_WORKSPACE_CONFIG set to :4096:8 for deterministic behavior")
+    else:
+        logger.debug(f"✅ CUBLAS_WORKSPACE_CONFIG already set to: {os.environ['CUBLAS_WORKSPACE_CONFIG']}")
+    
+    # 🔧 ENHANCED: Set default dtype based on model dtype
     try:
-        torch.set_default_dtype(torch.float32)
-        logger.debug("✅ Default dtype set to float32")
+        if model is not None:
+            # Get model dtype from the first parameter or buffer
+            model_dtype = torch.float32  # fallback
+            for param in model.parameters():
+                if param.is_floating_point():
+                    model_dtype = param.dtype
+                    break
+            else:
+                for buffer in model.buffers():
+                    if buffer.is_floating_point():
+                        model_dtype = buffer.dtype
+                        break
+            
+            torch.set_default_dtype(model_dtype)
+            logger.debug(f"✅ Default dtype set to {model_dtype} (from model)")
+        else:
+            torch.set_default_dtype(torch.float32)
+            logger.debug("✅ Default dtype set to float32 (no model provided)")
     except Exception as e:
         logger.debug(f"⚠️  Could not set default dtype: {e}")
     
@@ -663,7 +687,7 @@ def _precheck_embedding(indices, weight, node_name):
     
     logger.debug(f"✅ Embedding pre-checks passed for {node_name}")
 
-def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, method_args, parents, node_io, node_name,tensor_map, children=None):
+def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, method_args, parents, node_io, node_name,tensor_map, children=None, model_dtype=None):
     logger = get_logger()
     logger.debug(f"🔧 Executing aten operation: {func_name}")
     logger.debug(f"🔧 Node name: {node_name}")
@@ -671,8 +695,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
     logger.debug(f"🔧 Parents: {parents}")
     
     try:
-        # 🔧 CRITICAL: Infer model compute dtype without requiring model reference
-        model_compute_dtype = torch.float32
+        # 🔧 CRITICAL: Infer model compute dtype with model reference
+        model_compute_dtype = model_dtype if model_dtype is not None else torch.float32
         try:
             if isinstance(layer_in, torch.Tensor) and layer_in.is_floating_point():
                 model_compute_dtype = layer_in.dtype
@@ -2037,6 +2061,9 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             return output
 
         elif func_name == "full":
+            print(f"full operation: {node_name}")
+            print(f"full operation: {layer_hyperparams}")
+            print(f"full operation: {method_args}")
             # 🔧 CRITICAL FIX: Robust size resolution for full operation
             size = layer_hyperparams.get("size") or layer_hyperparams.get("sizes")
             
@@ -2091,8 +2118,15 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                 raise RuntimeError(f"[{node_name}] ❌ Invalid size dimensions: {resolved_size} (all must be positive)")
             
             # Remaining parameters with validation
-            fill_value = layer_hyperparams.get("fill_value", 0)
-            dtype = layer_hyperparams.get("dtype", torch.float32)
+            # Extract fill_value from method_args[1] if available, otherwise from hyperparams
+            if method_args and len(method_args) > 1:
+                fill_value = method_args[1]
+                logger.debug(f"[{node_name}] 🔧 Using fill_value from method_args: {fill_value}")
+            else:
+                fill_value = layer_hyperparams.get("fill_value", 0)
+                logger.debug(f"[{node_name}] 🔧 Using fill_value from hyperparams: {fill_value}")
+            
+            dtype = layer_hyperparams.get("dtype", model_compute_dtype)
             device = layer_hyperparams.get("device", torch.device("cpu"))
 
             if isinstance(fill_value, torch.Tensor):
@@ -2108,7 +2142,7 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             except Exception as e:
                 raise RuntimeError(f"[{node_name}] ❌ Failed to execute full: "
                                 f"size={resolved_size}, fill_value={fill_value}, dtype={dtype}, device={device}. Error: {e}")
-            
+            print(f"full output: {output}")
             return output
 
         
@@ -2675,6 +2709,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             output_shape = output.shape if hasattr(output, 'shape') else f"scalar({output})"
             
             logger.debug(f"[{node_name}] ✅ {func_name}: input shapes={a_shape}, {b_shape}, output shape={output_shape}")
+            if func_name == "gt":
+                print(f"gt output: {output}")
             return output
 
         elif func_name == "rsqrt":
@@ -2698,6 +2734,7 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                 raise TypeError(f"`triu` expects a tensor input but got: {type(layer_in)}")
             output = aten_op(layer_in, layer_hyperparams.get("diagonal", 0))
             logger.debug(f"triu output shape: {output.shape}")
+            print(f"triu output: {output}")
             return output
 
         elif func_name == "mm":
@@ -3514,7 +3551,7 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
     logger.info(f"Executing `run_execution_nocache` ...!")
     
     # 🔧 CONSISTENCY FIX: Set up consistent environment
-    setup_consistent_environment()
+    setup_consistent_environment(model)
     
     # 🔧 CRITICAL FIX: Ensure model is in consistent state
     logger.debug("🔧 Ensuring model consistency...")
@@ -3557,6 +3594,19 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
     # 🔧 ENHANCED FIX: Get the target device from the model for all operations
     target_device = ensure_model_has_device_attribute(model)
     logger.debug(f"🎯 Target device for all operations: {target_device}")
+    
+    # 🔧 ENHANCED FIX: Get the model dtype for all operations
+    model_dtype = torch.float32  # fallback
+    for param in model.parameters():
+        if param.is_floating_point():
+            model_dtype = param.dtype
+            break
+    else:
+        for buffer in model.buffers():
+            if buffer.is_floating_point():
+                model_dtype = buffer.dtype
+                break
+    logger.debug(f"🎯 Model dtype for all operations: {model_dtype}")
     
     tensor_map = {}
     node_io = {}
@@ -3759,7 +3809,13 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
                     
                     # 🔧 IMPROVED: Handle empty input lists gracefully
                     if len(layer_in) == 0:
-                        logger.warning(f"⚠️ No inputs collected for {func_name}, trying to recover from parents")
+                        # Only warn for operations that should have inputs, not leaf operations
+                        leaf_operations = ["arange", "full", "zeros", "ones", "randn", "rand", "eye", "linspace"]
+                        if func_name not in leaf_operations:
+                            logger.warning(f"⚠️ No inputs collected for {func_name}, trying to recover from parents")
+                        else:
+                            logger.debug(f"🔧 {func_name} is a leaf operation with no inputs (expected)")
+                        
                         # Try to recover inputs from parent nodes
                         for node_x in parents:
                             if node_io[node_x]['layer_type'] not in ("Weight", "Bias", "future_use"):
@@ -3776,7 +3832,7 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
                     
                     logger.debug(f"🔧 After processing: {type(layer_in)}, length: {len(layer_in) if isinstance(layer_in, (list, tuple)) else 'single'}")
 
-                output = execute_aten_operation(func_name, layer, layer_in, layer_hyperparams, method_args, parents, node_io, node_name,tensor_map, children=children)
+                output = execute_aten_operation(func_name, layer, layer_in, layer_hyperparams, method_args, parents, node_io, node_name,tensor_map, children=children, model_dtype=model_dtype)
                 # 🔧 FIX: Only log shape if output is a tensor
                 if isinstance(output, int):
                     logger.debug(f"[outerloop] {node_name} output type: {type(output)}, value: {output} (non-tensor)")
@@ -3804,8 +3860,19 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
             elif torch.is_floating_point(processed_output) or torch.is_complex(processed_output):
                 # Only apply abs() to floating point or complex tensors
                 max_val = torch.max(torch.abs(processed_output)).item()
-                if max_val > 1e6:
+                
+                # Skip extreme value warnings for attention mask operations that legitimately use float32 min/max
+                attention_mask_ops = ["full", "masked_fill", "eq", "triu", "tril", "mul", "add"]
+                shape_preserving_ops = ["slice", "unsqueeze", "expand", "clone", "copy", "slice_scatter"]
+                is_attention_mask = (func_name in attention_mask_ops or 
+                                   any(op in node_name.lower() for op in ["mask", "attention", "causal"]))
+                is_shape_preserving = (func_name in shape_preserving_ops or
+                                     any(op in node_name.lower() for op in ["slice", "unsqueeze", "expand", "clone", "copy"]))
+                
+                if max_val > 1e6 and not (is_attention_mask or is_shape_preserving):
                     logger.warning(f"[WARNING:EXTREME] Node `{node_name}` produced extreme values → max: {max_val:.2e}")
+                elif is_shape_preserving:
+                    logger.debug(f"✅ Skipped extreme value warning for shape-preserving operation: {func_name}")
                 elif func_name in ["scaled_dot_product_attention", "layer_norm", "linear"] and max_val < 1e-6:
                     logger.warning(f"[WARNING:SMALL] Node `{node_name}` produced very small values → max: {max_val:.2e}")
                 
