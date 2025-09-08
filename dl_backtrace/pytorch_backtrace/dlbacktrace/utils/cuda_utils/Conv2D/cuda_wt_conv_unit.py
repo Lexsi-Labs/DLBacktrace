@@ -30,153 +30,188 @@ __device__ __forceinline__ float apply_activation(float x, int act_func) {
     }
 }
 
-__global__ void calculate_wt_conv_unit_kernel(
+// Phase 1: Compute conv_out and extract p_ind/n_ind
+__global__ void compute_conv_and_parts_kernel(
     const float* __restrict__ patch,     // (i, j, k)
-    const float* __restrict__ wts,       // (l,)
     const float* __restrict__ w,         // (i, j, k, l)
+    float* __restrict__ conv_out,        // (i, j, k, l)
+    float* __restrict__ p_ind,           // (i, j, k, l)
+    float* __restrict__ n_ind,           // (i, j, k, l)
+    const int i_size,
+    const int j_size,
+    const int k_size,
+    const int l_size
+) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total_elements = i_size * j_size * k_size * l_size;
+    
+    if (idx >= total_elements) return;
+    
+    // Decompose linear index
+    int l = idx % l_size;
+    int temp = idx / l_size;
+    int k = temp % k_size;
+    temp = temp / k_size;
+    int j = temp % j_size;
+    int i = temp / j_size;
+    
+    // Get indices
+    int spatial_idx = i * j_size * k_size + j * k_size + k;
+    int full_idx = spatial_idx * l_size + l;
+    
+    // Compute convolution: einsum("ijkl,ijk->ijkl")
+    float patch_val = patch[spatial_idx];
+    float w_val = w[full_idx];
+    float conv_val = w_val * patch_val;
+    
+    // Store convolution output
+    conv_out[full_idx] = conv_val;
+    
+    // Extract positive and negative parts
+    p_ind[full_idx] = fmaxf(conv_val, 0.0f);
+    n_ind[full_idx] = fminf(conv_val, 0.0f);
+}
+
+// Phase 2: Compute channel-wise sums (reduction over spatial dimensions)
+__global__ void compute_channel_sums_kernel(
+    const float* __restrict__ p_ind,     // (i, j, k, l)
+    const float* __restrict__ n_ind,     // (i, j, k, l)
+    float* __restrict__ p_sum,           // (l,)
+    float* __restrict__ n_sum,           // (l,)
+    const int i_size,
+    const int j_size,
+    const int k_size,
+    const int l_size
+) {
+    int l = blockIdx.x * blockDim.x + threadIdx.x;
+    if (l >= l_size) return;
+    
+    float p_acc = 0.0f;
+    float n_acc = 0.0f;
+    
+    // Sum over all spatial positions for this channel
+    for (int i = 0; i < i_size; i++) {
+        for (int j = 0; j < j_size; j++) {
+            for (int k = 0; k < k_size; k++) {
+                int idx = (i * j_size * k_size + j * k_size + k) * l_size + l;
+                p_acc += p_ind[idx];
+                n_acc += n_ind[idx];
+            }
+        }
+    }
+    
+    p_sum[l] = p_acc;
+    n_sum[l] = -n_acc;  // Convert to positive
+}
+
+// Phase 3: Compute weights and apply to get final output
+__global__ void apply_weights_kernel(
+    const float* __restrict__ p_ind,     // (i, j, k, l)
+    const float* __restrict__ n_ind,     // (i, j, k, l)
+    const float* __restrict__ p_sum,     // (l,)
+    const float* __restrict__ n_sum,     // (l,)
+    const float* __restrict__ wts,       // (l,)
     const float* __restrict__ b,         // (l,) or nullptr
     float* __restrict__ output,          // (i, j, k)
     const int i_size,
-    const int j_size, 
+    const int j_size,
     const int k_size,
     const int l_size,
-    const int act_type,                  // 0: mono, 1: non_mono
+    const int act_type,
     const float act_lower,
     const float act_upper,
     const int act_func_int,
     const bool has_bias
 ) {
-    // 3D thread mapping to spatial dimensions
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    int j = blockIdx.y * blockDim.y + threadIdx.y;
-    int k = blockIdx.z * blockDim.z + threadIdx.z;
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total_spatial = i_size * j_size * k_size;
     
-    if (i >= i_size || j >= j_size || k >= k_size) return;
+    if (idx >= total_spatial) return;
     
-    // Calculate spatial position index
-    int spatial_idx = i * j_size * k_size + j * k_size + k;
+    // Decompose spatial index
+    int k = idx % k_size;
+    int temp = idx / k_size;
+    int j = temp % j_size;
+    int i = temp / j_size;
     
-    // Get patch value at this spatial position
-    float patch_val = patch[spatial_idx];
-    
-    // Shared memory for channel-wise reductions
-    extern __shared__ float shared_mem[];
-    float* s_p_sum = shared_mem;                    // l_size floats
-    float* s_n_sum = s_p_sum + l_size;             // l_size floats
-    float* s_conv_out = s_n_sum + l_size;          // l_size floats
-    
-    // Initialize shared memory for this thread block
-    int tid = threadIdx.x * blockDim.y * blockDim.z + threadIdx.y * blockDim.z + threadIdx.z;
-    int threads_per_block = blockDim.x * blockDim.y * blockDim.z;
-    
-    // Each thread initializes part of shared memory
-    for (int l = tid; l < l_size; l += threads_per_block) {
-        s_p_sum[l] = 0.0f;
-        s_n_sum[l] = 0.0f;
-    }
-    __syncthreads();
-    
-    // Compute convolution and accumulate positive/negative parts
     float result = 0.0f;
     
-    // Phase 1: Compute convolution outputs and accumulate channel statistics
+    // Process each channel
     for (int l = 0; l < l_size; l++) {
-        int w_idx = spatial_idx * l_size + l;
-        float conv_val = w[w_idx] * patch_val;
+        float p_sum_l = p_sum[l];
+        float n_sum_l = n_sum[l];
+        float t_sum_l = p_sum_l + n_sum_l;
         
-        // Store convolution output for later use
-        if (tid == 0) s_conv_out[l] = conv_val;
+        // Handle bias
+        float bias_pos = 0.0f;
+        float bias_neg = 0.0f;
+        float denom_bias_term = 0.0f;
         
-        // Accumulate positive and negative parts atomically
-        if (conv_val > 0.0f) {
-            atomicAdd(&s_p_sum[l], conv_val);
-        } else if (conv_val < 0.0f) {
-            atomicAdd(&s_n_sum[l], -conv_val);  // Store as positive
+        if (has_bias && b != nullptr) {
+            float bias_val = b[l];
+            bias_pos = fmaxf(bias_val, 0.0f);
+            bias_neg = fmaxf(-bias_val, 0.0f);
+            denom_bias_term = bias_pos + bias_neg;
         }
-    }
-    __syncthreads();
-    
-    // Phase 2: Only first thread computes activation logic and final weights
-    if (tid == 0) {
-        // Compute total sums and bias terms
-        float p_sum_total = 0.0f, n_sum_total = 0.0f;
-        float bias_pos_total = 0.0f, bias_neg_total = 0.0f;
         
-        for (int l = 0; l < l_size; l++) {
-            p_sum_total += s_p_sum[l];
-            n_sum_total += s_n_sum[l];
-            
-            if (has_bias && b) {
-                float bias_val = b[l];
-                bias_pos_total += fmaxf(bias_val, 0.0f);
-                bias_neg_total += fmaxf(-bias_val, 0.0f);
+        // Initialize saturation indicators
+        float p_saturate = (p_sum_l > 0.0f) ? 1.0f : 0.0f;
+        float n_saturate = (n_sum_l > 0.0f) ? 1.0f : 0.0f;
+        
+        // Handle activation function logic
+        if (act_type == 0) {  // mono
+            if (act_lower > -FLT_MAX) {
+                float temp_ind = (t_sum_l > act_lower) ? 1.0f : 0.0f;
+                p_saturate = temp_ind;
             }
-        }
-        
-        float t_sum = p_sum_total + n_sum_total;
-        float denom_bias_term = bias_pos_total + bias_neg_total;
-        
-        // Compute activation-specific saturation indicators
-        float p_saturate_base = (p_sum_total > 0.0f) ? 1.0f : 0.0f;
-        float n_saturate_base = (n_sum_total > 0.0f) ? 1.0f : 0.0f;
-        
-        for (int l = 0; l < l_size; l++) {
-            float p_saturate = p_saturate_base;
-            float n_saturate = n_saturate_base;
+            if (act_upper < FLT_MAX) {
+                float temp_ind = (t_sum_l < act_upper) ? 1.0f : 0.0f;
+                n_saturate = temp_ind;
+            }
+        } else if (act_type == 1) {  // non_mono
+            float t_act = apply_activation(t_sum_l, act_func_int);
+            float p_act = apply_activation(p_sum_l + bias_pos, act_func_int);
+            float n_act = apply_activation(-(n_sum_l + bias_neg), act_func_int);
             
-            if (act_type == 0) {  // mono
-                if (act_lower > -FLT_MAX) {
-                    float temp_ind = (t_sum > act_lower) ? 1.0f : 0.0f;
-                    p_saturate = temp_ind;
-                }
-                if (act_upper < FLT_MAX) {
-                    float temp_ind = (t_sum < act_upper) ? 1.0f : 0.0f;
-                    n_saturate = temp_ind;
-                }
-            } else {  // non_mono
-                float t_act = apply_activation(t_sum, act_func_int);
-                float p_act = apply_activation(s_p_sum[l] + bias_pos_total, act_func_int);
-                float n_act = apply_activation(-(s_n_sum[l] + bias_neg_total), act_func_int);
-                
-                // Apply range constraints
-                if (act_lower > -FLT_MAX) {
-                    float temp_ind = (t_sum > act_lower) ? 1.0f : 0.0f;
-                    p_saturate *= temp_ind;
-                }
-                if (act_upper < FLT_MAX) {
-                    float temp_ind = (t_sum < act_upper) ? 1.0f : 0.0f;
-                    n_saturate *= temp_ind;
-                }
-                
-                // Apply activation function difference thresholding
-                float temp_ind = (fabsf(t_act - p_act) > 1e-5f) ? 1.0f : 0.0f;
-                n_saturate *= temp_ind;
-                temp_ind = (fabsf(t_act - n_act) > 1e-5f) ? 1.0f : 0.0f;
-                p_saturate *= temp_ind;
+            // Apply range constraints
+            if (act_lower > -FLT_MAX) {
+                float temp_ind = (t_sum_l > act_lower) ? 1.0f : 0.0f;
+                p_saturate = p_saturate * temp_ind;
+            }
+            if (act_upper < FLT_MAX) {
+                float temp_ind = (t_sum_l < act_upper) ? 1.0f : 0.0f;
+                n_saturate = n_saturate * temp_ind;
             }
             
-            // Calculate denominator with numerical stabilization
-            float denom = s_p_sum[l] + s_n_sum[l] + denom_bias_term;
-            if (denom == 0.0f) denom = 1e-12f;
-            
-            // Calculate aggregated weights
-            float inv_denom = __fdividef(1.0f, denom);
-            float p_agg_wt = inv_denom * wts[l] * p_saturate;
-            float n_agg_wt = inv_denom * wts[l] * n_saturate;
-            
-            // Compute contribution to final result
-            float p_contrib = (s_conv_out[l] > 0.0f) ? s_conv_out[l] * p_agg_wt : 0.0f;
-            float n_contrib = (s_conv_out[l] < 0.0f) ? s_conv_out[l] * n_agg_wt : 0.0f;
-            
-            result += p_contrib - n_contrib;
+            // Apply activation function difference thresholding
+            float temp_ind = (fabsf(t_act - p_act) > 1e-5f) ? 1.0f : 0.0f;
+            n_saturate = n_saturate * temp_ind;
+            temp_ind = (fabsf(t_act - n_act) > 1e-5f) ? 1.0f : 0.0f;
+            p_saturate = p_saturate * temp_ind;
         }
+        
+        // Calculate denominator with numerical stabilization
+        float denom = p_sum_l + n_sum_l + denom_bias_term;
+        if (denom == 0.0f) {
+            denom = 1e-12f;
+        }
+        
+        // Calculate aggregated weights
+        float inv_denom = __fdividef(1.0f, denom);
+        float p_agg_wt = inv_denom * wts[l] * p_saturate;
+        float n_agg_wt = inv_denom * wts[l] * n_saturate;
+        
+        // Get the conv values for this spatial position and channel
+        int full_idx = idx * l_size + l;
+        float p_val = p_ind[full_idx];
+        float n_val = n_ind[full_idx];
+        
+        // Compute weighted contribution
+        float wt_contrib = p_val * p_agg_wt - n_val * n_agg_wt;
+        result += wt_contrib;
     }
-    __syncthreads();
     
-    // Write result to global memory
-    if (tid == 0) {
-        output[spatial_idx] = result;
-    }
+    output[idx] = result;
 }
 
 torch::Tensor launch_calculate_wt_conv_unit_kernel(
@@ -202,37 +237,62 @@ torch::Tensor launch_calculate_wt_conv_unit_kernel(
     auto w_sizes = w.sizes();
     
     int i_size = patch_sizes[0];
-    int j_size = patch_sizes[1]; 
+    int j_size = patch_sizes[1];
     int k_size = patch_sizes[2];
     int l_size = w_sizes[3];
-
-    bool has_bias = b.defined() && b.numel() > 0;
-
-    // Create output tensor
-    auto output = torch::zeros({i_size, j_size, k_size}, 
-                              torch::TensorOptions().dtype(torch::kFloat32).device(patch.device()));
     
-    // Calculate grid and block dimensions
-    dim3 threads_per_block(8, 8, 8);
-    dim3 grid_dim(
-        (i_size + threads_per_block.x - 1) / threads_per_block.x,
-        (j_size + threads_per_block.y - 1) / threads_per_block.y,
-        (k_size + threads_per_block.z - 1) / threads_per_block.z
+    bool has_bias = b.defined() && b.numel() > 0;
+    
+    // Allocate intermediate tensors
+    auto options = torch::TensorOptions().dtype(torch::kFloat32).device(patch.device());
+    auto conv_out = torch::empty({i_size, j_size, k_size, l_size}, options);
+    auto p_ind = torch::empty({i_size, j_size, k_size, l_size}, options);
+    auto n_ind = torch::empty({i_size, j_size, k_size, l_size}, options);
+    auto p_sum = torch::empty({l_size}, options);
+    auto n_sum = torch::empty({l_size}, options);
+    auto output = torch::zeros({i_size, j_size, k_size}, options);
+    
+    // Phase 1: Compute convolution and parts
+    int total_elements = i_size * j_size * k_size * l_size;
+    int threads1 = 256;
+    int blocks1 = (total_elements + threads1 - 1) / threads1;
+    
+    compute_conv_and_parts_kernel<<<blocks1, threads1>>>(
+        patch.data_ptr<float>(),
+        w.data_ptr<float>(),
+        conv_out.data_ptr<float>(),
+        p_ind.data_ptr<float>(),
+        n_ind.data_ptr<float>(),
+        i_size, j_size, k_size, l_size
     );
     
-    // Calculate shared memory size
-    int shared_mem_size = 3 * l_size * sizeof(float);
+    // Phase 2: Compute channel sums
+    int threads2 = 256;
+    int blocks2 = (l_size + threads2 - 1) / threads2;
     
-    // Get data pointers
-    const float* patch_ptr = patch.data_ptr<float>();
-    const float* wts_ptr = wts.data_ptr<float>();
-    const float* w_ptr = w.data_ptr<float>();
+    compute_channel_sums_kernel<<<blocks2, threads2>>>(
+        p_ind.data_ptr<float>(),
+        n_ind.data_ptr<float>(),
+        p_sum.data_ptr<float>(),
+        n_sum.data_ptr<float>(),
+        i_size, j_size, k_size, l_size
+    );
+    
+    // Phase 3: Apply weights and compute output
+    int total_spatial = i_size * j_size * k_size;
+    int threads3 = 256;
+    int blocks3 = (total_spatial + threads3 - 1) / threads3;
+    
     const float* b_ptr = has_bias ? b.data_ptr<float>() : nullptr;
-    float* output_ptr = output.data_ptr<float>();
     
-    // Launch kernel
-    calculate_wt_conv_unit_kernel<<<grid_dim, threads_per_block, shared_mem_size>>>(
-        patch_ptr, wts_ptr, w_ptr, b_ptr, output_ptr,
+    apply_weights_kernel<<<blocks3, threads3>>>(
+        p_ind.data_ptr<float>(),
+        n_ind.data_ptr<float>(),
+        p_sum.data_ptr<float>(),
+        n_sum.data_ptr<float>(),
+        wts.data_ptr<float>(),
+        b_ptr,
+        output.data_ptr<float>(),
         i_size, j_size, k_size, l_size,
         act_type, act_lower, act_upper, act_func_int,
         has_bias
@@ -243,7 +303,7 @@ torch::Tensor launch_calculate_wt_conv_unit_kernel(
     TORCH_CHECK(err == cudaSuccess, "CUDA kernel failed: ", cudaGetErrorString(err));
     
     cudaDeviceSynchronize();
-
+    
     return output;
 }
 """
