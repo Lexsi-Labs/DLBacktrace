@@ -178,7 +178,9 @@ def enforce_precision_consistency(tensors, target_dtype=None, preserve_original_
                     # FakeTensors should already have the correct values from the forward pass
                     # Just ensure they're real tensors by detaching and cloning
                     real_tensor = t.detach().clone()
-                    get_logger().debug(f"🔧 Converted FakeTensor to real tensor: {real_tensor.shape}")
+                    # 🔧 CRITICAL: Explicitly preserve device to prevent device drift
+                    real_tensor = real_tensor.to(device=t.device)
+                    get_logger().debug(f"🔧 Converted FakeTensor to real tensor: {real_tensor.shape} on {real_tensor.device}")
                     result.append(real_tensor)
                 else:
                     # Keep original tensor unchanged for maximum consistency
@@ -193,7 +195,9 @@ def enforce_precision_consistency(tensors, target_dtype=None, preserve_original_
             # FakeTensors should already have the correct values from the forward pass
             # Just ensure they're real tensors by detaching and cloning
             real_tensor = tensors.detach().clone()
-            get_logger().debug(f"🔧 Converted FakeTensor to real tensor: {real_tensor.shape}")
+            # 🔧 CRITICAL: Explicitly preserve device to prevent device drift
+            real_tensor = real_tensor.to(device=tensors.device)
+            get_logger().debug(f"🔧 Converted FakeTensor to real tensor: {real_tensor.shape} on {real_tensor.device}")
             return real_tensor
         else:
             # Keep original tensor unchanged for maximum consistency
@@ -579,13 +583,115 @@ def flatten_paths(val):
         return [val]
 
 
+def _check_tensor_sig(t, name):
+    """Create a compact signature for tensor comparison"""
+    if isinstance(t, torch.Tensor):
+        # Get a small slice hash for value verification
+        try:
+            flat = t.flatten()
+            slice_hash = hash(tuple(flat[:32].tolist())) if flat.numel() > 0 else 0
+        except:
+            slice_hash = 0
+        return (name, str(t.dtype), str(t.device), tuple(t.shape), t.is_contiguous(), slice_hash)
+    else:
+        return (name, str(type(t)), "non-tensor", "non-tensor", False, 0)
+
+def _assert_same_sig(sig_eager, sig_exec, node_name):
+    """Assert tensor signatures match between eager and executor"""
+    if sig_eager != sig_exec:
+        logger = get_logger()
+        logger.error(f"❌ Signature mismatch in {node_name}:")
+        logger.error(f"   Eager: {sig_eager}")
+        logger.error(f"   Exec:  {sig_exec}")
+        raise AssertionError(f"Tensor signature mismatch in {node_name}: eager={sig_eager} exec={sig_exec}")
+
+def _precheck_sdpa(q, k, v, attn_mask, dropout_p, is_causal, node_name, model_compute_dtype):
+    """Pre-execution checks for SDPA operations"""
+    logger = get_logger()
+    
+    # Check tensor signatures
+    exec_sig = tuple(_check_tensor_sig(x, n) for x, n in [(q, "q"), (k, "k"), (v, "v")])
+    logger.debug(f"🔍 SDPA tensor signatures: {exec_sig}")
+    
+    # Dtype policy - ensure q/k/v match model compute dtype
+    if not all(x.dtype == model_compute_dtype for x in (q, k, v)):
+        logger.warning(f"⚠️  SDPA dtype mismatch: q={q.dtype}, k={k.dtype}, v={v.dtype}, expected={model_compute_dtype}")
+    
+    # Mask checks (allow boolean or additive float masks)
+    if attn_mask is not None:
+        if not (attn_mask.dtype == torch.bool or torch.is_floating_point(attn_mask)):
+            logger.warning(f"⚠️  SDPA mask uncommon dtype: {attn_mask.dtype} (expected bool or floating)")
+    
+    # Eval mode checks
+    if dropout_p != 0.0:
+        logger.warning(f"⚠️  SDPA dropout_p should be 0.0 in eval, got {dropout_p}")
+    
+    # Causal flag check
+    if not isinstance(is_causal, bool):
+        logger.warning(f"⚠️  SDPA is_causal should be bool, got {type(is_causal)}")
+    
+    logger.debug(f"✅ SDPA pre-checks passed for {node_name}")
+
+def _precheck_layernorm(x, normalized_shape, weight, bias, eps, node_name, layer_eps=None):
+    """Pre-execution checks for LayerNorm operations"""
+    logger = get_logger()
+    
+    # Check if eps matches layer's actual epsilon
+    if layer_eps is not None and eps != layer_eps:
+        logger.warning(f"⚠️  LayerNorm eps mismatch: passed={eps}, layer={layer_eps}")
+    
+    # Check tensor properties
+    if not isinstance(x, torch.Tensor):
+        logger.error(f"❌ LayerNorm input must be tensor, got {type(x)}")
+        raise AssertionError(f"LayerNorm input type mismatch: expected tensor, got {type(x)}")
+    
+    logger.debug(f"✅ LayerNorm pre-checks passed for {node_name}")
+
+def _precheck_embedding(indices, weight, node_name):
+    """Pre-execution checks for Embedding operations"""
+    logger = get_logger()
+    
+    # Check indices dtype
+    if indices.dtype != torch.long:
+        logger.error(f"❌ Embedding indices must be long, got {indices.dtype}")
+        raise AssertionError(f"Embedding indices dtype mismatch: expected long, got {indices.dtype}")
+    
+    # Check weight properties
+    if not isinstance(weight, torch.Tensor):
+        logger.error(f"❌ Embedding weight must be tensor, got {type(weight)}")
+        raise AssertionError(f"Embedding weight type mismatch: expected tensor, got {type(weight)}")
+    
+    logger.debug(f"✅ Embedding pre-checks passed for {node_name}")
+
 def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, method_args, parents, node_io, node_name,tensor_map, children=None):
     logger = get_logger()
     logger.debug(f"🔧 Executing aten operation: {func_name}")
     logger.debug(f"🔧 Node name: {node_name}")
     logger.debug(f"🔧 Children: {children}")
     logger.debug(f"🔧 Parents: {parents}")
+    
     try:
+        # 🔧 CRITICAL: Infer model compute dtype without requiring model reference
+        model_compute_dtype = torch.float32
+        try:
+            if isinstance(layer_in, torch.Tensor) and layer_in.is_floating_point():
+                model_compute_dtype = layer_in.dtype
+            elif isinstance(layer_in, (list, tuple)):
+                for _x in layer_in:
+                    if isinstance(_x, torch.Tensor) and _x.is_floating_point():
+                        model_compute_dtype = _x.dtype
+                        break
+            else:
+                # Fallback: scan node_io for any floating tensor
+                for _data in node_io.values():
+                    if isinstance(_data, dict) and 'output_values' in _data:
+                        _t = _data['output_values']
+                        if isinstance(_t, torch.Tensor) and _t.is_floating_point():
+                            model_compute_dtype = _t.dtype
+                            break
+        except Exception:
+            pass
+        
         # 🔧 MINIMAL FIX: Only convert FakeTensors to real tensors, don't modify properties
         if isinstance(layer_in, (list, tuple)):
             layer_in = [enforce_precision_consistency(x) for x in layer_in]
@@ -962,6 +1068,9 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             # 🔧 EPSILON: Allow override from hyperparams while having a default
             eps = layer_hyperparams.get("eps", 1e-5)
             
+            # 🔧 CRITICAL: Pre-execution checks for layer_norm
+            _precheck_layernorm(layer_in, normalized_shape, weight, bias, eps, node_name, eps)
+            
             # 🔧 DEBUGGING: Log parameter shapes/values for debugging
             logger.debug(f"🔧 layer_norm parameters:")
             logger.debug(f"  Input shape: {layer_in.shape}")
@@ -1009,8 +1118,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             if running_var.device != target_device:
                 running_var = running_var.to(device=target_device)
             
-            # 🔧 CONSISTENCY FIX: Use consistent epsilon value
-            eps = 1e-5  # Standard value instead of variable
+            # 🔧 CONSISTENCY FIX: Use the layer's configured epsilon
+            eps = layer_hyperparams.get("eps", 1e-5)
             
             return aten_op(layer_in,
                            weight,
@@ -1058,28 +1167,61 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             k = enforce_precision_consistency(k)
             v = enforce_precision_consistency(v)
             
-            # 🔧 ATTENTION MASK FIX: Handle attention mask shape for multi-head attention
-            attn_mask = layer_hyperparams.get("attn_mask", None)
-            
-            # If attention mask is provided, ensure it has the correct shape
+            # 🔧 ATTENTION MASK FIX: Handle attention mask with minimal broadcast, preserve dtype
+            # Prefer the 4th positional input if present; fall back to hyperparams
+            attn_mask = None
+            if isinstance(layer_in, (list, tuple)) and len(layer_in) >= 4 and isinstance(layer_in[3], torch.Tensor):
+                attn_mask = layer_in[3]
+            else:
+                attn_mask = layer_hyperparams.get("attn_mask", None)
             if attn_mask is not None:
-                # Convert to float and ensure proper shape
-                if attn_mask.dtype != torch.float32:
-                    attn_mask = attn_mask.float()
-                
-                # If mask is 2D [batch, seq_len], expand to 4D [batch, heads, seq_len, seq_len]
-                if attn_mask.dim() == 2:
-                    batch_size, seq_len = attn_mask.shape
-                    num_heads = q.shape[1]
-                    
-                    # Create 4D mask by expanding the 2D mask
-                    attn_mask_4d = attn_mask.unsqueeze(1).unsqueeze(2)  # [batch, 1, 1, seq_len]
-                    attn_mask_4d = attn_mask_4d.expand(batch_size, num_heads, seq_len, seq_len)
-                    attn_mask = attn_mask_4d
-                
-                # Ensure mask is on the same device as query
+                # Keep mask dtype (bool/additive) exactly as provided
+                # Move to correct device if needed
                 if attn_mask.device != q.device:
                     attn_mask = attn_mask.to(device=q.device)
+
+                # Only reshape if strictly required for torch.sdpa; prefer minimal broadcast
+                # Acceptable shapes: [B, S], [B, 1, 1, S], [B, 1, S, S], [B, H, S, S]
+                if attn_mask.dim() == 2:
+                    # Convert [B, S] to [B, 1, 1, S]
+                    attn_mask = attn_mask.unsqueeze(1).unsqueeze(2)
+            
+            # 🔧 CRITICAL: Pre-execution checks for SDPA
+            dropout_p = layer_hyperparams.get("dropout_p", 0.0)
+            
+            # 🔧 CRITICAL FIX: Proper model type detection for RoBERTa/BERT vs GPT/Llama
+            if "is_causal" not in layer_hyperparams:
+                # DEFAULT to bidirectional (is_causal=False) since most transformer models are bidirectional
+                # Only use causal=True for explicitly detected causal models
+                is_bidirectional_model = True  # Default assumption
+                
+                # Check for RoBERTa/BERT patterns in ALL node names in node_io
+                model_type_indicators = []
+                if node_io:
+                    for existing_node in node_io.keys():
+                        if any(pattern in existing_node.lower() for pattern in ['roberta', 'bert', 'distilbert', 'electra', 'encoder']):
+                            model_type_indicators.append('bidirectional')
+                        elif any(pattern in existing_node.lower() for pattern in ['gpt', 'llama', 'opt', 'bloom', 'decoder']):
+                            model_type_indicators.append('causal')
+                
+                # Determine model type based on indicators
+                if 'bidirectional' in model_type_indicators:
+                    is_bidirectional_model = True
+                elif 'causal' in model_type_indicators:
+                    is_bidirectional_model = False
+                # else: keep default (bidirectional=True)
+                
+                # Set appropriate default based on model type
+                if is_bidirectional_model:
+                    is_causal = False
+                    logger.debug(f"🔧 Auto-detected bidirectional model → setting is_causal=False for {node_name}")
+                else:
+                    is_causal = True
+                    logger.debug(f"🔧 Auto-detected causal model → setting is_causal=True for {node_name}")
+            else:
+                is_causal = layer_hyperparams["is_causal"]
+            
+            _precheck_sdpa(q, k, v, attn_mask, dropout_p, is_causal, node_name, model_compute_dtype)
             
             # 🔧 DEBUGGING: Log attention mask info
             logger.debug(f"🔧 scaled_dot_product_attention parameters:")
@@ -1087,13 +1229,10 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             logger.debug(f"  Key shape: {k.shape}")
             logger.debug(f"  Value shape: {v.shape}")
             logger.debug(f"  Attention mask shape: {attn_mask.shape if attn_mask is not None else 'None'}")
-            logger.debug(f"  Dropout p: {layer_hyperparams.get('dropout_p', 0.0)}")
-            logger.debug(f"  Is causal: {layer_hyperparams.get('is_causal', False)}")
+            logger.debug(f"  Dropout p: {dropout_p}")
+            logger.debug(f"  Is causal: {is_causal}")
             
-            return aten_op(q, k, v,
-                           attn_mask,
-                           layer_hyperparams.get("dropout_p", 0.0),
-                           layer_hyperparams.get("is_causal", False))
+            return aten_op(q, k, v, attn_mask, dropout_p, is_causal)
 
         elif func_name == "lstm":
             return aten_op(layer_in[0],
@@ -1144,8 +1283,10 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             if isinstance(value, torch.Tensor):
                 value = value.item()  # Convert single-element tensor to Python scalar
 
+            # 🔧 CRITICAL: Preserve -inf values, don't replace with large negatives
             if value == float('-inf'):
-                value = -torch.finfo(layer_in.dtype).max  # Use max negative finite value
+                logger.debug(f"✅ masked_fill preserving -inf value (correct)")
+                value = float('-inf')  # Keep -inf as-is
 
             logger.debug(f"[{node_name}] input shape: {getattr(layer_in, 'shape', None)}, dtype: {getattr(layer_in, 'dtype', None)}")
             logger.debug(f"[{node_name}] mask shape: {getattr(mask, 'shape', None)}, dtype: {getattr(mask, 'dtype', None)}")
@@ -1571,6 +1712,9 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             
             # 🔧 ENHANCED CONSISTENCY: Use dedicated embedding consistency function
             weight, indices = ensure_embedding_consistency(weight, indices, node_name)
+            
+            # 🔧 CRITICAL: Pre-execution checks for embedding
+            _precheck_embedding(indices, weight, node_name)
         
             return aten_op(weight,
                     indices,
@@ -3147,6 +3291,200 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             except Exception as e:
                 raise RuntimeError(f"[{node_name}] ❌ type_as failed with input shape={input_tensor.shape}, target shape={target_tensor.shape}. Error: {e}")
 
+        elif func_name == "split":
+            # 🔧 NEW OPERATION: Split tensor into chunks (crucial for transformers)
+            if isinstance(layer_in, (list, tuple)):
+                layer_in = layer_in[0]
+            layer_in = enforce_precision_consistency(layer_in)
+            
+            if not isinstance(layer_in, torch.Tensor):
+                raise TypeError(f"[{node_name}] ❌ split: expected tensor input, got {type(layer_in)}")
+            
+            # Get split parameters
+            split_size_or_sections = layer_hyperparams.get("split_size_or_sections", 1)
+            dim = layer_hyperparams.get("dim", 0)
+            
+            # Handle negative indexing
+            tensor_rank = layer_in.dim()
+            if dim < 0:
+                dim = tensor_rank + dim
+            
+            try:
+                output = aten_op(layer_in, split_size_or_sections, dim)
+                logger.debug(f"[{node_name}] ✅ split: input shape={layer_in.shape}, output chunks={len(output)}")
+                return output
+            except Exception as e:
+                raise RuntimeError(f"[{node_name}] ❌ split failed with input shape={layer_in.shape}, split_size={split_size_or_sections}, dim={dim}. Error: {e}")
+
+        elif func_name == "chunk":
+            # 🔧 NEW OPERATION: Split tensor into equal chunks
+            if isinstance(layer_in, (list, tuple)):
+                layer_in = layer_in[0]
+            layer_in = enforce_precision_consistency(layer_in)
+            
+            if not isinstance(layer_in, torch.Tensor):
+                raise TypeError(f"[{node_name}] ❌ chunk: expected tensor input, got {type(layer_in)}")
+            
+            chunks = layer_hyperparams.get("chunks", 2)
+            dim = layer_hyperparams.get("dim", 0)
+            
+            # Handle negative indexing
+            tensor_rank = layer_in.dim()
+            if dim < 0:
+                dim = tensor_rank + dim
+            
+            try:
+                output = aten_op(layer_in, chunks, dim)
+                logger.debug(f"[{node_name}] ✅ chunk: input shape={layer_in.shape}, chunks={chunks}, dim={dim}")
+                return output
+            except Exception as e:
+                raise RuntimeError(f"[{node_name}] ❌ chunk failed with input shape={layer_in.shape}, chunks={chunks}, dim={dim}. Error: {e}")
+
+        elif func_name == "stack":
+            # 🔧 NEW OPERATION: Stack tensors along new dimension
+            if not isinstance(layer_in, (list, tuple)):
+                raise RuntimeError(f"[{node_name}] ❌ stack: expected list of tensors, got {type(layer_in)}")
+            
+            # Apply precision consistency to all tensors
+            tensors = [enforce_precision_consistency(t) for t in layer_in]
+            
+            # Ensure all are tensors and on same device
+            target_device = tensors[0].device
+            for i, t in enumerate(tensors):
+                if not isinstance(t, torch.Tensor):
+                    raise TypeError(f"[{node_name}] ❌ stack: all inputs must be tensors, got {type(t)} at index {i}")
+                if t.device != target_device:
+                    tensors[i] = t.to(device=target_device)
+            
+            dim = layer_hyperparams.get("dim", 0)
+            
+            try:
+                output = aten_op(tensors, dim)
+                logger.debug(f"[{node_name}] ✅ stack: {len(tensors)} tensors, output shape={output.shape}")
+                return output
+            except Exception as e:
+                raise RuntimeError(f"[{node_name}] ❌ stack failed with {len(tensors)} tensors, dim={dim}. Error: {e}")
+
+        elif func_name == "gather":
+            # 🔧 NEW OPERATION: Gather values along dimension (critical for attention)
+            if not isinstance(layer_in, (list, tuple)) or len(layer_in) != 2:
+                raise RuntimeError(f"[{node_name}] ❌ gather: expected 2 inputs (input, index), got {layer_in}")
+            
+            input_tensor, index_tensor = layer_in
+            input_tensor = enforce_precision_consistency(input_tensor)
+            index_tensor = enforce_precision_consistency(index_tensor)
+            
+            # Ensure index tensor is long
+            if index_tensor.dtype != torch.long:
+                index_tensor = index_tensor.long()
+            
+            # Ensure same device
+            if input_tensor.device != index_tensor.device:
+                index_tensor = index_tensor.to(device=input_tensor.device)
+            
+            dim = layer_hyperparams.get("dim", 0)
+            
+            try:
+                output = aten_op(input_tensor, dim, index_tensor)
+                logger.debug(f"[{node_name}] ✅ gather: input shape={input_tensor.shape}, index shape={index_tensor.shape}, output shape={output.shape}")
+                return output
+            except Exception as e:
+                raise RuntimeError(f"[{node_name}] ❌ gather failed with input shape={input_tensor.shape}, index shape={index_tensor.shape}, dim={dim}. Error: {e}")
+
+        elif func_name == "native_layer_norm":
+            # 🔧 NEW OPERATION: Native layer norm (optimized version)
+            layer_in = standardize_layer_input(layer_in, parents, node_io, tensor_map, func_name)
+            layer_in = enforce_precision_consistency(layer_in)
+            
+            if not isinstance(layer_in, torch.Tensor):
+                raise RuntimeError(f"[{node_name}] ❌ native_layer_norm: expected tensor input, got {type(layer_in)}")
+            
+            # Get parameters
+            normalized_shape = layer_hyperparams.get("normalized_shape")
+            weight = layer_hyperparams.get("weight")
+            bias = layer_hyperparams.get("bias")
+            eps = layer_hyperparams.get("eps", 1e-5)
+            
+            # Validate parameters
+            if not isinstance(weight, torch.Tensor) or not isinstance(bias, torch.Tensor):
+                raise RuntimeError(f"[{node_name}] ❌ native_layer_norm: weight and bias must be tensors")
+            
+            # Ensure device consistency
+            target_device = layer_in.device
+            if weight.device != target_device:
+                weight = weight.to(device=target_device)
+            if bias.device != target_device:
+                bias = bias.to(device=target_device)
+            
+            try:
+                output = aten_op(layer_in, normalized_shape, weight, bias, eps)
+                # native_layer_norm returns (output, mean, rstd) tuple
+                if isinstance(output, tuple):
+                    return output[0]  # Return just the normalized output
+                return output
+            except Exception as e:
+                raise RuntimeError(f"[{node_name}] ❌ native_layer_norm failed with input shape={layer_in.shape}. Error: {e}")
+
+        elif func_name == "baddbmm":
+            # 🔧 NEW OPERATION: Batch matrix multiplication with bias (critical for attention)
+            if not isinstance(layer_in, (list, tuple)) or len(layer_in) != 3:
+                raise RuntimeError(f"[{node_name}] ❌ baddbmm: expected 3 inputs (bias, batch1, batch2), got {layer_in}")
+            
+            bias, batch1, batch2 = layer_in
+            
+            # Apply precision consistency
+            bias = enforce_precision_consistency(bias)
+            batch1 = enforce_precision_consistency(batch1)
+            batch2 = enforce_precision_consistency(batch2)
+            
+            # Ensure device consistency
+            target_device = batch1.device
+            if bias.device != target_device:
+                bias = bias.to(device=target_device)
+            if batch2.device != target_device:
+                batch2 = batch2.to(device=target_device)
+            
+            # Get scaling factors
+            beta = layer_hyperparams.get("beta", 1.0)
+            alpha = layer_hyperparams.get("alpha", 1.0)
+            
+            try:
+                output = aten_op(bias, batch1, batch2, beta=beta, alpha=alpha)
+                logger.debug(f"[{node_name}] ✅ baddbmm: bias shape={bias.shape}, batch1 shape={batch1.shape}, batch2 shape={batch2.shape}, output shape={output.shape}")
+                return output
+            except Exception as e:
+                raise RuntimeError(f"[{node_name}] ❌ baddbmm failed with shapes: bias={bias.shape}, batch1={batch1.shape}, batch2={batch2.shape}. Error: {e}")
+
+        elif func_name == "addmv":
+            # 🔧 NEW OPERATION: Matrix-vector multiplication with bias
+            if not isinstance(layer_in, (list, tuple)) or len(layer_in) != 3:
+                raise RuntimeError(f"[{node_name}] ❌ addmv: expected 3 inputs (bias, mat, vec), got {layer_in}")
+            
+            bias, mat, vec = layer_in
+            
+            # Apply precision consistency
+            bias = enforce_precision_consistency(bias)
+            mat = enforce_precision_consistency(mat)
+            vec = enforce_precision_consistency(vec)
+            
+            # Ensure device consistency
+            target_device = mat.device
+            if bias.device != target_device:
+                bias = bias.to(device=target_device)
+            if vec.device != target_device:
+                vec = vec.to(device=target_device)
+            
+            # Get scaling factors
+            beta = layer_hyperparams.get("beta", 1.0)
+            alpha = layer_hyperparams.get("alpha", 1.0)
+            
+            try:
+                output = aten_op(bias, mat, vec, beta=beta, alpha=alpha)
+                logger.debug(f"[{node_name}] ✅ addmv: bias shape={bias.shape}, mat shape={mat.shape}, vec shape={vec.shape}, output shape={output.shape}")
+                return output
+            except Exception as e:
+                raise RuntimeError(f"[{node_name}] ❌ addmv failed with shapes: bias={bias.shape}, mat={mat.shape}, vec={vec.shape}. Error: {e}")
+
         else:
             # 🔧 UNHANDLED OPERATION: Print with emojis for easy identification
             logger.warning(f"🚨 UNHANDLED OPERATION: `{func_name}` - needs implementation!")
@@ -3238,13 +3576,12 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
             consistent_inputs = []
             for i, inp in enumerate(inputs):
                 if isinstance(inp, torch.Tensor):
-                    # 🔧 SPECIAL HANDLING: input_ids and attention_mask must remain long/int
-                    if i == 0:  # First input is usually input_ids
-                        consistent_inp = inp.detach().to(dtype=torch.long)
-                    elif i == 1:  # Second input is usually attention_mask
+                    # 🔧 NAME-BASED CASTING: cast only input_ids/position_ids to long; keep attention_mask dtype
+                    arg_name = expected_input_names[i] if i < len(expected_input_names) else None
+                    if arg_name in ("input_ids", "position_ids"):
                         consistent_inp = inp.detach().to(dtype=torch.long)
                     else:
-                        consistent_inp = inp.detach().to(dtype=inp.dtype)  # Preserve original dtype
+                        consistent_inp = inp.detach()  # preserve original dtype
                     
                     # Ensure contiguous memory layout
                     if not consistent_inp.is_contiguous():
@@ -3257,8 +3594,8 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
             tensor_map[layer_stack[len(extracted_weights)]] = consistent_inputs
         else:
             if isinstance(inputs, torch.Tensor):
-                # For single tensor input, assume it's input_ids
-                consistent_input = inputs.detach().to(dtype=torch.long)
+                # For single tensor input, conservatively preserve dtype
+                consistent_input = inputs.detach()
                 if not consistent_input.is_contiguous():
                     consistent_input = consistent_input.contiguous()
                 tensor_map[layer_stack[len(extracted_weights)]] = consistent_input
@@ -3454,8 +3791,36 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
         # At the end of node execution
         processed_output = _process_output_tuple(output)
 
-        if isinstance(processed_output, torch.Tensor) and torch.isnan(processed_output).any():
+        # 🔧 CRITICAL FIX: Only check for NaN in floating point tensors
+        if isinstance(processed_output, torch.Tensor) and torch.is_floating_point(processed_output) and torch.isnan(processed_output).any():
             logger.error(f"[ERROR:NaN] Node `{node_name}` produced NaNs → shape: {processed_output.shape}")
+        
+        # 🔧 DEBUG: Check for extreme values that could indicate precision issues
+        if isinstance(processed_output, torch.Tensor):
+            # 🔧 CRITICAL FIX: Only check abs for numeric tensors, not boolean tensors
+            if processed_output.dtype in [torch.bool]:
+                # For boolean tensors, just check basic properties
+                logger.debug(f"[DEBUG:BOOL] Node `{node_name}` produced boolean tensor → shape: {processed_output.shape}")
+            elif torch.is_floating_point(processed_output) or torch.is_complex(processed_output):
+                # Only apply abs() to floating point or complex tensors
+                max_val = torch.max(torch.abs(processed_output)).item()
+                if max_val > 1e6:
+                    logger.warning(f"[WARNING:EXTREME] Node `{node_name}` produced extreme values → max: {max_val:.2e}")
+                elif func_name in ["scaled_dot_product_attention", "layer_norm", "linear"] and max_val < 1e-6:
+                    logger.warning(f"[WARNING:SMALL] Node `{node_name}` produced very small values → max: {max_val:.2e}")
+                
+                # Log first few values for critical operations to help debug
+                if func_name in ["scaled_dot_product_attention", "layer_norm"] and logger.isEnabledFor(logging.DEBUG):
+                    flat_vals = processed_output.flatten()[:5].tolist()
+                    logger.debug(f"[DEBUG:VALUES] {node_name} first 5 values: {[f'{v:.6f}' for v in flat_vals]}")
+            elif processed_output.dtype in [torch.int8, torch.int16, torch.int32, torch.int64]:
+                # For integer tensors, use different approach
+                max_val = torch.max(processed_output).item()
+                min_val = torch.min(processed_output).item()
+                logger.debug(f"[DEBUG:INT] Node `{node_name}` → min: {min_val}, max: {max_val}")
+            else:
+                # For other dtypes, just log basic info
+                logger.debug(f"[DEBUG:OTHER] Node `{node_name}` → dtype: {processed_output.dtype}, shape: {processed_output.shape}")
 
         # 🔧 CRITICAL FIX: Ensure ALL tensor outputs maintain consistency without forcing float32
         if isinstance(processed_output, torch.Tensor):

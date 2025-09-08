@@ -45,6 +45,16 @@ ATEN_HYPERPARAMS: dict[str, Any] = {
             "unflatten": ["dim", "sizes"],
             "contiguous": ["memory_format"],
             "scaled_dot_product_attention": ["attn_mask", "dropout_p", "is_causal"],
+            # Additional attention operations for transformers
+            "addmv": ["beta", "alpha"],  # Matrix-vector multiplication with bias
+            "baddbmm": ["beta", "alpha"],  # Batch matrix-matrix multiplication with bias
+            "split": ["split_size_or_sections", "dim"],  # Split tensor into chunks
+            "chunk": ["chunks", "dim"],  # Split tensor into equal chunks
+            "stack": ["tensors", "dim"],  # Stack tensors along new dimension
+            "gather": ["dim", "index"],  # Gather values along dimension
+            "scatter": ["dim", "index", "src"],  # Scatter values along dimension
+            "index_add": ["dim", "index", "source"],  # Add values at indices
+            "native_layer_norm": ["normalized_shape", "weight", "bias", "eps"],  # Native layer norm
             "dropout": ["p", "train"],
             "add": ["other", "alpha"],
             "add_": ["other", "alpha"],

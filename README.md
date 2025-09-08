@@ -1,14 +1,14 @@
 # DL-Backtrace
-A patent-pending explainable AI (XAI) framework for deep learning model interpretability using TensorFlow and PyTorch
+A powerful explainable AI (XAI) framework for deep learning model interpretability using TensorFlow and PyTorch
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://python.org)
-[![PyTorch](https://img.shields.io/badge/PyTorch-1.9%2B-red.svg)](https://pytorch.org)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.6%2B-red.svg)](https://pytorch.org)
 [![TensorFlow](https://img.shields.io/badge/TensorFlow-2.0%2B-orange.svg)](https://tensorflow.org)
 
 ## Overview
 
-DL-Backtrace is a powerful and patent-pending explainable AI framework developed by AryaXAI for enhancing the interpretability of deep learning models. It provides comprehensive layer-wise relevance propagation and model tracing capabilities across various architectures and tasks.
+DL-Backtrace is a powerful explainable AI framework developed by AryaXAI for enhancing the interpretability of deep learning models. It provides comprehensive layer-wise relevance propagation and model tracing capabilities across various architectures and tasks, with robust execution engines optimized for both CPU and GPU environments.
 
 ## Key Features
 
@@ -19,14 +19,42 @@ DL-Backtrace is a powerful and patent-pending explainable AI framework developed
 - **🔧 Robust Operations:** Full support for negative indexing and complex tensor operations
 - **📊 Comprehensive Tracing:** Layer-wise activation and relevance analysis with detailed execution tracking
 - **🛡️ Production Ready:** Deterministic execution environment with comprehensive error handling
+- **🚀 Enhanced Execution Engine:** Recently improved with critical fixes for RoBERTa, LLaMA, and other transformer models
+- **💾 Memory Efficient:** Both disk-cached and in-memory execution options for different use cases
 
 ## Installation
 
-Install DL-Backtrace using pip:
+### From Source (Recommended)
 
 ```bash
-pip install dl-backtrace
+git clone https://github.com/aryaxai/DL-Backtrace.git
+cd DL-Backtrace
+pip install -r requirements.txt
+pip install -e .
 ```
+
+### Requirements
+
+- Python 3.8+
+- PyTorch 2.6+ (with CUDA 12.6 support recommended)
+- TensorFlow 2.0+ (for TensorFlow backend)
+- Additional dependencies: transformers, matplotlib, seaborn, graphviz, joblib, zstandard
+
+See `requirements.txt` for the complete list of dependencies.
+
+### Hugging Face Setup
+
+For accessing models from Hugging Face Hub (required for BERT, RoBERTa, LLaMA, etc.):
+
+```bash
+# Install Hugging Face CLI
+pip install huggingface_hub
+
+# Login to Hugging Face (required for gated models)
+huggingface-cli login
+```
+
+You'll need a Hugging Face account and access token. Get your token from [https://huggingface.co/settings/tokens](https://huggingface.co/settings/tokens).
 
 ## Quick Start
 
@@ -90,6 +118,16 @@ relevance = backtrace.eval(
 ```
 
 ## Advanced Features
+
+### Execution Engines
+DL-Backtrace provides two execution engines optimized for different use cases:
+
+#### ExecutionEngineNoCache (Recommended)
+- **Memory-efficient**: Runs entirely in RAM for faster execution
+- **CPU/GPU Compatible**: Works seamlessly on both CPU and GPU
+- **Enhanced Operations**: Supports 100+ PyTorch operations with robust error handling
+- **Recent Improvements**: Critical fixes for transformer models (RoBERTa, LLaMA, BERT)
+
 
 ### Deterministic Execution Environment
 DL-Backtrace automatically sets up a deterministic environment for consistent results:
@@ -204,17 +242,37 @@ For more detailed examples and use cases, check out our documentation.
 
 ## Performance & Reliability
 
-### Recent Improvements
+### Recent Critical Improvements (2025)
 - **🔧 Enhanced Execution Engine:** Robust handling of complex tensor operations with comprehensive error handling
 - **⚡ Deterministic Environment:** Automatic setup for consistent, reproducible results across runs
 - **🛡️ Error Resilience:** Comprehensive validation and graceful error handling for production use
 - **📊 Better Debugging:** Detailed logging and execution tracking for troubleshooting
+- **🚨 Critical Fixes:** Resolved boolean tensor handling issues that caused crashes in RoBERTa/Llama models
+- **🧠 Smart Attention Detection:** Auto-detects bidirectional vs causal attention for transformer models
+- **💾 Memory Optimization:** Fixed OOM errors in embedding operations and improved memory management
+- **🔄 Dtype Consistency:** Universal framework for handling mixed precision scenarios across CPU/GPU
 
-### Benchmarks
-DL-Backtrace has been tested on various model architectures:
-- **Vision Models:** ResNet, VGG, DenseNet, EfficientNet, MobileNet, ViT
-- **NLP Models:** BERT, ALBERT, RoBERTa, DistilBERT, ELECTRA, XLNet, LLaMA
-- **Tasks:** Classification, Object Detection, Segmentation, Text Generation
+## Testing & Validation
+
+### Quick Test
+Test the installation and basic functionality:
+
+```bash
+# Test PyTorch backend
+python benchmarks/trace_RoBERTa.py
+
+# Test with LLaMA model (if you have sufficient memory)
+python benchmarks/trace_llama3_2_1B_selective.py
+
+# Run comprehensive benchmarks
+python benchmarks/benchmark_linear.py
+```
+
+### Supported Models
+DL-Backtrace has been extensively tested with:
+- **Vision Models**: ResNet, VGG, DenseNet, EfficientNet, MobileNet, ViT
+- **NLP Models**: BERT, ALBERT, RoBERTa, DistilBERT, ELECTRA, XLNet, LLaMA-3.2
+- **Tasks**: Classification, Object Detection, Segmentation, Text Generation
 
 ## Getting Started
 
@@ -226,10 +284,13 @@ We welcome contributions from the community! Please follow our contribution guid
 
 ## License
 
-This software is the confidential and proprietary information of AryaXAI. 
-You may not copy, modify, distribute, or disclose any part of this software without express written permission from AryaXAI.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-This code is not open-source. It is made available solely as part of a hosted service provided by AryaXAI. All rights reserved.
+## Recent Updates & Critical Fixes
+
+For detailed information about recent critical fixes and improvements, see:
+- [CRITICAL_FIXES_SUMMARY.md](CRITICAL_FIXES_SUMMARY.md) - Overview of recent critical fixes
+- [EXECUTION_ENGINE_CRITICAL_FIXES.md](EXECUTION_ENGINE_CRITICAL_FIXES.md) - Detailed technical documentation of execution engine improvements
 
 ## Contact
 
