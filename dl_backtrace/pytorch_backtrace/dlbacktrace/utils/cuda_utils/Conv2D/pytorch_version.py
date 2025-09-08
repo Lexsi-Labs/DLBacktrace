@@ -2,6 +2,8 @@ import torch
 from typing import Tuple, Union, Callable, Dict, Any, Optional, List
 import torch.nn.functional as F
 
+from .cuda_wt_conv_unit import calculate_wt_conv_unit_cuda
+
 def convert_to_pytorch_format(
     relevance_y,
     input_array, 
@@ -226,7 +228,8 @@ def calculate_wt_conv(
     b,
     padding: Union[str, Tuple[Union[int, None], Union[int, None]]],
     strides:Tuple[int, int],
-    act: Dict[str, Any]
+    act: Dict[str, Any],
+    version: str
 ) -> torch.Tensor:
     """
     Calculate weighted convolution for relevance propagation in neural networks.
@@ -313,11 +316,18 @@ def calculate_wt_conv(
                 
                 # Get relevance weight for current output location
                 relevance_weight = current_relevance[out_h, out_w, :]
-                
-                # Calculate weighted convolution updates for this patch
-                patch_updates = calculate_wt_conv_unit(
-                    input_patch, relevance_weight, w_transposed, b, act
-                )
+                if version == 'pytorch':
+                    # Calculate weighted convolution updates for this patch
+                    patch_updates = calculate_wt_conv_unit(
+                        input_patch, relevance_weight, w_transposed, b, act
+                    )
+                elif version == 'cuda':
+                    # Calculate weighted convolution updates for this patch
+                    patch_updates = calculate_wt_conv_unit_cuda(
+                        input_patch, relevance_weight, w_transposed, b, act
+                    )
+                else:
+                    raise ValueError(f"Unknown version for Conv2D layer: {version}")
                 
                 # Accumulate updates with proper bounds checking
                 actual_h_size = min(patch_updates.shape[0], h_end - h_start)

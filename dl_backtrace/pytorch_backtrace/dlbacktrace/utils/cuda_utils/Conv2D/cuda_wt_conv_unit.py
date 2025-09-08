@@ -248,7 +248,7 @@ torch::Tensor launch_calculate_wt_conv_unit_kernel(
 }
 """
 
-# Simplified C++ declaration (no pybind11 includes needed)
+# Simplified C++ declaration
 wt_conv_unit_cuda_declaration = r"""
 torch::Tensor launch_calculate_wt_conv_unit_kernel(
     const torch::Tensor& patch,
@@ -307,25 +307,15 @@ def calculate_wt_conv_unit_cuda(patch, wts, w, b, act):
     Returns:
         torch::Tensor: Computed weight matrix of shape (i, j, k)
     """
-    # Ensure tensors are on CUDA and contiguous
-    if not patch.is_cuda:
-        patch = patch.cuda()
-    if not wts.is_cuda:
-        wts = wts.cuda()
-    if not w.is_cuda:
-        w = w.cuda()
-    if b is not None and not b.is_cuda:
-        b = b.cuda()
-    
-    # Make tensors contiguous
+
+    # Ensure tensors are contiguous
     patch = patch.contiguous()
     wts = wts.contiguous()
     w = w.contiguous()
     if b is not None:
         b = b.contiguous()
     else:
-        # Create empty tensor for b if None
-        b = torch.empty(0, device=patch.device, dtype=patch.dtype)
+        b = torch.empty(0, dtype=torch.float32)
 
     # Parse activation parameters once
     act_type = 0 if act["type"] == "mono" else 1
