@@ -128,12 +128,6 @@ __global__ void apply_weights_kernel(
     
     if (idx >= total_spatial) return;
     
-    // Decompose spatial index
-    int k = idx % k_size;
-    int temp = idx / k_size;
-    int j = temp % j_size;
-    int i = temp / j_size;
-    
     float result = 0.0f;
     
     // Process each channel
