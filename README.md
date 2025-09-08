@@ -128,10 +128,6 @@ DL-Backtrace provides two execution engines optimized for different use cases:
 - **Enhanced Operations**: Supports 100+ PyTorch operations with robust error handling
 - **Recent Improvements**: Critical fixes for transformer models (RoBERTa, LLaMA, BERT)
 
-#### ExecutionEngine (Disk-cached)
-- **Large Model Support**: Uses disk caching for memory-constrained environments
-- **Persistent Storage**: Saves intermediate results for debugging and analysis
-- **Production Ready**: Optimized for long-running inference tasks
 
 ### Deterministic Execution Environment
 DL-Backtrace automatically sets up a deterministic environment for consistent results:
