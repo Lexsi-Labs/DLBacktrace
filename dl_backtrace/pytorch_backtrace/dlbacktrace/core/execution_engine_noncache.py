@@ -2061,9 +2061,6 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             return output
 
         elif func_name == "full":
-            print(f"full operation: {node_name}")
-            print(f"full operation: {layer_hyperparams}")
-            print(f"full operation: {method_args}")
             # 🔧 CRITICAL FIX: Robust size resolution for full operation
             size = layer_hyperparams.get("size") or layer_hyperparams.get("sizes")
             
@@ -2142,7 +2139,6 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             except Exception as e:
                 raise RuntimeError(f"[{node_name}] ❌ Failed to execute full: "
                                 f"size={resolved_size}, fill_value={fill_value}, dtype={dtype}, device={device}. Error: {e}")
-            print(f"full output: {output}")
             return output
 
         
@@ -2709,8 +2705,6 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             output_shape = output.shape if hasattr(output, 'shape') else f"scalar({output})"
             
             logger.debug(f"[{node_name}] ✅ {func_name}: input shapes={a_shape}, {b_shape}, output shape={output_shape}")
-            if func_name == "gt":
-                print(f"gt output: {output}")
             return output
 
         elif func_name == "rsqrt":
@@ -2734,7 +2728,6 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                 raise TypeError(f"`triu` expects a tensor input but got: {type(layer_in)}")
             output = aten_op(layer_in, layer_hyperparams.get("diagonal", 0))
             logger.debug(f"triu output shape: {output.shape}")
-            print(f"triu output: {output}")
             return output
 
         elif func_name == "mm":
