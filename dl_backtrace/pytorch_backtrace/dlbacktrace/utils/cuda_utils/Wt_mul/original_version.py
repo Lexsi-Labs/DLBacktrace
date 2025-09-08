@@ -1,6 +1,6 @@
 import numpy as np
 
-def calculate_wt_mul(R, X, Y, epsilon=1e-12, clip_negative=True, normalize=True):
+def calculate_wt_mul(R):
     """
     Stable and safe distribution of relevance for elementwise multiplication.
 

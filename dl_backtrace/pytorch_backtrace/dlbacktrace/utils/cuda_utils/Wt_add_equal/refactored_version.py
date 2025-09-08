@@ -29,18 +29,6 @@ def calculate_wt_add_equal(
     List[np.ndarray]
         List of relevance tensors, one per entry in ``inp``, each having the
         same shape as the corresponding entry in ``inp``.
-
-    Examples
-    --------
-    >>> R = np.ones((2, 3, 4))
-    >>> inp = [np.empty((2, 3, 1)), np.empty((2, 3, 4))]
-    >>> out = calculate_wt_add_equal(R, inp)
-    >>> out[0].shape
-    (2, 3, 1)
-    >>> out[1].shape
-    (2, 3, 4)
-    >>> np.allclose(out[0].sum(axis=(1, 2)), 2.0)  # R split in 2 → 2.0 each
-    True
     """
     num_inputs = len(inp)
     input_shapes = [x.shape for x in inp]
