@@ -80,7 +80,7 @@ def launch_conv2d(version, wts, inp, w, b, padding, strides, act):
         return func(wts, inp, w, b, padding, strides, act)
     
     elif version == 'cuda':
-        return calculate_wt_conv_parallel(wts, inp, w, b, padding, strides, act, version)
+        return calculate_wt_conv_parallel(wts, inp, w, b, padding, strides, act)
 
     else:
         raise ValueError(f"Unknown version for Conv2D layer: {version}")
