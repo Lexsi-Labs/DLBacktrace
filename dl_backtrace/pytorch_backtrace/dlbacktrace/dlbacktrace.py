@@ -119,7 +119,7 @@ class DLBacktraceFX:
             
         elif isinstance(layer_implementation, dict):
             # Layer-specific configuration
-            valid_layer_types = ["linear", "conv2d", "attention", "embedding", "wt_add_equal", "wt_mul", "pooling", "default"]
+            valid_layer_types = ["linear", "conv2d", "attention", "embedding", "wt_add_equal", "wt_mul", "default"]
             
             # Validate all implementations
             for layer_type, impl in layer_implementation.items():
@@ -158,8 +158,7 @@ class DLBacktraceFX:
                 "Attention": "attention",
                 "NLP_Embedding": "embedding",
                 "Mathematical_Operation_mul": "wt_mul",
-                "Mathematical_Operation_add": "wt_add_equal",
-                "Pooling": "pooling"
+                "Mathematical_Operation_add": "wt_add_equal"
             }
             
             mapped_type = layer_mapping.get(layer_type, layer_type.lower())

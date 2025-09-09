@@ -3,13 +3,13 @@ import torch
 # Linear Layer
 from .cuda_utils.Linear_v2.original_version import calculate_wt_fc as calculate_wt_fc_original_linear
 from .cuda_utils.Linear_v2.pytorch_version import calculate_wt_fc as calculate_wt_fc_pytorch_linear
-from .cuda_utils.Linear_v2.cuda_v2 import calculate_wt_fc_cuda as calculate_wt_fc_cuda_linear
+from .cuda_utils.Linear_v3.cuda_v3 import calculate_wt_fc_cuda as calculate_wt_fc_cuda_linear
 
-# Conv2D Layer - Under Development
+# Conv2D Layer
 from .cuda_utils.Conv2D.original_version import calculate_wt_conv as calculate_wt_conv_original
 from .cuda_utils.Conv2D.refactored_version import calculate_wt_conv as calculate_wt_conv_refactored
 from .cuda_utils.Conv2D.pytorch_version import calculate_wt_conv as calculate_wt_conv_pytorch
-from .cuda_utils.Conv2D.cuda_v2 import calculate_wt_conv_cuda as calculate_wt_conv_cuda
+#from .cuda_utils.Conv2D.cuda_v2 import calculate_wt_conv_cuda as calculate_wt_conv_cuda
 
 # MaxPool2D Layer
 from .cuda_utils.MaxPool2D.original_version import calculate_wt_maxpool as calculate_wt_maxpool_original
@@ -32,7 +32,7 @@ from .cuda_utils.Embedded.cuda_v2 import calculate_wt_embedding_cuda as calculat
 # SelfAttention Layer
 from .cuda_utils.SelfAttention.original_version import calculate_wt_self_attention as calculate_wt_self_attention_original
 from .cuda_utils.SelfAttention.pytorch_version import calculate_wt_self_attention as calculate_wt_self_attention_pytorch
-from .cuda_utils.SelfAttention.cuda_v2 import calculate_wt_self_attention_multi_kernel as calculate_wt_self_attention_cuda
+#from .cuda_utils.SelfAttention.cuda_v2 import calculate_wt_self_attention_multi_kernel as calculate_wt_self_attention_cuda
 
 # Wt_add_equal Layer
 from .cuda_utils.Wt_add_equal.original_version import calculate_wt_add_equal as calculate_wt_add_original
@@ -43,6 +43,8 @@ from .cuda_utils.Wt_add_equal.pytorch_version import calculate_wt_add_equal_vect
 # Wt_mul Layer
 from .cuda_utils.Wt_mul.original_version import calculate_wt_mul as calculate_wt_mul_original
 from .cuda_utils.Wt_mul.refactored_version import calculate_wt_mul as calculate_wt_mul_refactored
+from .cuda_utils.Wt_mul.pytorch_version import calculate_wt_mul_gpu as calculate_wt_mul_pytorch
+from .cuda_utils.Wt_mul.cuda_v1 import calculate_wt_mul as calculate_wt_mul_cuda
 
 def _prepare_tensors(device, *arrays):
     return [torch.tensor(arr, dtype=torch.float32, device=device) for arr in arrays]
@@ -77,13 +79,11 @@ def launch_conv2d(version, wts, inp, w, b, padding, strides, act):
         func = calculate_wt_conv_original if version == 'original' else calculate_wt_conv_refactored
         return func(wts, inp, w, b, padding, strides, act)
     
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
-    if version == 'pytorch':
-        return calculate_wt_conv_pytorch(wts, inp, w, b, padding, strides, act)
+    elif version == 'pytorch':
+        return calculate_wt_conv_pytorch(wts, inp, w, b, padding, strides, act, version)
     
     elif version == 'cuda':
-        return calculate_wt_conv_cuda(wts, inp, w, b, padding, strides, act)
+        return calculate_wt_conv_pytorch(wts, inp, w, b, padding, strides, act, version)
 
     else:
         raise ValueError(f"Unknown version for Conv2D layer: {version}")
@@ -150,9 +150,9 @@ def launch_self_attention(version, R_out, Q, K, V, masked_fill, scale = None, ep
         result_torch = calculate_wt_self_attention_pytorch(R_out_t, Q_t, K_t, V_t, masked_fill_t, scale_t, epsilon)
         return [arr.cpu().numpy() for arr in result_torch]
     elif version == 'cuda':
-        result_cuda = calculate_wt_self_attention_cuda(R_out_t, Q_t, K_t, V_t, masked_fill_t, scale_t)
-        return [arr.cpu().numpy() for arr in result_cuda]
-        #return None
+        #result_cuda = calculate_wt_self_attention_cuda(R_out_t, Q_t, K_t, V_t, masked_fill_t, scale_t)
+        #return [arr.cpu().numpy() for arr in result_cuda]
+        return None
     else:
         raise ValueError(f"Unknown version for SelfAttention layer: {version}")
 
@@ -172,11 +172,21 @@ def launch_wt_add_equal(version, R_out, inp):
     else:
         raise ValueError(f"Unknown version for Wt_add_equal layer: {version}")
 
-def launch_wt_mul(version, R_out, X, Y):
+def launch_wt_mul(version, R_out):
     if version in ['original', 'refactored']:
         func = calculate_wt_mul_original if version == 'original' else calculate_wt_mul_refactored
-        return func(R_out, X, Y)
+        return func(R_out)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    R_out_t = torch.tensor(R_out, dtype=torch.float32, device=device)
+
+    if version == 'pytorch':
+        result = calculate_wt_mul_pytorch(R_out_t)
+        return tuple(tensor.cpu().numpy() for tensor in result)
+
+    elif version == 'cuda':
+        return calculate_wt_mul_cuda(R_out)
     else:
         # Fallback to original for unsupported implementations
         print(f"⚠️  {version} implementation not available for Wt_mul, using original")
-        return calculate_wt_mul_original(R_out, X, Y)
+        return calculate_wt_mul_original(R_out)
