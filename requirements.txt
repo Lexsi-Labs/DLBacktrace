@@ -14,3 +14,6 @@ joblib
 zstandard
 graphviz
 tqdm
+scikit-image
+lime
+tensorflow
