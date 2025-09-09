@@ -2,8 +2,6 @@ import torch
 from typing import Tuple, Union, Callable, Dict, Any, Optional, List
 import torch.nn.functional as F
 
-from .cuda_wt_conv_unit import calculate_wt_conv_unit_cuda
-
 def convert_to_pytorch_format(
     relevance_y,
     input_array, 
@@ -229,7 +227,6 @@ def calculate_wt_conv(
     padding: Union[str, Tuple[Union[int, None], Union[int, None]]],
     strides:Tuple[int, int],
     act: Dict[str, Any],
-    version: str
 ) -> torch.Tensor:
     """
     Calculate weighted convolution for relevance propagation in neural networks.
@@ -269,8 +266,8 @@ def calculate_wt_conv(
         
         # Apply padding using kernel shape like the original version
         input_padded, paddings = calculate_padding(
-            (kernel_h, kernel_w), current_input, padding, strides
-        )
+                (kernel_h, kernel_w), current_input, padding, strides
+                )
         
         # Initialize output tensor for accumulated updates
         output_accumulated = torch.zeros_like(input_padded)
@@ -280,7 +277,6 @@ def calculate_wt_conv(
         
         # Vectorized index calculation for better performance
         stride_h, stride_w = strides
-
         
         # Process each spatial location in the output (matching original's loop structure)
         for out_h in range(output_height):
@@ -316,18 +312,10 @@ def calculate_wt_conv(
                 
                 # Get relevance weight for current output location
                 relevance_weight = current_relevance[out_h, out_w, :]
-                if version == 'pytorch':
                     # Calculate weighted convolution updates for this patch
-                    patch_updates = calculate_wt_conv_unit(
-                        input_patch, relevance_weight, w_transposed, b, act
-                    )
-                elif version == 'cuda':
-                    # Calculate weighted convolution updates for this patch
-                    patch_updates = calculate_wt_conv_unit_cuda(
-                        input_patch, relevance_weight, w_transposed, b, act
-                    )
-                else:
-                    raise ValueError(f"Unknown version for Conv2D layer: {version}")
+                patch_updates = calculate_wt_conv_unit(
+                    input_patch, relevance_weight, w_transposed, b, act
+                )
                 
                 # Accumulate updates with proper bounds checking
                 actual_h_size = min(patch_updates.shape[0], h_end - h_start)

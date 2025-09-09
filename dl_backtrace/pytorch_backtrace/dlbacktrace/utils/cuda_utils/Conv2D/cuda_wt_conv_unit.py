@@ -226,9 +226,13 @@ torch::Tensor launch_calculate_wt_conv_unit_kernel(
     TORCH_CHECK(wts.dtype() == torch::kFloat32, "wts must be float32");
     TORCH_CHECK(w.dtype() == torch::kFloat32, "w must be float32");
     
+    auto patch_c = patch.contiguous();
+    auto wts_c = wts.contiguous();
+    auto w_c = w.contiguous();
+    
     // Get tensor dimensions
-    auto patch_sizes = patch.sizes();
-    auto w_sizes = w.sizes();
+    auto patch_sizes = patch_c.sizes();
+    auto w_sizes = w_c.sizes();
     
     int i_size = patch_sizes[0];
     int j_size = patch_sizes[1];
@@ -252,8 +256,8 @@ torch::Tensor launch_calculate_wt_conv_unit_kernel(
     int blocks1 = (total_elements + threads1 - 1) / threads1;
     
     compute_conv_and_parts_kernel<<<blocks1, threads1>>>(
-        patch.data_ptr<float>(),
-        w.data_ptr<float>(),
+        patch_c.data_ptr<float>(),
+        w_c.data_ptr<float>(),
         conv_out.data_ptr<float>(),
         p_ind.data_ptr<float>(),
         n_ind.data_ptr<float>(),
@@ -284,7 +288,7 @@ torch::Tensor launch_calculate_wt_conv_unit_kernel(
         n_ind.data_ptr<float>(),
         p_sum.data_ptr<float>(),
         n_sum.data_ptr<float>(),
-        wts.data_ptr<float>(),
+        wts_c.data_ptr<float>(),
         b_ptr,
         output.data_ptr<float>(),
         i_size, j_size, k_size, l_size,
@@ -362,14 +366,7 @@ def calculate_wt_conv_unit_cuda(patch, wts, w, b, act):
         torch::Tensor: Computed weight matrix of shape (i, j, k)
     """
 
-    # Ensure tensors are contiguous
-    patch = patch.contiguous()
-    wts = wts.contiguous()
-    w = w.contiguous()
-    if b is not None:
-        b = b.contiguous()
-    else:
-        b = torch.empty(0, dtype=torch.float32)
+    b = b if b is not None else torch.empty(0, dtype=torch.float32)
 
     # Parse activation parameters once
     act_type = 0 if act["type"] == "mono" else 1
