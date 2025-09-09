@@ -219,6 +219,7 @@ def calculate_padding(
         else:
             return inp, [[0, 0], [0, 0], [0, 0]]
 
+@torch.compile
 def calculate_wt_conv(
     relevance_y,
     input_array, 
