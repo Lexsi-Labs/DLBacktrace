@@ -291,6 +291,7 @@ class DLBacktraceFX:
         Returns:
             dict: Updated node_io with scaled logits.
         """
+        print(f"Using Temperature Scaling: {temperature}")
         if not hasattr(self, "node_io") or "output" not in self.node_io:
             raise ValueError("No 'output' node found in self.node_io")
 
@@ -374,6 +375,7 @@ class DLBacktraceFX:
         # 🔧 Apply temperature scaling if requested
         if temperature != 1.0:
             try:
+                print(f"Calling temperature_scaling...")
                 self.apply_temperature_scaling(temperature)
                 if debug:
                     print(f"✅ Applied temperature scaling with temperature={temperature}")
