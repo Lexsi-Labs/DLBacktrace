@@ -278,7 +278,41 @@ class DLBacktraceFX:
         else:
             return 'unknown'
 
-    def predict(self, *inputs, debug=None):
+    def apply_temperature_scaling(self, temperature: float = 1.0):
+        """
+        Apply temperature scaling to the output logits in-place.
+
+        Args:
+            temperature (float):
+                > 1.0  -> softer / more uniform distribution
+                < 1.0  -> sharper / more peaked distribution
+                = 1.0  -> no change
+
+        Returns:
+            dict: Updated node_io with scaled logits.
+        """
+        if not hasattr(self, "node_io") or "output" not in self.node_io:
+            raise ValueError("No 'output' node found in self.node_io")
+
+        if "output_values" not in self.node_io["output"]:
+            raise ValueError("'output_values' not found in self.node_io['output']")
+
+        logits = self.node_io["output"]["output_values"]
+        if logits is None:
+            raise ValueError("self.node_io['output']['output_values'] is None")
+
+        if temperature <= 0:
+            raise ValueError(f"temperature must be > 0, got {temperature}")
+
+        if temperature == 1.0:
+            return self.node_io  # no-op
+
+        # Apply scaling in-place
+        self.node_io["output"]["output_values"] = logits / temperature
+
+        return self.node_io 
+
+    def predict(self, *inputs, temperature: float = 1.0, debug=None):
         """
         Execute the model with the given inputs and return node I/O data.
         
@@ -336,7 +370,17 @@ class DLBacktraceFX:
         if debug:
             print(f"🔧 Execution completed successfully")
             print(f"   Output nodes: {len(self.node_io)}")
-        
+
+        # 🔧 Apply temperature scaling if requested
+        if temperature != 1.0:
+            try:
+                self.apply_temperature_scaling(temperature)
+                if debug:
+                    print(f"✅ Applied temperature scaling with temperature={temperature}")
+            except Exception as te:
+                if debug:
+                    print(f"⚠️ Temperature scaling skipped due to error: {te}")
+            
         return self.node_io
 
     def _preprocess_inputs(self, inputs, debug=False):
