@@ -748,7 +748,17 @@ def calculate_wt_self_attention(R_out, Q, K, V, masked_fill=None, scale=None, ep
     log(f"updated R_QK--- rel: {np.sum(R_QK):.2f}, shape: {R_QK.shape}")
     log(f"updated R_V--- rel: {np.sum(R_V):.2f}, shape: {R_V.shape}") 
 
+    if (R_V >= 0).any():
+        print(f"Before:  Negative value found in R_V")
+    else:
+        print(f"Before: No negative value found in R_V")
+
     R_V = dlb_style_signed_conserve(R_V, V)
+
+    if (R_V < 0).any():
+        print(f"After:  Negative value found in R_V")
+    else:
+        print(f"After: No negative value found in R_V")
 
     # Relevance Calculation for K and Q
     relevance_norm_QK_out = R_QK / stabilize(QK_output *2, epsilon)
@@ -761,8 +771,28 @@ def calculate_wt_self_attention(R_out, Q, K, V, masked_fill=None, scale=None, ep
     log(f"updated R_Q--- rel: {np.sum(R_Q):.2f}, shape: {R_Q.shape}")
     log(f"updated R_K--- rel: {np.sum(R_K):.2f}, shape: {R_K.shape}")
 
+    if (R_Q < 0).any():
+        print(f"Before:  Negative value found in R_Q")
+    else:
+        print(f"Before: No negative value found in R_Q")
+
+    if (R_K < 0).any():
+        print(f"Before:  Negative value found in R_K")
+    else:
+        print(f"Before: No negative value found in R_K")
+
     R_Q = dlb_style_signed_conserve(R_Q, Q)
     R_K = dlb_style_signed_conserve(R_K, K)
+
+    if (R_Q < 0).any():
+        print(f"After:  Negative value found in R_Q")
+    else:
+        print(f"After: No negative value found in R_Q")
+
+    if (R_K < 0).any():
+        print(f"After:  Negative value found in R_K")
+    else:
+        print(f"After: No negative value found in R_K")
 
     # Relevance `masked_fill`
     delta_A = A - A_masked
