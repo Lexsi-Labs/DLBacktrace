@@ -649,6 +649,46 @@ def calculate_wt_avgpool(relevance_y, input_array, pool_size, pad, stride):
         relevance_x.append(out_ds.T)
     return np.array(relevance_x)
 
+def dlb_style_nonneg_conserve(wts, inp, eps=1e-12):
+    """
+    Non-negative, mass-preserving DLB on |wts| (conserves L1).
+    Keeps your current behavior: sum(out) == sum(abs(wts)) per (B,H).
+    """
+    assert wts.shape == inp.shape
+    pos = inp > 0
+    neg = inp < 0
+
+    p_sum = np.sum(np.where(pos, inp, 0.0), axis=(-2,-1), keepdims=True)
+    n_sum = -np.sum(np.where(neg, inp, 0.0), axis=(-2,-1), keepdims=True)
+    denom = p_sum + n_sum + eps
+
+    p_share = np.where(p_sum > 0, p_sum/denom, 0.0)
+    n_share = np.where(n_sum > 0, n_sum/denom, 0.0)
+
+    M = np.sum(np.abs(wts), axis=(-2,-1), keepdims=True)  # mass to conserve
+
+    p_div = np.where(p_sum == 0, 1.0, p_sum)
+    n_div = np.where(n_sum == 0, 1.0, n_sum)
+
+    out = np.zeros_like(inp)
+    out += np.where(pos, (inp / p_div) * (p_share * M), 0.0)
+    out += np.where(neg, (inp / n_div) * (n_share * M) * (-1.0), 0.0)
+    return out
+
+def dlb_style_signed_conserve(wts, inp, eps=1e-12):
+    """
+    Signed, mass-preserving DLB:
+    For each (B,H), sum over (T,D) of out == sum over (T,D) of wts (signed).
+    Entries may be negative (as they should be if wts has negatives).
+    """
+    Rp = np.maximum(wts, 0.0)
+    Rn = np.maximum(-wts, 0.0)  # magnitude of negative part
+
+    P = dlb_style_nonneg_conserve(Rp, inp, eps)  # ≥0, sums to sum(Rp)
+    N = dlb_style_nonneg_conserve(Rn, inp, eps)  # ≥0, sums to sum(Rn)
+
+    return P - N  # signed result; per-(B,H) sums match sum(wts)
+
 def stabilize(matrix, epsilon=1e-6):
     # If abs(val) < epsilon, set to epsilon (keeping original sign or + for zeros)
     return np.where(np.abs(matrix) < epsilon,
@@ -708,6 +748,8 @@ def calculate_wt_self_attention(R_out, Q, K, V, masked_fill=None, scale=None, ep
     log(f"updated R_QK--- rel: {np.sum(R_QK):.2f}, shape: {R_QK.shape}")
     log(f"updated R_V--- rel: {np.sum(R_V):.2f}, shape: {R_V.shape}") 
 
+    R_V = dlb_style_signed_conserve(R_V, V)
+
     # Relevance Calculation for K and Q
     relevance_norm_QK_out = R_QK / stabilize(QK_output *2, epsilon)
     log(f"relevance_norm_QK_out---  value: {np.sum(relevance_norm_QK_out):.2f},  shape: {relevance_norm_QK_out.shape}")
@@ -718,6 +760,9 @@ def calculate_wt_self_attention(R_out, Q, K, V, masked_fill=None, scale=None, ep
 
     log(f"updated R_Q--- rel: {np.sum(R_Q):.2f}, shape: {R_Q.shape}")
     log(f"updated R_K--- rel: {np.sum(R_K):.2f}, shape: {R_K.shape}")
+
+    R_Q = dlb_style_signed_conserve(R_Q, Q)
+    R_K = dlb_style_signed_conserve(R_K, K)
 
     # Relevance `masked_fill`
     delta_A = A - A_masked
