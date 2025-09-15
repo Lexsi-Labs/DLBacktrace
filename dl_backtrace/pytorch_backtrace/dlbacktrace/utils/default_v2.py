@@ -9,7 +9,6 @@ from .cuda_utils.Linear_v3.cuda_v3 import calculate_wt_fc_cuda as calculate_wt_f
 from .cuda_utils.Conv2D.original_version import calculate_wt_conv as calculate_wt_conv_original
 from .cuda_utils.Conv2D.refactored_version import calculate_wt_conv as calculate_wt_conv_refactored
 from .cuda_utils.Conv2D.pytorch_version import calculate_wt_conv as calculate_wt_conv_parallel
-#from .cuda_utils.Conv2D.cuda_v2 import calculate_wt_conv_cuda as calculate_wt_conv_cuda
 
 # MaxPool2D Layer
 from .cuda_utils.MaxPool2D.original_version import calculate_wt_maxpool as calculate_wt_maxpool_original
