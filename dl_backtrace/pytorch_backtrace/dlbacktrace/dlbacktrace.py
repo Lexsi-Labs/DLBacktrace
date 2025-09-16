@@ -37,13 +37,15 @@ class DLBacktraceFX:
             strict_cpu (bool): When running on CPU, disable MKL-DNN and pin threads for stricter determinism.
         """
         # 🔧 CRITICAL: Set up deterministic environment for consistent tracing
+        print("Setting up DL-Bactrace", flush=True)
         self.verbose = verbose
         self.strict_cpu = strict_cpu
         self._setup_deterministic_environment(seed=42, verbose=self.verbose, strict_cpu=self.strict_cpu)
         
         self.model = model
         if self.verbose:
-            print("---------------------------v1------------------------------------------")
+            print("---------------------------v1------------------------------------------", flush=True)
+            print("🔧 Initializing DL-Backtrace FX...", flush=True)
         self.input_for_graph = input_for_graph
         # Normalize sample inputs to a tuple for exporter compatibility
         if isinstance(self.input_for_graph, torch.Tensor):
@@ -57,49 +59,56 @@ class DLBacktraceFX:
         self.layer_implementation = self._parse_layer_implementation(layer_implementation)
         
         if self.verbose:
-            print(f"🚀 Layer Implementation Configuration:")
+            print(f"🚀 Layer Implementation Configuration:", flush=True)
             if isinstance(self.layer_implementation, str):
-                print(f"   Global: {self.layer_implementation.upper()}")
+                print(f"   Global: {self.layer_implementation.upper()}", flush=True)
             else:
-                print(f"   Layer-specific configuration:")
+                print(f"   Layer-specific configuration:", flush=True)
                 for layer_type, impl in self.layer_implementation.items():
-                    print(f"     {layer_type}: {impl.upper()}")
+                    print(f"     {layer_type}: {impl.upper()}", flush=True)
         
         # Cache manager removed - using non-cache execution only
         if self.verbose:
-            print("---------------------------v2------------------------------------------")
+            print("---------------------------v2------------------------------------------", flush=True)
+            print("🔧 Exporting and tracing model...", flush=True)
         # Export and trace model
         self._trace_model()
         if self.verbose:
-            print("---------------------------v3------------------------------------------")
+            print("---------------------------v3------------------------------------------", flush=True)
+            print("🔧 Extracting placeholders...", flush=True)
         # Placeholder mapping
         self.fx_placeholders = extract_placeholders(self.exported_program)
         if self.verbose:
-            print("---------------------------v4------------------------------------------")
+            print("---------------------------v4------------------------------------------", flush=True)
+            print("🔧 Mapping placeholders to state dict...", flush=True)
         self.placeholder_to_real_name = map_placeholders_to_state_dict(
             self.exported_program, self.model
         )
         if self.verbose:
-            print("---------------------------v5------------------------------------------")
+            print("---------------------------v5------------------------------------------", flush=True)
+            print("🔧 Extracting weights...", flush=True)
         self.extracted_weights = {
             p: get_weight_from_placeholder(
                 p, self.exported_program, self.model, self.placeholder_to_real_name
             ) for p in self.fx_placeholders
         }
         if self.verbose:
-            print("---------------------------v6------------------------------------------")
+            print("---------------------------v6------------------------------------------", flush=True)
+            print("🔧 Building computation graph...", flush=True)
 
         # Graph + metadata
         self.graph, self.layer_stack = build_graph(
             self.tracer, self.extracted_weights
         )
         if self.verbose:
-            print("---------------------------v7------------------------------------------")
+            print("---------------------------v7------------------------------------------", flush=True)
+            print("🔧 Initializing I/O and bookkeeping...", flush=True)
         # I/O and bookkeeping
         self.node_io = {}
         self.activation_dict = {}
         if self.verbose:
-            print("---------------------------v8------------------------------------------")
+            print("---------------------------v8------------------------------------------", flush=True)
+            print("✅ DL-Backtrace FX initialization complete!", flush=True)
     
     def _parse_layer_implementation(self, layer_implementation):
         """Parse and validate layer implementation configuration."""

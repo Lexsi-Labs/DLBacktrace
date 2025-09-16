@@ -3515,6 +3515,29 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             except Exception as e:
                 raise RuntimeError(f"[{node_name}] ❌ addmv failed with shapes: bias={bias.shape}, mat={mat.shape}, vec={vec.shape}. Error: {e}")
 
+        elif func_name == "alias":
+            # 🔧 NEW OPERATION: Alias operation - creates a view of tensor without copying
+            logger.debug(f"[{node_name}] 🔧 alias: processing input, layer_in type={type(layer_in)}")
+            
+            # Handle different input scenarios
+            if isinstance(layer_in, (list, tuple)):
+                if len(layer_in) == 1:
+                    input_tensor = layer_in[0]
+                else:
+                    raise RuntimeError(f"[{node_name}] ❌ alias expects 1 input, got {len(layer_in)}")
+            elif isinstance(layer_in, torch.Tensor):
+                input_tensor = layer_in
+            else:
+                raise RuntimeError(f"[{node_name}] ❌ alias expects tensor input, got {type(layer_in)}")
+            
+            # Apply consistency checks for exact reproducibility
+            input_tensor = enforce_precision_consistency(input_tensor)
+            
+            # Execute operation - aten::alias() creates a view of the input tensor
+            output = aten_op(input_tensor)
+            logger.debug(f"[{node_name}] ✅ alias: input shape={input_tensor.shape}, output shape={output.shape}")
+            return output
+
         else:
             # 🔧 UNHANDLED OPERATION: Print with emojis for easy identification
             logger.warning(f"🚨 UNHANDLED OPERATION: `{func_name}` - needs implementation!")
@@ -3846,8 +3869,11 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
         
         # 🔧 DEBUG: Check for extreme values that could indicate precision issues
         if isinstance(processed_output, torch.Tensor):
+            # 🔧 CRITICAL FIX: Check for empty tensors first
+            if processed_output.numel() == 0:
+                logger.debug(f"[DEBUG:EMPTY] Node `{node_name}` produced empty tensor → shape: {processed_output.shape}")
             # 🔧 CRITICAL FIX: Only check abs for numeric tensors, not boolean tensors
-            if processed_output.dtype in [torch.bool]:
+            elif processed_output.dtype in [torch.bool]:
                 # For boolean tensors, just check basic properties
                 logger.debug(f"[DEBUG:BOOL] Node `{node_name}` produced boolean tensor → shape: {processed_output.shape}")
             elif torch.is_floating_point(processed_output) or torch.is_complex(processed_output):
