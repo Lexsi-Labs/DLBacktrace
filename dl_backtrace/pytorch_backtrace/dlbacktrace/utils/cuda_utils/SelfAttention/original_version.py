@@ -82,6 +82,7 @@ def calculate_wt_self_attention(R_out, Q, K, V, masked_fill=None, scale=None, ep
     A = A / (np.sum(A, axis=-1, keepdims=True) + epsilon)
 
     # Step 3: Apply additive attention mask (optional)
+    masked_fill = None
     if masked_fill is not None:
         logits_masked = logits_unmasked + masked_fill  # [B, H, T, T] + [B, 1, T, T]
     else:

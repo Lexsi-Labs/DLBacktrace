@@ -99,6 +99,7 @@ def calculate_wt_self_attention(
     A = A_exp / (torch.sum(A_exp, dim=-1, keepdim=True) + epsilon)
 
     # Step 3: Apply additive attention mask (optional)
+    masked_fill = None
     if masked_fill is not None:
         logits_masked = logits_unmasked + masked_fill
     else:
