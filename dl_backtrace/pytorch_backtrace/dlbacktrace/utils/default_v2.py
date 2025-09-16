@@ -30,7 +30,7 @@ from .cuda_utils.Embedded.cuda_v2 import calculate_wt_embedding_cuda as calculat
 
 # SelfAttention Layer
 from .cuda_utils.SelfAttention.original_version import calculate_wt_self_attention as calculate_wt_self_attention_original
-from .cuda_utils.SelfAttention.pytorch_version import calculate_wt_self_attention as calculate_wt_self_attention_pytorch
+from .cuda_utils.SelfAttention.pytorch_v2 import calculate_wt_self_attention as calculate_wt_self_attention_pytorch
 #from .cuda_utils.SelfAttention.cuda_v2 import calculate_wt_self_attention_multi_kernel as calculate_wt_self_attention_cuda
 
 # Wt_add_equal Layer
