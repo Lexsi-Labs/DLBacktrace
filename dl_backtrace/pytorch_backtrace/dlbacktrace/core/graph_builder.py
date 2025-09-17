@@ -80,72 +80,148 @@ def extract_layer_hyperparams(node: Any, extracted_weights: Dict[str, Any]) -> D
             expected_params = ATEN_HYPERPARAMS_TABLE[func_name]
             args_node = iter(node.args)
 
-            for param in expected_params:
-                value, arg_flag, flag_skip = None, False, False
-                try:
-                    while True:
-                        x_itr = next(args_node)
-                        if isinstance(x_itr, torch.fx.node.Node):
-                            if param in x_itr.name:
-                                value = extracted_weights.get(x_itr.name)
+            # 🔧 SPECIAL HANDLING: Fix arange parameter extraction
+            if func_name == "arange":
+                logger.debug(f"🔧 Special handling for arange parameter extraction")
+                args_list = list(node.args)
+                logger.debug(f"🔧 arange args: {args_list}")
+                
+                # Handle different arange signatures
+                if len(args_list) == 1:
+                    # torch.arange(5) -> start=0, end=5
+                    end_value = args_list[0]
+                    layer_hyperparams["start"] = 0
+                    layer_hyperparams["end"] = end_value
+                    layer_hyperparams["step"] = 1
+                    logger.debug(f"🔧 arange: Single arg {end_value} -> start=0, end={end_value}, step=1")
+                elif len(args_list) == 2:
+                    # torch.arange(1, 4) -> start=1, end=4
+                    start_value, end_value = args_list[0], args_list[1]
+                    layer_hyperparams["start"] = start_value
+                    layer_hyperparams["end"] = end_value
+                    layer_hyperparams["step"] = 1
+                    logger.debug(f"🔧 arange: Two args {start_value}, {end_value} -> start={start_value}, end={end_value}, step=1")
+                elif len(args_list) == 3:
+                    # torch.arange(1, 4, 2) -> start=1, end=4, step=2
+                    start_value, end_value, step_value = args_list[0], args_list[1], args_list[2]
+                    layer_hyperparams["start"] = start_value
+                    layer_hyperparams["end"] = end_value
+                    layer_hyperparams["step"] = step_value
+                    logger.debug(f"🔧 arange: Three args {start_value}, {end_value}, {step_value} -> start={start_value}, end={end_value}, step={step_value}")
+                else:
+                    # Fallback to default extraction
+                    logger.warning(f"🔧 arange: Unexpected number of args {len(args_list)}, using default extraction")
+                    for param in expected_params:
+                        value, arg_flag, flag_skip = None, False, False
+                        try:
+                            while True:
+                                x_itr = next(args_node)
+                                if isinstance(x_itr, torch.fx.node.Node):
+                                    if param in x_itr.name:
+                                        value = extracted_weights.get(x_itr.name)
+                                        arg_flag = True
+                                        layer_hyperparams[param] = value
+                                        logger.debug(f"Found {param} from node {x_itr.name}")
+                                        break
+                                elif isinstance(x_itr, (tuple, list)) and any(isinstance(item, torch.fx.node.Node) for item in x_itr):
+                                    x_itr_list = []
+                                    for item in x_itr:
+                                        value = extracted_weights.get(item.name, None) if isinstance(item, torch.fx.node.Node) else item
+                                        x_itr_list.append(value)
+                                        flag_skip = True
+                                    layer_hyperparams[param] = x_itr_list
+                                    arg_flag = True
+                                    logger.debug(f"Found {param} from list/tuple with {len(x_itr_list)} items")
+                                    break
+                                elif x_itr is None and param == "bias":
+                                    value = None
+                                    arg_flag = True
+                                    layer_hyperparams[param] = value
+                                    logger.debug(f"Found {param} as None (bias)")
+                                    break
+                                elif isinstance(x_itr, (bool, int, float, list, tuple, torch.memory_format)):
+                                    value = x_itr
+                                    logger.debug(f"Found {param} as literal value: {value}")
+                                    break
+                        except StopIteration:
+                            value = ATEN_DEFAULTS_TABLE.get(param, None)
+                            default_flag = True
+                            logger.debug(f"Using default value for {param}: {value}")
+                
+                # Handle remaining parameters (dtype, layout, device, pin_memory)
+                for param in ["dtype", "layout", "device", "pin_memory"]:
+                    if param not in layer_hyperparams:
+                        value = ATEN_DEFAULTS_TABLE.get(param, None)
+                        layer_hyperparams[param] = value
+                        logger.debug(f"Using default value for {param}: {value}")
+            else:
+                # Default parameter extraction for other operations
+                for param in expected_params:
+                    value, arg_flag, flag_skip = None, False, False
+                    try:
+                        while True:
+                            x_itr = next(args_node)
+                            if isinstance(x_itr, torch.fx.node.Node):
+                                if param in x_itr.name:
+                                    value = extracted_weights.get(x_itr.name)
+                                    arg_flag = True
+                                    layer_hyperparams[param] = value
+                                    logger.debug(f"Found {param} from node {x_itr.name}")
+                                    break
+                            elif isinstance(x_itr, (tuple, list)) and any(isinstance(item, torch.fx.node.Node) for item in x_itr):
+                                x_itr_list = []
+                                for item in x_itr:
+                                    value = extracted_weights.get(item.name, None) if isinstance(item, torch.fx.node.Node) else item
+                                    x_itr_list.append(value)
+                                    flag_skip = True
+                                layer_hyperparams[param] = x_itr_list
+                                arg_flag = True
+                                logger.debug(f"Found {param} from list/tuple with {len(x_itr_list)} items")
+                                break
+                            elif x_itr is None and param == "bias":
+                                value = None
                                 arg_flag = True
                                 layer_hyperparams[param] = value
-                                logger.debug(f"Found {param} from node {x_itr.name}")
+                                logger.debug(f"Found {param} as None (bias)")
                                 break
-                        elif isinstance(x_itr, (tuple, list)) and any(isinstance(item, torch.fx.node.Node) for item in x_itr):
-                            x_itr_list = []
-                            for item in x_itr:
-                                value = extracted_weights.get(item.name, None) if isinstance(item, torch.fx.node.Node) else item
-                                x_itr_list.append(value)
-                                flag_skip = True
-                            layer_hyperparams[param] = x_itr_list
-                            arg_flag = True
-                            logger.debug(f"Found {param} from list/tuple with {len(x_itr_list)} items")
-                            break
-                        elif x_itr is None and param == "bias":
-                            value = None
-                            arg_flag = True
+                            elif isinstance(x_itr, (bool, int, float, list, tuple, torch.memory_format)):
+                                value = x_itr
+                                logger.debug(f"Found {param} as literal value: {value}")
+                                break
+                    except StopIteration:
+                        value = ATEN_DEFAULTS_TABLE.get(param, None)
+                        default_flag = True
+                        logger.debug(f"Using default value for {param}: {value}")
+
+                    if value is not None and not arg_flag:
+                        # Handle dimension-specific parameters
+                        if func_name.startswith(("conv", "pool")) and param in {"stride", "padding", "dilation", "output_padding"}:
+                            dim = func_name[-2:]
+                            num_dims = 1 if dim == "1d" else 2 if dim == "2d" else 3 if dim == "3d" else 1
+                            value = tuple(value if isinstance(value, (list, tuple)) else [value] * num_dims)
+                            logger.debug(f"Expanded {param} to {num_dims}D: {value}")
+
+                        # Type-specific parameter handling
+                        if param in {"stride", "padding", "dilation", "output_padding", "kernel_size", "normalized_shape"}:
+                            layer_hyperparams[param] = tuple(value) if isinstance(value, (list, tuple)) else (value,)
+                        elif param in {"momentum", "eps"}:
+                            layer_hyperparams[param] = float(value)
+                        elif param in {"groups", "num_groups"}:
+                            layer_hyperparams[param] = int(value)
+                        elif param == "bias" and default_flag:
+                            layer_hyperparams[param] = bool(value)
+                        elif param in {"ceil_mode", "count_include_pad", "affine", "track_running_stats", "elementwise_affine"}:
+                            layer_hyperparams[param] = bool(value)
+                        elif param == "dim" or func_name == "softmax":
+                            layer_hyperparams[param] = value if isinstance(value, int) else 1
+                        elif param in {"shape", "dims", "dim0", "dim1", "sizes"}:
+                            layer_hyperparams[param] = tuple(value) if isinstance(value, (list, tuple)) else (value,)
+                        else:
                             layer_hyperparams[param] = value
-                            logger.debug(f"Found {param} as None (bias)")
-                            break
-                        elif isinstance(x_itr, (bool, int, float, list, tuple, torch.memory_format)):
-                            value = x_itr
-                            logger.debug(f"Found {param} as literal value: {value}")
-                            break
-                except StopIteration:
-                    value = ATEN_DEFAULTS_TABLE.get(param, None)
-                    default_flag = True
-                    logger.debug(f"Using default value for {param}: {value}")
-
-                if value is not None and not arg_flag:
-                    # Handle dimension-specific parameters
-                    if func_name.startswith(("conv", "pool")) and param in {"stride", "padding", "dilation", "output_padding"}:
-                        dim = func_name[-2:]
-                        num_dims = 1 if dim == "1d" else 2 if dim == "2d" else 3 if dim == "3d" else 1
-                        value = tuple(value if isinstance(value, (list, tuple)) else [value] * num_dims)
-                        logger.debug(f"Expanded {param} to {num_dims}D: {value}")
-
-                    # Type-specific parameter handling
-                    if param in {"stride", "padding", "dilation", "output_padding", "kernel_size", "normalized_shape"}:
-                        layer_hyperparams[param] = tuple(value) if isinstance(value, (list, tuple)) else (value,)
-                    elif param in {"momentum", "eps"}:
-                        layer_hyperparams[param] = float(value)
-                    elif param in {"groups", "num_groups"}:
-                        layer_hyperparams[param] = int(value)
-                    elif param == "bias" and default_flag:
-                        layer_hyperparams[param] = bool(value)
-                    elif param in {"ceil_mode", "count_include_pad", "affine", "track_running_stats", "elementwise_affine"}:
-                        layer_hyperparams[param] = bool(value)
-                    elif param == "dim" or func_name == "softmax":
-                        layer_hyperparams[param] = value if isinstance(value, int) else 1
-                    elif param in {"shape", "dims", "dim0", "dim1", "sizes"}:
-                        layer_hyperparams[param] = tuple(value) if isinstance(value, (list, tuple)) else (value,)
+                    elif flag_skip:
+                        continue
                     else:
                         layer_hyperparams[param] = value
-                elif flag_skip:
-                    continue
-                else:
-                    layer_hyperparams[param] = value
 
         # Ensure bias parameter is always present
         if "bias" not in layer_hyperparams:

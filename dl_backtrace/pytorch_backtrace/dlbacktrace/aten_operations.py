@@ -189,7 +189,7 @@ ATEN_DEFAULTS: dict[str, Any] = {
             "value": 0.0,  # Default fill value for masked_fill
             "implicit": False,  # Default implicit broadcasting
             "start": 0,
-            "end": 10,
+            "end": None,  # No hardcoded default for end
             "step": 1,
             "fill_value": 0,
             "diagonal": 0,
