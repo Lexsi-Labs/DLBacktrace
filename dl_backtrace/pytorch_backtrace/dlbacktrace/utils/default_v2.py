@@ -37,13 +37,11 @@ from .cuda_utils.SelfAttention.pytorch_v2 import calculate_wt_self_attention as 
 from .cuda_utils.Wt_add_equal.original_version import calculate_wt_add_equal as calculate_wt_add_original
 from .cuda_utils.Wt_add_equal.refactored_version import calculate_wt_add_equal as calculate_wt_add_refactored
 from .cuda_utils.Wt_add_equal.pytorch_version import calculate_wt_add_equal_vectorized as calculate_wt_add_pytorch
-#from .cuda_utils.Wt_add_equal.cuda_version.wt_add_equal_ops import wt_add_equal_cuda as calculate_wt_add_cuda
 
 # Wt_mul Layer
 from .cuda_utils.Wt_mul.original_version import calculate_wt_mul as calculate_wt_mul_original
 from .cuda_utils.Wt_mul.refactored_version import calculate_wt_mul as calculate_wt_mul_refactored
 from .cuda_utils.Wt_mul.pytorch_version import calculate_wt_mul_gpu as calculate_wt_mul_pytorch
-#from .cuda_utils.Wt_mul.cuda_v1 import calculate_wt_mul as calculate_wt_mul_cuda
 
 def _prepare_tensors(device, *arrays):
     return [torch.tensor(arr, dtype=torch.float32, device=device) for arr in arrays]
@@ -187,3 +185,212 @@ def launch_wt_mul(version, R_out):
         # Fallback to original for unsupported implementations
         print(f"⚠️  {version} implementation not available for Wt_mul, using original")
         return calculate_wt_mul_original(R_out)
+
+def np_swish(x, beta=0.75):
+    z = 1 / (1 + np.exp(-(beta * x)))
+    return x * z
+
+def np_wave(x, alpha=1.0):
+    return (alpha * x * np.exp(1.0)) / (np.exp(-x) + np.exp(x))
+
+def np_pulse(x, alpha=1.0):
+    return alpha * (1 - np.tanh(x) * np.tanh(x))
+
+def np_absolute(x, alpha=1.0):
+    return alpha * x * np.tanh(x)
+
+def np_hard_sigmoid(x):
+    return np.clip(0.2 * x + 0.5, 0, 1)
+
+def np_sigmoid(x):
+    z = 1 / (1 + np.exp(-x))
+    return z
+
+def np_tanh(x):
+    z = np.tanh(x)
+    return z.astype(np.float32)
+
+def calculate_start_wt(arg, scaler=1,*args, **kwargs):
+    task = kwargs.get('task', None)  # Access 'task' from kwargs, default to None if not provided
+    
+    if task == "binary-classification":
+        # x = np.argmax(arg, axis=2)  # max along features
+        # m = np.max(arg, axis=2)
+        # y = np.zeros_like(arg)
+
+        # batch_size, seq_len, _ = arg.shape
+        # for i in range(batch_size):
+        #     for j in range(seq_len):
+        #         if scaler:
+        #             y[i, j, x[i, j]] = scaler
+        #         else:
+        #             y[i, j, x[i, j]] = m[i, j]
+        # log(y.shape,"y")
+        predicted_class = np.argmax(arg, axis=-1, keepdims=True)  # [B, 1] 
+        print(f"predicted_class: {predicted_class}")
+
+        # Create sparse relevance: only 1 class matters
+        target_relevance = np.zeros_like(arg, dtype=np.float32)
+
+        # Set the 1.0 at predicted indices
+        for b, t in enumerate(predicted_class):
+            print(f"batch: {b}, predicted_class: {t.item()}") 
+            target_relevance[b, t] = 1.0
+        
+        print(f"target_relevance --- original array: {target_relevance}, value: {np.sum(target_relevance):.4f}, shape: {target_relevance.shape}")
+
+    elif task == "generation":
+        # code here
+        print("======arg.shape=====",arg.shape)
+        # x = np.argmax(arg, axis=2)
+        # print("===x.shape============",x.shape)
+        # y = np.zeros_like(arg)
+        # value = 1 / arg.shape[1]
+
+        # batch_size, seq_len, _ = arg.shape
+        # for i in range(batch_size):
+        #     for j in range(seq_len):
+        #         y[i, j, x[i, j]] = value 
+
+        # print("====y.shape=======",y.shape)
+
+        next_token_logit = arg[:, -1, :]
+        print(f"next_token_logit: {next_token_logit.shape}")
+        predicted_token = np.argmax(next_token_logit, axis=-1, keepdims=True)  # [B, 1]
+        print(f"predicted_token: {predicted_token}")
+
+        # Create target relevance
+        target_relevance = np.zeros_like(arg, dtype=np.float32)
+
+        # Set the 1.0 at predicted indices
+        for b, t in enumerate(predicted_token):
+            print(f"batch: {b}, token: {t}")
+            target_relevance[b, -1, t] = 1.0
+        
+        print(f"target_relevance --- value: {np.sum(target_relevance):.4f}, shape: {target_relevance.shape}")
+
+    return target_relevance
+
+
+def calculate_wt_add(wts, inp=None):
+    wts_shape = wts.shape
+    batch_size = wts_shape[0]
+    batch_expanded_wts = []
+
+    # Flatten weights
+    for i in range(batch_size):
+        wts_matrix = wts[i]
+        expanded_wts_matrix = wts_matrix.reshape(-1)
+        batch_expanded_wts.append(expanded_wts_matrix)
+
+    batch_expanded_wts = np.array(batch_expanded_wts)
+
+    batch_wt_mat = []
+    batch_inp_list = []
+
+    original_input_shapes = [x.shape for x in inp]
+
+    # Compute broadcast shape
+    target_shape = np.broadcast_shapes(*[x.shape for x in inp])
+    inp_bcast = [np.broadcast_to(x, target_shape) for x in inp]
+
+    for i, x in enumerate(inp_bcast):
+        wt_mat = []
+        inp_list = []
+        for j in range(x.shape[0]):
+            expanded_input = x[j].reshape(-1)
+            inp_list.append(expanded_input)
+            wt_mat.append(np.zeros_like(expanded_input))
+        batch_inp_list.append(inp_list)
+        batch_wt_mat.append(wt_mat)
+
+    batch_inp_list = list(map(list, zip(*batch_inp_list)))
+    batch_wt_mat = list(map(list, zip(*batch_wt_mat)))
+
+    for i in range(batch_size):
+        inp_list = [np.array(x) for x in batch_inp_list[i]]
+        expanded_wts = batch_expanded_wts[i]
+
+        for j in range(len(expanded_wts)):
+            wt_ind1 = np.array(batch_wt_mat[i])[:, j]
+            wt = expanded_wts[j]
+            l1_ind1 = np.array(inp_list)[:, j]
+
+            p_ind = l1_ind1 > 0
+            n_ind = l1_ind1 < 0
+
+            p_sum = np.sum(l1_ind1[p_ind])
+            n_sum = np.sum(l1_ind1[n_ind]) * -1
+
+            p_agg_wt = n_agg_wt = 0
+            total = p_sum + n_sum
+            if total > 0:
+                p_agg_wt = p_sum / total
+                n_agg_wt = n_sum / total
+
+            if p_sum == 0:
+                p_sum = 1
+            if n_sum == 0:
+                n_sum = 1
+
+            wt_ind1[p_ind] = (l1_ind1[p_ind] / p_sum) * wt * p_agg_wt
+            wt_ind1[n_ind] = (l1_ind1[n_ind] / n_sum) * wt * n_agg_wt * -1.0
+
+            for k in range(len(batch_wt_mat[i])):
+                batch_wt_mat[i][k][j] = wt_ind1[k]
+
+    # Reshape and reduce to original input shapes
+    result = []
+    for input_idx, orig_shape in enumerate(original_input_shapes):
+        relevance_per_batch = []
+        for batch_idx in range(batch_size):
+            rel_flat = np.array(batch_wt_mat[batch_idx][input_idx])
+            input_shape = inp_bcast[input_idx][batch_idx].shape
+
+            if rel_flat.size != np.prod(input_shape):
+                raise ValueError(f"[calculate_wt_add] ❌ Mismatch: trying to reshape {rel_flat.size} elements into {input_shape}")
+
+            rel = rel_flat.reshape(input_shape)
+
+            # Reduce back to original input shape
+            reduced_rel = rel
+            for axis in reversed(range(len(orig_shape))):
+                if orig_shape[axis] == 1 and rel.shape[axis] > 1:
+                    reduced_rel = np.sum(reduced_rel, axis=axis, keepdims=True)
+
+            relevance_per_batch.append(reduced_rel)
+
+        result.append(np.stack(relevance_per_batch, axis=0))
+
+    return result
+
+
+def calculate_wt_add_equal(R, inp):
+    num_inputs = len(inp)
+    input_shapes = [x.shape for x in inp]
+
+    # Split relevance equally
+    equal_relevance = [R / num_inputs for _ in range(num_inputs)]
+
+    result = []
+    for idx, orig_shape in enumerate(input_shapes):
+        per_input_rel = []
+
+        # For each batch entry
+        for batch_idx in range(R.shape[0]):
+            # Slice out the batch dimension
+            rel_slice = equal_relevance[idx][batch_idx]  # shape == orig_shape[1:]
+            reduced_rel = rel_slice
+
+            # Only iterate over non-batch dims
+            for axis, orig_dim in enumerate(orig_shape[1:]):
+                # if this original dim was 1 but got broadcast, sum it back
+                if orig_dim == 1 and reduced_rel.shape[axis] > 1:
+                    reduced_rel = reduced_rel.sum(axis=axis, keepdims=True)
+
+            per_input_rel.append(reduced_rel)
+
+        # Reassemble batch dimension
+        result.append(np.stack(per_input_rel, axis=0))
+
+    return result        

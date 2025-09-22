@@ -5,7 +5,6 @@ import gc  # For memory cleanup
 import numpy as np
 import torch
 from tqdm import tqdm
-from dl_backtrace.pytorch_backtrace.dlbacktrace.utils import default as UD
 from dl_backtrace.pytorch_backtrace.dlbacktrace.utils import default_v2 as UD2  # Import launch functions
 
 # Toggle debug prints
@@ -452,7 +451,7 @@ def run_evaluation(
     if DEBUG:
         log(f"out_np: {out_np.shape}")
     
-    seed = UD.calculate_start_wt(out_np, scaler=scaler, thresholding=thresholding, task=task)
+    seed = UD2.calculate_start_wt(out_np, scaler=scaler, thresholding=thresholding, task=task)
     
     if DEBUG:
         log(f"seed: {np.sum(seed):.8f},  shape: {seed.shape}")

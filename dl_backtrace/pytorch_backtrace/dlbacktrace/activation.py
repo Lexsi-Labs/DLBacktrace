@@ -1,4 +1,4 @@
-from dl_backtrace.pytorch_backtrace.dlbacktrace.utils.default import np_swish
+from dl_backtrace.pytorch_backtrace.dlbacktrace.utils.default_v2 import np_swish
 
 activation_master = {
     None: {
