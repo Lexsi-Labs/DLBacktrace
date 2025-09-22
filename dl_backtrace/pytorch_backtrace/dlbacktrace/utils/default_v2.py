@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 # Linear Layer
 from .cuda_utils.Linear_v2.original_version import calculate_wt_fc as calculate_wt_fc_original_linear
