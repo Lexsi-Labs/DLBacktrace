@@ -385,14 +385,14 @@ def calculate_wt_self_attention_cuda(
     if scale is None:
         scale = float(D) ** 0.5
 
-    # Step 1: Use PyTorch matmul
+    # Step 1: Raw attention logits
     QK_output = torch.matmul(Q, K.transpose(-2, -1))
     logits_unmasked = QK_output / scale
 
     # Step 2: Fused softmax for unmasked
     A = torch.empty_like(logits_unmasked)
     softmax_ops.launch_fused_softmax(logits_unmasked, A, epsilon)
-    torch.cuda.synchronize()  # Ensure kernel completes
+    torch.cuda.synchronize()  
 
     # Step 3: Apply mask
     masked_fill = None
@@ -401,7 +401,7 @@ def calculate_wt_self_attention_cuda(
         # Step 4: Fused softmax for masked
         A_masked = torch.empty_like(logits_masked)
         softmax_ops.launch_fused_softmax(logits_masked, A_masked, epsilon)
-        torch.cuda.synchronize()  # Ensure kernel completes
+        torch.cuda.synchronize()
     else:
         # No mask applied
         A_masked = A

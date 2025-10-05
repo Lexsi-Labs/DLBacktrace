@@ -92,7 +92,6 @@ def calculate_wt_self_attention(
     B, H, T_q, D = Q.shape
     T_k = K.shape[2]
     
-    # Match NumPy's scale calculation exactly
     if scale is None:
         scale = float(D) ** 0.5
 
