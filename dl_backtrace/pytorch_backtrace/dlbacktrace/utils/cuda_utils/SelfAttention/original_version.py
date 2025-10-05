@@ -85,12 +85,12 @@ def calculate_wt_self_attention(R_out, Q, K, V, masked_fill=None, scale=None, ep
     masked_fill = None
     if masked_fill is not None:
         logits_masked = logits_unmasked + masked_fill  # [B, H, T, T] + [B, 1, T, T]
+        # Step 4: Softmax over masked logits
+        A_masked = np.exp(logits_masked - np.max(logits_masked, axis=-1, keepdims=True))
+        A_masked = A_masked / (np.sum(A_masked, axis=-1, keepdims=True) + epsilon)
     else:
-        logits_masked = logits_unmasked.copy()
-
-    # Step 4: Softmax over masked logits
-    A_masked = np.exp(logits_masked - np.max(logits_masked, axis=-1, keepdims=True))
-    A_masked = A_masked / (np.sum(A_masked, axis=-1, keepdims=True) + epsilon)
+        # No mask applied - reuse A to avoid redundant computation and ensure delta_A = 0
+        A_masked = A
 
     # Step 5: Compute attention output using masked weights
     attention_output = np.matmul(A_masked, V)  # [B, H, T_q, D]

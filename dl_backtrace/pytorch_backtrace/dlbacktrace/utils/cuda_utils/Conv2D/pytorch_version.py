@@ -15,14 +15,39 @@ def convert_to_pytorch_format(
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    relevance_y = torch.tensor(relevance_y, dtype=torch.float32, device=device)
-    input_array = torch.tensor(input_array, dtype=torch.float32, device=device)
-    w = torch.tensor(w, dtype=torch.float32, device=device)
-    b = torch.tensor(b, dtype=torch.float32, device=device) if b is not None else None
-    strides = torch.tensor(strides, dtype=torch.int32, device=device) if strides is not None else None
+    # Handle case where inputs are already PyTorch tensors to avoid double conversion
+    if not isinstance(relevance_y, torch.Tensor):
+        relevance_y = torch.tensor(relevance_y, dtype=torch.float32, device=device)
+    else:
+        relevance_y = relevance_y.to(device=device, dtype=torch.float32)
+        
+    if not isinstance(input_array, torch.Tensor):
+        input_array = torch.tensor(input_array, dtype=torch.float32, device=device)
+    else:
+        input_array = input_array.to(device=device, dtype=torch.float32)
+        
+    if not isinstance(w, torch.Tensor):
+        w = torch.tensor(w, dtype=torch.float32, device=device)
+    else:
+        w = w.to(device=device, dtype=torch.float32)
+        
+    if b is not None:
+        if not isinstance(b, torch.Tensor):
+            b = torch.tensor(b, dtype=torch.float32, device=device)
+        else:
+            b = b.to(device=device, dtype=torch.float32)
+    
+    if strides is not None:
+        if not isinstance(strides, torch.Tensor):
+            strides = torch.tensor(strides, dtype=torch.int32, device=device)
+        else:
+            strides = strides.to(device=device, dtype=torch.int32)
     
     if padding != 'valid' and padding != 'same':
-        padding = torch.tensor(padding, dtype=torch.int32, device=device)
+        if not isinstance(padding, torch.Tensor):
+            padding = torch.tensor(padding, dtype=torch.int32, device=device)
+        else:
+            padding = padding.to(device=device, dtype=torch.int32)
         
     return relevance_y, input_array, w, b, padding, strides
     
@@ -55,34 +80,34 @@ def calculate_wt_conv_unit(
                      the last dimension
     """
     
-    device = torch.device("cuda")
-    
     # Compute convolution output once using torch.einsum
     conv_out = torch.einsum("ijkl,ijk->ijkl", w, patch)
     
-    # Extract positive and negative parts using vectorized operations
-    p_ind = torch.clamp_min(conv_out, 0)  # Positive parts
-    n_ind = torch.clamp_max(conv_out, 0)  # Negative parts
+    # Extract positive and negative parts exactly like the original
+    p_ind = conv_out * (conv_out > 0).float()  # Positive parts
+    n_ind = conv_out * (conv_out < 0).float()  # Negative parts (remain negative)
     
     # Sum over spatial dimensions (i, j, k) to get per-channel sums
     p_sum = torch.sum(p_ind, dim=(0, 1, 2))  # Shape: (l,)
-    n_sum = -torch.sum(n_ind, dim=(0, 1, 2))  # Shape: (l,) - negative of negative parts
+    n_sum = torch.sum(n_ind, dim=(0, 1, 2)) * -1.0  # Shape: (l,) - make negative parts positive
     t_sum = p_sum + n_sum
+    
+    # Initialize saturation indicators
+    p_saturate = (p_sum > 0).float()
+    n_saturate = (n_sum > 0).float()
     
     # Handle bias terms if present
     if b is not None:
-        bias_pos = torch.clamp_min(b, 0)  # Positive bias parts
-        bias_neg = torch.clamp_min(-b, 0)  # Negative bias parts (made positive)
+        b_ind = (b > 0).float()
+        bias_pos = b * b_ind
+        b_ind = (b < 0).float()
+        bias_neg = b * b_ind * -1.0
         denom_bias_term = bias_pos + bias_neg
     else:
         # Create zero tensors for bias terms when bias is None
         bias_pos = torch.zeros_like(p_sum)
         bias_neg = torch.zeros_like(n_sum)
         denom_bias_term = 0.0
-    
-    # Initialize saturation indicators
-    p_saturate = (p_sum > 0).float()
-    n_saturate = (n_sum > 0).float()
     
     # Handle activation function logic
     if act["type"] == 'mono':
@@ -116,21 +141,18 @@ def calculate_wt_conv_unit(
     
     # Calculate denominator with numerical stabilization
     denom = p_sum + n_sum + denom_bias_term
-    epsilon = torch.full_like(denom, 1e-12)
-
-    denom = torch.where(denom == 0, epsilon, denom)
+    denom = torch.where(denom == 0, torch.tensor(1e-12, device=denom.device), denom)
     
     # Calculate aggregated weights
-    inv_denom = 1.0 / denom
-    p_agg_wt = inv_denom * wts * p_saturate
-    n_agg_wt = inv_denom * wts * n_saturate
+    p_agg_wt = (1.0 / denom) * wts * p_saturate
+    n_agg_wt = (1.0 / denom) * wts * n_saturate
     
-    # Compute final weight matrix using broadcasting
-    # p_ind and n_ind have shape (i,j,k,l), p_agg_wt and n_agg_wt have shape (l,)
-    wt_mat = p_ind * p_agg_wt - n_ind * n_agg_wt  # Broadcasting handles shape alignment
+    # Calculate weighted matrix
+    wt_mat = p_ind * p_agg_wt + n_ind * n_agg_wt * -1.0
     
     # Sum over the last dimension to get final result
     return torch.sum(wt_mat, dim=-1)
+
 
 def calculate_padding(
     kernel_size: Tuple[int, int], 
@@ -148,7 +170,7 @@ def calculate_padding(
     
     Args:
         kernel_size: Tuple of (height, width) representing the kernel dimensions
-        inp: Input tensor of shape (height, width, channels, batch_size) to be padded
+        inp: Input tensor of shape (height, width, channels) to be padded
         padding: Padding mode - 'valid' for no padding, 'same' for size-preserving 
                 padding, or tuple of (pad_h, pad_v) for custom padding
         strides: Tuple of (stride_height, stride_width) for convolution strides
@@ -167,33 +189,34 @@ def calculate_padding(
     # Handle 'same' padding - calculate padding to preserve output size
     elif padding == 'same':
         # Calculate required padding for height dimension
-        height_remainder = inp.shape[0] % strides[0]
-        if height_remainder == 0:
+        h = inp.shape[0] % strides[0]
+        if h == 0:
             pad_h = max(0, kernel_size[0] - strides[0])
         else:
-            pad_h = max(0, kernel_size[0] - height_remainder)
+            pad_h = max(0, kernel_size[0] - h)
         
         # Calculate required padding for width dimension  
-        width_remainder = inp.shape[1] % strides[1]
-        if width_remainder == 0:
+        v = inp.shape[1] % strides[1]
+        if v == 0:
             pad_v = max(0, kernel_size[1] - strides[1])
         else:
-            pad_v = max(0, kernel_size[1] - width_remainder)
+            pad_v = max(0, kernel_size[1] - v)
         
         # Calculate asymmetric padding exactly like the original version
         paddings = [
-            torch.floor(torch.tensor([pad_h/2.0, (pad_h+1)/2.0])).to(torch.int32),
-            torch.floor(torch.tensor([pad_v/2.0, (pad_v+1)/2.0])).to(torch.int32),
-            torch.zeros(2, dtype=torch.int32)  # No padding for channel dimension
+            [int(pad_h // 2), int((pad_h + 1) // 2)],
+            [int(pad_v // 2), int((pad_v + 1) // 2)],
+            [0, 0]  # No padding for channel dimension
         ]
         
-        # Apply padding using PyTorch's pad function
-        # Note: F.pad expects (left, right, top, bottom) for 2D padding
-        pad_values = (paddings[1][0].item(), paddings[1][1].item(), paddings[0][0].item(), paddings[0][1].item())
-        inp = inp.permute(2, 0, 1)
-        inp_padded = F.pad(inp, pad_values, mode='constant', value=const_val)
-        inp_padded = inp_padded.permute(1, 2, 0)
-        return inp_padded, paddings 
+        # Apply padding - convert list format to tuple for F.pad
+        # Note: PyTorch pad expects (left, right, top, bottom, front, back) for 3D
+        pad_tuple = (0, 0,  # No padding for channels (last dim)
+                    paddings[1][0], paddings[1][1],  # Width padding
+                    paddings[0][0], paddings[0][1])   # Height padding
+        
+        inp_padded = F.pad(inp, pad_tuple, mode='constant', value=const_val)
+        return inp_padded, paddings
     
     # Handle custom padding (tuple) or fallback cases
     else:
@@ -203,30 +226,31 @@ def calculate_padding(
             
             # Apply symmetric padding exactly like the original version
             paddings = [
-                torch.floor(torch.tensor([pad_h, pad_h])).to(torch.int32),
-                torch.floor(torch.tensor([pad_v, pad_v])).to(torch.int32),
-                torch.zeros(2, dtype=torch.int32)  # No padding for channel dimension
+                [int(pad_h), int(pad_h)],
+                [int(pad_v), int(pad_v)],
+                [0, 0]  # No padding for channel dimension
             ]
             
-            # Apply padding using PyTorch's pad function
-            pad_values = (paddings[1][0].item(), paddings[1][1].item(), paddings[0][0].item(), paddings[0][1].item())
-            inp = inp.permute(2, 0, 1)
-            inp_padded = F.pad(inp, pad_values, mode='constant', value=const_val)
-            inp_padded = inp_padded.permute(1, 2, 0)
+            # Apply padding
+            pad_tuple = (0, 0,  # No padding for channels
+                        paddings[1][0], paddings[1][1],  # Width padding
+                        paddings[0][0], paddings[0][1])   # Height padding
+            
+            inp_padded = F.pad(inp, pad_tuple, mode='constant', value=const_val)
             return inp_padded, paddings
         
         # Default case - no padding applied
         else:
             return inp, [[0, 0], [0, 0], [0, 0]]
 
-@torch.compile
+
 def calculate_wt_conv(
     relevance_y,
     input_array, 
     w,
     b,
     padding: Union[str, Tuple[Union[int, None], Union[int, None]]],
-    strides:Tuple[int, int],
+    strides: Tuple[int, int],
     act: Dict[str, Any],
 ) -> torch.Tensor:
     """
@@ -241,34 +265,46 @@ def calculate_wt_conv(
         relevance_y: Relevance scores from the next layer, shape (batch_size, out_channels, height, width)
         input_array: Input activations, shape (batch_size, in_channels, height, width)  
         w: Convolution weights, shape (out_channels, in_channels, kernel_h, kernel_w)
-        b: Bias terms, shape (out_channels,)
+        b: Bias terms, shape (out_channels,) or None
         padding: Padding mode - 'valid', 'same', or tuple of (pad_h, pad_v)
         strides: Convolution strides as (stride_h, stride_w)
         act: Dictionary with activation function parameters
         
     Returns:
-        Relevance scores propagated to input layer, shape (batch_size, in_channels, height, width)
+        Relevance scores propagated to input layer as numpy array, shape (batch_size, in_channels, height, width)
     """
-    relevance_y, input_array, w, b, padding, strides = convert_to_pytorch_format(relevance_y, input_array, w, b, padding, strides)
+    # Convert inputs to PyTorch format if needed
+    relevance_y, input_array, w, b, padding, strides = convert_to_pytorch_format(
+        relevance_y, input_array, w, b, padding, strides
+    )
+    
     batch_size = input_array.shape[0]
     
-    # Transpose weight matrix to match original behavior (out_channels, in_channels, h, w) -> (h, w, in_channels, out_channels)
-    w_transposed = w.permute(2, 3, 1, 0)
+    # Transpose weight matrix to match NumPy behavior
+    # NumPy does w = w.T which reverses all dimensions
+    # For 4D tensor (out_channels, in_channels, h, w) -> (w, h, in_channels, out_channels)
+    w_transposed = w.permute(3, 2, 1, 0)  # This matches w.T in NumPy for 4D arrays
     
-    # Pre-allocate output tensor for better memory efficiency
-    relevance_x = torch.zeros_like(input_array)
+    # Pre-allocate output tensor
+    relevance_x = []
     
     # Process each sample in the batch
     for batch_idx in range(batch_size):
-        # Extract current batch data and transpose to match original layout (batch, channels, h, w) -> (h, w, channels, batch)
-        current_relevance = relevance_y[batch_idx].permute(2, 1, 0)  # Shape: (h, w, out_channels)
-        current_input = input_array[batch_idx].permute(2, 1, 0)      # Shape: (h, w, in_channels)
+        # Extract current batch data and transpose to match NumPy layout
+        # NumPy uses .T which reverses all dimensions
+        current_relevance = relevance_y[batch_idx]  # Shape: (out_channels, height, width)
+        current_input = input_array[batch_idx]      # Shape: (in_channels, height, width)
+        
+        # Apply .T transpose to match NumPy (reverses all dimensions)
+        current_relevance = current_relevance.permute(2, 1, 0)  # (width, height, out_channels)
+        current_input = current_input.permute(2, 1, 0)          # (width, height, in_channels)
+        
         kernel_h, kernel_w = w_transposed.shape[0], w_transposed.shape[1]
         
-        # Apply padding using kernel shape like the original version
+        # Apply padding
         input_padded, paddings = calculate_padding(
-                (kernel_h, kernel_w), current_input, padding, strides
-                )
+            (kernel_h, kernel_w), current_input, padding, strides, const_val=0.0
+        )
         
         # Initialize output tensor for accumulated updates
         output_accumulated = torch.zeros_like(input_padded)
@@ -276,58 +312,55 @@ def calculate_wt_conv(
         # Get output spatial dimensions for iteration
         output_height, output_width = current_relevance.shape[0], current_relevance.shape[1]
         
-        # Vectorized index calculation for better performance
         stride_h, stride_w = strides
         
-        # Process each spatial location in the output (matching original's loop structure)
+        # Process each spatial location in the output
         for out_h in range(output_height):
             for out_w in range(output_width):
-                # Calculate start indices like the original version
+                # Calculate indices for the patch
                 h_start = out_h * stride_h
                 h_end = h_start + kernel_h
                 w_start = out_w * stride_w
                 w_end = w_start + kernel_w
                 
-                # Ensure indices are within bounds of the padded tensor
+                # Ensure indices don't exceed padded input dimensions
                 h_end = min(h_end, input_padded.shape[0])
                 w_end = min(w_end, input_padded.shape[1])
                 
-                # Create index ranges, ensuring they don't exceed tensor bounds
-                h_indices = torch.arange(h_start, h_end, device=input_padded.device, dtype=torch.long)
-                w_indices = torch.arange(w_start, w_end, device=input_padded.device, dtype=torch.long)
+                # Extract patch using slicing
+                input_patch = input_padded[h_start:h_end, w_start:w_end, :]
                 
-                # Extract patch using advanced indexing (equivalent to np.ix_)
-                input_patch = input_padded[h_indices.unsqueeze(1), w_indices.unsqueeze(0), :]
-                
-                # Pad patch if it's smaller than kernel size (boundary condition)
+                # Handle edge cases where patch might be smaller than kernel
                 if input_patch.shape[0] < kernel_h or input_patch.shape[1] < kernel_w:
-                    pad_h_needed = max(0, kernel_h - input_patch.shape[0])
-                    pad_w_needed = max(0, kernel_w - input_patch.shape[1])
+                    # Pad the patch to match kernel size
+                    pad_h = kernel_h - input_patch.shape[0]
+                    pad_w = kernel_w - input_patch.shape[1]
                     
-                    if pad_h_needed > 0 or pad_w_needed > 0:
-                        # Pad with zeros to match kernel dimensions
-                        pad_values = (0, pad_w_needed, 0, pad_h_needed)  # (left, right, top, bottom)
-                        input_patch = input_patch.permute(2, 0, 1)  # (channels, height, width)
-                        input_patch = F.pad(input_patch, pad_values, mode='constant', value=0.0)
-                        input_patch = input_patch.permute(1, 2, 0)  # back to (height, width, channels)
+                    if pad_h > 0 or pad_w > 0:
+                        pad_tuple = (0, 0, 0, pad_w, 0, pad_h)  # (channels, width, height)
+                        input_patch = F.pad(input_patch, pad_tuple, mode='constant', value=0.0)
                 
                 # Get relevance weight for current output location
                 relevance_weight = current_relevance[out_h, out_w, :]
-                    # Calculate weighted convolution updates for this patch
+                
+                # Calculate weighted convolution updates for this patch
                 patch_updates = calculate_wt_conv_unit(
                     input_patch, relevance_weight, w_transposed, b, act
                 )
                 
-                # Accumulate updates with proper bounds checking
-                actual_h_size = min(patch_updates.shape[0], h_end - h_start)
-                actual_w_size = min(patch_updates.shape[1], w_end - w_start)
+                # Accumulate updates (handle potential size mismatch at boundaries)
+                update_h = min(patch_updates.shape[0], h_end - h_start)
+                update_w = min(patch_updates.shape[1], w_end - w_start)
                 
-                output_accumulated[h_start:h_start + actual_h_size, w_start:w_start + actual_w_size, :] += \
-                    patch_updates[:actual_h_size, :actual_w_size, :]
+                output_accumulated[h_start:h_start + update_h, 
+                                 w_start:w_start + update_w, :] += \
+                    patch_updates[:update_h, :update_w, :]
         
-        # Remove padding to get final output, preserving original slice behavior
-        pad_h_before, pad_w_before = paddings[0][0], paddings[1][0]
-        original_h, original_w = current_input.shape[0], current_input.shape[1]
+        # Remove padding to get final output
+        pad_h_before = paddings[0][0]
+        pad_w_before = paddings[1][0]
+        original_h = current_input.shape[0]
+        original_w = current_input.shape[1]
         
         output_unpadded = output_accumulated[
             pad_h_before:pad_h_before + original_h,
@@ -335,7 +368,12 @@ def calculate_wt_conv(
             :
         ]
         
-        # Transpose back to original format (h, w, channels) -> (channels, h, w) and store
-        relevance_x[batch_idx] = output_unpadded.permute(2, 0, 1)
+        # Transpose back to match NumPy output format (apply .T)
+        output_unpadded = output_unpadded.permute(2, 1, 0)  # Reverse dimensions again
+        relevance_x.append(output_unpadded)
     
+    # Stack results and convert to numpy
+    relevance_x = torch.stack(relevance_x, dim=0)
+    
+    # Move to CPU and convert to numpy
     return relevance_x.cpu().numpy()

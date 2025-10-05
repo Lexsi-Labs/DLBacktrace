@@ -4,10 +4,7 @@ from typing import Tuple, Optional
 
 
 def dlb_style_nonneg_conserve(wts: torch.Tensor, inp: torch.Tensor, eps: float = 1e-12) -> torch.Tensor:
-    """
-    Non-negative, mass-preserving DLB on |wts| (conserves L1).
-    Keeps your current behavior: sum(out) == sum(abs(wts)) per (B,H).
-    """
+
     assert wts.shape == inp.shape
     
     # Use boolean masks for efficiency
@@ -39,12 +36,7 @@ def dlb_style_nonneg_conserve(wts: torch.Tensor, inp: torch.Tensor, eps: float =
 
 
 def dlb_style_signed_conserve(wts: torch.Tensor, inp: torch.Tensor, eps: float = 1e-12) -> torch.Tensor:
-    """
-    Signed, mass-preserving DLB:
-    For each (B,H), sum over (T,D) of out == sum over (T,D) of wts (signed).
-    Entries may be negative (as they should be if wts has negatives).
-    """
-    # Use torch.clamp for consistent behavior with numpy.maximum
+
     Rp = torch.clamp(wts, min=0.0)
     Rn = torch.clamp(-wts, min=0.0)
 
@@ -55,11 +47,6 @@ def dlb_style_signed_conserve(wts: torch.Tensor, inp: torch.Tensor, eps: float =
 
 
 def stabilize(matrix: torch.Tensor, epsilon: float = 1e-6) -> torch.Tensor:
-    """
-    Stabilize matrix values by setting small values to epsilon while preserving sign.
-    Exactly match NumPy's np.sign(matrix + (matrix == 0)) behavior.
-    """
-    # Create sign tensor: for zeros, use +1; for non-zeros, use actual sign
     abs_matrix = torch.abs(matrix)
     sign_matrix = torch.where(matrix == 0, 
                              torch.ones_like(matrix), 
@@ -80,7 +67,27 @@ def calculate_wt_self_attention(
     epsilon: float = 1e-9
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """
-    Calculate relevance propagation through self-attention mechanism with exact NumPy matching.
+    
+    B : batch size (Can change)
+    H : number of heads (Fixed according to the model architecture, might go as high as 96)
+    T_q : query length (depends on query sequence length)
+    T_k : key length (depends on key sequence length)
+    D : dimension of the query and key (Fixed according to the model architecture, might go as high as 128)
+
+    Args:
+        R_out: Relevance tensor of shape [B, H, T_q, D] 
+        Q: Query tensor of shape [B, H, T_q, D]         
+        K: Key tensor of shape [B, H, T_k, D]          
+        V: Value tensor of shape [B, H, T_k, D]         
+        mask: Optional additive mask of shape [B, 1, T_q, T_k] or [B, H, T_q, T_k] 
+        scale: Optional scaling factor (default: sqrt(D))
+        
+    Returns:
+        Tuple containing:
+            - R_Q: Query relevance tensor, same shape as Q
+            - R_K: Key relevance tensor, same shape as K
+            - R_V: Value relevance tensor, same shape as V
+            - R_mask: Mask relevance tensor, same shape as mask (or zeros)
     """
     B, H, T_q, D = Q.shape
     T_k = K.shape[2]
@@ -102,18 +109,18 @@ def calculate_wt_self_attention(
     masked_fill = None
     if masked_fill is not None:
         logits_masked = logits_unmasked + masked_fill
+        # Step 4: Softmax over masked logits - manual implementation
+        logits_max_masked = torch.max(logits_masked, dim=-1, keepdim=True)[0]
+        A_masked_exp = torch.exp(logits_masked - logits_max_masked)
+        A_masked = A_masked_exp / (torch.sum(A_masked_exp, dim=-1, keepdim=True) + epsilon)
     else:
-        logits_masked = logits_unmasked.clone()
-
-    # Step 4: Softmax over masked logits - manual implementation
-    logits_max_masked = torch.max(logits_masked, dim=-1, keepdim=True)[0]
-    A_masked_exp = torch.exp(logits_masked - logits_max_masked)
-    A_masked = A_masked_exp / (torch.sum(A_masked_exp, dim=-1, keepdim=True) + epsilon)
+        # No mask applied - reuse A to avoid redundant computation and ensure delta_A = 0
+        A_masked = A
 
     # Step 5: Compute attention output
     attention_output = torch.matmul(A_masked, V)
 
-    # Step 6: Relevance propagation - using more stable computation
+    # Step 6: Relevance propagation
     # Add small epsilon to prevent division by zero in edge cases
     attention_output_stable = stabilize(attention_output * 2, epsilon)
     relevance_norm_attn_out = R_out / attention_output_stable
@@ -136,7 +143,7 @@ def calculate_wt_self_attention(
     R_Q = dlb_style_signed_conserve(R_Q_raw, Q)
     R_K = dlb_style_signed_conserve(R_K_raw, K)
 
-    # Relevance for masked_fill - exact computation
+    # Relevance for masked_fill
     delta_A = A - A_masked
     R_blocked_per_qk = torch.einsum('bhqk,bhkd->bhqk', delta_A, V)
     R_masked_fill = R_blocked_per_qk.sum(dim=1, keepdim=True)

@@ -13,11 +13,8 @@ attention_cuda_source = r"""
 
 __device__ __forceinline__ float stabilize_value(float x, float epsilon) {
     float abs_x = fabsf(x);
-    if (abs_x < epsilon) {
-        float sign_val = (x == 0.0f) ? 1.0f : ((x > 0.0f) ? 1.0f : -1.0f);
-        return epsilon * sign_val;
-    }
-    return x;
+    float sign_x = (x == 0.0f) ? 1.0f : ((x > 0.0f) ? 1.0f : -1.0f);
+    return (abs_x < epsilon) ? (epsilon * sign_x) : x;
 }
 
 __device__ void warp_reduce_max(float& val) {
