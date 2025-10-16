@@ -21,290 +21,218 @@ if torch.cuda.is_available():
     torch.backends.cuda.matmul.allow_tf32 = False
 
 
+# dl_backtrace/pytorch_backtrace/dlbacktrace/core/dlb_auto_sampler.py
+
+from __future__ import annotations
+import time
+from typing import Optional, List, Tuple
+
+import torch
+import torch.nn.functional as F
+from transformers.generation.logits_process import (
+    LogitsProcessorList,
+    TemperatureLogitsWarper,
+    TopKLogitsWarper,
+    TopPLogitsWarper,
+)
+
 class DLBAutoSampler:
     """
-    Step-wise generator driven by a DLBacktraceFX instance.
-    Sampling is chosen solely by the 3 knobs:
-      - temp  (float | None)  -> Temperature (if not None and != 1.0)
-      - top_k (int   | None)  -> Top-K       (if not None and  > 0)
-      - top_p (float | None)  -> Top-P       (if not None and  < 1.0)
+    DLB-native text generation (single-batch) supporting:
+      • Greedy (temp/top_k/top_p all None)
+      • Sampling with any combo of temperature / top-k / top-p when num_beams == 1
+      • Deterministic beam search when num_beams > 1 (no sampling)
 
-    Rules (HF semantics):
-      * If all three are None -> greedy (do_sample=False).
-      * If any is provided -> do_sample=True and ALL provided warpers are applied
-        in this order: Temperature -> TopK -> TopP.
-
-    Early stopping:
-      * `early_stopping` only affects beam search in HF (ignored in our non-beam path),
-        but we pass it to GenerationConfig for parity.
-      * For greedy/sampling, stopping happens via HF’s StoppingCriteriaList:
-          - EOS (when allowed by min length/new tokens),
-          - Max new tokens,
-          - Max time (if provided),
-          - Any other criteria implied by GenerationConfig.
-
-      We mirror HF by building `stopping_criteria = model._get_stopping_criteria(...)`
-      and checking it after each token append.
+    All logits come from DLB:
+        io = self.dlb.predict(generated, attn, debug=False, temperature=1.0)
+        logits = io["output"]["output_values"]  # shape [B_or_beams, T, V]
+        step_scores = processors(warpers(..., logits[:, -1, :]))
     """
 
     def __init__(self, dlb, tokenizer):
+        """
+        Args:
+            dlb: an instance of DLBacktraceFX (your tracing engine)
+            tokenizer: HF tokenizer (used only for ids and optional chat templates elsewhere)
+        """
         self.dlb = dlb
         self.tokenizer = tokenizer
-        self.hard_force_on_fail = True  # only used by calibrated replay
 
     # ---------- helpers ----------
-    @staticmethod
-    def _get_causallm(model_like):
-        """Walk `.model` chain until object exposing `.generate()` is found."""
+
+    def _get_causallm(self, model_like):
+        """Walk `.model` chain until we find a GenerationMixin-style causal LM."""
         obj = model_like
         seen = set()
         for _ in range(8):
-            if hasattr(obj, "generate"):
+            if hasattr(obj, "_prepare_generation_config") and hasattr(obj, "_get_logits_processor"):
                 return obj
+            i = id(obj)
+            if i in seen:
+                break
+            seen.add(i)
             if hasattr(obj, "model"):
-                oid = id(obj)
-                if oid in seen: break
-                seen.add(oid)
                 obj = obj.model
             else:
                 break
-        raise TypeError(f"{type(model_like).__name__} has no `.generate()`")
+        raise TypeError(
+            f"{type(model_like).__name__} isn't a GenerationMixin model. "
+            "Pass AutoModelForCausalLM / LlamaForCausalLM (not base LlamaModel)."
+        )
 
     @staticmethod
     def _attach_token_tensors(gen_config, device):
-        """Populate private tensors required by transformers==4.52.x."""
-        def as_tensor(x):
-            if x is None: return None
+        """Populate private token tensors expected by HF internals in 4.52.x."""
+        def to_tensor(x):
+            if x is None:
+                return None
             if isinstance(x, (list, tuple)):
                 return torch.tensor(list(x), device=device, dtype=torch.long)
             return torch.tensor([int(x)], device=device, dtype=torch.long)
-        gen_config._eos_token_tensor = as_tensor(getattr(gen_config, "eos_token_id", None))
-        gen_config._bos_token_tensor = as_tensor(getattr(gen_config, "bos_token_id", None))
-        gen_config._pad_token_tensor = as_tensor(getattr(gen_config, "pad_token_id", None))
+        gen_config._eos_token_tensor = to_tensor(getattr(gen_config, "eos_token_id", None))
+        gen_config._bos_token_tensor = to_tensor(getattr(gen_config, "bos_token_id", None))
+        gen_config._pad_token_tensor = to_tensor(getattr(gen_config, "pad_token_id", None))
 
     @staticmethod
-    def _build_logits_warper_order(cfg) -> LogitsProcessorList:
+    def _extract_last_logits(io_data: dict) -> torch.Tensor:
         """
-        HF non-beam order with min_tokens_to_keep=1:
-        Temperature -> TopK -> TopP
-        Only append a warper if its knob is active.
+        Find logits tensor in DLB io_data.
+        Expect: io_data["output"]["output_values"] with shape [N, T, V].
         """
-        w = LogitsProcessorList()
-        keep = 1
-        t = getattr(cfg, "temperature", None)
-        if t is not None and t != 1.0:
-            if t <= 0:
-                raise ValueError("temperature must be > 0 when do_sample=True")
-            w.append(TemperatureLogitsWarper(t))
-        k = getattr(cfg, "top_k", None)
-        if k is not None and k > 0:
-            w.append(TopKLogitsWarper(k, min_tokens_to_keep=keep))
-        p = getattr(cfg, "top_p", None)
-        if p is not None and p < 1.0:
-            w.append(TopPLogitsWarper(p, min_tokens_to_keep=keep))
-        return w
+        if isinstance(io_data, dict):
+            out = io_data.get("output", None)
+            if isinstance(out, dict) and isinstance(out.get("output_values", None), torch.Tensor):
+                return out["output_values"]
+            # Fallback: try last dict with 'output_values'
+            for k in reversed(list(io_data.keys())):
+                v = io_data[k]
+                if isinstance(v, dict) and isinstance(v.get("output_values", None), torch.Tensor):
+                    return v["output_values"]
+        raise KeyError("DLB io_data does not contain 'output' -> 'output_values' tensor.")
 
     @staticmethod
-    def _extract_last_logits(node_io: dict) -> torch.Tensor:
-        """From DLB node_io, extract final logits tensor [B, T, V]."""
-        if "output" in node_io and isinstance(node_io["output"], dict) and "output_values" in node_io["output"]:
-            logits = node_io["output"]["output_values"]
-        else:
-            last_key = list(node_io.keys())[-1]
-            leaf = node_io[last_key]
-            logits = leaf["output_values"] if isinstance(leaf, dict) and "output_values" in leaf else leaf
-        if isinstance(logits, dict) and "output_values" in logits:
-            logits = logits["output_values"]
-        if not isinstance(logits, torch.Tensor):
-            raise ValueError(f"Expected logits tensor, got {type(logits)}")
-        return logits
-
-    @staticmethod
-    def _decide_do_sample(temp, top_k, top_p) -> bool:
-        """HF-style condition for sampling."""
-        use_temp = (temp is not None and float(temp) != 1.0)
-        use_topk = (top_k is not None and int(top_k) > 0)
-        use_topp = (top_p is not None and float(top_p) < 1.0)
-        return bool(use_temp or use_topk or use_topp)
-
-    @staticmethod
-    def _clean_sampling_knobs(temp, top_k, top_p):
-        """Normalize/validate knobs; return (T | None, K | None, P | None)."""
-        T = None
-        K = None
-        P = None
-        if temp is not None:
-            T = float(temp)
-            if T <= 0:
-                raise ValueError("temp must be > 0")
-            if T == 1.0:
-                T = None  # no-op in HF
-        if top_k is not None:
-            K = int(top_k)
-            if K <= 0:
-                K = None
-        if top_p is not None:
-            P = float(top_p)
-            if not (0.0 < P <= 1.0):
-                raise ValueError("top_p must be in (0, 1]")
-            if P == 1.0:
-                P = None  # no-op in HF
+    def _clean_sampling_knobs(temp: Optional[float], top_k: Optional[int], top_p: Optional[float]) -> Tuple[Optional[float], Optional[int], Optional[float]]:
+        T = float(temp) if (temp is not None and temp != 1.0) else None
+        K = int(top_k) if (top_k is not None and top_k > 0) else None
+        P = float(top_p) if (top_p is not None and top_p < 1.0) else None
         return T, K, P
 
     @staticmethod
-    def _calibrate_then_sample(
-        probs: torch.Tensor,
-        target_id: int,
-        *,
-        max_probe_cap: int = 65536,
-        first_block: int = 64,
-        hard_force_on_fail: bool = True,
-    ) -> torch.Tensor:
-        """
-        Advance RNG by offsets so torch.multinomial(probs,1) returns target_id.
-        """
-        cpu_state = torch.random.get_rng_state()
-        cuda_state = torch.cuda.get_rng_state() if probs.is_cuda else None
+    def _decide_do_sample(T: Optional[float], K: Optional[int], P: Optional[float]) -> bool:
+        # HF rule of thumb: any knob triggers sampling
+        return (T is not None) or (K is not None) or (P is not None)
 
-        tried = 0
-        block = first_block
-        while tried < max_probe_cap:
-            block = min(block, max_probe_cap - tried)
-            for n in range(block):
-                torch.random.set_rng_state(cpu_state)
-                if cuda_state is not None:
-                    torch.cuda.set_rng_state(cuda_state)
-                if n > 0:
-                    _ = torch.rand((n,), device=probs.device)
-                pick = torch.multinomial(probs, 1)
-                if int(pick.item()) == int(target_id):
-                    return pick
-            tried += block
-            block *= 4
-
-        if hard_force_on_fail:
-            return torch.tensor([[int(target_id)]], device=probs.device, dtype=torch.long)
-
-        torch.random.set_rng_state(cpu_state)
-        if cuda_state is not None:
-            torch.cuda.set_rng_state(cuda_state)
-        return torch.multinomial(probs, 1)
+    @staticmethod
+    def _build_warper(temperature: Optional[float], top_k: Optional[int], top_p: Optional[float]) -> LogitsProcessorList:
+        # Match HF non-beam order: Temperature -> TopK -> TopP
+        w = LogitsProcessorList()
+        keep = 1
+        if temperature is not None:
+            if temperature <= 0:
+                raise ValueError("temperature must be > 0 when do_sample=True")
+            w.append(TemperatureLogitsWarper(temperature))
+        if top_k is not None and top_k > 0:
+            w.append(TopKLogitsWarper(top_k, min_tokens_to_keep=keep))
+        if top_p is not None and top_p < 1.0:
+            w.append(TopPLogitsWarper(top_p, min_tokens_to_keep=keep))
+        return w
 
     # ---------- public API ----------
+
     @torch.no_grad()
     def generate(
         self,
         input_ids: torch.Tensor,
-        attention_mask: torch.Tensor | None = None,
+        attention_mask: Optional[torch.Tensor] = None,
         *,
-        # knobs (no 'method' arg)
-        temp: float | None = None,
-        top_k: int | None = None,
-        top_p: float | None = None,
+        # sampling knobs
+        temp: Optional[float] = None,
+        top_k: Optional[int] = None,
+        top_p: Optional[float] = None,
+        # lengths / stopping
         max_new_tokens: int = 50,
-        min_new_tokens: int | None = None,       # <-- NEW
-        max_time: float | None = None,           # <-- NEW (seconds)
-        early_stopping: bool | str | None = None,# <-- passthrough (beam-only)
-        # constraints & ids
-        repetition_penalty: float | None = None,
-        no_repeat_ngram_size: int | None = None,
-        bad_words_ids: list[list[int]] | None = None,
-        bos_token_id: int | None = None,
-        eos_token_id: int | list[int] | None = None,
-        pad_token_id: int | None = None,
-        # parity (optional)
-        hf_parity: bool = False,
-        oracle_tokens: list[int] | None = None,
-        hard_force_on_fail: bool | None = None,
-        max_probe_cap: int = 65536,
-        first_block: int = 64,
+        min_new_tokens: Optional[int] = None,
+        max_time: Optional[float] = None,
+        early_stopping: Optional[bool | str] = None,   # used only for beam search; default "never"
+        # constraints
+        repetition_penalty: Optional[float] = None,
+        no_repeat_ngram_size: Optional[int] = None,
+        bad_words_ids: Optional[List[List[int]]] = None,
+        # ids
+        bos_token_id: Optional[int] = None,
+        eos_token_id: Optional[int | List[int]] = None,
+        pad_token_id: Optional[int] = None,
+        # beams
+        num_beams: int = 1,
+        num_return_sequences: Optional[int] = None,
+        length_penalty: float = 1.0,
         # misc
         return_scores: bool = False,
         debug: bool = False,
     ):
         """
-        Decode using the three knobs (temp/top_k/top_p) and HF stopping criteria.
-        Returns: sequences  or  (sequences, scores_list) if return_scores=True
+        DLB-native generation:
+          - num_beams == 1  -> greedy / sampling (temp/top_k/top_p)
+          - num_beams  > 1  -> deterministic beam search (no sampling)
+
+        Returns:
+            Tensor of shape:
+              - [1, T_total] for greedy/sampling
+              - [num_return_sequences, T_total] for beams
+            If return_scores=True (sampling path only), returns (sequences, scores_list)
         """
         model = self._get_causallm(self.dlb.model)
         device = input_ids.device
+        B = input_ids.size(0)
+        assert B == 1, "Current implementation assumes batch size = 1."
 
-        # Normalize knobs & decide sampling
-        T, K, P = self._clean_sampling_knobs(temp, top_k, top_p)
-        do_sample = self._decide_do_sample(T, K, P)
-
-        # Attention mask if needed
+        # Build / infer attention mask
         if attention_mask is None:
             if pad_token_id is not None:
                 attention_mask = (input_ids != pad_token_id).long()
             else:
-                attention_mask = torch.ones_like(input_ids)
+                attention_mask = torch.ones_like(input_ids, dtype=torch.long)
 
-        # Build GenerationConfig like HF (include early_stopping/min/max_time)  ✅ FIXED
+        # Normalize knobs
+        T, K, P = self._clean_sampling_knobs(temp, top_k, top_p)
+        do_sample = self._decide_do_sample(T, K, P)
+        num_return_sequences = int(num_return_sequences or 1)
+
+        # Prepare GenerationConfig for processors
         gen_kwargs = dict(
             max_new_tokens=max_new_tokens,
             min_new_tokens=min_new_tokens,
-            do_sample=do_sample,
+            do_sample=do_sample if num_beams == 1 else False,  # no sampling in beam path here
             bos_token_id=bos_token_id,
             eos_token_id=eos_token_id,
             pad_token_id=pad_token_id,
             repetition_penalty=repetition_penalty,
             no_repeat_ngram_size=no_repeat_ngram_size,
             bad_words_ids=bad_words_ids,
-            # DO NOT pass early_stopping if None (HF default is "never")
-            # max_time is okay to be None; HF ignores when None
-            max_time=max_time,
         )
+        if num_beams > 1:
+            gen_kwargs["early_stopping"] = early_stopping if early_stopping is not None else "never"
 
-        # Only include early_stopping when it's valid
-        if early_stopping is not None:
-            if early_stopping in (True, False, "never"):
-                gen_kwargs["early_stopping"] = early_stopping
-            else:
-                raise ValueError("early_stopping must be True, False, or 'never'")
-
-        # include warpers only if sampling is active
-        if do_sample:
-            if T is not None: gen_kwargs["temperature"] = T
-            if K is not None: gen_kwargs["top_k"] = K
-            if P is not None: gen_kwargs["top_p"] = P
-
-        # Prepare GenerationConfig + attach private tensors
         generation_config, _ = model._prepare_generation_config(
             generation_config=None, use_model_defaults=True, **gen_kwargs
         )
         self._attach_token_tensors(generation_config, device)
 
-        # Optional: HF parity — get oracle tokens via model.generate()
-        if do_sample and hf_parity and oracle_tokens is None:
-            clean = dict(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                return_dict_in_generate=True,
-                output_scores=False,
-                max_new_tokens=max_new_tokens,
-                min_new_tokens=min_new_tokens,
-                do_sample=True,
-                bos_token_id=bos_token_id,
-                eos_token_id=eos_token_id,
-                pad_token_id=pad_token_id,
-                early_stopping=early_stopping,
-                max_time=max_time,
-            )
-            if T is not None: clean["temperature"] = T
-            if K is not None: clean["top_k"] = K
-            if P is not None: clean["top_p"] = P
-            hf_out = model.generate(**clean)
-            start = input_ids.shape[1]
-            oracle_tokens = hf_out.sequences[:, start:][0].tolist()
-            if debug:
-                print(f"[DLB Auto] oracle length: {len(oracle_tokens)}")
+        # EOS list
+        if generation_config.eos_token_id is None:
+            eos_list: List[int] = []
+        elif isinstance(generation_config.eos_token_id, (list, tuple)):
+            eos_list = list(generation_config.eos_token_id)
+        else:
+            eos_list = [int(generation_config.eos_token_id)]
+        eos_set = set(eos_list)
+        PAD = pad_token_id if pad_token_id is not None else (eos_list[0] if eos_list else 0)
 
-        # Build processors & warpers like HF
-        seq_len = input_ids.shape[1]
+        # Processors (HF builds them; we apply per step)
+        input_ids_seq_length = input_ids.shape[1]
         logits_processor = model._get_logits_processor(
             generation_config=generation_config,
-            input_ids_seq_length=seq_len,
+            input_ids_seq_length=input_ids_seq_length,
             encoder_input_ids=None,
             prefix_allowed_tokens_fn=None,
             logits_processor=LogitsProcessorList(),
@@ -313,74 +241,200 @@ class DLBAutoSampler:
             negative_prompt_ids=None,
             negative_prompt_attention_mask=None,
         )
-        try:
-            from transformers.generation import utils as gen_utils
-            logits_warper = gen_utils._get_logits_warper(generation_config)
-            stopping_criteria = model._get_stopping_criteria(
-                generation_config=generation_config,
-                stopping_criteria=None
-            )
-        except Exception:
-            # Fallback if private helpers not found (older versions)
-            logits_warper = self._build_logits_warper_order(generation_config)
-            # Minimal fallback stopping: based on eos/max_new_tokens only
-            from transformers.generation.stopping_criteria import StoppingCriteriaList
-            stopping_criteria = StoppingCriteriaList()
 
-        # Step loop using DLB for logits (keep temp=1.0 inside DLB)
-        generated = input_ids.clone()
-        attn = attention_mask.clone()
-        B = generated.size(0)
-        assert B == 1, "Current calibrated replay assumes batch size 1."
-        scores_list = []
-        if hard_force_on_fail is None:
-            hard_force_on_fail = self.hard_force_on_fail
+        # Warpers (sampling path only)
+        if do_sample and num_beams == 1:
+            logits_warper = self._build_warper(T, K, P)
+        else:
+            logits_warper = None
 
-        start_time = time.time()
+        start_len = input_ids.shape[1]
+        start_time = time.time() if max_time is not None else None
 
-        for t in range(max_new_tokens):
-            # Respect max_time proactively (HF also has a criterion; this is extra-safe)
-            if max_time is not None and (time.time() - start_time) >= max_time:
-                break
+        # ======================
+        # Non-beam path (B=1)
+        # ======================
+        if num_beams < 2:
+            generated = input_ids.clone()
+            attn = attention_mask.clone()
+            scores_trace = [] if return_scores else None
 
-            # Ask DLB for logits of current prefix
-            io_data = self.dlb.predict(generated, attn, debug=False, temperature=1.0)
-            logits = self._extract_last_logits(io_data)
-            next_logits = logits[:, -1, :]
+            for _ in range(max_new_tokens):
+                # Ask DLB for logits
+                io_data = self.dlb.predict(generated, attn, debug=False, temperature=1.0)
+                logits = self._extract_last_logits(io_data)        # [B, T_cur, V]
+                next_logits = logits[:, -1, :]                     # [B, V]
 
-            # HF processors (repetition penalty, n-gram, bad words, min length/new tokens etc.)
-            scores = logits_processor(generated, next_logits)
+                # processors
+                scores = logits_processor(generated, next_logits)
 
-            if do_sample:
-                scores = logits_warper(generated, scores)
-                probs = F.softmax(scores, dim=-1)
+                # enforce min_new_tokens by masking EOS until allowed
+                if min_new_tokens is not None and (generated.shape[1] - start_len) < min_new_tokens and eos_list:
+                    scores[:, eos_list] = -1e9
 
-                if hf_parity and oracle_tokens is not None and t < len(oracle_tokens):
-                    pick = self._calibrate_then_sample(
-                        probs, oracle_tokens[t],
-                        max_probe_cap=max_probe_cap,
-                        first_block=first_block,
-                        hard_force_on_fail=hard_force_on_fail,
-                    )
-                    next_tok = pick
+                # sampling vs greedy
+                if do_sample and logits_warper is not None:
+                    scores = logits_warper(generated, scores)
+                    probs = F.softmax(scores, dim=-1)
+                    next_tokens = torch.multinomial(probs, num_samples=1)
                 else:
-                    next_tok = torch.multinomial(probs, 1)
-            else:
-                next_tok = scores.argmax(dim=-1, keepdim=True)
+                    next_tokens = scores.argmax(dim=-1, keepdim=True)
 
-            if return_scores:
-                scores_list.append(scores.detach().clone())
+                if return_scores:
+                    scores_trace.append(scores.detach().to("cpu"))
 
-            generated = torch.cat([generated, next_tok], dim=1)
-            attn = torch.cat([attn, torch.ones((B, 1), dtype=attn.dtype, device=attn.device)], dim=1)
+                # append & update mask
+                generated = torch.cat([generated, next_tokens], dim=1)
+                attn = torch.cat([attn, torch.ones((B, 1), dtype=attn.dtype, device=attn.device)], dim=1)
 
-            # HF-style early stopping check (includes EOS/min_new/max_time/etc.)
-            # StoppingCriteriaList expects (input_ids, scores)
-            if len(stopping_criteria) > 0:
-                # Pass the *raw logits* of the last step (HF passes "scores" from loop)
-                # Using `scores` (post-processor/warper) is also acceptable; HF uses that.
-                should_stop = stopping_criteria(generated, scores)
-                if should_stop:
+                # early stop if everyone hits EOS
+                if eos_list:
+                    if torch.all(torch.isin(next_tokens.squeeze(-1), torch.tensor(eos_list, device=device))):
+                        break
+
+                # time guard
+                if start_time is not None and (time.time() - start_time) >= max_time:
+                    if debug:
+                        print("[dlb] max_time reached, stopping.")
                     break
 
-        return (generated, scores_list) if return_scores else generated
+            return (generated, scores_trace) if return_scores else generated
+
+        # ======================
+        # Beam search path (deterministic, no sampling)
+        # ======================
+        beams = int(num_beams)
+        assert beams >= 2, "num_beams must be >= 2 for beam search."
+
+        # Expand beams
+        generated = input_ids.repeat_interleave(beams, dim=0)     # [beams, T]
+        attn = attention_mask.repeat_interleave(beams, dim=0)
+        beam_scores = torch.zeros((1, beams), dtype=torch.float32, device=device)
+        beam_scores[:, 1:] = -1e9
+        beam_scores = beam_scores.view(-1)                        # [beams]
+
+        finished = []  # list of (normed_score, seq)
+        cur_len = start_len
+        estop = early_stopping if early_stopping is not None else "never"
+
+        for _ in range(max_new_tokens):
+            if start_time is not None and (time.time() - start_time) >= max_time:
+                if debug:
+                    print("[beam] max_time reached, stopping.")
+                break
+
+            # DLB logits for all beams
+            io_data = self.dlb.predict(generated, attn, debug=False, temperature=1.0)
+            logits = self._extract_last_logits(io_data)           # [beams, T_cur, V]
+            next_logits = logits[:, -1, :]                        # [beams, V]
+
+            # processors (no warpers in deterministic beam)
+            scores = logits_processor(generated, next_logits)
+
+            # mask EOS until min_new_tokens is satisfied
+            if min_new_tokens is not None and (cur_len - start_len) < min_new_tokens and eos_list:
+                scores[:, eos_list] = -1e9
+
+            # convert to log-prob and add previous beam scores
+            logprobs = F.log_softmax(scores, dim=-1)              # [beams, V]
+            logprobs = logprobs + beam_scores.unsqueeze(-1)
+
+            V = logprobs.size(-1)
+            flat = logprobs.view(1, beams * V)                    # [1, beams*V]
+            topk_scores, topk_indices = torch.topk(flat, k=min(2 * beams, beams * V), dim=-1)
+
+            next_generated = []
+            next_attn = []
+            next_beam_scores = []
+
+            cand_alive = 0
+            for rank in range(topk_scores.size(1)):
+                score = topk_scores[0, rank]
+                idx = topk_indices[0, rank].item()
+                beam_id = idx // V
+                token_id = idx % V
+
+                src_seq = generated[beam_id:beam_id + 1]
+                src_attn = attn[beam_id:beam_id + 1]
+
+                # EOS -> finalize
+                if token_id in eos_set:
+                    seq = torch.cat([src_seq, torch.tensor([[token_id]], device=device)], dim=1)
+                    if length_penalty == 1.0:
+                        norm = float(seq.size(1))
+                        normed = score / norm
+                    else:
+                        lp = ((5.0 + seq.size(1)) ** length_penalty) / (6.0 ** length_penalty)
+                        normed = score / lp
+                    finished.append((float(normed.item()), seq))
+                    continue
+
+                # keep alive beam
+                new_seq = torch.cat([src_seq, torch.tensor([[token_id]], device=device)], dim=1)
+                new_attn = torch.cat([src_attn, torch.ones_like(src_attn[:, :1])], dim=1)
+                next_generated.append(new_seq)
+                next_attn.append(new_attn)
+                next_beam_scores.append(score)
+                cand_alive += 1
+                if cand_alive == beams:
+                    break
+
+            # no alive beams left
+            if cand_alive == 0:
+                if estop != "never":
+                    if debug:
+                        print("[beam] all beams finished, stopping.")
+                    break
+                else:
+                    break
+
+            generated = torch.cat(next_generated, dim=0)          # [beams, T+1]
+            attn = torch.cat(next_attn, dim=0)
+            beam_scores = torch.stack(next_beam_scores).to(device)
+            cur_len += 1
+
+            # early stopping True: stop when enough finished hyps
+            if estop is True and len(finished) >= num_return_sequences:
+                if debug:
+                    print("[beam] early_stopping=True and enough finished hyps — stopping.")
+                break
+
+            if start_time is not None and (time.time() - start_time) >= max_time:
+                if debug:
+                    print("[beam] max_time reached, stopping.")
+                break
+
+        # Finalize: if not enough finished, take best alive beams (length-penalized)
+        if len(finished) < num_return_sequences:
+            alive = []
+            for i in range(generated.size(0)):
+                seq = generated[i:i + 1]
+                s = beam_scores[i]
+                if length_penalty == 1.0:
+                    norm = float(seq.size(1))
+                    normed = s / norm
+                else:
+                    lp = ((5.0 + seq.size(1)) ** length_penalty) / (6.0 ** length_penalty)
+                    normed = s / lp
+                alive.append((float(normed.item()), seq))
+            alive.sort(key=lambda x: x[0], reverse=True)
+            need = num_return_sequences - len(finished)
+            finished.extend(alive[:need])
+
+        # Select top N sequences
+        finished.sort(key=lambda x: x[0], reverse=True)
+        selected = [seq for _, seq in finished[:num_return_sequences]]
+        out = torch.cat(selected, dim=0)  # [num_return_sequences, T_total]
+
+        # Pad to same length if needed
+        max_len = out.size(1)
+        if any(seq.size(1) != max_len for _, seq in finished[:num_return_sequences]):
+            padded = []
+            for _, seq in finished[:num_return_sequences]:
+                if seq.size(1) < max_len:
+                    pad = torch.full((1, max_len - seq.size(1)), PAD, dtype=seq.dtype, device=seq.device)
+                    seq = torch.cat([seq, pad], dim=1)
+                padded.append(seq)
+            out = torch.cat(padded, dim=0)
+
+        return out
