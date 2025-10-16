@@ -18,6 +18,7 @@ from transformers.generation.logits_process import (
     TopPLogitsWarper,
 )
 
+
 # Optional: steadier math (helps parity on CUDA)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
@@ -27,30 +28,29 @@ if torch.cuda.is_available():
 
 class DLBAutoSampler:
     """
-    DLB-native text generation (single-batch) supporting:
+    DLB-native text generation (single-prompt => B=1) supporting:
       • Greedy (temp/top_k/top_p all None)
-      • Sampling with any combo of temperature / top-k / top-p when num_beams == 1
-      • Deterministic beam search when num_beams > 1 (no sampling)
+      • Sampling: temperature / top-k / top-p (when num_beams == 1)
+      • Deterministic beam search (when num_beams > 1, no sampling)
 
     All logits come from DLB:
         io = self.dlb.predict(generated, attn, debug=False, temperature=1.0)
-        logits = io["output"]["output_values"]  # shape [B_or_beams, T, V]
-        step_scores = processors(warpers(..., logits[:, -1, :]))
+        logits = io["output"]["output_values"]  # shape [batch, T, V]
+        next_scores = processors(..., logits[:, -1, :])
+
+    Beam path note:
+      DLB graphs are batch-static (exported at B=1). To avoid shape explosions,
+      we query per-beam sequentially and stack the per-beam logits.
     """
 
     def __init__(self, dlb, tokenizer):
-        """
-        Args:
-            dlb: an instance of DLBacktraceFX (your tracing engine)
-            tokenizer: HF tokenizer (used only for ids and optional chat templates elsewhere)
-        """
         self.dlb = dlb
         self.tokenizer = tokenizer
 
     # ---------- helpers ----------
 
     def _get_causallm(self, model_like):
-        """Walk `.model` chain until we find a GenerationMixin-style causal LM."""
+        """Walk `.model` chain until we find a GenerationMixin-style CausalLM."""
         obj = model_like
         seen = set()
         for _ in range(8):
@@ -71,7 +71,7 @@ class DLBAutoSampler:
 
     @staticmethod
     def _attach_token_tensors(gen_config, device):
-        """Populate private token tensors expected by HF internals in 4.52.x."""
+        """Populate private token tensors expected by HF internals (4.52.x)."""
         def to_tensor(x):
             if x is None:
                 return None
@@ -100,19 +100,23 @@ class DLBAutoSampler:
         raise KeyError("DLB io_data does not contain 'output' -> 'output_values' tensor.")
 
     @staticmethod
-    def _clean_sampling_knobs(temp: Optional[float], top_k: Optional[int], top_p: Optional[float]) -> Tuple[Optional[float], Optional[int], Optional[float]]:
+    def _clean_sampling_knobs(
+        temp: Optional[float], top_k: Optional[int], top_p: Optional[float]
+    ) -> Tuple[Optional[float], Optional[int], Optional[float]]:
         T = float(temp) if (temp is not None and temp != 1.0) else None
         K = int(top_k) if (top_k is not None and top_k > 0) else None
-        P = float(top_p) if (top_p is not None and top_p < 1.0) else None
+        P = float(top_p) if (top_p is not None and 0.0 < top_p < 1.0) else None
         return T, K, P
 
     @staticmethod
     def _decide_do_sample(T: Optional[float], K: Optional[int], P: Optional[float]) -> bool:
-        # HF rule of thumb: any knob triggers sampling
+        # HF rule: any knob triggers sampling
         return (T is not None) or (K is not None) or (P is not None)
 
     @staticmethod
-    def _build_warper(temperature: Optional[float], top_k: Optional[int], top_p: Optional[float]) -> LogitsProcessorList:
+    def _build_warper(
+        temperature: Optional[float], top_k: Optional[int], top_p: Optional[float]
+    ) -> LogitsProcessorList:
         # Match HF non-beam order: Temperature -> TopK -> TopP
         w = LogitsProcessorList()
         keep = 1
@@ -142,7 +146,7 @@ class DLBAutoSampler:
         max_new_tokens: int = 50,
         min_new_tokens: Optional[int] = None,
         max_time: Optional[float] = None,
-        early_stopping: Optional[bool | str] = None,   # used only for beam search; default "never"
+        early_stopping: Optional[bool | str] = None,   # used only for beams; default "never"
         # constraints
         repetition_penalty: Optional[float] = None,
         no_repeat_ngram_size: Optional[int] = None,
@@ -160,10 +164,6 @@ class DLBAutoSampler:
         debug: bool = False,
     ):
         """
-        DLB-native generation:
-          - num_beams == 1  -> greedy / sampling (temp/top_k/top_p)
-          - num_beams  > 1  -> deterministic beam search (no sampling)
-
         Returns:
             Tensor of shape:
               - [1, T_total] for greedy/sampling
@@ -249,10 +249,10 @@ class DLBAutoSampler:
             scores_trace = [] if return_scores else None
 
             for _ in range(max_new_tokens):
-                # Ask DLB for logits
+                # Ask DLB for logits (B=1)
                 io_data = self.dlb.predict(generated, attn, debug=False, temperature=1.0)
-                logits = self._extract_last_logits(io_data)        # [B, T_cur, V]
-                next_logits = logits[:, -1, :]                     # [B, V]
+                logits = self._extract_last_logits(io_data)        # [1, T_cur, V]
+                next_logits = logits[:, -1, :]                     # [1, V]
 
                 # processors
                 scores = logits_processor(generated, next_logits)
@@ -276,7 +276,7 @@ class DLBAutoSampler:
                 generated = torch.cat([generated, next_tokens], dim=1)
                 attn = torch.cat([attn, torch.ones((B, 1), dtype=attn.dtype, device=attn.device)], dim=1)
 
-                # early stop if everyone hits EOS
+                # early stop if EOS produced
                 if eos_list:
                     if torch.all(torch.isin(next_tokens.squeeze(-1), torch.tensor(eos_list, device=device))):
                         break
@@ -294,10 +294,11 @@ class DLBAutoSampler:
         # ======================
         beams = int(num_beams)
         assert beams >= 2, "num_beams must be >= 2 for beam search."
+        num_return_sequences = min(num_return_sequences, beams)
 
-        # Expand beams
-        generated = input_ids.repeat_interleave(beams, dim=0)     # [beams, T]
-        attn = attention_mask.repeat_interleave(beams, dim=0)
+        # Expand seeds for bookkeeping (we will still call DLB per-beam)
+        generated = input_ids.expand(beams, -1).contiguous()      # [beams, T]
+        attn = attention_mask.expand(beams, -1).contiguous()
         beam_scores = torch.zeros((1, beams), dtype=torch.float32, device=device)
         beam_scores[:, 1:] = -1e9
         beam_scores = beam_scores.view(-1)                        # [beams]
@@ -312,10 +313,14 @@ class DLBAutoSampler:
                     print("[beam] max_time reached, stopping.")
                 break
 
-            # DLB logits for all beams
-            io_data = self.dlb.predict(generated, attn, debug=False, temperature=1.0)
-            logits = self._extract_last_logits(io_data)           # [beams, T_cur, V]
-            next_logits = logits[:, -1, :]                        # [beams, V]
+            # ---- Query DLB per beam (keep B=1 for the traced graph) ----
+            next_logits_list = []
+            for b in range(beams):
+                io_b = self.dlb.predict(generated[b:b+1], attn[b:b+1], debug=False, temperature=1.0)
+                logits_b = self._extract_last_logits(io_b)         # [1, T_cur, V]
+                nl_b = logits_b[:, -1, :]                          # [1, V]
+                next_logits_list.append(nl_b)
+            next_logits = torch.cat(next_logits_list, dim=0)       # [beams, V]
 
             # processors (no warpers in deterministic beam)
             scores = logits_processor(generated, next_logits)
@@ -330,7 +335,8 @@ class DLBAutoSampler:
 
             V = logprobs.size(-1)
             flat = logprobs.view(1, beams * V)                    # [1, beams*V]
-            topk_scores, topk_indices = torch.topk(flat, k=min(2 * beams, beams * V), dim=-1)
+            topk = min(2 * beams, beams * V)
+            topk_scores, topk_indices = torch.topk(flat, k=topk, dim=-1)
 
             next_generated = []
             next_attn = []
@@ -346,7 +352,7 @@ class DLBAutoSampler:
                 src_seq = generated[beam_id:beam_id + 1]
                 src_attn = attn[beam_id:beam_id + 1]
 
-                # EOS -> finalize
+                # EOS -> finalize hypothesis
                 if token_id in eos_set:
                     seq = torch.cat([src_seq, torch.tensor([[token_id]], device=device)], dim=1)
                     if length_penalty == 1.0:
@@ -358,7 +364,7 @@ class DLBAutoSampler:
                     finished.append((float(normed.item()), seq))
                     continue
 
-                # keep alive beam
+                # keep beam alive
                 new_seq = torch.cat([src_seq, torch.tensor([[token_id]], device=device)], dim=1)
                 new_attn = torch.cat([src_attn, torch.ones_like(src_attn[:, :1])], dim=1)
                 next_generated.append(new_seq)
@@ -382,7 +388,7 @@ class DLBAutoSampler:
             beam_scores = torch.stack(next_beam_scores).to(device)
             cur_len += 1
 
-            # early stopping True: stop when enough finished hyps
+            # early_stopping=True: stop when enough finished hyps
             if estop is True and len(finished) >= num_return_sequences:
                 if debug:
                     print("[beam] early_stopping=True and enough finished hyps — stopping.")
@@ -417,7 +423,7 @@ class DLBAutoSampler:
 
         # Pad to same length if needed
         max_len = out.size(1)
-        if any(seq.size(1) != max_len for _, seq in finished[:num_return_sequences]):
+        if any(s.size(1) != max_len for _, s in finished[:num_return_sequences]):
             padded = []
             for _, seq in finished[:num_return_sequences]:
                 if seq.size(1) < max_len:
