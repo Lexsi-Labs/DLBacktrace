@@ -491,19 +491,16 @@ class DLBacktraceFX:
         )
         return self.all_wt
 
-    def sample_auto(self, tokenizer, input_ids, attention_mask=None, **kwargs):
+    def sample_auto(self, tokenizer, input_ids, attention_mask, **kwargs):
         """
-        Wrapper for DLBAutoSampler.generate(...)
-        Knobs:
-        temp, top_k, top_p
-        Early stopping / limits:
-        max_new_tokens, min_new_tokens, max_time, early_stopping
-        Other:
-        repetition_penalty, no_repeat_ngram_size, bad_words_ids,
-        bos_token_id, eos_token_id, pad_token_id, hf_parity, return_scores, debug
+        Wrapper for DLB-based generation (greedy/sampling/beam).
+        kwargs: temp, top_k, top_p, max_new_tokens, min_new_tokens, max_time,
+                early_stopping, repetition_penalty, no_repeat_ngram_size,
+                bad_words_ids, bos_token_id, eos_token_id, pad_token_id,
+                num_beams, num_return_sequences, length_penalty, return_scores, debug
         """
         eng = DLBAutoSampler(self, tokenizer)
-        return eng.generate(input_ids, attention_mask, **kwargs)
+        return eng.generate(input_ids, attention_mask, **kwargs) 
 
     def print_all_relevance_info(self):
         """ 
