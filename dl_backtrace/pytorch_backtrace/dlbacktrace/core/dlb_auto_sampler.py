@@ -240,7 +240,7 @@ class DLBAutoSampler:
             else:
                 attention_mask = torch.ones_like(input_ids)
 
-        # Build GenerationConfig like HF (include early_stopping/min/max_time)
+        # Build GenerationConfig like HF (include early_stopping/min/max_time)  ✅ FIXED
         gen_kwargs = dict(
             max_new_tokens=max_new_tokens,
             min_new_tokens=min_new_tokens,
@@ -251,9 +251,19 @@ class DLBAutoSampler:
             repetition_penalty=repetition_penalty,
             no_repeat_ngram_size=no_repeat_ngram_size,
             bad_words_ids=bad_words_ids,
-            early_stopping=early_stopping,   # beam-only, but pass-through for parity
-            max_time=max_time,               # HF uses this to add a MaxTime criterion
+            # DO NOT pass early_stopping if None (HF default is "never")
+            # max_time is okay to be None; HF ignores when None
+            max_time=max_time,
         )
+
+        # Only include early_stopping when it's valid
+        if early_stopping is not None:
+            if early_stopping in (True, False, "never"):
+                gen_kwargs["early_stopping"] = early_stopping
+            else:
+                raise ValueError("early_stopping must be True, False, or 'never'")
+
+        # include warpers only if sampling is active
         if do_sample:
             if T is not None: gen_kwargs["temperature"] = T
             if K is not None: gen_kwargs["top_k"] = K
