@@ -199,8 +199,17 @@ class DLBAutoSampler:
             no_repeat_ngram_size=no_repeat_ngram_size,
             bad_words_ids=bad_words_ids,
         )
+        
+        # normalize early_stopping
         if num_beams > 1:
-            gen_kwargs["early_stopping"] = early_stopping if early_stopping is not None else "never"
+            if isinstance(early_stopping, bool):
+                estop = "always" if early_stopping else "never"
+            elif early_stopping in ("always", "never"):
+                estop = early_stopping
+            else:
+                estop = "never"
+        else:
+            estop = None  # not used for non-beam
 
         generation_config, _ = model._prepare_generation_config(
             generation_config=None, use_model_defaults=True, **gen_kwargs
@@ -389,9 +398,8 @@ class DLBAutoSampler:
             cur_len += 1
 
             # early_stopping=True: stop when enough finished hyps
-            if estop is True and len(finished) >= num_return_sequences:
-                if debug:
-                    print("[beam] early_stopping=True and enough finished hyps — stopping.")
+            if estop == "always" and len(finished) >= num_return_sequences:
+                if debug: print("[beam] early_stopping=always and enough finished hyps — stopping.")
                 break
 
             if start_time is not None and (time.time() - start_time) >= max_time:
