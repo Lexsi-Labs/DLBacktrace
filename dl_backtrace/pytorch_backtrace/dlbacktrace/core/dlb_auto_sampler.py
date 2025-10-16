@@ -3,8 +3,12 @@
 # now with HF-native stopping criteria (EOS / min_new_tokens / max_time / etc.)
 # transformers==4.52.x
 
+# dl_backtrace/pytorch_backtrace/dlbacktrace/core/dlb_auto_sampler.py
 from __future__ import annotations
+
 import time
+from typing import Optional, List, Tuple
+
 import torch
 import torch.nn.functional as F
 from transformers.generation.logits_process import (
@@ -20,21 +24,6 @@ torch.backends.cudnn.benchmark = False
 if torch.cuda.is_available():
     torch.backends.cuda.matmul.allow_tf32 = False
 
-
-# dl_backtrace/pytorch_backtrace/dlbacktrace/core/dlb_auto_sampler.py
-
-from __future__ import annotations
-import time
-from typing import Optional, List, Tuple
-
-import torch
-import torch.nn.functional as F
-from transformers.generation.logits_process import (
-    LogitsProcessorList,
-    TemperatureLogitsWarper,
-    TopKLogitsWarper,
-    TopPLogitsWarper,
-)
 
 class DLBAutoSampler:
     """
