@@ -8,6 +8,7 @@ from .core.trace_utils import (
     get_weight_from_placeholder
 )
 from .core.config import activation_master
+from .core.dlb_auto_sampler import DLBAutoSampler
 from .core.relevance_propagation import RelevancePropagator
 from .core.visualization import visualize_graph, visualize_relevance
 
@@ -489,6 +490,20 @@ class DLBacktraceFX:
             debug=debug
         )
         return self.all_wt
+
+    def sample_auto(self, tokenizer, input_ids, attention_mask=None, **kwargs):
+        """
+        Wrapper for DLBAutoSampler.generate(...)
+        Knobs:
+        temp, top_k, top_p
+        Early stopping / limits:
+        max_new_tokens, min_new_tokens, max_time, early_stopping
+        Other:
+        repetition_penalty, no_repeat_ngram_size, bad_words_ids,
+        bos_token_id, eos_token_id, pad_token_id, hf_parity, return_scores, debug
+        """
+        eng = DLBAutoSampler(self, tokenizer)
+        return eng.generate(input_ids, attention_mask, **kwargs)
 
     def print_all_relevance_info(self):
         """ 
