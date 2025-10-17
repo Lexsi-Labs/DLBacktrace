@@ -1,13 +1,11 @@
 # dlb_auto_sampler.py
-# Auto sampler that uses DL-BacktraceFX for logits and matches HF sampling semantics
-# now with HF-native stopping criteria (EOS / min_new_tokens / max_time / etc.)
+# Auto sampler that uses DL-BacktraceFX for logits and matches HF sampling/beam semantics
 # transformers==4.52.x
 
-# dl_backtrace/pytorch_backtrace/dlbacktrace/core/dlb_auto_sampler.py
 from __future__ import annotations
 
 import time
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, cast
 
 import torch
 import torch.nn.functional as F
@@ -17,7 +15,12 @@ from transformers.generation.logits_process import (
     TopKLogitsWarper,
     TopPLogitsWarper,
 )
-
+from transformers.generation.beam_search import BeamSearchScorer
+from transformers.generation.stopping_criteria import (
+    StoppingCriteriaList,
+    MaxTimeCriteria,
+    MaxNewTokensCriteria,
+)
 
 # Optional: steadier math (helps parity on CUDA)
 torch.backends.cudnn.deterministic = True
@@ -31,23 +34,37 @@ class DLBAutoSampler:
     DLB-native text generation (single-prompt => B=1) supporting:
       • Greedy (temp/top_k/top_p all None)
       • Sampling: temperature / top-k / top-p (when num_beams == 1)
-      • Deterministic beam search (when num_beams > 1, no sampling)
+      • Deterministic beam search via HF BeamSearchScorer (when num_beams > 1)
 
     All logits come from DLB:
         io = self.dlb.predict(generated, attn, debug=False, temperature=1.0)
         logits = io["output"]["output_values"]  # shape [batch, T, V]
         next_scores = processors(..., logits[:, -1, :])
 
-    Beam path note:
+    Beam note:
       DLB graphs are batch-static (exported at B=1). To avoid shape explosions,
       we query per-beam sequentially and stack the per-beam logits.
+
+    Returns:
+      Always a single sequence with shape [1, T_total]
+      (If return_scores=True on the sampling path, returns (sequence, scores_trace))
     """
 
     def __init__(self, dlb, tokenizer):
         self.dlb = dlb
         self.tokenizer = tokenizer
 
-    # ---------- helpers ----------
+    # ---------- small dtype helpers ----------
+
+    @staticmethod
+    def _as_long(x: torch.Tensor) -> torch.LongTensor:
+        return cast(torch.LongTensor, x.long())
+
+    @staticmethod
+    def _as_float(x: torch.Tensor) -> torch.FloatTensor:
+        return cast(torch.FloatTensor, x.float())
+
+    # ---------- model / config helpers ----------
 
     def _get_causallm(self, model_like):
         """Walk `.model` chain until we find a GenerationMixin-style CausalLM."""
@@ -130,6 +147,15 @@ class DLBAutoSampler:
             w.append(TopPLogitsWarper(top_p, min_tokens_to_keep=keep))
         return w
 
+    @staticmethod
+    def _build_stopping(max_new_tokens: Optional[int], max_time: Optional[float]) -> StoppingCriteriaList:
+        sc = StoppingCriteriaList()
+        if max_new_tokens is not None:
+            sc.append(MaxNewTokensCriteria(max_new_tokens=max_new_tokens))
+        if max_time is not None:
+            sc.append(MaxTimeCriteria(max_time=max_time))
+        return sc
+
     # ---------- public API ----------
 
     @torch.no_grad()
@@ -157,35 +183,41 @@ class DLBAutoSampler:
         pad_token_id: Optional[int] = None,
         # beams
         num_beams: int = 1,
-        num_return_sequences: Optional[int] = None,
+        num_return_sequences: Optional[int] = None,  # ignored on return (we always return top-1)
         length_penalty: float = 1.0,
         # misc
         return_scores: bool = False,
         debug: bool = False,
     ):
         """
-        Returns:
-            Tensor of shape:
-              - [1, T_total] for greedy/sampling
-              - [num_return_sequences, T_total] for beams
-            If return_scores=True (sampling path only), returns (sequences, scores_list)
+        Always returns:
+            - [1, T_total] (top-1 sequence)
+            - Or (sequence, scores_trace) for sampling when return_scores=True
         """
         model = self._get_causallm(self.dlb.model)
         device = input_ids.device
         B = input_ids.size(0)
         assert B == 1, "Current implementation assumes batch size = 1."
 
+        # Dtypes up-front
+        input_ids = self._as_long(input_ids)
+
         # Build / infer attention mask
         if attention_mask is None:
             if pad_token_id is not None:
-                attention_mask = (input_ids != pad_token_id).long()
+                attention_mask = self._as_long((input_ids != pad_token_id).long())
             else:
-                attention_mask = torch.ones_like(input_ids, dtype=torch.long)
+                attention_mask = self._as_long(torch.ones_like(input_ids))
+        else:
+            attention_mask = self._as_long(attention_mask)
 
         # Normalize knobs
         T, K, P = self._clean_sampling_knobs(temp, top_k, top_p)
         do_sample = self._decide_do_sample(T, K, P)
-        num_return_sequences = int(num_return_sequences or 1)
+
+        # We will *return* only top-1 even if caller passes a larger value.
+        # (Still honoring it inside HF if you want; but we set keep=1 for efficiency.)
+        keep_top = 1
 
         # Prepare GenerationConfig for processors
         gen_kwargs = dict(
@@ -199,8 +231,8 @@ class DLBAutoSampler:
             no_repeat_ngram_size=no_repeat_ngram_size,
             bad_words_ids=bad_words_ids,
         )
-        
-        # normalize early_stopping
+
+        # normalize early_stopping for beams
         if num_beams > 1:
             if isinstance(early_stopping, bool):
                 estop = "always" if early_stopping else "never"
@@ -216,7 +248,7 @@ class DLBAutoSampler:
         )
         self._attach_token_tensors(generation_config, device)
 
-        # EOS list
+        # EOS list / PAD
         if generation_config.eos_token_id is None:
             eos_list: List[int] = []
         elif isinstance(generation_config.eos_token_id, (list, tuple)):
@@ -247,24 +279,25 @@ class DLBAutoSampler:
             logits_warper = None
 
         start_len = input_ids.shape[1]
-        start_time = time.time() if max_time is not None else None
+        stopping_criteria = self._build_stopping(max_new_tokens=max_new_tokens, max_time=max_time)
 
         # ======================
         # Non-beam path (B=1)
         # ======================
         if num_beams < 2:
-            generated = input_ids.clone()
-            attn = attention_mask.clone()
+            generated = self._as_long(input_ids.clone())
+            attn = self._as_long(attention_mask.clone())
             scores_trace = [] if return_scores else None
 
-            for _ in range(max_new_tokens):
+            stopped_by = None
+            for _ in range(max_new_tokens if max_new_tokens is not None else 10_000_000):
                 # Ask DLB for logits (B=1)
                 io_data = self.dlb.predict(generated, attn, debug=False, temperature=1.0)
                 logits = self._extract_last_logits(io_data)        # [1, T_cur, V]
-                next_logits = logits[:, -1, :]                     # [1, V]
+                next_logits = self._as_float(logits[:, -1, :])     # Float for processors
 
                 # processors
-                scores = logits_processor(generated, next_logits)
+                scores = logits_processor(self._as_long(generated), next_logits)
 
                 # enforce min_new_tokens by masking EOS until allowed
                 if min_new_tokens is not None and (generated.shape[1] - start_len) < min_new_tokens and eos_list:
@@ -272,172 +305,168 @@ class DLBAutoSampler:
 
                 # sampling vs greedy
                 if do_sample and logits_warper is not None:
-                    scores = logits_warper(generated, scores)
+                    scores = logits_warper(self._as_long(generated), scores)
                     probs = F.softmax(scores, dim=-1)
-                    next_tokens = torch.multinomial(probs, num_samples=1)
+                    next_tokens = torch.multinomial(probs, num_samples=1)  # LongTensor
                 else:
-                    next_tokens = scores.argmax(dim=-1, keepdim=True)
+                    next_tokens = scores.argmax(dim=-1, keepdim=True)      # LongTensor
 
                 if return_scores:
                     scores_trace.append(scores.detach().to("cpu"))
 
-                # append & update mask
-                generated = torch.cat([generated, next_tokens], dim=1)
-                attn = torch.cat([attn, torch.ones((B, 1), dtype=attn.dtype, device=attn.device)], dim=1)
+                generated = torch.cat([generated, self._as_long(next_tokens)], dim=1)
+                attn = torch.cat(
+                    [attn, torch.ones((1, 1), dtype=attn.dtype, device=attn.device)],
+                    dim=1,
+                )
 
                 # early stop if EOS produced
                 if eos_list:
-                    if torch.all(torch.isin(next_tokens.squeeze(-1), torch.tensor(eos_list, device=device))):
+                    tok = int(next_tokens.view(-1)[0].item())
+                    if tok in eos_set:
+                        stopped_by = "eos"
                         break
 
+                # HF-native stopping criteria (max_new_tokens / max_time)
+                if stopping_criteria(self._as_long(generated), None):
+                    stopped_by = "stopping_criteria"
+                    break
+            else:
+                stopped_by = "loop_exhausted"
+
+            if debug:
+                print(f"[greedy/sampling] stopped_by={stopped_by}")
+
+            return (generated, scores_trace) if return_scores else generated  # [1, T]
+
+        # ======================
+        # Beam search path (deterministic, no sampling) — always return top-1
+        # ======================
+        else:
+            beams = int(num_beams)
+            assert beams >= 2, "num_beams must be >= 2 for beam search."
+
+            # Map early_stopping to HF's expected values
+            if isinstance(early_stopping, bool):
+                do_early_stopping = "always" if early_stopping else "never"
+            elif early_stopping in ("always", "never"):
+                do_early_stopping = early_stopping
+            else:
+                do_early_stopping = "never"
+
+            beam_scorer = BeamSearchScorer(
+                batch_size=1,
+                num_beams=beams,
+                device=device,
+                length_penalty=length_penalty,
+                do_early_stopping=do_early_stopping,
+                num_beam_hyps_to_keep=keep_top,   # keep only the best hypothesis per item
+            )
+
+            # Expand seeds for bookkeeping (we will still call DLB per-beam)
+            generated = self._as_long(input_ids.expand(beams, -1).contiguous())  # [beams, T]
+            attn = self._as_long(attention_mask.expand(beams, -1).contiguous())
+
+            # Local beam scores (public, no private attrs)
+            beam_scores = torch.zeros((1, beams), dtype=torch.float32, device=device)
+            beam_scores[:, 1:] = -1e9
+            beam_scores = beam_scores.view(-1)                                    # [beams]
+
+            cur_len = start_len
+            vocab_size = None
+            start_time = time.time() if max_time is not None else None
+
+            stopped_by = None
+            for _ in range(max_new_tokens if max_new_tokens is not None else 10_000_000):
                 # time guard
                 if start_time is not None and (time.time() - start_time) >= max_time:
                     if debug:
-                        print("[dlb] max_time reached, stopping.")
+                        print("[beam] max_time reached, stopping.")
+                    stopped_by = "max_time"
                     break
 
-            return (generated, scores_trace) if return_scores else generated
+                # ---- Query DLB per beam (keep B=1 for the traced graph) ----
+                next_logits_list: List[torch.Tensor] = []
+                for b in range(beams):
+                    io_b = self.dlb.predict(generated[b:b+1], attn[b:b+1], debug=False, temperature=1.0)
+                    logits_b = self._extract_last_logits(io_b)         # [1, T_cur, V]
+                    nl_b = self._as_float(logits_b[:, -1, :])          # [1, V] Float for processors
+                    next_logits_list.append(nl_b)
+                    if vocab_size is None:
+                        vocab_size = nl_b.size(-1)
 
-        # ======================
-        # Beam search path (deterministic, no sampling)
-        # ======================
-        beams = int(num_beams)
-        assert beams >= 2, "num_beams must be >= 2 for beam search."
-        num_return_sequences = min(num_return_sequences, beams)
+                next_logits = torch.cat(next_logits_list, dim=0)       # [beams, V] FloatTensor
 
-        # Expand seeds for bookkeeping (we will still call DLB per-beam)
-        generated = input_ids.expand(beams, -1).contiguous()      # [beams, T]
-        attn = attention_mask.expand(beams, -1).contiguous()
-        beam_scores = torch.zeros((1, beams), dtype=torch.float32, device=device)
-        beam_scores[:, 1:] = -1e9
-        beam_scores = beam_scores.view(-1)                        # [beams]
+                # processors (no warpers in deterministic beam)
+                scores = logits_processor(self._as_long(generated), next_logits)
 
-        finished = []  # list of (normed_score, seq)
-        cur_len = start_len
-        estop = early_stopping if early_stopping is not None else "never"
+                # mask EOS until min_new_tokens is satisfied (hard guard)
+                if min_new_tokens is not None and (cur_len - start_len) < min_new_tokens and eos_list:
+                    scores[:, eos_list] = -1e9
 
-        for _ in range(max_new_tokens):
-            if start_time is not None and (time.time() - start_time) >= max_time:
-                if debug:
-                    print("[beam] max_time reached, stopping.")
-                break
+                # convert to log-prob and add previous beam scores
+                next_token_scores = F.log_softmax(scores, dim=-1)      # [beams, V]
+                next_token_scores = next_token_scores + beam_scores[:, None]
 
-            # ---- Query DLB per beam (keep B=1 for the traced graph) ----
-            next_logits_list = []
-            for b in range(beams):
-                io_b = self.dlb.predict(generated[b:b+1], attn[b:b+1], debug=False, temperature=1.0)
-                logits_b = self._extract_last_logits(io_b)         # [1, T_cur, V]
-                nl_b = logits_b[:, -1, :]                          # [1, V]
-                next_logits_list.append(nl_b)
-            next_logits = torch.cat(next_logits_list, dim=0)       # [beams, V]
+                # Select top 2*beams across all (beam, vocab) pairs
+                flat = next_token_scores.view(1, beams * vocab_size)   # [1, beams*V]
+                topk = min(2 * beams, beams * vocab_size)
+                next_scores, next_tokens = torch.topk(flat, k=topk, dim=1)
+                next_indices = next_tokens // vocab_size
+                next_tokens = next_tokens % vocab_size
 
-            # processors (no warpers in deterministic beam)
-            scores = logits_processor(generated, next_logits)
+                # Let HF scorer decide which beams continue / finish
+                beam_outputs = beam_scorer.process(
+                    input_ids=self._as_long(generated),
+                    next_scores=self._as_float(next_scores),
+                    next_tokens=self._as_long(next_tokens),
+                    next_indices=self._as_long(next_indices),
+                    pad_token_id=PAD,
+                    eos_token_id=eos_list if eos_list else None,
+                    beam_indices=None,
+                )
 
-            # mask EOS until min_new_tokens is satisfied
-            if min_new_tokens is not None and (cur_len - start_len) < min_new_tokens and eos_list:
-                scores[:, eos_list] = -1e9
+                # Rebuild the new beam batch using public keys
+                next_beam_scores = beam_outputs["next_beam_scores"]      # [beams]
+                next_beam_tokens = beam_outputs["next_beam_tokens"]      # [beams]
+                next_beam_indices = beam_outputs["next_beam_indices"]    # [beams]
 
-            # convert to log-prob and add previous beam scores
-            logprobs = F.log_softmax(scores, dim=-1)              # [beams, V]
-            logprobs = logprobs + beam_scores.unsqueeze(-1)
+                generated = torch.cat(
+                    [generated[self._as_long(next_beam_indices), :], self._as_long(next_beam_tokens).unsqueeze(-1)],
+                    dim=1,
+                )
+                attn = torch.cat(
+                    [attn[self._as_long(next_beam_indices), :],
+                     torch.ones((beams, 1), dtype=attn.dtype, device=attn.device)],
+                    dim=1,
+                )
+                beam_scores = self._as_float(next_beam_scores)
+                cur_len += 1
 
-            V = logprobs.size(-1)
-            flat = logprobs.view(1, beams * V)                    # [1, beams*V]
-            topk = min(2 * beams, beams * V)
-            topk_scores, topk_indices = torch.topk(flat, k=topk, dim=-1)
-
-            next_generated = []
-            next_attn = []
-            next_beam_scores = []
-
-            cand_alive = 0
-            for rank in range(topk_scores.size(1)):
-                score = topk_scores[0, rank]
-                idx = topk_indices[0, rank].item()
-                beam_id = idx // V
-                token_id = idx % V
-
-                src_seq = generated[beam_id:beam_id + 1]
-                src_attn = attn[beam_id:beam_id + 1]
-
-                # EOS -> finalize hypothesis
-                if token_id in eos_set:
-                    seq = torch.cat([src_seq, torch.tensor([[token_id]], device=device)], dim=1)
-                    if length_penalty == 1.0:
-                        norm = float(seq.size(1))
-                        normed = score / norm
-                    else:
-                        lp = ((5.0 + seq.size(1)) ** length_penalty) / (6.0 ** length_penalty)
-                        normed = score / lp
-                    finished.append((float(normed.item()), seq))
-                    continue
-
-                # keep beam alive
-                new_seq = torch.cat([src_seq, torch.tensor([[token_id]], device=device)], dim=1)
-                new_attn = torch.cat([src_attn, torch.ones_like(src_attn[:, :1])], dim=1)
-                next_generated.append(new_seq)
-                next_attn.append(new_attn)
-                next_beam_scores.append(score)
-                cand_alive += 1
-                if cand_alive == beams:
+                # Stopping: HF early stopping OR time/new-token criteria
+                if beam_scorer.is_done:
+                    stopped_by = "beam_scorer_done"
+                    break
+                elif self._build_stopping(max_new_tokens=None, max_time=None)(self._as_long(generated), None):
+                    # (we've already limited steps with for-range; keep criteria optional here)
+                    stopped_by = "stopping_criteria"
                     break
 
-            # no alive beams left
-            if cand_alive == 0:
-                if estop != "never":
-                    if debug:
-                        print("[beam] all beams finished, stopping.")
-                    break
-                else:
-                    break
+            else:
+                stopped_by = "loop_exhausted"
 
-            generated = torch.cat(next_generated, dim=0)          # [beams, T+1]
-            attn = torch.cat(next_attn, dim=0)
-            beam_scores = torch.stack(next_beam_scores).to(device)
-            cur_len += 1
+            if debug:
+                print(f"[beam] stopped_by={stopped_by}")
 
-            # early_stopping=True: stop when enough finished hyps
-            if estop == "always" and len(finished) >= num_return_sequences:
-                if debug: print("[beam] early_stopping=always and enough finished hyps — stopping.")
-                break
-
-            if start_time is not None and (time.time() - start_time) >= max_time:
-                if debug:
-                    print("[beam] max_time reached, stopping.")
-                break
-
-        # Finalize: if not enough finished, take best alive beams (length-penalized)
-        if len(finished) < num_return_sequences:
-            alive = []
-            for i in range(generated.size(0)):
-                seq = generated[i:i + 1]
-                s = beam_scores[i]
-                if length_penalty == 1.0:
-                    norm = float(seq.size(1))
-                    normed = s / norm
-                else:
-                    lp = ((5.0 + seq.size(1)) ** length_penalty) / (6.0 ** length_penalty)
-                    normed = s / lp
-                alive.append((float(normed.item()), seq))
-            alive.sort(key=lambda x: x[0], reverse=True)
-            need = num_return_sequences - len(finished)
-            finished.extend(alive[:need])
-
-        # Select top N sequences
-        finished.sort(key=lambda x: x[0], reverse=True)
-        selected = [seq for _, seq in finished[:num_return_sequences]]
-        out = torch.cat(selected, dim=0)  # [num_return_sequences, T_total]
-
-        # Pad to same length if needed
-        max_len = out.size(1)
-        if any(s.size(1) != max_len for _, s in finished[:num_return_sequences]):
-            padded = []
-            for _, seq in finished[:num_return_sequences]:
-                if seq.size(1) < max_len:
-                    pad = torch.full((1, max_len - seq.size(1)), PAD, dtype=seq.dtype, device=seq.device)
-                    seq = torch.cat([seq, pad], dim=1)
-                padded.append(seq)
-            out = torch.cat(padded, dim=0)
-
-        return out
+            # Finalize: HF pads as needed, returns top-N; we take top-1 and keep it 2D: [1, T]
+            final = beam_scorer.finalize(
+                input_ids=self._as_long(generated),
+                final_beam_scores=self._as_float(beam_scores),
+                best_indices=None,
+                pad_token_id=PAD,
+                eos_token_id=eos_list if eos_list else None,
+                max_length=generated.size(1),
+            )
+            sequences = final["sequences"]            # [keep_top, T_total] with keep_top==1
+            out_top1 = sequences[:1, :]               # ensure 2D shape [1, T_total]
+            return out_top1
