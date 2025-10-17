@@ -1,6 +1,6 @@
 # dlb_auto_sampler.py
 # Auto sampler that uses DL-BacktraceFX for logits and matches HF sampling/beam semantics
-# transformers >= 4.30 (tested on 4.52.x); supports older HF via MaxNewTokensCriteria fallback
+# Works across multiple Transformers versions (tested new/older) via fallbacks.
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from typing import Optional, List, Tuple, cast
 
 import torch
 import torch.nn.functional as F
+
 from transformers.generation.logits_process import (
     LogitsProcessorList,
     TemperatureLogitsWarper,
@@ -30,6 +31,7 @@ except ImportError:  # older HF
         MaxTimeCriteria,
         StoppingCriteria,
     )
+
     class MaxNewTokensCriteria(StoppingCriteria):
         def __init__(self, start_length: int, max_new_tokens: int):
             self.start_length = int(start_length)
@@ -372,7 +374,7 @@ class DLBAutoSampler:
         beams = int(num_beams)
         assert beams >= 2, "num_beams must be >= 2 for beam search."
 
-        # Some HF versions require max_length when early stopping is configured
+        # Some HF versions require max_length when early stopping is configured.
         max_len_for_beam = int(start_len + (max_new_tokens if max_new_tokens is not None else 1024))
 
         beam_scorer = BeamSearchScorer(
@@ -397,6 +399,10 @@ class DLBAutoSampler:
         cur_len = start_len
         vocab_size = None
         start_time = time.time() if max_time is not None else None
+
+        # Keep top-k tensors from the last step (needed by some HF versions)
+        last_topk_tokens: Optional[torch.Tensor] = None
+        last_topk_indices: Optional[torch.Tensor] = None
 
         stopped_by = None
         for _ in range(max_new_tokens if max_new_tokens is not None else 10_000_000):
@@ -436,6 +442,10 @@ class DLBAutoSampler:
             next_scores, next_tokens = torch.topk(flat, k=topk, dim=1)
             next_indices = next_tokens // vocab_size
             next_tokens = next_tokens % vocab_size
+
+            # keep the *last* top-k tensors for finalize() (shape [1, topk])
+            last_topk_tokens = self._as_long(next_tokens)
+            last_topk_indices = self._as_long(next_indices)
 
             # Let HF scorer decide which beams continue / finish
             beam_outputs = beam_scorer.process(
@@ -479,15 +489,34 @@ class DLBAutoSampler:
         if debug:
             print(f"[beam] stopped_by={stopped_by}")
 
-        # Finalize: HF pads as needed, returns top-N; we take top-1 and keep it 2D: [1, T]
-        final = beam_scorer.finalize(
-            input_ids=self._as_long(generated),
-            final_beam_scores=self._as_float(beam_scores),
-            best_indices=None,
-            pad_token_id=PAD,
-            eos_token_id=eos_list if eos_list else None,
-            max_length=max_len_for_beam,
-        )
+        # Safety: if loop never ran (shouldn't happen with positive max_new_tokens), guard shapes
+        if last_topk_tokens is None or last_topk_indices is None:
+            # create minimal placeholders to satisfy older finalize signatures
+            last_topk_tokens = torch.zeros((1, 1), dtype=torch.long, device=device)
+            last_topk_indices = torch.zeros((1, 1), dtype=torch.long, device=device)
+
+        # Finalize across HF versions:
+        try:
+            # Newer signature requiring final_beam_* tensors
+            final = beam_scorer.finalize(
+                input_ids=self._as_long(generated),
+                final_beam_scores=self._as_float(beam_scores),
+                final_beam_tokens=last_topk_tokens,
+                final_beam_indices=last_topk_indices,
+                pad_token_id=PAD,
+                eos_token_id=eos_list if eos_list else None,
+                max_length=max_len_for_beam,
+            )
+        except TypeError:
+            # Older signature without final_beam_* tensors
+            final = beam_scorer.finalize(
+                input_ids=self._as_long(generated),
+                final_beam_scores=self._as_float(beam_scores),
+                pad_token_id=PAD,
+                eos_token_id=eos_list if eos_list else None,
+                max_length=max_len_for_beam,
+            )
+
         sequences = final["sequences"]  # [1, T_total] because num_beam_hyps_to_keep=1
         out_top1 = sequences[:1, :]     # ensure [1, T_total]
         return out_top1
