@@ -491,16 +491,138 @@ class DLBacktraceFX:
         )
         return self.all_wt
 
-    def sample_auto(self, tokenizer, input_ids, attention_mask, **kwargs):
+    def sample_auto(self, tokenizer, input_ids, attention_mask=None, **kwargs):
         """
-        Wrapper for DLB-based generation (greedy/sampling/beam).
-        kwargs: temp, top_k, top_p, max_new_tokens, min_new_tokens, max_time,
-                early_stopping, repetition_penalty, no_repeat_ngram_size,
-                bad_words_ids, bos_token_id, eos_token_id, pad_token_id,
-                num_beams, num_return_sequences, length_penalty, return_scores, debug
+        Wrapper for DLB-based generation (greedy / sampling / beam).
+        Accepts kwargs: temp, top_k, top_p, max_new_tokens, min_new_tokens, max_time,
+                        early_stopping, repetition_penalty, no_repeat_ngram_size,
+                        bad_words_ids, bos_token_id, eos_token_id, pad_token_id,
+                        num_beams, num_return_sequences, length_penalty, return_scores, debug
+
+        Returns:
+            - Always a single sequence with shape [1, T_total]
+            (If return_scores=True on sampling path, returns (sequence, scores_trace))
+            - Beam path returns the top-1 sequence (num_return_sequences is ignored on return).
         """
-        eng = DLBAutoSampler(self, tokenizer)
-        return eng.generate(input_ids, attention_mask, **kwargs) 
+
+        # --- helpers ---
+        def _pick_device():
+            mdl = getattr(self, "model", None)
+            dev = getattr(mdl, "device", None)
+            if isinstance(dev, torch.device):
+                return dev
+            return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        def _to_long_tensor(x, device):
+            if isinstance(x, torch.Tensor):
+                t = x
+            elif isinstance(x, (list, tuple)):
+                t = torch.tensor(x)
+            else:
+                try:
+                    import numpy as np  # noqa: F401
+                    if isinstance(x, np.ndarray):
+                        t = torch.from_numpy(x)
+                    else:
+                        raise TypeError
+                except Exception:
+                    raise TypeError(
+                        f"input must be Tensor/list/tuple/ndarray; got {type(x).__name__}"
+                    )
+            if t.dim() == 1:
+                t = t.unsqueeze(0)  # ensure [B=1, T]
+            return t.to(device=device, dtype=torch.long, non_blocking=True)
+
+        def _ensure_mask(mask, ids, pad_id, device):
+            if mask is None:
+                if pad_id is not None:
+                    m = (ids != int(pad_id)).long()
+                else:
+                    m = torch.ones_like(ids, dtype=torch.long, device=device)
+            else:
+                m = _to_long_tensor(mask, device)
+                if m.shape != ids.shape:
+                    raise ValueError(
+                        f"attention_mask shape {tuple(m.shape)} does not match input_ids shape {tuple(ids.shape)}"
+                    )
+            return m
+
+        # --- device & core tensors ---
+        device = _pick_device()
+        input_ids = _to_long_tensor(input_ids, device)
+
+        # Enforce B=1 (DLB export/engine assumes batch-static B=1)
+        if input_ids.size(0) != 1:
+            raise AssertionError("DLBAutoSampler currently assumes batch size = 1. Provide a single prompt.")
+
+        # --- auto-fill token IDs from tokenizer if absent ---
+        for kid in ("bos_token_id", "eos_token_id", "pad_token_id"):
+            if kwargs.get(kid) is None and hasattr(tokenizer, kid):
+                v = getattr(tokenizer, kid)
+                if v is not None:
+                    kwargs[kid] = v
+
+        pad_id = kwargs.get("pad_token_id", None)
+        attention_mask = _ensure_mask(attention_mask, input_ids, pad_id, device)
+
+        # --- sanitize knobs / lengths ---
+        temp = kwargs.get("temp", None)
+        if temp is not None and float(temp) <= 0.0:
+            raise ValueError("temp must be > 0 when provided")
+
+        top_k = kwargs.get("top_k", None)
+        if top_k is not None and int(top_k) < 0:
+            raise ValueError("top_k must be >= 0")
+
+        top_p = kwargs.get("top_p", None)
+        if top_p is not None and not (0.0 < float(top_p) <= 1.0):
+            raise ValueError("top_p must be in (0, 1]")
+
+        max_new_tokens = kwargs.get("max_new_tokens", 50)
+        if int(max_new_tokens) <= 0:
+            raise ValueError("max_new_tokens must be a positive integer")
+        kwargs["max_new_tokens"] = int(max_new_tokens)
+
+        mnt = kwargs.get("min_new_tokens", None)
+        if mnt is not None:
+            mnt = int(mnt)
+            if mnt < 0:
+                raise ValueError("min_new_tokens must be >= 0")
+            if mnt > max_new_tokens:
+                mnt = max_new_tokens
+            kwargs["min_new_tokens"] = mnt
+
+        # --- sanitize beams ---
+        num_beams = int(kwargs.get("num_beams", 1))
+        if num_beams < 1:
+            raise ValueError("num_beams must be >= 1")
+        kwargs["num_beams"] = num_beams
+
+        # even though the generator returns top-1 for beams, keep HF internals happy:
+        nret = int(kwargs.get("num_return_sequences", 1))
+        if nret < 1:
+            nret = 1
+        if nret > num_beams:
+            nret = num_beams
+        kwargs["num_return_sequences"] = nret
+
+        # --- normalize bad_words_ids to List[List[int]] ---
+        bwi = kwargs.get("bad_words_ids", None)
+        if bwi is not None:
+            norm = []
+            if isinstance(bwi, (list, tuple)):
+                for seq in bwi:
+                    if isinstance(seq, (list, tuple)):
+                        norm.append([int(t) for t in seq])
+                    else:
+                        norm.append([int(seq)])
+            else:
+                norm.append([int(bwi)])
+            kwargs["bad_words_ids"] = norm
+
+        # --- create engine & dispatch ---
+        eng = DLBAutoSampler(self, tokenizer)  # `self` is the DLB engine (has .model and .predict)
+        return eng.generate(input_ids=input_ids, attention_mask=attention_mask, **kwargs) 
 
     def print_all_relevance_info(self):
         """ 
