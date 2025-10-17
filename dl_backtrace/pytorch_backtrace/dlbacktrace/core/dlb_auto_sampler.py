@@ -37,7 +37,6 @@ except ImportError:  # older HF
             self.max_new_tokens = int(max_new_tokens)
 
         def __call__(self, input_ids, scores, **kwargs) -> bool:
-            # Stop when generated >= max_new_tokens beyond the starting prompt
             cur = input_ids.shape[1]
             return (cur - self.start_length) >= self.max_new_tokens
 
@@ -59,10 +58,6 @@ class DLBAutoSampler:
     All logits come from DLB:
         io = self.dlb.predict(generated, attn, debug=False, temperature=1.0)
         logits = io["output"]["output_values"]  # [batch, T, V]
-
-    Beam note:
-      DLB graphs are batch-static (exported at B=1). To avoid shape explosions,
-      we query per-beam sequentially and stack the per-beam logits.
 
     Returns:
       Always a single sequence with shape [1, T_total]
@@ -194,7 +189,7 @@ class DLBAutoSampler:
         max_new_tokens: int = 50,
         min_new_tokens: Optional[int] = None,
         max_time: Optional[float] = None,
-        early_stopping: Optional[bool | str] = None,   # used only for beams; default "never"
+        early_stopping: Optional[bool | str] = None,   # used only for beams
         # constraints
         repetition_penalty: Optional[float] = None,
         no_repeat_ngram_size: Optional[int] = None,
@@ -237,22 +232,30 @@ class DLBAutoSampler:
         T, K, P = self._clean_sampling_knobs(temp, top_k, top_p)
         do_sample = self._decide_do_sample(T, K, P)
 
-        # Early stopping for beams (string in HF >= 4.27; bool also accepted)
+        start_len = input_ids.shape[1]
+        stopping_criteria = self._build_stopping(start_len, max_new_tokens=max_new_tokens, max_time=max_time)
+
+        # If we're in BEAM mode, **hard-disable** sampling knobs to avoid warnings
+        if num_beams > 1:
+            do_sample = False
+            T = K = P = None  # silence "ignored flag" warnings
+
+        # Early stopping for beams (use bool for compatibility across HF versions)
         if num_beams > 1:
             if isinstance(early_stopping, bool):
-                estop = "always" if early_stopping else "never"
-            elif early_stopping in ("always", "never"):
-                estop = early_stopping
-            else:
-                estop = "never"
+                do_early_stopping = early_stopping
+            elif early_stopping == "always":
+                do_early_stopping = True
+            else:  # "never" or None or anything else
+                do_early_stopping = False
         else:
-            estop = None
+            do_early_stopping = False
 
         # Prepare GenerationConfig for processors
         gen_kwargs = dict(
             max_new_tokens=max_new_tokens,
             min_new_tokens=min_new_tokens,
-            do_sample=do_sample if num_beams == 1 else False,  # no sampling in beam path here
+            do_sample=do_sample,  # sampling only when num_beams == 1 and any knob is set
             bos_token_id=bos_token_id,
             eos_token_id=eos_token_id,
             pad_token_id=pad_token_id,
@@ -291,13 +294,10 @@ class DLBAutoSampler:
         )
 
         # Warpers (sampling path only)
-        if do_sample and num_beams == 1:
+        if do_sample and num_beams == 1 and any(v is not None for v in (T, K, P)):
             logits_warper = self._build_warper(T, K, P)
         else:
             logits_warper = None
-
-        start_len = input_ids.shape[1]
-        stopping_criteria = self._build_stopping(start_len, max_new_tokens=max_new_tokens, max_time=max_time)
 
         # ======================
         # Non-beam path (B=1)
@@ -363,21 +363,18 @@ class DLBAutoSampler:
         beams = int(num_beams)
         assert beams >= 2, "num_beams must be >= 2 for beam search."
 
-        # Map early_stopping to HF's expected values
-        if isinstance(early_stopping, bool):
-            do_early_stopping = "always" if early_stopping else "never"
-        elif early_stopping in ("always", "never"):
-            do_early_stopping = early_stopping
-        else:
-            do_early_stopping = "never"
+        # Some HF versions require max_length when early stopping is configured (especially when it was a string).
+        # Define a conservative cap: prompt length + max_new_tokens (or +1024 fallback).
+        max_len_for_beam = int(start_len + (max_new_tokens if max_new_tokens is not None else 1024))
 
         beam_scorer = BeamSearchScorer(
             batch_size=1,
             num_beams=beams,
             device=device,
             length_penalty=length_penalty,
-            do_early_stopping=do_early_stopping,
-            num_beam_hyps_to_keep=1,   # keep only the best hypothesis per item
+            do_early_stopping=do_early_stopping,  # bool for cross-version compatibility
+            num_beam_hyps_to_keep=1,              # keep only the best hypothesis per item
+            max_length=max_len_for_beam,          # fixes older HF requirement
         )
 
         # Expand seeds for bookkeeping (we will still call DLB per-beam)
@@ -480,7 +477,7 @@ class DLBAutoSampler:
             best_indices=None,
             pad_token_id=PAD,
             eos_token_id=eos_list if eos_list else None,
-            max_length=generated.size(1),
+            max_length=max_len_for_beam,
         )
         sequences = final["sequences"]  # [1, T_total] because num_beam_hyps_to_keep=1
         out_top1 = sequences[:1, :]     # ensure [1, T_total]
