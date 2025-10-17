@@ -30,12 +30,10 @@ except ImportError:  # older HF
         MaxTimeCriteria,
         StoppingCriteria,
     )
-
     class MaxNewTokensCriteria(StoppingCriteria):
         def __init__(self, start_length: int, max_new_tokens: int):
             self.start_length = int(start_length)
             self.max_new_tokens = int(max_new_tokens)
-
         def __call__(self, input_ids, scores, **kwargs) -> bool:
             cur = input_ids.shape[1]
             return (cur - self.start_length) >= self.max_new_tokens
@@ -77,6 +75,17 @@ class DLBAutoSampler:
     @staticmethod
     def _as_float(x: torch.Tensor) -> torch.FloatTensor:
         return cast(torch.FloatTensor, x.float())
+
+    @staticmethod
+    def _criteria_true(x) -> bool:
+        """Robustly coerce stopping-criteria output (bool or tensor) to a Python bool."""
+        if isinstance(x, torch.Tensor):
+            if x.numel() == 0:
+                return False
+            if x.numel() == 1:
+                return bool(x.item())
+            return bool(x.any().item())
+        return bool(x)
 
     # ---------- model / config helpers ----------
 
@@ -235,18 +244,18 @@ class DLBAutoSampler:
         start_len = input_ids.shape[1]
         stopping_criteria = self._build_stopping(start_len, max_new_tokens=max_new_tokens, max_time=max_time)
 
-        # If we're in BEAM mode, **hard-disable** sampling knobs to avoid warnings
+        # If BEAM mode, **hard-disable** sampling knobs to avoid warnings
         if num_beams > 1:
             do_sample = False
-            T = K = P = None  # silence "ignored flag" warnings
+            T = K = P = None
 
-        # Early stopping for beams (use bool for compatibility across HF versions)
+        # Early stopping for beams -> use bool for cross-version HF
         if num_beams > 1:
             if isinstance(early_stopping, bool):
                 do_early_stopping = early_stopping
             elif early_stopping == "always":
                 do_early_stopping = True
-            else:  # "never" or None or anything else
+            else:
                 do_early_stopping = False
         else:
             do_early_stopping = False
@@ -263,7 +272,6 @@ class DLBAutoSampler:
             no_repeat_ngram_size=no_repeat_ngram_size,
             bad_words_ids=bad_words_ids,
         )
-
         generation_config, _ = model._prepare_generation_config(
             generation_config=None, use_model_defaults=True, **gen_kwargs
         )
@@ -346,7 +354,8 @@ class DLBAutoSampler:
                         break
 
                 # HF-native stopping criteria (max_new_tokens / max_time)
-                if stopping_criteria(self._as_long(generated), None):
+                crit = stopping_criteria(self._as_long(generated[:1, :]), None)  # slice to [1, T]
+                if self._criteria_true(crit):
                     stopped_by = "stopping_criteria"
                     break
             else:
@@ -363,8 +372,7 @@ class DLBAutoSampler:
         beams = int(num_beams)
         assert beams >= 2, "num_beams must be >= 2 for beam search."
 
-        # Some HF versions require max_length when early stopping is configured (especially when it was a string).
-        # Define a conservative cap: prompt length + max_new_tokens (or +1024 fallback).
+        # Some HF versions require max_length when early stopping is configured
         max_len_for_beam = int(start_len + (max_new_tokens if max_new_tokens is not None else 1024))
 
         beam_scorer = BeamSearchScorer(
@@ -372,19 +380,19 @@ class DLBAutoSampler:
             num_beams=beams,
             device=device,
             length_penalty=length_penalty,
-            do_early_stopping=do_early_stopping,  # bool for cross-version compatibility
-            num_beam_hyps_to_keep=1,              # keep only the best hypothesis per item
-            max_length=max_len_for_beam,          # fixes older HF requirement
+            do_early_stopping=do_early_stopping,  # bool
+            num_beam_hyps_to_keep=1,              # keep only the best hypothesis
+            max_length=max_len_for_beam,
         )
 
-        # Expand seeds for bookkeeping (we will still call DLB per-beam)
+        # Expand seeds for bookkeeping (DLB called per-beam)
         generated = self._as_long(input_ids.expand(beams, -1).contiguous())  # [beams, T]
         attn = self._as_long(attention_mask.expand(beams, -1).contiguous())
 
-        # Local beam scores (public, no private attrs)
+        # Local beam scores
         beam_scores = torch.zeros((1, beams), dtype=torch.float32, device=device)
         beam_scores[:, 1:] = -1e9
-        beam_scores = beam_scores.view(-1)                                    # [beams]
+        beam_scores = beam_scores.view(-1)  # [beams]
 
         cur_len = start_len
         vocab_size = None
@@ -399,22 +407,22 @@ class DLBAutoSampler:
                 stopped_by = "max_time"
                 break
 
-            # ---- Query DLB per beam (keep B=1 for the traced graph) ----
+            # ---- Query DLB per beam ----
             next_logits_list: List[torch.Tensor] = []
             for b in range(beams):
                 io_b = self.dlb.predict(generated[b:b+1], attn[b:b+1], debug=False, temperature=1.0)
                 logits_b = self._extract_last_logits(io_b)         # [1, T_cur, V]
-                nl_b = self._as_float(logits_b[:, -1, :])          # [1, V] Float for processors
+                nl_b = self._as_float(logits_b[:, -1, :])          # [1, V]
                 next_logits_list.append(nl_b)
                 if vocab_size is None:
                     vocab_size = nl_b.size(-1)
 
-            next_logits = torch.cat(next_logits_list, dim=0)       # [beams, V] FloatTensor
+            next_logits = torch.cat(next_logits_list, dim=0)       # [beams, V]
 
             # processors (no warpers in deterministic beam)
             scores = logits_processor(self._as_long(generated), next_logits)
 
-            # mask EOS until min_new_tokens is satisfied (hard guard)
+            # mask EOS until min_new_tokens is satisfied
             if min_new_tokens is not None and (cur_len - start_len) < min_new_tokens and eos_list:
                 scores[:, eos_list] = -1e9
 
@@ -461,7 +469,8 @@ class DLBAutoSampler:
             if beam_scorer.is_done:
                 stopped_by = "beam_scorer_done"
                 break
-            if stopping_criteria(self._as_long(generated), None):
+            crit = stopping_criteria(self._as_long(generated[:1, :]), None)  # slice to [1, T]
+            if self._criteria_true(crit):
                 stopped_by = "stopping_criteria"
                 break
         else:
