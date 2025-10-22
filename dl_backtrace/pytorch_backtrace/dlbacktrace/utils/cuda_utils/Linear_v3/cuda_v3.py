@@ -154,15 +154,20 @@ __global__ void calculate_wt_fc_kernel(
             // Compute total sum
             float t_sum = p_sum + pbias - n_sum - nbias;
             
-            if (t_sum < act_lower_bound) p_sum = 0.0f;
-            if (t_sum > act_upper_bound) n_sum = 0.0f;
+            if (activation_kind == 0) {
+                if (t_sum < act_lower_bound) p_sum = 0.0f;
+                if (t_sum > act_upper_bound) n_sum = 0.0f;
+            } 
             
-            // Activation-specific handling
-            if (activation_kind == 1) {
+            else if (activation_kind == 1) {
+                // Activation-specific handling
                 float t_act = apply_activation(t_sum, act_func);
                 float p_act = apply_activation(p_sum + pbias, act_func);
                 float n_act = apply_activation(-(n_sum + nbias), act_func);
-                
+
+                if (t_sum < act_lower_bound) p_sum = 0.0f;
+                if (t_sum > act_upper_bound) n_sum = 0.0f;
+
                 if (p_sum > 0.0f && n_sum > 0.0f) {
                     if (t_act == p_act) {
                         n_sum = 0.0f;
