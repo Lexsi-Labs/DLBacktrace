@@ -35,7 +35,6 @@ from .cuda_utils.SelfAttention.cuda_v3 import calculate_wt_self_attention_cuda a
 # Wt_add_equal Layer
 from .cuda_utils.Wt_add_equal.original_version import calculate_wt_add_equal as calculate_wt_add_original
 from .cuda_utils.Wt_add_equal.refactored_version import calculate_wt_add_equal as calculate_wt_add_refactored
-from .cuda_utils.Wt_add_equal.pytorch_version import calculate_wt_add_equal_vectorized as calculate_wt_add_pytorch
 
 # Wt_mul Layer
 from .cuda_utils.Wt_mul.original_version import calculate_wt_mul as calculate_wt_mul_original

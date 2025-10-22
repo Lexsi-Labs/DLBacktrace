@@ -186,10 +186,10 @@ __global__ void calculate_wt_fc_kernel(
             float total_nsum_inv = __frcp_rn(total_nsum);
             
             // Compute aggregated weights
-            float p_agg_wt = (p_sum_final > 0.0f) ? 
+            float p_agg_wt = (p_sum > 0.0f) ? 
                 (total_psum * total_sum_inv) * (p_sum * total_psum_inv) : 0.0f;
             
-            float n_agg_wt = (n_sum_final > 0.0f) ? 
+            float n_agg_wt = (n_sum > 0.0f) ? 
                 (total_nsum * total_sum_inv) * (n_sum * total_nsum_inv) : 0.0f;
             
             // Store in shared memory for all threads
