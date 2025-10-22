@@ -1,0 +1,375 @@
+# Introduction to DL-Backtrace
+
+Welcome to the DL-Backtrace user guide! This guide will help you understand and effectively use DL-Backtrace for explainable AI and model interpretability.
+
+---
+
+## What is DL-Backtrace?
+
+DL-Backtrace is an **explainable AI (XAI) framework** that helps you understand how deep learning models make decisions. It provides layer-wise relevance propagation and comprehensive model tracing to reveal which parts of your input contribute most to the model's predictions.
+
+### Core Concept: Layer-wise Relevance Propagation
+
+At its heart, DL-Backtrace uses **relevance propagation** - a technique that traces the "importance" of each input feature backward through the network:
+
+```
+Input → Layer 1 → Layer 2 → ... → Output
+  ↑       ↑         ↑              ↑
+  R₀  ←   R₁    ←   R₂    ←  ...  R_final (100%)
+```
+
+Starting with the output (100% relevance), we trace backward to see how this relevance distributes across layers and ultimately back to the input features.
+
+---
+
+## Why Use DL-Backtrace?
+
+### 1. **Model Understanding**
+Gain deep insights into your model's decision-making process:
+
+- Which input features drive predictions?
+- How do different layers contribute to the output?
+- What patterns does the model learn?
+
+### 2. **Model Debugging**
+Identify issues before deployment:
+
+- Detect spurious correlations
+- Find bias in model decisions
+- Validate model behavior on edge cases
+
+### 3. **Regulatory Compliance**
+Meet explainability requirements:
+
+- Provide evidence for model decisions
+- Document decision-making processes
+- Satisfy audit requirements
+
+### 4. **Research & Development**
+Advance model architectures:
+
+- Understand architecture choices
+- Compare different models
+- Guide architecture improvements
+
+---
+
+## How DL-Backtrace Works
+
+### Step 1: Graph Tracing
+
+DL-Backtrace first traces your model's computational graph:
+
+```python
+from dl_backtrace.pytorch_backtrace import DLBacktraceFX
+
+dlb = DLBacktraceFX(
+    model=model,
+    input_for_graph=(dummy_input,)
+)
+```
+
+This captures:
+- Every operation in your model
+- Parameter values (weights, biases)
+- Tensor shapes and connections
+- Execution order
+
+### Step 2: Forward Execution
+
+Run your input through the traced graph:
+
+```python
+node_io = dlb.predict(input_tensor)
+```
+
+This produces:
+- Layer-wise activations
+- Intermediate outputs
+- Complete execution trace
+
+### Step 3: Relevance Propagation
+
+Calculate how relevance flows backward:
+
+```python
+relevance = dlb.evaluation(
+    mode="default",
+    multiplier=100.0,
+    task="multi-class classification"
+)
+```
+
+This generates:
+- Relevance scores for each layer
+- Input feature importance
+- Decision attribution
+
+### Step 4: Visualization
+
+Visualize the results:
+
+```python
+dlb.visualize()  # Full graph
+dlb.visualize_dlbacktrace(top_k=15)  # Top contributors
+```
+
+---
+
+## Key Concepts
+
+### Relevance
+
+**Relevance** measures how much each neuron/layer contributes to the final prediction. It's a value that:
+
+- Starts at 100% at the output
+- Distributes backward through the network
+- Conserves total relevance (∑R = 100%)
+- Can be positive or negative
+
+### Conservation Property
+
+A key principle in DL-Backtrace is **relevance conservation**:
+
+$$
+\sum_{i} R_i^{(l)} = \sum_{j} R_j^{(l+1)}
+$$
+
+The total relevance at layer \(l\) equals the total relevance at layer \(l+1\).
+
+### Execution Engines
+
+DL-Backtrace provides optimized execution engines:
+
+**ExecutionEngineNoCache** (Recommended)
+- In-memory execution
+- Fast and memory-efficient
+- No disk I/O overhead
+
+Both engines support:
+- CPU and GPU execution
+- 100+ PyTorch operations
+- Deterministic execution
+
+### Task Types
+
+Different tasks require different evaluation approaches:
+
+- **Classification**: Binary or multi-class
+- **Regression**: Continuous outputs (e.g., bounding boxes)
+- **Segmentation**: Pixel-level predictions
+- **Generation**: Autoregressive models
+
+---
+
+## Supported Framework
+
+### PyTorch
+
+Full support for PyTorch 2.6+ models:
+
+```python
+from dl_backtrace.pytorch_backtrace import DLBacktraceFX
+
+dlb = DLBacktraceFX(
+    model=pytorch_model,
+    input_for_graph=(dummy_input,),
+    layer_implementation="pytorch"
+)
+```
+
+**Features:**
+- Native PyTorch integration
+- CUDA acceleration
+- Dynamic graph tracing
+- Custom operation support
+- 100+ ATen operations
+
+---
+
+## Typical Workflow
+
+Here's a typical DL-Backtrace workflow:
+
+### 1. Prepare Your Model
+
+```python
+import torch
+import torchvision.models as models
+
+# Load your model
+model = models.resnet18(pretrained=True)
+model.eval()
+```
+
+### 2. Initialize DL-Backtrace
+
+```python
+from dl_backtrace.pytorch_backtrace import DLBacktraceFX
+
+# Create dummy input for tracing
+dummy_input = torch.randn(1, 3, 224, 224)
+
+# Initialize
+dlb = DLBacktraceFX(
+    model=model,
+    input_for_graph=(dummy_input,),
+    layer_implementation="pytorch"
+)
+```
+
+### 3. Prepare Real Input
+
+```python
+from PIL import Image
+from torchvision import transforms
+
+# Load and preprocess image
+transform = transforms.Compose([
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                       std=[0.229, 0.224, 0.225])
+])
+
+image = Image.open('cat.jpg')
+input_tensor = transform(image).unsqueeze(0)
+```
+
+### 4. Run Analysis
+
+```python
+# Forward pass
+node_io = dlb.predict(input_tensor)
+
+# Relevance propagation
+relevance = dlb.evaluation(
+    mode="default",
+    multiplier=100.0,
+    task="multi-class classification"
+)
+```
+
+### 5. Interpret Results
+
+```python
+# Get prediction
+output = node_io[list(node_io.keys())[-1]][1]
+predicted_class = output.argmax()
+
+print(f"Predicted class: {predicted_class}")
+print(f"Number of nodes: {len(relevance)}")
+
+# Find most relevant layers
+sorted_relevance = sorted(
+    relevance.items(),
+    key=lambda x: abs(x[1]) if isinstance(x[1], (int, float)) else 0,
+    reverse=True
+)
+
+print("\nTop 5 most relevant layers:")
+for node_name, rel_score in sorted_relevance[:5]:
+    print(f"  {node_name}: {rel_score}")
+```
+
+### 6. Visualize
+
+```python
+# Save visualizations
+dlb.visualize()  # Full graph
+dlb.visualize_dlbacktrace(top_k=15)  # Top 15 nodes
+```
+
+---
+
+## What's Next?
+
+Now that you understand the basics, dive deeper into specific topics:
+
+### Learn by Framework
+
+=== "PyTorch Users"
+    - [PyTorch Overview](pytorch/overview.md)
+    - [DLBacktraceFX Guide](pytorch/dlbacktracefx.md)
+    - [Execution Engines](pytorch/execution-engines.md)
+    - [PyTorch Tutorials](../tutorials/vision/resnet.md)
+
+=== "TensorFlow Users"
+    - [TensorFlow Overview](tensorflow/overview.md)
+    - [Backtrace API](tensorflow/backtrace-api.md)
+    - [Supported Layers](tensorflow/layers.md)
+    - [TensorFlow Examples](../examples/tensorflow-examples.md)
+
+### Learn by Topic
+
+- **[Relevance Propagation](relevance/overview.md)** - Understand the theory
+- **[Evaluation Modes](relevance/modes.md)** - Different evaluation strategies
+- **[Task Types](relevance/tasks.md)** - Classification, detection, etc.
+- **[Visualization](visualization.md)** - Interpret and display results
+
+### Learn by Example
+
+- **[Vision Tutorials](../tutorials/vision/resnet.md)** - Image models
+- **[NLP Tutorials](../tutorials/nlp/bert.md)** - Text models
+- **[Colab Notebooks](../examples/colab-notebooks.md)** - Interactive examples
+
+---
+
+## Best Practices
+
+!!! tip "Start Simple"
+    Begin with small models to understand the workflow before moving to large transformers.
+
+!!! tip "Use Evaluation Mode"
+    Always set your model to evaluation mode: `model.eval()`
+
+!!! tip "Choose Right Engine"
+    Use `ExecutionEngineNoCache` for large models (it's memory-efficient).
+
+!!! tip "Match Input Shapes"
+    Ensure your dummy input shape matches your real input shape.
+
+!!! warning "GPU Memory"
+    Large models (LLaMA-3B+) require significant memory. Monitor GPU usage.
+
+!!! warning "Custom Layers"
+    Some custom operations may not be supported. Check the operation list.
+
+---
+
+## Getting Help
+
+If you run into issues:
+
+1. Check the [FAQ](../support/faq.md)
+2. Read [Troubleshooting Guide](../support/troubleshooting.md)
+3. Search [GitHub Issues](https://github.com/aryaxai/DL-Backtrace/issues)
+4. Ask in [GitHub Discussions](https://github.com/aryaxai/DL-Backtrace/discussions)
+5. Email [support@aryaxai.com](mailto:support@aryaxai.com)
+
+---
+
+## Contributing
+
+DL-Backtrace is open source! Contributions are welcome:
+
+- Report bugs
+- Suggest features
+- Submit pull requests
+- Improve documentation
+
+See the [Contributing Guide](../developer/contributing.md) to get started.
+
+---
+
+<div align="center">
+
+**Ready to make your models explainable?**
+
+[Quick Start →](../home/quickstart.md){ .md-button .md-button--primary }
+
+</div>
+
+
+

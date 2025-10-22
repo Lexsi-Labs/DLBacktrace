@@ -1,0 +1,190 @@
+site_name: DL-Backtrace Documentation
+site_description: A powerful explainable AI (XAI) framework for deep learning model interpretability
+site_author: AryaXAI
+site_url: https://www.aryaxai.com/
+
+repo_name: aryaxai/DL-Backtrace
+repo_url: https://github.com/aryaxai/DL-Backtrace
+edit_uri: edit/main/docs/
+
+copyright: Copyright &copy; 2025 AryaXAI
+
+theme:
+  name: material
+  palette:
+    # Palette toggle for light mode
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Palette toggle for dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Roboto
+    code: Roboto Mono
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/github
+    logo: material/brain
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/aryaxai
+    - icon: fontawesome/solid/globe
+      link: https://www.aryaxai.com/
+    - icon: fontawesome/solid/envelope
+      link: mailto:support@aryaxai.com
+  version:
+    provider: mike
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+plugins:
+  - search:
+      separator: '[\s\-,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
+  - minify:
+      minify_html: true
+  - git-revision-date-localized:
+      enable_creation_date: true
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+nav:
+  - Home:
+    - Overview: index.md
+    - Key Features: home/features.md
+    - Installation: home/installation.md
+    - Quick Start: home/quickstart.md
+    - What's New: home/whats-new.md
+  
+  - User Guide:
+    - Introduction: guide/introduction.md
+    - PyTorch Backend:
+      - Overview: guide/pytorch/overview.md
+      - DLBacktraceFX: guide/pytorch/dlbacktracefx.md
+      - Execution Engines: guide/pytorch/execution-engines.md
+      - Supported Operations: guide/pytorch/operations.md
+      - Model Tracing: guide/pytorch/tracing.md
+    - Relevance Propagation:
+      - Overview: guide/relevance/overview.md
+      - Evaluation Modes: guide/relevance/modes.md
+      - Task Types: guide/relevance/tasks.md
+      - Parameters: guide/relevance/parameters.md
+    - Visualization: guide/visualization.md
+    - Best Practices: guide/best-practices.md
+  
+  - Tutorials:
+    - Vision Models:
+      - ResNet Classification: tutorials/vision/resnet.md
+      - VGG Classification: tutorials/vision/vgg.md
+      - Vision Transformer: tutorials/vision/vit.md
+      - Custom CNN: tutorials/vision/custom-cnn.md
+    - NLP Models:
+      - BERT Sentiment Analysis: tutorials/nlp/bert.md
+      - RoBERTa Classification: tutorials/nlp/roberta.md
+      - LLaMA Text Generation: tutorials/nlp/llama.md
+      - Custom Transformers: tutorials/nlp/custom-transformer.md
+    - Tabular Models:
+      - Binary Classification: tutorials/tabular/binary-classification.md
+      - Multi-class Classification: tutorials/tabular/multiclass.md
+    - Advanced:
+      - Object Detection: tutorials/advanced/object-detection.md
+      - Segmentation: tutorials/advanced/segmentation.md
+      - Multi-task Models: tutorials/advanced/multitask.md
+      - Custom Architectures: tutorials/advanced/custom-arch.md
+  
+  - Examples:
+    - PyTorch Examples: examples/pytorch-examples.md
+    - Colab Notebooks: examples/colab-notebooks.md
+    - Use Cases: examples/use-cases.md
+  
+  - API Reference:
+    - PyTorch API:
+      - DLBacktraceFX: api/pytorch/dlbacktracefx.md
+      - ExecutionEngine: api/pytorch/execution-engine.md
+      - GraphBuilder: api/pytorch/graph-builder.md
+      - RelevancePropagation: api/pytorch/relevance.md
+      - ATen Operations: api/pytorch/aten-ops.md
+      - Utilities: api/pytorch/utils.md
+  
+  - Developer Guide:
+    - Architecture: developer/architecture.md
+    - Contributing: developer/contributing.md
+    - Layer Implementation: developer/layer-implementation.md
+    - Execution Engine: developer/execution-engine.md
+    - CUDA Development: developer/cuda-development.md
+    - Testing: developer/testing.md
+    - Benchmarking: developer/benchmarking.md
+  
+  - Support:
+    - FAQ: support/faq.md
+    - Troubleshooting: support/troubleshooting.md
+    - Performance Tips: support/performance.md
+    - Known Issues: support/known-issues.md
+    - Changelog: support/changelog.md
+    - License: support/license.md
+
+
+

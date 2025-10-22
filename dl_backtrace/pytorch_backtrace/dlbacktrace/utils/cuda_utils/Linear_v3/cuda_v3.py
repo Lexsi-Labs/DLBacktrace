@@ -328,14 +328,23 @@ extra_flags = [
 
 extra_flags.extend(get_cuda_arch_flags())
 
-custom_linear_layer_cuda_ops = load_inline(
-    name="linear_layer_cuda_v3",
-    cpp_sources=linear_layer_cuda_declaration,
-    cuda_sources=linear_layer_cuda_source,
-    functions=["launch_calculate_wt_fc_kernel"],
-    extra_cuda_cflags=extra_flags,
-    verbose=True
-)
+# Lazy compilation: only compile when first used
+custom_linear_layer_cuda_ops = None
+
+def _get_cuda_ops():
+    """Lazy loader for CUDA operations - compiles only on first use."""
+    global custom_linear_layer_cuda_ops
+    if custom_linear_layer_cuda_ops is None:
+        print("🔧 Compiling Linear CUDA kernel...")
+        custom_linear_layer_cuda_ops = load_inline(
+            name="linear_layer_cuda_v3",
+            cpp_sources=linear_layer_cuda_declaration,
+            cuda_sources=linear_layer_cuda_source,
+            functions=["launch_calculate_wt_fc_kernel"],
+            extra_cuda_cflags=extra_flags,
+            verbose=True
+        )
+    return custom_linear_layer_cuda_ops
 
 def calculate_wt_fc_cuda(relevance_y, input_array, w, b, act):
     """
@@ -399,7 +408,9 @@ def calculate_wt_fc_cuda(relevance_y, input_array, w, b, act):
         inp_torch = torch.tensor(inp, dtype=torch.float32, device=cuda_device)
         wts_torch = torch.tensor(wts, dtype=torch.float32, device=cuda_device)
         
-        cuda_function = custom_linear_layer_cuda_ops.launch_calculate_wt_fc_kernel
+        # Get CUDA ops (compiles on first call)
+        cuda_ops = _get_cuda_ops()
+        cuda_function = cuda_ops.launch_calculate_wt_fc_kernel
         
         # Call CUDA kernel for single batch element with simplified parameters
         try:

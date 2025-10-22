@@ -15,13 +15,11 @@ from .cuda_utils.Conv2D.pytorch_version import calculate_wt_conv as calculate_wt
 from .cuda_utils.MaxPool2D.original_version import calculate_wt_maxpool as calculate_wt_maxpool_original
 from .cuda_utils.MaxPool2D.refactored_version import calculate_wt_maxpool as calculate_wt_maxpool_refactored
 from .cuda_utils.MaxPool2D.pytorch_version import calculate_wt_maxpool as calculate_wt_maxpool_pytorch
-#from .cuda_utils.MaxPool2D.cuda_version import calculate_wt_maxpool_cuda as calculate_wt_maxpool_cuda
 
 # AdaptiveAvgPool2D Layer
 from .cuda_utils.AdaptiveAvgPool2D.original_version import calculate_wt_gavgpool as calculate_wt_gavgpool_original
 from .cuda_utils.AdaptiveAvgPool2D.refactored_version import calculate_wt_gavgpool as calculate_wt_gavgpool_refactored
 from .cuda_utils.AdaptiveAvgPool2D.pytorch_version import calculate_wt_gavgpool as calculate_wt_gavgpool_pytorch
-#from .cuda_utils.AdaptiveAvgPool2D.cuda_version.wt_gavgpool_ops import fused_weighted_gavgpool as calculate_wt_gavgpool_cuda
 
 # Embedded Layer
 from .cuda_utils.Embedded.original_version import calculate_wt_embedding as calculate_wt_embedding_original
@@ -83,38 +81,6 @@ def launch_conv2d(version, wts, inp, w, b, padding, strides, act):
     else:
         raise ValueError(f"Unknown version for Conv2D layer: {version}")
 
-def launch_maxpool2d(version, wts, inp, pool_size, padding, strides):
-    if version in ['original', 'refactored']:
-        func = calculate_wt_maxpool_original if version == 'original' else calculate_wt_maxpool_refactored
-        return func(wts, inp, pool_size, padding, strides)
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    wts_t, inp_t = _prepare_tensors(device, wts, inp)
-
-    if version == 'pytorch':
-        return calculate_wt_maxpool_pytorch(wts_t, inp_t, pool_size, padding, strides).cpu().numpy()
-    elif version == 'cuda':
-        #return calculate_wt_maxpool_cuda(wts_t, inp_t, pool_size, padding, strides).cpu().numpy()
-        return None
-    else:
-        raise ValueError(f"Unknown version for MaxPool2D layer: {version}")
-
-def launch_adaptiveavgpool2d(version, wts, inp):
-    if version in ['original', 'refactored']:
-        func = calculate_wt_gavgpool_original if version == 'original' else calculate_wt_gavgpool_refactored
-        return func(wts, inp)
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    wts_t, inp_t = _prepare_tensors(device, wts, inp)
-
-    if version == 'pytorch':
-        return calculate_wt_gavgpool_pytorch(wts_t, inp_t)[0].cpu().numpy()
-    elif version == 'cuda':
-        #return calculate_wt_gavgpool_cuda(wts_t, inp_t)[0].cpu().numpy()
-        return None
-    else:
-        raise ValueError(f"Unknown version for AdaptiveAvgPool2D layer: {version}")
-
 def launch_embedding(version, R_out, inp, vocab_size, aggregate):
     if version in ['original', 'refactored']:
         func = calculate_wt_embedding_original if version == 'original' else calculate_wt_embedding_refactored
@@ -128,7 +94,6 @@ def launch_embedding(version, R_out, inp, vocab_size, aggregate):
         return calculate_wt_embedding_pytorch(R_out_t, inp_t, vocab_size, aggregate)[0].cpu().numpy()
     elif version == 'cuda':
         return calculate_wt_embedding_cuda(R_out_t, inp_t, vocab_size, aggregate)[0].cpu().numpy()
-        #return None
     else:
         raise ValueError(f"Unknown version for Embedding layer: {version}")
 
@@ -154,17 +119,6 @@ def launch_wt_add_equal(version, R_out, inp):
     if version in ['original', 'refactored']:
         func = calculate_wt_add_original if version == 'original' else calculate_wt_add_refactored
         return func(R_out, inp)
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    R_out_t, inp_t = _prepare_tensors(device, R_out, inp)
-
-    if version == 'pytorch':
-        return [arr.cpu().numpy() for arr in calculate_wt_add_pytorch(R_out_t, inp_t)[0]]
-    elif version == 'cuda':
-        #return [arr.cpu().numpy() for arr in calculate_wt_add_cuda(R_out_t, inp_t)[0]]
-        return None
-    else:
-        raise ValueError(f"Unknown version for Wt_add_equal layer: {version}")
 
 def launch_wt_mul(version, R_out):
     if version in ['original', 'refactored']:
