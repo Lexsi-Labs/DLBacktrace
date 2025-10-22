@@ -407,6 +407,8 @@ def calculate_wt_fc_cuda(relevance_y, input_array, w, b, act):
                 wts_torch, inp_torch, w_torch, b_torch,
                 act_type, act_lower, act_upper, act_func_int
             )
+
+            torch.cuda.synchronize()
             
             if result is None:
                 print(f"[CUDA ERROR] Kernel returned None for batch element {i}")
