@@ -341,46 +341,33 @@ extra_flags = [
 ]
 extra_flags.extend(get_cuda_arch_flags())
 
-# Lazy compilation: only compile when first used
-_softmax_ops = None
-_stabilize_ops = None
-_conservation_ops = None
+# Compile kernels
+softmax_ops = load_inline(
+    name="fused_softmax",
+    cpp_sources=fused_softmax_declaration,
+    cuda_sources=fused_softmax_source,
+    functions=["launch_fused_softmax"],
+    extra_cuda_cflags=extra_flags,
+    verbose=True
+)
 
-def _get_cuda_ops():
-    """Lazy loader for CUDA operations - compiles only on first use."""
-    global _softmax_ops, _stabilize_ops, _conservation_ops
-    
-    if _softmax_ops is None:
-        print("🔧 Compiling SelfAttention CUDA kernels (first time only)...")
-        
-        _softmax_ops = load_inline(
-            name="fused_softmax",
-            cpp_sources=fused_softmax_declaration,
-            cuda_sources=fused_softmax_source,
-            functions=["launch_fused_softmax"],
-            extra_cuda_cflags=extra_flags,
-            verbose=True
-        )
+stabilize_ops = load_inline(
+    name="fused_stabilize_normalize",
+    cpp_sources=fused_stabilize_normalize_declaration,
+    cuda_sources=fused_stabilize_normalize_source,
+    functions=["launch_fused_stabilize_normalize"],
+    extra_cuda_cflags=extra_flags,
+    verbose=True
+)
 
-        _stabilize_ops = load_inline(
-            name="fused_stabilize_normalize",
-            cpp_sources=fused_stabilize_normalize_declaration,
-            cuda_sources=fused_stabilize_normalize_source,
-            functions=["launch_fused_stabilize_normalize"],
-            extra_cuda_cflags=extra_flags,
-            verbose=True
-        )
-
-        _conservation_ops = load_inline(
-            name="fused_conservation",
-            cpp_sources=fused_conservation_declaration,
-            cuda_sources=fused_conservation_source,
-            functions=["launch_fused_conservation"],
-            extra_cuda_cflags=extra_flags,
-            verbose=True
-        )
-    
-    return _softmax_ops, _stabilize_ops, _conservation_ops
+conservation_ops = load_inline(
+    name="fused_conservation",
+    cpp_sources=fused_conservation_declaration,
+    cuda_sources=fused_conservation_source,
+    functions=["launch_fused_conservation"],
+    extra_cuda_cflags=extra_flags,
+    verbose=True
+)
 
 def calculate_wt_self_attention_cuda(
     R_out: torch.Tensor,
@@ -391,9 +378,6 @@ def calculate_wt_self_attention_cuda(
     scale: Optional[float] = None,
     epsilon: float = 1e-9
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    
-    # Get CUDA ops (compiles on first call)
-    softmax_ops, stabilize_ops, conservation_ops = _get_cuda_ops()
     
     B, H, T_q, D = Q.shape
     T_k = K.shape[2]

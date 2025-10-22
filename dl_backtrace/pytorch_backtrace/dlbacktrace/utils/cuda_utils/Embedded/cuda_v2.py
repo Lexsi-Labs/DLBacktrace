@@ -251,23 +251,14 @@ extra_flags = [
 
 extra_flags.extend(get_cuda_arch_flags())
 
-# Lazy compilation: only compile when first used
-_embedding_cuda_ops = None
-
-def _get_cuda_ops():
-    """Lazy loader for CUDA operations - compiles only on first use."""
-    global _embedding_cuda_ops
-    if _embedding_cuda_ops is None:
-        print("🔧 Compiling Embedding CUDA kernel (first time only)...")
-        _embedding_cuda_ops = load_inline(
-            name="custom_embedding_layer_cuda_v2",
-            cpp_sources=embedding_cuda_declaration,
-            cuda_sources=embedding_cuda_source,
-            functions=["wt_embedding_cuda_v2"],
-            extra_cuda_cflags=extra_flags,
-            verbose=True
-        )
-    return _embedding_cuda_ops
+embedding_cuda_ops = load_inline(
+    name="custom_embedding_layer_cuda_v2",
+    cpp_sources=embedding_cuda_declaration,
+    cuda_sources=embedding_cuda_source,
+    functions=["wt_embedding_cuda_v2"],
+    extra_cuda_cflags=extra_flags,
+    verbose=True
+)
 
 def calculate_wt_embedding_cuda(R_out, input_ids, vocab_size, aggregate):
     """
@@ -290,7 +281,5 @@ def calculate_wt_embedding_cuda(R_out, input_ids, vocab_size, aggregate):
                      accumulated relevance vectors per token. If aggregate='mean',
                      returns [vocab_size] tensor with mean relevance per token.
     """
-    
-    # Get CUDA ops (compiles on first call)
-    cuda_ops = _get_cuda_ops()
-    return cuda_ops.wt_embedding_cuda_v2(R_out, input_ids, vocab_size, aggregate)
+
+    return embedding_cuda_ops.wt_embedding_cuda_v2(R_out, input_ids, vocab_size, aggregate)
