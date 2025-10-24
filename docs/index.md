@@ -1,18 +1,16 @@
 # Welcome to DL-Backtrace
 
-<div align="center">
+<figure markdown="span">
+    ![DL-Backtrace Logo](assets/images/arya-fav.png){ width="300" }
+    <figcaption>A powerful explainable AI (XAI) framework for deep learning model interpretability</figcaption>
+</figure>
 
-![DL-Backtrace Logo](https://img.shields.io/badge/DL--Backtrace-XAI%20Framework-blue)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/aryaxai/DL-Backtrace/blob/main/LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://python.org)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.6%2B-red.svg)](https://pytorch.org)
 
-**A powerful explainable AI (XAI) framework for deep learning model interpretability**
-
 [Get Started](home/quickstart.md){ .md-button .md-button--primary }
 [View on GitHub](https://github.com/aryaxai/DL-Backtrace){ .md-button }
-
-</div>
 
 ---
 
@@ -37,7 +35,7 @@ Optimized execution engine with CUDA acceleration and deterministic tracing. Cho
 Support for CNN, RNN, Transformer, and custom architectures. Works seamlessly with popular models like ResNet, BERT, LLaMA, and more.
 
 ### 🎯 **Multi-Task Support**
-Binary/multi-class classification, object detection, segmentation, and text generation - all supported out of the box.
+Binary/multi-class classification, segmentation, and text generation - all supported out of the box.
 
 ### 🛡️ **Production Ready**
 Deterministic execution environment with comprehensive error handling. Battle-tested on real-world models and datasets.
@@ -72,7 +70,7 @@ x = torch.randn(1, 3, 224, 224)
 dlb = DLBacktraceFX(
     model=model,
     input_for_graph=(x,),
-    layer_implementation="pytorch"
+    device="cuda"
 )
 
 # Get layer-wise outputs
@@ -157,33 +155,28 @@ Ensures reproducible results across runs with automatic environment configuratio
 
     [:octicons-arrow-right-24: Read the guide](guide/introduction.md)
 
--   :material-code-braces:{ .lg .middle } __Tutorials__
+-   :material-code-braces:{ .lg .middle } __Examples__
 
     ---
 
-    Step-by-step tutorials for various model types and tasks
+    Interactive notebooks and real-world use cases
 
-    [:octicons-arrow-right-24: Explore tutorials](tutorials/vision/resnet.md)
+    [:octicons-arrow-right-24: Explore examples](examples/colab-notebooks.md)
 
--   :material-api:{ .lg .middle } __API Reference__
+-   :material-account-group:{ .lg .middle } __Developer Guide__
 
     ---
 
-    Detailed API documentation for all components
+    Contributing and extending DL-Backtrace
 
-    [:octicons-arrow-right-24: API docs](api/pytorch/dlbacktracefx.md)
+    [:octicons-arrow-right-24: Developer docs](developer/contributing.md)
 
 </div>
 
 ---
 
-<div align="center">
 
 DL-Backtrace - Making AI Transparent and Explainable 🚀
 
-Built with ❤️ by [AryaXAI](https://www.aryaxai.com/)
-
-</div>
-
-
+Built with ❤️ by [AryaXAI](https://www.aryaxai.com)
 

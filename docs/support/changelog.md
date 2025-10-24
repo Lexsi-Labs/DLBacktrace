@@ -4,7 +4,7 @@ All notable changes to DL-Backtrace are documented here.
 
 ---
 
-## [2.0.0] - 2025-01 (Current)
+<!-- ## [2.0.0] - 2025-01 (Current)
 
 ### 🚀 Major Features
 
@@ -325,4 +325,4 @@ DL-Backtrace is released under the [MIT License](license.md).
 </div>
 
 
-
+ -->

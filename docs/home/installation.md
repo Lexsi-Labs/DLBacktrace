@@ -17,7 +17,7 @@ This guide covers how to install DL-Backtrace and its dependencies.
 ### System Requirements
 
 **For GPU Support:**
-- NVIDIA GPU with CUDA capability 7.0+
+- NVIDIA GPU with CUDA capability 12.0+
 - CUDA Toolkit 12.6 (for PyTorch) or 11.x (for TensorFlow)
 - cuDNN compatible with your CUDA version
 
@@ -84,11 +84,6 @@ For the best experience with PyTorch, install with CUDA support:
     pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
     ```
 
-=== "CUDA 11.8"
-    ```bash
-    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-    ```
-
 === "CPU Only"
     ```bash
     pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
@@ -115,43 +110,6 @@ huggingface-cli login
 ```
 
 You'll be prompted to enter your access token. Get your token from [https://huggingface.co/settings/tokens](https://huggingface.co/settings/tokens).
-
-!!! warning "Gated Models"
-    Some models like LLaMA require you to accept their terms of use on Hugging Face before you can download them.
-
----
-
-## CUDA Layers Compilation (Optional)
-
-For maximum performance, you can compile custom CUDA kernels:
-
-### Prerequisites
-
-- NVIDIA GPU with CUDA support
-- CUDA Toolkit installed and in PATH
-- C++ compiler (g++ on Linux, MSVC on Windows)
-
-### Compilation
-
-```bash
-cd DL-Backtrace
-
-# Make the script executable
-chmod +x compile_cuda_layers.sh
-
-# Compile all CUDA layers
-./compile_cuda_layers.sh
-```
-
-This will compile custom CUDA kernels for:
-- Linear layers
-- Conv2D layers
-- Embedding layers
-- Self-attention layers
-- And more...
-
-!!! note "Compilation Time"
-    Compiling CUDA kernels can take several minutes. You only need to do this once after installation.
 
 ---
 
@@ -249,28 +207,14 @@ If you encounter issues:
 
 ---
 
-## Docker Installation (Coming Soon)
-
-We're working on official Docker images for easy deployment:
-
-```bash
-# Pull the Docker image (coming soon)
-docker pull aryaxai/dl-backtrace:latest
-
-# Run with GPU support
-docker run --gpus all -it aryaxai/dl-backtrace:latest
-```
-
----
-
 ## What's Next?
 
 Now that you have DL-Backtrace installed:
 
 - [Quick Start Guide](quickstart.md) - Build your first explainable model
 - [User Guide](../guide/introduction.md) - Learn the concepts
-- [Tutorials](../tutorials/vision/resnet.md) - Follow detailed examples
-- [API Reference](../api/pytorch/dlbacktracefx.md) - Explore the API
+- [Examples](../examples/colab-notebooks.md) - Interactive notebooks
+- [Developer Guide](../developer/contributing.md) - Contributing and extending
 
 ---
 
@@ -283,12 +227,3 @@ cd DL-Backtrace
 git pull origin main
 pip install -e . --upgrade
 ```
-
-If you've compiled CUDA kernels, you may need to recompile:
-
-```bash
-./compile_cuda_layers.sh
-```
-
-
-

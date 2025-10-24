@@ -23,8 +23,6 @@ Complete reference for relevance evaluation parameters.
 - **Options**: 
   - `"binary-classification"`
   - `"multi-class classification"`
-  - `"bbox-regression"`
-  - `"binary-segmentation"`
 - **Description**: Type of task the model performs
 
 ---
@@ -35,12 +33,6 @@ Complete reference for relevance evaluation parameters.
 - **Type**: `float`
 - **Default**: `0.5`
 - **Description**: Threshold for segmentation tasks
-
-### model_type
-- **Type**: `str`
-- **Default**: `"Encoder"`
-- **Options**: `"Encoder"`, `"Encoder_Decoder"`
-- **Description**: Model architecture type
 
 ### scaler
 - **Type**: `float`
@@ -56,13 +48,10 @@ relevance = dlb.evaluation(
     mode="default",
     multiplier=100.0,
     task="multi-class classification",
-    model_type="Encoder"
 )
 ```
 
 ---
-
-See [Evaluation Modes](modes.md) and [Task Types](tasks.md) for more details.
 
 
 

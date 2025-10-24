@@ -4,7 +4,7 @@ DL-Backtrace provides optimized execution engines for running traced models.
 
 ---
 
-## ExecutionEngineNoCache (Recommended)
+## ExecutionEngineNoCache
 
 The **ExecutionEngineNoCache** is the recommended engine for most use cases.
 
@@ -107,23 +107,6 @@ node_io = {
 
 ## Device Support
 
-### Automatic Device Detection
-
-The engine automatically detects and uses the appropriate device:
-
-```python
-# CPU execution
-model = model.cpu()
-input_tensor = input_tensor.cpu()
-
-# GPU execution
-model = model.cuda()
-input_tensor = input_tensor.cuda()
-
-# Same DLBacktraceFX code works for both!
-dlb = DLBacktraceFX(model=model, input_for_graph=(input_tensor,))
-```
-
 ### Device Consistency
 
 Ensures all tensors are on the same device:
@@ -136,16 +119,6 @@ def ensure_tensor_consistency(tensors, target_device=None):
     
     return [t.to(device=target_device) if t.device != target_device 
             else t for t in tensors]
-```
-
-### Mixed Precision
-
-Handles mixed precision scenarios:
-
-```python
-# FP16 inference
-with torch.cuda.amp.autocast():
-    node_io = dlb.predict(input_tensor)
 ```
 
 ---
@@ -201,40 +174,6 @@ The execution engine supports comprehensive PyTorch operations:
 - `dropout` (pass-through in eval mode)
 
 See [Supported Operations](operations.md) for the complete list.
-
----
-
-## Performance Optimization
-
-### Memory Efficiency
-
-**Tensor Cleanup:**
-```python
-# Automatically removes unused tensors
-with torch.no_grad():
-    output = operation(input_tensor.detach().contiguous())
-```
-
-**No Gradient Tracking:**
-```python
-# Disables gradient computation
-torch.set_grad_enabled(False)
-```
-
-### Speed Optimization
-
-**CUDA Synchronization:**
-```python
-# Ensures correct timing on GPU
-if torch.cuda.is_available():
-    torch.cuda.synchronize()
-```
-
-**Contiguous Tensors:**
-```python
-# Ensures memory layout is optimal
-input_tensor = input_tensor.contiguous()
-```
 
 ---
 
@@ -317,9 +256,6 @@ for node_name, (inputs, output) in node_io.items():
 
 ## Best Practices
 
-!!! tip "Use No-Cache Engine"
-    ExecutionEngineNoCache is recommended for all use cases.
-
 !!! tip "Monitor Memory"
     Watch GPU memory usage with `nvidia-smi` or `torch.cuda.memory_summary()`.
 
@@ -360,8 +296,7 @@ for node_name, (inputs, output) in node_io.items():
 
 - [Supported Operations](operations.md) - See all supported operations
 - [Model Tracing](tracing.md) - Learn about graph tracing
-- [API Reference](../../api/pytorch/execution-engine.md) - Detailed API docs
-- [Performance Tips](../../support/performance.md) - Optimization guide
+- [Examples](../../examples/colab-notebooks.md) - Interactive notebooks
 
 
 

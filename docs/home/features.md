@@ -31,10 +31,16 @@ Identify which input features contribute most to predictions:
     
 === "Transformers"
     - BERT family (BERT, RoBERTa, DistilBERT, ALBERT)
-    - GPT-style models (LLaMA, GPT)
+    - SoTa models (LLaMA, Qwen)
     - Vision Transformers (ViT)
     - Custom transformer architectures
-    
+
+=== "Mixture of Experts"
+    - Qwen3 MoE
+    - GPT oss
+    - JetMoE
+    - OLMoE
+
 === "Recurrent Networks"
     - LSTM networks
     - Bidirectional RNNs
@@ -49,10 +55,9 @@ Identify which input features contribute most to predictions:
 
 ### Optimized Execution Engines
 
-**ExecutionEngineNoCache** (Recommended)
+**ExecutionEngineNoCache**
 - In-memory execution for maximum speed
 - Memory-efficient tensor management
-- Supports both CPU and GPU
 - Enhanced operation support
 
 **CUDA Acceleration**
@@ -163,7 +168,6 @@ Automatic setup for consistent results:
 
 - ✅ CUDA memory management and synchronization
 - ✅ Deterministic algorithms (when available)
-- ✅ cuDNN deterministic settings
 - ✅ Random seed control
 - ✅ Environment variable configuration
 
@@ -201,11 +205,11 @@ Automatic setup for consistent results:
 ### Memory Optimization Tips
 
 ```python
-# Use no-cache engine for large models
+
 dlb = DLBacktraceFX(
     model=model,
     input_for_graph=(x,),
-    layer_implementation="pytorch"
+    device="cuda"
 )
 
 # Enable mixed precision if supported
@@ -244,7 +248,7 @@ dlb.visualize_dlbacktrace(top_k=15)
 
 ---
 
-## 🚀 Recent Improvements (2025)
+<!-- ## 🚀 Recent Improvements (2025)
 
 ### Critical Fixes
 
@@ -261,32 +265,9 @@ dlb.visualize_dlbacktrace(top_k=15)
 - Improved error messages
 - Better logging and debugging
 
----
+--- -->
 
-## 🔌 Extensibility
 
-### Custom Layer Support
-
-Easily add support for new layers:
-
-```python
-# Add your custom operation handler
-def custom_op_handler(node, inputs, params):
-    # Your implementation
-    return output
-```
-
-### Plugin System
-
-- Extend with custom relevance rules
-- Add new visualization styles
-- Integrate with other tools
-
-### API Flexibility
-
-- Low-level APIs for advanced users
-- High-level APIs for quick prototyping
-- Modular design for easy extension
 
 ---
 
@@ -295,7 +276,7 @@ def custom_op_handler(node, inputs, params):
 - [Installation Guide](installation.md) - Get DL-Backtrace installed
 - [Quick Start](quickstart.md) - Build your first explainable model
 - [User Guide](../guide/introduction.md) - Learn the details
-- [Tutorials](../tutorials/vision/resnet.md) - Follow step-by-step examples
+- [Examples](../examples/colab-notebooks.md) - Interactive notebooks and use cases
 
 
 

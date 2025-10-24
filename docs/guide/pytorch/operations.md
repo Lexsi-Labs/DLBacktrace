@@ -14,12 +14,6 @@ DL-Backtrace supports 100+ PyTorch ATen operations. This page lists all supporte
 | `addmm` | Matrix multiply and add | ✅ |
 | `mm` | Matrix multiply | ✅ |
 
-**Example:**
-```python
-# Linear layer
-output = torch.nn.functional.linear(input, weight, bias)
-```
-
 ---
 
 ### Convolutional Layers
@@ -30,12 +24,6 @@ output = torch.nn.functional.linear(input, weight, bias)
 | `conv1d` | 1D convolution | ✅ |
 | `conv_transpose2d` | 2D transposed convolution | 🔄 |
 | `conv_transpose1d` | 1D transposed convolution | 🔄 |
-
-**Example:**
-```python
-# 2D Convolution
-output = torch.nn.functional.conv2d(input, weight, bias, stride, padding)
-```
 
 ---
 
@@ -52,12 +40,6 @@ output = torch.nn.functional.conv2d(input, weight, bias, stride, padding)
 | `adaptive_avg_pool1d` | Adaptive average pooling 1D | ✅ |
 | `adaptive_max_pool1d` | Adaptive max pooling 1D | ✅ |
 
-**Example:**
-```python
-# Adaptive average pooling
-output = torch.nn.functional.adaptive_avg_pool2d(input, (1, 1))
-```
-
 ---
 
 ### Activation Functions
@@ -73,15 +55,6 @@ output = torch.nn.functional.adaptive_avg_pool2d(input, (1, 1))
 | `elu` | ELU activation | ✅ |
 | `softmax` | Softmax activation | ✅ |
 | `log_softmax` | Log softmax | ✅ |
-
-**Example:**
-```python
-# ReLU activation
-output = torch.nn.functional.relu(input)
-
-# GELU activation
-output = torch.nn.functional.gelu(input)
-```
 
 ---
 
@@ -100,18 +73,6 @@ output = torch.nn.functional.gelu(input)
 | `permute` | Permute dimensions | ✅ |
 | `contiguous` | Make tensor contiguous | ✅ |
 
-**Example:**
-```python
-# Reshape
-output = input.view(batch_size, -1)
-
-# Transpose (supports negative indexing)
-output = input.transpose(-1, -2)
-
-# Permute (supports negative indexing)
-output = input.permute([0, 2, 1, 3])
-```
-
 ---
 
 ### Slicing & Indexing
@@ -124,15 +85,6 @@ output = input.permute([0, 2, 1, 3])
 | `select` | Select single index | ✅ |
 | `narrow` | Narrow tensor | ✅ |
 
-**Example:**
-```python
-# Slice (supports negative indexing)
-output = input.slice(dim=-1, start=0, end=10)
-
-# Index select (supports negative dimension)
-output = torch.index_select(input, dim=-1, index)
-```
-
 ---
 
 ### Concatenation & Stacking
@@ -143,15 +95,6 @@ output = torch.index_select(input, dim=-1, index)
 | `stack` | Stack tensors | ✅ |
 | `split` | Split tensor | ✅ |
 | `chunk` | Chunk tensor | ✅ |
-
-**Example:**
-```python
-# Concatenate (supports negative dimension)
-output = torch.cat([tensor1, tensor2], dim=-1)
-
-# Stack
-output = torch.stack([tensor1, tensor2], dim=0)
-```
 
 ---
 
@@ -170,15 +113,6 @@ output = torch.stack([tensor1, tensor2], dim=0)
 | `exp` | Exponential | ✅ |
 | `log` | Logarithm | ✅ |
 
-**Example:**
-```python
-# Element-wise multiplication
-output = torch.mul(input1, input2)
-
-# Addition with broadcasting
-output = torch.add(input, bias)
-```
-
 ---
 
 ### Matrix Operations
@@ -189,15 +123,6 @@ output = torch.add(input, bias)
 | `bmm` | Batch matrix multiplication | ✅ |
 | `addmm` | Matrix multiply and add | ✅ |
 | `baddbmm` | Batch matrix multiply and add | ✅ |
-
-**Example:**
-```python
-# Matrix multiplication
-output = torch.matmul(input1, input2)
-
-# Batch matrix multiplication
-output = torch.bmm(batch1, batch2)
-```
 
 ---
 
@@ -212,12 +137,6 @@ output = torch.bmm(batch1, batch2)
 | `gt` | Greater than | ✅ |
 | `ge` | Greater than or equal | ✅ |
 
-**Example:**
-```python
-# Element-wise comparison
-mask = torch.ne(input, 0)  # Not equal to zero
-```
-
 ---
 
 ## Normalization
@@ -228,15 +147,6 @@ mask = torch.ne(input, 0)  # Not equal to zero
 | `batch_norm` | Batch normalization | ✅ |
 | `group_norm` | Group normalization | ✅ |
 | `instance_norm` | Instance normalization | ✅ |
-
-**Example:**
-```python
-# Layer normalization
-output = torch.nn.functional.layer_norm(
-    input, normalized_shape, weight, bias, eps
-)
-```
-
 ---
 
 ## Attention Operations
@@ -247,16 +157,6 @@ output = torch.nn.functional.layer_norm(
 | `softmax` | Softmax for attention weights | ✅ |
 | `dropout` | Dropout (pass-through in eval) | ✅ |
 
-**Example:**
-```python
-# Scaled dot-product attention
-output = torch.nn.functional.scaled_dot_product_attention(
-    query, key, value, attn_mask, dropout_p, is_causal
-)
-```
-
-**Note:** DL-Backtrace auto-detects whether to use bidirectional or causal attention based on model type.
-
 ---
 
 ## Embedding Operations
@@ -265,14 +165,6 @@ output = torch.nn.functional.scaled_dot_product_attention(
 |-----------|-------------|-----------|
 | `embedding` | Embedding lookup | ✅ |
 | `embedding_bag` | Embedding bag | 🔄 |
-
-**Example:**
-```python
-# Embedding lookup
-output = torch.nn.functional.embedding(
-    input_ids, weight, padding_idx
-)
-```
 
 ---
 
@@ -288,12 +180,6 @@ output = torch.nn.functional.embedding(
 | `zeros` | Create zeros | ✅ |
 | `ones` | Create ones | ✅ |
 | `full` | Create filled tensor | ✅ |
-
-**Example:**
-```python
-# Create range
-indices = torch.arange(0, seq_len, device=device)
-```
 
 ---
 
@@ -380,8 +266,8 @@ except Exception as e:
 
 - [Execution Engines](execution-engines.md) - Learn how operations are executed
 - [Model Tracing](tracing.md) - Understand graph tracing
-- [API Reference](../../api/pytorch/aten-ops.md) - Detailed operation docs
-- [Troubleshooting](../../support/troubleshooting.md) - Fix operation errors
+- [Examples](../../examples/colab-notebooks.md) - See operations in action
+- [Best Practices](../best-practices.md) - Optimization tips
 
 
 

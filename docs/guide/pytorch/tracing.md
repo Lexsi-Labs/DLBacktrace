@@ -25,9 +25,9 @@ Node: output (output)
 
 ## How Tracing Works
 
-### Step 1: torch.export
+### Step 1: torch.export_for_training
 
-DL-Backtrace uses PyTorch's `torch.export` to trace models:
+DL-Backtrace uses PyTorch's `torch.export_for_training` to trace models:
 
 ```python
 from dl_backtrace.pytorch_backtrace import DLBacktraceFX
@@ -124,13 +124,13 @@ dummy_input = torch.randn(1, 3, 224, 224)
 dlb = DLBacktraceFX(
     model=model,
     input_for_graph=(dummy_input,),
-    layer_implementation="pytorch"
+    device="cpu"
 )
 
 print("✅ Model traced successfully!")
 ```
 
----
+<!-- ---
 
 ## Traced Graph Structure
 
@@ -210,7 +210,7 @@ dlb = DLBacktraceFX(
     model=model,
     input_for_graph=(dummy_image, dummy_metadata)
 )
-```
+``` -->
 
 ---
 
@@ -246,106 +246,6 @@ Some constraints apply:
 
 ---
 
-## Troubleshooting Tracing
-
-### Common Issues
-
-#### 1. Dynamic Control Flow
-
-**Problem:**
-```python
-def forward(self, x):
-    if x.sum() > 0:  # ❌ Data-dependent control flow
-        return self.path_a(x)
-    else:
-        return self.path_b(x)
-```
-
-**Solution:**
-Use torch operations instead:
-```python
-def forward(self, x):
-    mask = (x.sum() > 0).float()
-    return mask * self.path_a(x) + (1 - mask) * self.path_b(x)
-```
-
-#### 2. In-place Operations
-
-**Problem:**
-```python
-def forward(self, x):
-    x += bias  # ❌ In-place operation
-    return x
-```
-
-**Solution:**
-Use out-of-place operations:
-```python
-def forward(self, x):
-    x = x + bias  # ✅ Out-of-place
-    return x
-```
-
-#### 3. Unsupported Operations
-
-**Problem:**
-```python
-def forward(self, x):
-    return torch.special.some_function(x)  # ❌ Not supported
-```
-
-**Solution:**
-- Check [supported operations](operations.md)
-- Decompose into supported operations
-- Request support on GitHub
-
----
-
-## Graph Inspection
-
-### View Traced Nodes
-
-```python
-# After tracing
-dlb = DLBacktraceFX(model=model, input_for_graph=(dummy_input,))
-
-# Access graph
-graph = dlb.graph
-
-# Inspect nodes
-for node in graph.nodes():
-    print(f"Node: {node}")
-    print(f"  Type: {graph.nodes[node].get('type', 'unknown')}")
-    print(f"  Operation: {graph.nodes[node].get('node_type', 'unknown')}")
-```
-
-### Visualize Graph
-
-```python
-# Generate graph visualization
-dlb.visualize()
-
-# This creates:
-# - dlbacktrace_graph.png
-# - dlbacktrace_graph.svg
-```
-
----
-
-## Advanced Tracing
-
-### Custom Tracing Logic
-
-For advanced use cases, you can customize the tracing:
-
-```python
-# Access internal graph builder
-from dl_backtrace.pytorch_backtrace.dlbacktrace.core import graph_builder
-
-# Customize tracing (advanced)
-# See developer documentation for details
-```
-
 ### Caching Traced Graphs
 
 Trace once, use multiple times:
@@ -380,21 +280,12 @@ for input_batch in dataloader:
 
 ## Performance Considerations
 
-### Tracing Time
-
-- **Small models**: < 1 second
-- **Medium models** (ResNet-50): 1-3 seconds
-- **Large models** (BERT-base): 3-10 seconds
-- **Very large models** (LLaMA-3B): 10-30 seconds
-
 ### Memory Usage
 
 Tracing requires memory for:
 - Graph structure
 - Model parameters
 - Dummy input execution
-
-Typical overhead: 100-500 MB
 
 ---
 
@@ -403,7 +294,7 @@ Typical overhead: 100-500 MB
 - [Execution Engines](execution-engines.md) - How traced graphs are executed
 - [Supported Operations](operations.md) - What can be traced
 - [DLBacktraceFX Guide](dlbacktracefx.md) - Complete API
-- [Troubleshooting](../../support/troubleshooting.md) - Fix tracing issues
+- [Examples](../../examples/colab-notebooks.md) - Tracing examples
 
 
 

@@ -60,8 +60,7 @@ from dl_backtrace.pytorch_backtrace import DLBacktraceFX
 
 dlb = DLBacktraceFX(
     model=model,
-    input_for_graph=(dummy_input,),
-    layer_implementation="pytorch"
+    input_for_graph=(dummy_input,)
 )
 ```
 
@@ -74,8 +73,6 @@ Check:
 2. All operations are supported
 3. No data-dependent control flow
 4. Input shape matches model expectations
-
-See [Troubleshooting](troubleshooting.md) for more help.
 
 ### How do I interpret relevance scores?
 
@@ -138,7 +135,6 @@ Tracing adds overhead, but you only trace once. Subsequent evaluations reuse the
 - Custom transformers
 
 **Others:**
-- Tabular models
 - Custom architectures using supported operations
 
 ### Are all PyTorch operations supported?
@@ -167,10 +163,6 @@ Relevance propagation traces the "importance" of input features by backpropagati
 - **Gradients**: Show sensitivity to small input changes
 
 Relevance is better for understanding model decisions.
-
-### Is it the same as GradCAM?
-
-No. GradCAM uses gradients to create visualizations. DL-Backtrace uses layer-wise relevance propagation, which follows different principles.
 
 ### Can I use it for model debugging?
 
@@ -224,37 +216,6 @@ DL-Backtrace should handle this automatically. If not:
 
 ---
 
-## Comparison Questions
-
-### How does it compare to SHAP?
-
-| Feature | DL-Backtrace | SHAP |
-|---------|-------------|------|
-| **Speed** | Fast | Slow (many forward passes) |
-| **Deep learning focus** | Yes | General ML |
-| **Layer-wise analysis** | Yes | No |
-| **Framework** | PyTorch | Model-agnostic |
-
-### How does it compare to LIME?
-
-| Feature | DL-Backtrace | LIME |
-|---------|-------------|------|
-| **Speed** | Fast | Slow (many model calls) |
-| **Accuracy** | High | Approximation |
-| **Layer-wise** | Yes | No |
-| **Framework** | PyTorch | Model-agnostic |
-
-### How does it compare to Integrated Gradients?
-
-| Feature | DL-Backtrace | Integrated Gradients |
-|---------|-------------|---------------------|
-| **Method** | Relevance propagation | Gradient integration |
-| **Speed** | Fast | Moderate |
-| **Layer-wise** | Yes | No |
-| **Completeness** | Yes | Yes |
-
----
-
 ## Licensing Questions
 
 ### Can I use it commercially?
@@ -277,10 +238,6 @@ Absolutely! Contributions are welcome. See the [Contributing Guide](../developer
 
 ## Advanced Questions
 
-### Can I customize relevance propagation?
-
-Yes, you can modify the relevance rules. See the [Developer Guide](../developer/layer-implementation.md).
-
 ### Can I add support for new operations?
 
 Yes! See the [Developer Guide](../developer/contributing.md) for details on adding new operations.
@@ -292,10 +249,6 @@ Yes! DL-Backtrace is production-ready with:
 - Error handling
 - Performance optimization
 - Extensive testing
-
-### Does it support distributed inference?
-
-Multi-GPU support is in development. Single GPU is fully supported.
 
 ### Can I export explanations?
 
@@ -313,9 +266,9 @@ torch.save(relevance, 'relevance.pt')
 ### Where can I find more documentation?
 
 - [User Guide](../guide/introduction.md)
-- [Tutorials](../tutorials/vision/resnet.md)
-- [API Reference](../api/pytorch/dlbacktracefx.md)
 - [Examples](../examples/colab-notebooks.md)
+- [Use Cases](../examples/use-cases.md)
+- [Developer Guide](../developer/contributing.md)
 
 ### Where can I ask questions?
 
@@ -345,20 +298,12 @@ Open a [feature request](https://github.com/aryaxai/DL-Backtrace/issues/new) on 
 
 If your question isn't answered here:
 
-1. Check the [Troubleshooting Guide](troubleshooting.md)
-2. Search [GitHub Issues](https://github.com/aryaxai/DL-Backtrace/issues)
-3. Ask in [GitHub Discussions](https://github.com/aryaxai/DL-Backtrace/discussions)
-4. Email us: [support@aryaxai.com](mailto:support@aryaxai.com)
+1. Search [GitHub Issues](https://github.com/aryaxai/DL-Backtrace/issues)
+2. Ask in [GitHub Discussions](https://github.com/aryaxai/DL-Backtrace/discussions)
+3. Email us: [support@aryaxai.com](mailto:support@aryaxai.com)
 
 ---
-
-<div align="center">
 
 **Can't find what you're looking for?**
 
 [Ask on GitHub →](https://github.com/aryaxai/DL-Backtrace/discussions){ .md-button }
-
-</div>
-
-
-

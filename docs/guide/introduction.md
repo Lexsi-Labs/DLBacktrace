@@ -125,23 +125,12 @@ dlb.visualize_dlbacktrace(top_k=15)  # Top contributors
 - Starts at 100% at the output
 - Distributes backward through the network
 - Conserves total relevance (∑R = 100%)
-- Can be positive or negative
-
-### Conservation Property
-
-A key principle in DL-Backtrace is **relevance conservation**:
-
-$$
-\sum_{i} R_i^{(l)} = \sum_{j} R_j^{(l+1)}
-$$
-
-The total relevance at layer \(l\) equals the total relevance at layer \(l+1\).
 
 ### Execution Engines
 
 DL-Backtrace provides optimized execution engines:
 
-**ExecutionEngineNoCache** (Recommended)
+**ExecutionEngineNoCache**
 - In-memory execution
 - Fast and memory-efficient
 - No disk I/O overhead
@@ -156,7 +145,7 @@ Both engines support:
 Different tasks require different evaluation approaches:
 
 - **Classification**: Binary or multi-class
-- **Regression**: Continuous outputs (e.g., bounding boxes)
+- **Regression**: Continuous outputs
 - **Segmentation**: Pixel-level predictions
 - **Generation**: Autoregressive models
 
@@ -174,7 +163,7 @@ from dl_backtrace.pytorch_backtrace import DLBacktraceFX
 dlb = DLBacktraceFX(
     model=pytorch_model,
     input_for_graph=(dummy_input,),
-    layer_implementation="pytorch"
+    device="cuda"
 )
 ```
 
@@ -214,7 +203,7 @@ dummy_input = torch.randn(1, 3, 224, 224)
 dlb = DLBacktraceFX(
     model=model,
     input_for_graph=(dummy_input,),
-    layer_implementation="pytorch"
+    device="cuda"
 )
 ```
 
@@ -293,25 +282,13 @@ Now that you understand the basics, dive deeper into specific topics:
     - [PyTorch Overview](pytorch/overview.md)
     - [DLBacktraceFX Guide](pytorch/dlbacktracefx.md)
     - [Execution Engines](pytorch/execution-engines.md)
-    - [PyTorch Tutorials](../tutorials/vision/resnet.md)
-
-=== "TensorFlow Users"
-    - [TensorFlow Overview](tensorflow/overview.md)
-    - [Backtrace API](tensorflow/backtrace-api.md)
-    - [Supported Layers](tensorflow/layers.md)
-    - [TensorFlow Examples](../examples/tensorflow-examples.md)
 
 ### Learn by Topic
 
 - **[Relevance Propagation](relevance/overview.md)** - Understand the theory
-- **[Evaluation Modes](relevance/modes.md)** - Different evaluation strategies
-- **[Task Types](relevance/tasks.md)** - Classification, detection, etc.
-- **[Visualization](visualization.md)** - Interpret and display results
 
 ### Learn by Example
 
-- **[Vision Tutorials](../tutorials/vision/resnet.md)** - Image models
-- **[NLP Tutorials](../tutorials/nlp/bert.md)** - Text models
 - **[Colab Notebooks](../examples/colab-notebooks.md)** - Interactive examples
 
 ---
@@ -323,9 +300,6 @@ Now that you understand the basics, dive deeper into specific topics:
 
 !!! tip "Use Evaluation Mode"
     Always set your model to evaluation mode: `model.eval()`
-
-!!! tip "Choose Right Engine"
-    Use `ExecutionEngineNoCache` for large models (it's memory-efficient).
 
 !!! tip "Match Input Shapes"
     Ensure your dummy input shape matches your real input shape.
@@ -343,10 +317,9 @@ Now that you understand the basics, dive deeper into specific topics:
 If you run into issues:
 
 1. Check the [FAQ](../support/faq.md)
-2. Read [Troubleshooting Guide](../support/troubleshooting.md)
-3. Search [GitHub Issues](https://github.com/aryaxai/DL-Backtrace/issues)
-4. Ask in [GitHub Discussions](https://github.com/aryaxai/DL-Backtrace/discussions)
-5. Email [support@aryaxai.com](mailto:support@aryaxai.com)
+2. Search [GitHub Issues](https://github.com/aryaxai/DL-Backtrace/issues)
+3. Ask in [GitHub Discussions](https://github.com/aryaxai/DL-Backtrace/discussions)
+4. Email [support@aryaxai.com](mailto:support@aryaxai.com)
 
 ---
 
@@ -363,13 +336,10 @@ See the [Contributing Guide](../developer/contributing.md) to get started.
 
 ---
 
-<div align="center">
-
 **Ready to make your models explainable?**
 
 [Quick Start →](../home/quickstart.md){ .md-button .md-button--primary }
 
-</div>
 
 
 

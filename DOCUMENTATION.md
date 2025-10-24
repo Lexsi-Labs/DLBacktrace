@@ -12,11 +12,9 @@ The documentation is built with **MkDocs** and **Material for MkDocs** theme.
 
 1. **Home** - Getting started, installation, quick start
 2. **User Guide** - Comprehensive PyTorch usage documentation
-3. **Tutorials** - Step-by-step tutorials
-4. **Examples** - Code examples and Colab notebooks
-5. **API Reference** - Detailed PyTorch API documentation
-6. **Developer Guide** - Contributing and development
-7. **Support** - FAQ, troubleshooting, changelog
+3. **Examples** - Interactive notebooks and real-world use cases
+4. **Developer Guide** - Contributing and development
+5. **Support** - FAQ, troubleshooting, changelog
 
 ---
 
@@ -67,19 +65,9 @@ Output will be in `site/` directory.
 - **Visualization** - Creating visualizations
 - **Best Practices** - Guidelines for effective use
 
-### Tutorials
-- **Vision Models** - ResNet, VGG, ViT, Custom CNNs
-- **NLP Models** - BERT, RoBERTa, LLaMA, Custom transformers
-- **Tabular Models** - Classification tasks
-- **Advanced** - Detection, segmentation, multi-task, custom architectures
-
 ### Examples
-- **PyTorch Examples** - Code snippets and patterns
-- **Colab Notebooks** - 40+ interactive notebooks (PyTorch-based)
-- **Use Cases** - Real-world applications
-
-### API Reference
-- **PyTorch API** - Complete PyTorch API documentation
+- **Colab Notebooks** - 40+ interactive notebooks covering vision, NLP, and advanced models
+- **Use Cases** - Real-world applications and practical implementations
 
 ### Developer Guide
 - **Architecture** - System architecture overview

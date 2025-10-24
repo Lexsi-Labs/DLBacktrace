@@ -23,48 +23,6 @@ Automatic detection of attention mechanisms:
 - **Causal Attention**: Auto-detects GPT/LLaMA-style causal models
 - **Correct Behavior**: Ensures proper attention mask handling for each model type
 
----
-
-## Critical Fixes
-
-### 🚨 RuntimeError: Boolean Tensor Handling
-**Fixed:** Critical crash when processing boolean tensors in debug code.
-
-**Issue:**
-```python
-# OLD CODE (BROKEN):
-max_val = torch.max(torch.abs(processed_output)).item()
-# ❌ Crashes on boolean tensors
-```
-
-**Solution:**
-```python
-# NEW CODE (FIXED):
-if processed_output.dtype in [torch.bool]:
-    # Handle boolean tensors separately
-elif torch.is_floating_point(processed_output):
-    # Only apply abs() to floating point tensors
-    max_val = torch.max(torch.abs(processed_output)).item()
-```
-
-**Impact:** RoBERTa, LLaMA, and other transformer models no longer crash during execution.
-
----
-
-### 🔧 Embedding Operation OOM Fix
-**Fixed:** Out-of-memory errors in embedding operations.
-
-**Issue:** Duplicate embedding handling caused 1TB memory allocation attempts.
-
-**Solution:**
-- Removed duplicate processing code
-- Direct `aten_op` usage with device consistency
-- Memory-efficient tensor management with `torch.no_grad()`
-
-**Benefits:**
-- ✅ No more OOM errors on large vocabulary models
-- ✅ Faster execution with reduced memory footprint
-- ✅ Better device compatibility (CPU/GPU)
 
 ---
 
@@ -82,41 +40,17 @@ elif torch.is_floating_point(processed_output):
 - `scaled_dot_product_attention`
 - And more...
 
-**Example:**
-```python
-# Automatically handles mixed precision
-def ensure_dtype_consistency(tensors, target_dtype=None):
-    """Handles mixed float16/float32 scenarios"""
-    # Converts half/float16 to float32 for CPU compatibility
-    # or maintains consistent dtype for GPU
-```
-
 ---
 
-### 🔧 Comparison Operations
-**Added:** Explicit handling for comparison operations (ne, eq, lt, le, gt, ge).
-
-**Features:**
-- Proper input validation
-- Dtype consistency checks
-- Clear error messages
-- Flexible input handling
-
-**Benefits:**
-- ✅ Exact reproducibility across runs
-- ✅ Better debugging with detailed logging
-- ✅ Correct ATen API usage
-
----
 
 ## New Model Support
 
-### LLaMA-3.2 Models
-Full support for LLaMA-3.2 models:
+Full support for LLaMA-3.2 and Qwen3 models:
 
 - **LLaMA-3.2-1B**: Tested and validated
 - **LLaMA-3.2-3B**: Tested and validated
-- **LLaMA-3.2-8B**: Experimental support
+- **LLaMA-3.2-8B**: Tested and validated
+- **Qwen3 0.6B to Qwen3 14B**: Tested and validated
 
 **Example:**
 ```python
@@ -153,12 +87,10 @@ Enhanced support for transformer architectures:
 
 Performance on NVIDIA A100 GPU:
 
-| Model | Old Version | New Version | Improvement |
-|-------|------------|-------------|-------------|
-| ResNet-18 | 3.2s | 2.3s | **28% faster** |
-| BERT-base | 8.1s | 5.7s | **30% faster** |
-| LLaMA-1B | 25.3s | 18.4s | **27% faster** |
-| LLaMA-3B | 58.7s | 42.1s | **28% faster** |
+| Model | Token Count | Old CPU Version | New Version |
+|-------|------------|-----------------|-------------|
+| LLaMA-1B | 256 | 2.5 hrs | 18.4s |
+| LLaMA-3B | 256 | 3 hrs | 42.1s |
 
 ---
 
@@ -196,13 +128,6 @@ Detailed logging for debugging:
 
 ## Quality & Reliability
 
-### Deterministic Execution
-Automatic setup for reproducible results:
-
-- ✅ CUDA memory management
-- ✅ Deterministic algorithms
-- ✅ cuDNN settings
-- ✅ Random seed control
 
 ### Testing & Validation
 Comprehensive test suite:
@@ -215,9 +140,7 @@ Comprehensive test suite:
 ### Continuous Integration
 Automated testing on:
 
-- Multiple Python versions (3.8, 3.9, 3.10, 3.11)
 - CPU and GPU environments
-- Different PyTorch versions
 - Various model architectures
 
 ---
@@ -236,29 +159,10 @@ All changes are backward compatible. Existing code will continue to work without
 
 All existing APIs remain supported and maintained.
 
----
-
-## Migration Guide
-
-### From Previous Versions
-
-No changes required! Simply update to the latest version:
-
-```bash
-cd DL-Backtrace
-git pull origin main
-pip install -e . --upgrade
-```
-
-If you've compiled CUDA kernels, recompile them:
-
-```bash
-./compile_cuda_layers.sh
-```
 
 ---
 
-## Upcoming Features
+<!-- ## Upcoming Features
 
 ### In Development
 
@@ -275,11 +179,11 @@ If you've compiled CUDA kernels, recompile them:
 - **Model comparison**: Compare explanations across models
 - **Deployment tools**: Production-ready serving utilities
 
----
+--- -->
 
 ## Community Contributions
 
-We welcome contributions! Recent community contributions include:
+We welcome contributions for the following:
 
 - Bug reports and fixes
 - Documentation improvements
@@ -320,7 +224,7 @@ Special thanks to:
 ### v1.5.0 (2024-12)
 - Initial PyTorch 2.6 support
 - ExecutionEngineNoCache improvements
-- Basic LLaMA support
+- Basic models support
 
 ### v1.0.0 (2024-06)
 - Initial stable release

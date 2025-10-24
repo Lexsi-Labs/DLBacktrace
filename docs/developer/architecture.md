@@ -41,26 +41,14 @@ Understanding DL-Backtrace's architecture.
 ## Core Components
 
 ### 1. Graph Builder
-- Traces model using `torch.export`
-- Extracts nodes and parameters
-- Builds NetworkX graph
-- Performs topological sort
+Uses PyTorch Train Export to construct the computational graphs with fundamental torch aten node operations = layers + inline operation alongside weights and hyperparameter extraction for comprehensive node-wise model output tracing.
 
 ### 2. Execution Engine
-- Executes operations
-- Tracks activations
-- Manages memory
-- Handles devices
+High-performance forward pass execution using the computation graph to compute the output of each node while ensuring consistent precision and correct hyper-params and weight being used with settings to ensure deterministic results. With warning logs for extremely high values.
 
 ### 3. Relevance Propagation
-- Calculates relevance scores
-- Propagates backward
-- Handles different layer types
-
-### 4. Visualization
-- Generates graph images
-- Creates heatmaps
-- Produces reports
+Layer-specific algorithms (Linear, Convolutional, Attention) that distribute relevance based on each layer's mathematical properties and activation patterns
+It distributes relevance scores across layers, providing insights into feature importance, information flow, and bias, enabling better model interpretation and validation without external dependencies.
 
 ---
 
@@ -73,8 +61,6 @@ Understanding DL-Backtrace's architecture.
 5. **Visualize**: Generate outputs
 
 ---
-
-See [Developer Guide](../dev_notes/DEVELOPER_GUIDE.md) for implementation details.
 
 
 

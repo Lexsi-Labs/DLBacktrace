@@ -62,17 +62,9 @@ Current limitations and known issues in DL-Backtrace.
 
 **Status**: In development for future release
 
-### TorchScript
-
-**Issue**: Limited TorchScript compatibility
-
-**Status**: Planned improvement
-
 ---
 
 ## Workarounds
-
-For most issues, see the [Troubleshooting Guide](troubleshooting.md).
 
 Report new issues on [GitHub](https://github.com/aryaxai/DL-Backtrace/issues).
 

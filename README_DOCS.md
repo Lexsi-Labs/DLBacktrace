@@ -39,17 +39,9 @@ docs/
 │   │   └── parameters.md
 │   ├── visualization.md
 │   └── best-practices.md
-├── tutorials/                 # Step-by-step tutorials
-│   ├── vision/               # Vision model tutorials
-│   ├── nlp/                  # NLP model tutorials
-│   ├── tabular/              # Tabular data tutorials
-│   └── advanced/             # Advanced topics
 ├── examples/                  # Code examples
-│   ├── pytorch-examples.md
 │   ├── colab-notebooks.md    # 40+ Colab links
 │   └── use-cases.md
-├── api/                       # API reference
-│   └── pytorch/              # PyTorch API
 ├── developer/                 # Developer documentation
 │   ├── architecture.md
 │   ├── contributing.md
@@ -150,8 +142,7 @@ This automatically builds and deploys to `gh-pages` branch.
 
 **Examples:**
 - 40+ Google Colab notebooks (PyTorch-based)
-- PyTorch code examples
-- Real-world use cases
+- Real-world use cases and applications
 
 **Developer Resources:**
 - Architecture documentation
@@ -166,6 +157,13 @@ This automatically builds and deploys to `gh-pages` branch.
 - Performance optimization tips
 - Known issues and workarounds
 - Complete changelog
+
+### Changes From Original Documentation
+- ✅ TensorFlow support deprecated and removed
+- ✅ Tutorials section removed (replaced with expanded examples)
+- ✅ API reference section removed (focus on user guide and examples)
+- ✅ Logo properly integrated into documentation
+- ✅ Streamlined navigation for better user experience
 
 ---
 

@@ -7,6 +7,8 @@ Relevance propagation is the core technique DL-Backtrace uses to explain model p
 ## What is Relevance Propagation?
 
 **Relevance propagation** traces the "importance" or "contribution" of each input feature to the model's output by propagating relevance scores backward through the network.
+We use Layer-specific algorithms (Linear, Convolutional, Attention) that distribute relevance based on each layer's mathematical properties and activation patterns
+It distributes relevance scores across layers, providing insights into feature importance, information flow, and bias, enabling better model interpretation and validation without external dependencies.
 
 ### Key Concept
 
@@ -15,33 +17,6 @@ Starting with the output (which has 100% relevance to itself), we ask:
 > "Which neurons in the previous layer contributed to this output, and how much?"
 
 We repeat this question layer by layer until we reach the input, resulting in a relevance score for each input feature.
-
----
-
-## Mathematical Foundation
-
-### Conservation Principle
-
-The core principle is **relevance conservation**:
-
-$$
-\sum_{i} R_i^{(l)} = \sum_{j} R_j^{(l+1)}
-$$
-
-The total relevance at layer \(l\) equals the total relevance at layer \(l+1\).
-
-### Relevance Redistribution
-
-For a neuron \(j\) in layer \(l+1\) receiving input from neurons \(i\) in layer \(l\):
-
-$$
-R_i^{(l)} = \sum_j \frac{w_{ij} \cdot a_i^{(l)}}{\sum_{k} w_{kj} \cdot a_k^{(l)}} R_j^{(l+1)}
-$$
-
-Where:
-- \(R_i^{(l)}\) = relevance of neuron \(i\) at layer \(l\)
-- \(w_{ij}\) = weight from neuron \(i\) to neuron \(j\)
-- \(a_i^{(l)}\) = activation of neuron \(i\) at layer \(l\)
 
 ---
 
@@ -231,7 +206,7 @@ for name, rel in relevance.items():
 
 ---
 
-## Evaluation Modes
+<!-- ## Evaluation Modes
 
 DL-Backtrace supports different evaluation modes:
 
@@ -248,10 +223,8 @@ relevance = dlb.evaluation(mode="default")
 Compare relevance for different classes:
 
 ```python
-relevance = dlb.evaluation(mode="contrastive")
+relevance = dlb.evaluation(mode="contrastive") -->
 ```
-
-See [Evaluation Modes](modes.md) for details.
 
 ---
 
@@ -326,41 +299,11 @@ All contributions are accounted for:
 
 ---
 
-## Common Questions
-
-??? question "Why use relevance instead of gradients?"
-    - **Relevance**: Shows which features contributed to the prediction
-    - **Gradients**: Show how sensitive the output is to small changes
-    
-    Relevance is better for understanding what the model actually used.
-
-??? question "Can relevance be negative?"
-    Yes! Negative relevance means the feature argued against the predicted class.
-
-??? question "Does relevance change with different inputs?"
-    Yes! Relevance is input-specific. Different inputs will have different relevance patterns.
-
-??? question "How accurate is relevance?"
-    Relevance follows mathematical conservation principles and has been validated in research and practice.
-
----
-
 ## Next Steps
 
-- [Evaluation Modes](modes.md) - Different propagation strategies
-- [Task Types](tasks.md) - Task-specific relevance
 - [Parameters](parameters.md) - Tune relevance calculation
-- [Tutorials](../../tutorials/vision/resnet.md) - See relevance in action
+- [Examples](../../examples/colab-notebooks.md) - See relevance in action
 
 ---
-
-## References
-
-For more on the theory behind relevance propagation:
-
-1. Bach et al. (2015) - "On Pixel-Wise Explanations for Non-Linear Classifier Decisions by Layer-Wise Relevance Propagation"
-2. Montavon et al. (2017) - "Methods for Interpreting and Understanding Deep Neural Networks"
-3. Samek et al. (2021) - "Explaining Deep Neural Networks and Beyond"
-
 
 

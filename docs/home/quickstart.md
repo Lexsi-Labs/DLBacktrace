@@ -8,10 +8,6 @@ Get started with DL-Backtrace in minutes! This guide will walk you through your 
 
 Make sure you have DL-Backtrace installed. If not, see the [Installation Guide](installation.md).
 
-```bash
-pip install -e /path/to/DL-Backtrace
-```
-
 ---
 
 ## Your First Example
@@ -60,7 +56,7 @@ dummy_input = torch.randn(1, 3, 32, 32)
 dlb = DLBacktraceFX(
     model=model,
     input_for_graph=(dummy_input,),
-    layer_implementation="pytorch"
+    device="cuda"
 )
 
 print("✅ DL-Backtrace initialized successfully!")
@@ -141,7 +137,7 @@ dummy_input = torch.randn(1, 3, 32, 32)
 dlb = DLBacktraceFX(
     model=model,
     input_for_graph=(dummy_input,),
-    layer_implementation="pytorch"
+    device="cpu"
 )
 
 # 3. Run Analysis
@@ -180,7 +176,7 @@ dummy_input = torch.randn(1, 3, 224, 224)
 dlb = DLBacktraceFX(
     model=model,
     input_for_graph=(dummy_input,),
-    layer_implementation="pytorch"
+    device="cuda"
 )
 
 # Load and preprocess image
@@ -231,7 +227,7 @@ inputs = tokenizer(text, return_tensors="pt", padding=True)
 dlb = DLBacktraceFX(
     model=model,
     input_for_graph=(inputs['input_ids'], inputs['attention_mask']),
-    layer_implementation="pytorch"
+    device="cuda"
 )
 
 # Analyze
@@ -291,7 +287,7 @@ The visualization methods save files to your current directory:
 |-----------|-------------|---------|
 | `model` | PyTorch model to trace | Required |
 | `input_for_graph` | Tuple of example inputs | Required |
-| `layer_implementation` | Implementation type | `"pytorch"` |
+| `device` | Device type | `"cpu"` |
 
 ### Evaluation Parameters
 
@@ -320,19 +316,15 @@ Now that you've run your first example, dive deeper:
 - [Understanding Relevance Propagation](../guide/relevance/overview.md)
 - [Execution Engines Explained](../guide/pytorch/execution-engines.md)
 
-### Follow Detailed Tutorials
-- [ResNet Image Classification](../tutorials/vision/resnet.md)
-- [BERT Sentiment Analysis](../tutorials/nlp/bert.md)
-- [Custom Model Tutorial](../tutorials/vision/custom-cnn.md)
-
 ### Explore Examples
-- [PyTorch Examples](../examples/pytorch-examples.md)
-- [TensorFlow Examples](../examples/tensorflow-examples.md)
 - [Google Colab Notebooks](../examples/colab-notebooks.md)
+- [Use Cases](../examples/use-cases.md)
 
-### API Reference
-- [DLBacktraceFX API](../api/pytorch/dlbacktracefx.md)
-- [Backtrace API (TF)](../api/tensorflow/backtrace.md)
+### Best Practices
+- [Best Practices Guide](../guide/best-practices.md)
+
+### Get Help
+- [FAQ](../support/faq.md)
 
 ---
 
@@ -348,7 +340,7 @@ Now that you've run your first example, dive deeper:
     Some custom operations might not be supported yet. Check the [supported operations list](../guide/pytorch/operations.md).
 
 !!! warning "Memory Usage"
-    Large models (like LLaMA-3B) require significant memory. Use the no-cache engine for better memory efficiency.
+    Large models (like LLaMA-8B) require significant memory. This requires a lot of RAM.
 
 ---
 
@@ -381,8 +373,6 @@ Now that you've run your first example, dive deeper:
     # Python package
     pip install graphviz
     ```
-
-For more help, see the [Troubleshooting Guide](../support/troubleshooting.md).
 
 
 

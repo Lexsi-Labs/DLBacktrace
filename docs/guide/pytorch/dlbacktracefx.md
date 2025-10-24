@@ -14,7 +14,7 @@ from dl_backtrace.pytorch_backtrace import DLBacktraceFX
 dlb = DLBacktraceFX(
     model=model,
     input_for_graph=(dummy_input,),
-    layer_implementation="pytorch"
+    device="cuda"
 )
 ```
 
@@ -24,7 +24,7 @@ dlb = DLBacktraceFX(
 |-----------|------|-------------|---------|
 | `model` | `nn.Module` | PyTorch model to trace | Required |
 | `input_for_graph` | `tuple` | Example inputs for tracing | Required |
-| `layer_implementation` | `str` | Implementation type | `"pytorch"` |
+| `device` | `str` | Device type | `"cpu"` |
 
 ---
 
@@ -75,13 +75,10 @@ relevance = dlb.evaluation(
 | `multiplier` | `float` | Starting relevance value | `100.0` |
 | `task` | `str` | Task type | Required |
 | `thresholding` | `float` | Threshold for segmentation | `0.5` |
-| `model_type` | `str` | Model architecture type | `"Encoder"` |
 
 **Task Types:**
 - `"binary-classification"`
 - `"multi-class classification"`
-- `"bbox-regression"`
-- `"binary-segmentation"`
 
 **Model Types:**
 - `"Encoder"`: Standard encoder models
@@ -118,31 +115,9 @@ Generates visualization of the computational graph.
 
 ```python
 dlb.visualize(
-    filename="my_graph",
-    format="png"
+    save_path="my_graph.png"
 )
-```
 
-**Parameters:**
-
-| Parameter | Type | Description | Default |
-|-----------|------|-------------|---------|
-| `filename` | `str` | Output filename | `"dlbacktrace_graph"` |
-| `format` | `str` | Output format | `"png"` |
-
-**Supported Formats:**
-- `"png"`: Raster image
-- `"svg"`: Vector graphics
-- `"pdf"`: PDF document
-
-**Example:**
-```python
-# Save as PNG
-dlb.visualize()
-
-# Save as SVG
-dlb.visualize(filename="model_graph", format="svg")
-```
 
 ---
 
@@ -153,31 +128,9 @@ Generates visualization of top-k most relevant nodes.
 ```python
 dlb.visualize_dlbacktrace(
     top_k=15,
-    filename="relevance_graph",
-    format="png"
+    ouput_path="relevance_graph",
+    relevance_threshold
 )
-```
-
-**Parameters:**
-
-| Parameter | Type | Description | Default |
-|-----------|------|-------------|---------|
-| `top_k` | `int` | Number of top nodes to show | `15` |
-| `filename` | `str` | Output filename | `"dlbacktrace_topk"` |
-| `format` | `str` | Output format | `"png"` |
-
-**Example:**
-```python
-# Show top 10 most relevant nodes
-dlb.visualize_dlbacktrace(top_k=10)
-
-# Save with custom filename
-dlb.visualize_dlbacktrace(
-    top_k=20,
-    filename="important_layers",
-    format="svg"
-)
-```
 
 ---
 
@@ -209,7 +162,7 @@ dummy_input = torch.randn(1, 3, 32, 32)
 dlb = DLBacktraceFX(
     model=model,
     input_for_graph=(dummy_input,),
-    layer_implementation="pytorch"
+    device="cpu"
 )
 
 # Analyze
@@ -227,50 +180,6 @@ dlb.visualize()
 dlb.visualize_dlbacktrace(top_k=10)
 
 print("Analysis complete!")
-```
-
----
-
-## Advanced Usage
-
-### Multiple Inputs
-
-For models with multiple inputs:
-
-```python
-# Model with two inputs
-model = MyMultiInputModel()
-dummy_input1 = torch.randn(1, 3, 224, 224)
-dummy_input2 = torch.randn(1, 100)
-
-# Initialize
-dlb = DLBacktraceFX(
-    model=model,
-    input_for_graph=(dummy_input1, dummy_input2),
-    layer_implementation="pytorch"
-)
-
-# Predict with real inputs
-node_io = dlb.predict(real_input1, real_input2)
-```
-
-### Custom Device
-
-Specify device for execution:
-
-```python
-# Use GPU
-model = model.cuda()
-dummy_input = torch.randn(1, 3, 224, 224).cuda()
-
-dlb = DLBacktraceFX(
-    model=model,
-    input_for_graph=(dummy_input,),
-    layer_implementation="pytorch"
-)
-
-# Predictions will run on GPU
-node_io = dlb.predict(test_input.cuda())
 ```
 
 ---
@@ -295,8 +204,8 @@ node_io = dlb.predict(test_input.cuda())
 
 - [Execution Engines](execution-engines.md) - Learn about execution options
 - [Supported Operations](operations.md) - See all supported operations
-- [API Reference](../../api/pytorch/dlbacktracefx.md) - Detailed API docs
-- [Tutorials](../../tutorials/vision/resnet.md) - Step-by-step examples
+- [Examples](../../examples/colab-notebooks.md) - Interactive notebooks
+- [Best Practices](../best-practices.md) - Tips for effective use
 
 
 

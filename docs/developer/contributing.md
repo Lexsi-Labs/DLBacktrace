@@ -173,8 +173,6 @@ For custom layer relevance rules:
 3. **Add launcher:**
    Update `utils/default_v2.py`
 
-See [Layer Implementation Guide](layer-implementation.md) for details.
-
 ### Improving Documentation
 
 Documentation is in `docs/` using MkDocs:
@@ -447,7 +445,6 @@ git rebase main
 ## Additional Resources
 
 - [Developer Guide](architecture.md) - Architecture overview
-- [Layer Implementation](layer-implementation.md) - Adding layers
 - [Testing Guide](testing.md) - Testing guidelines
 - [Code Style Guide](https://pep8.org/) - PEP 8
 

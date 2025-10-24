@@ -259,10 +259,10 @@ Try:
 
 ## Next Steps
 
-- [PyTorch Examples](pytorch-examples.md) - More PyTorch code examples
-- [Tutorials](../tutorials/vision/resnet.md) - Step-by-step guides
+- [Use Cases](use-cases.md) - Real-world applications
 - [User Guide](../guide/introduction.md) - Comprehensive documentation
-- [API Reference](../api/pytorch/dlbacktracefx.md) - Detailed API docs
+- [Best Practices](../guide/best-practices.md) - Tips for effective use
+- [Developer Guide](../developer/contributing.md) - Contributing to the project
 
 
 

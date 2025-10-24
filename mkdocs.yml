@@ -48,7 +48,7 @@ theme:
     - toc.follow
   icon:
     repo: fontawesome/brands/github
-    logo: material/brain
+  logo: assets/images/arya-logo-mini.png
 
 extra:
   social:
@@ -74,6 +74,7 @@ markdown_extensions:
       generic: true
   - pymdownx.betterem:
       smart_enable: all
+  - pymdownx.blocks.caption
   - pymdownx.caret
   - pymdownx.details
   - pymdownx.emoji:
@@ -108,8 +109,15 @@ plugins:
 
 extra_javascript:
   - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
   - https://polyfill.io/v3/polyfill.min.js?features=es6
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+  - javascripts/katex.js
+  - https://unpkg.com/katex@0/dist/katex.min.js
+  - https://unpkg.com/katex@0/dist/contrib/auto-render.min.js
+
+extra_css:
+  - https://unpkg.com/katex@0/dist/katex.min.css
 
 nav:
   - Home:
@@ -129,59 +137,22 @@ nav:
       - Model Tracing: guide/pytorch/tracing.md
     - Relevance Propagation:
       - Overview: guide/relevance/overview.md
-      - Evaluation Modes: guide/relevance/modes.md
-      - Task Types: guide/relevance/tasks.md
       - Parameters: guide/relevance/parameters.md
-    - Visualization: guide/visualization.md
     - Best Practices: guide/best-practices.md
   
-  - Tutorials:
-    - Vision Models:
-      - ResNet Classification: tutorials/vision/resnet.md
-      - VGG Classification: tutorials/vision/vgg.md
-      - Vision Transformer: tutorials/vision/vit.md
-      - Custom CNN: tutorials/vision/custom-cnn.md
-    - NLP Models:
-      - BERT Sentiment Analysis: tutorials/nlp/bert.md
-      - RoBERTa Classification: tutorials/nlp/roberta.md
-      - LLaMA Text Generation: tutorials/nlp/llama.md
-      - Custom Transformers: tutorials/nlp/custom-transformer.md
-    - Tabular Models:
-      - Binary Classification: tutorials/tabular/binary-classification.md
-      - Multi-class Classification: tutorials/tabular/multiclass.md
-    - Advanced:
-      - Object Detection: tutorials/advanced/object-detection.md
-      - Segmentation: tutorials/advanced/segmentation.md
-      - Multi-task Models: tutorials/advanced/multitask.md
-      - Custom Architectures: tutorials/advanced/custom-arch.md
-  
   - Examples:
-    - PyTorch Examples: examples/pytorch-examples.md
     - Colab Notebooks: examples/colab-notebooks.md
     - Use Cases: examples/use-cases.md
-  
-  - API Reference:
-    - PyTorch API:
-      - DLBacktraceFX: api/pytorch/dlbacktracefx.md
-      - ExecutionEngine: api/pytorch/execution-engine.md
-      - GraphBuilder: api/pytorch/graph-builder.md
-      - RelevancePropagation: api/pytorch/relevance.md
-      - ATen Operations: api/pytorch/aten-ops.md
-      - Utilities: api/pytorch/utils.md
   
   - Developer Guide:
     - Architecture: developer/architecture.md
     - Contributing: developer/contributing.md
-    - Layer Implementation: developer/layer-implementation.md
     - Execution Engine: developer/execution-engine.md
     - CUDA Development: developer/cuda-development.md
     - Testing: developer/testing.md
-    - Benchmarking: developer/benchmarking.md
   
   - Support:
     - FAQ: support/faq.md
-    - Troubleshooting: support/troubleshooting.md
-    - Performance Tips: support/performance.md
     - Known Issues: support/known-issues.md
     - Changelog: support/changelog.md
     - License: support/license.md
