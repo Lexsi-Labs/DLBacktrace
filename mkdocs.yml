@@ -1,7 +1,7 @@
 site_name: DL-Backtrace Documentation
 site_description: A powerful explainable AI (XAI) framework for deep learning model interpretability
 site_author: AryaXAI
-site_url: https://www.aryaxai.com/
+site_url: https://aryaxai.github.io/DL-Backtrace/
 
 repo_name: aryaxai/DL-Backtrace
 repo_url: https://github.com/aryaxai/DL-Backtrace
