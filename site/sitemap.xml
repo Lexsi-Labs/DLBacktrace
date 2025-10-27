@@ -1,107 +1,107 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
-         <loc>https://www.aryaxai.com/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://www.aryaxai.com/BUILD_DOCS/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/BUILD_DOCS/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://www.aryaxai.com/developer/architecture/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/developer/architecture/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://www.aryaxai.com/developer/contributing/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/developer/contributing/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://www.aryaxai.com/developer/cuda-development/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/developer/cuda-development/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://www.aryaxai.com/developer/execution-engine/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/developer/execution-engine/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://www.aryaxai.com/developer/testing/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/developer/testing/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://www.aryaxai.com/examples/colab-notebooks/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/examples/colab-notebooks/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://www.aryaxai.com/examples/use-cases/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/examples/use-cases/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://www.aryaxai.com/guide/best-practices/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/guide/best-practices/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://www.aryaxai.com/guide/introduction/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/guide/introduction/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://www.aryaxai.com/guide/pytorch/dlbacktracefx/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/guide/pytorch/dlbacktracefx/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://www.aryaxai.com/guide/pytorch/execution-engines/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/guide/pytorch/execution-engines/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://www.aryaxai.com/guide/pytorch/operations/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/guide/pytorch/operations/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://www.aryaxai.com/guide/pytorch/overview/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/guide/pytorch/overview/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://www.aryaxai.com/guide/pytorch/tracing/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/guide/pytorch/tracing/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://www.aryaxai.com/guide/relevance/overview/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/guide/relevance/overview/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://www.aryaxai.com/guide/relevance/parameters/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/guide/relevance/parameters/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://www.aryaxai.com/home/features/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/home/features/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://www.aryaxai.com/home/installation/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/home/installation/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://www.aryaxai.com/home/quickstart/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/home/quickstart/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://www.aryaxai.com/home/whats-new/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/home/whats-new/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://www.aryaxai.com/support/changelog/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/support/changelog/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://www.aryaxai.com/support/faq/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/support/faq/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://www.aryaxai.com/support/known-issues/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/support/known-issues/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
     <url>
-         <loc>https://www.aryaxai.com/support/license/</loc>
+         <loc>https://aryaxai.github.io/DL-Backtrace/support/license/</loc>
          <lastmod>2025-10-24</lastmod>
     </url>
 </urlset>
