@@ -1,0 +1,46 @@
+# Example YAML Configuration for DL-Backtrace Pipeline
+# model_name is mandatory
+
+model_name: "bert-sst2"  # REQUIRED: Name of the model from registry
+
+# Device configuration
+device: "cpu"  # Options: "cpu" or "cuda"
+
+# Model loading options
+model_kwargs:
+  torch_dtype: "float32"
+  use_cache: false
+
+tokenizer_kwargs:
+  # Add any tokenizer-specific options here
+
+# DL-Backtrace configuration
+dynamic_shapes: null  # Set to specific shape dict if needed
+verbose: true
+strict_cpu: true
+
+# Input configuration
+batch_size: 2
+max_length: 128
+
+# Evaluation configuration
+mode: "default"
+start_wt: []  # Starting relevance weights
+multiplier: 100.0
+scaler: 1.0
+thresholding: 0.5
+task: "binary-classification"  # Options: binary-classification, multi-classification, regression
+
+# Temperature scaling
+temperature: 1.0
+
+# Debug configuration
+debug: false
+
+# Output configuration
+save_results: true
+output_dir: "backtrace_results"
+save_timing: true
+save_relevance: true
+save_visualization: false
+
