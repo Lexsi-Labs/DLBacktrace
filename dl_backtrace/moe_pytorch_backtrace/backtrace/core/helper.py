@@ -6,28 +6,28 @@ from collections import defaultdict
 def rename_self_attention_keys(attention_weights):
     renamed_weights = {}
     for key, value in attention_weights.items():
-        if 'query.weight' in key or 'SelfAttention.q.weight' in key or 'self_attn.q_proj' in key:
+        if 'query.weight' in key or 'SelfAttention.q.weight' in key or 'self_attn.q_proj.weight' in key:
             new_key = key.replace(key, 'W_q')
             renamed_weights[new_key] = value
-        elif 'query.bias' in key or 'SelfAttention.q.bias' in key:
+        elif 'query.bias' in key or 'SelfAttention.q.bias' in key or 'self_attn.q_proj.bias' in key:
             new_key = key.replace(key, 'b_q')
             renamed_weights[new_key] = value
-        elif 'key.weight' in key or 'SelfAttention.k.weight' in key or 'self_attn.k_proj' in key:
+        elif 'key.weight' in key or 'SelfAttention.k.weight' in key or 'self_attn.k_proj.weight' in key:
             new_key = key.replace(key, 'W_k')
             renamed_weights[new_key] = value
-        elif 'key.bias' in key or 'SelfAttention.k.bias' in key:
+        elif 'key.bias' in key or 'SelfAttention.k.bias' in key or 'self_attn.k_proj.bias' in key:
             new_key = key.replace(key, 'b_k')
             renamed_weights[new_key] = value
-        elif 'value.weight' in key or 'SelfAttention.v.weight' in key or 'self_attn.v_proj' in key:
+        elif 'value.weight' in key or 'SelfAttention.v.weight' in key or 'self_attn.v_proj.weight' in key:
             new_key = key.replace(key, 'W_v')
             renamed_weights[new_key] = value
-        elif 'value.bias' in key or 'SelfAttention.v.bias' in key:
+        elif 'value.bias' in key or 'SelfAttention.v.bias' in key or 'self_attn.v_proj.bias' in key:
             new_key = key.replace(key, 'b_v')
             renamed_weights[new_key] = value
-        elif 'output.dense.weight' in key or 'SelfAttention.o.weight' in key or 'self_attn.o_proj' in key:
+        elif 'output.dense.weight' in key or 'SelfAttention.o.weight' in key or 'self_attn.o_proj.weight' in key:
             new_key = key.replace(key, 'W_d')
             renamed_weights[new_key] = value
-        elif 'output.dense.bias' in key or 'SelfAttention.o.bias' in key:
+        elif 'output.dense.bias' in key or 'SelfAttention.o.bias' in key or 'self_attn.o_proj.bias' in key:
             new_key = key.replace(key, 'b_d')
             renamed_weights[new_key] = value
         elif 'self_attn.q_norm' in key:
@@ -35,6 +35,9 @@ def rename_self_attention_keys(attention_weights):
             renamed_weights[new_key] = value
         elif 'self_attn.k_norm' in key:
             new_key = key.replace(key, 'k_norm')
+            renamed_weights[new_key] = value
+        elif 'self_attn.sinks' in key:
+            new_key = key.replace(key, 'W_sinks')
             renamed_weights[new_key] = value
 
     return renamed_weights
@@ -214,5 +217,31 @@ def rename_qwenmoe_feed_forward_keys(feed_forward_weights):
                 elif 'down_proj' in k:
                     new_key = k.replace(k, 'W_down_proj')
                     renamed_weights[key][new_key] = v
+
+    return renamed_weights
+
+
+def rename_gptoss_feed_forward_keys(feed_forward_weights):
+    renamed_weights = {}
+
+    for key, value in feed_forward_weights.items():
+        if key.endswith('.mlp.router.weight'):
+            new_key = key.replace(key, 'W_router')
+            renamed_weights[new_key] = value
+        elif key.endswith('.mlp.router.bias'):
+            new_key = key.replace(key, 'b_router')
+            renamed_weights[new_key] = value
+        elif key.endswith('.mlp.experts.gate_up_proj'):
+            new_key = key.replace(key, 'W_gate_up_proj')
+            renamed_weights[new_key] = value
+        elif key.endswith('mlp.experts.gate_up_proj_bias'):
+            new_key = key.replace(key, 'b_gate_up_proj')
+            renamed_weights[new_key] = value
+        elif key.endswith('mlp.experts.down_proj'):
+            new_key = key.replace(key, 'W_down_proj')
+            renamed_weights[new_key] = value
+        elif key.endswith('mlp.experts.down_proj_bias'):
+            new_key = key.replace(key, 'b_down_proj')
+            renamed_weights[new_key] = value
 
     return renamed_weights
