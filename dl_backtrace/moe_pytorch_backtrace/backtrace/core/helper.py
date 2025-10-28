@@ -43,62 +43,62 @@ def rename_self_attention_keys(attention_weights):
     return renamed_weights
 
 
-def rename_cross_attention_keys(cross_attention_weights):
-    renamed_weights = {}
+# def rename_cross_attention_keys(cross_attention_weights):
+#     renamed_weights = {}
 
-    for key, value in cross_attention_weights.items():
-        if 'EncDecAttention.q.weight' in key:
-            new_key = key.replace(key, 'W_q')
-        elif 'EncDecAttention.k.weight' in key:
-            new_key = key.replace(key, 'W_k')
-        elif 'EncDecAttention.v.weight' in key:
-            new_key = key.replace(key, 'W_v')
-        elif 'EncDecAttention.o.weight' in key:
-            new_key = key.replace(key, 'W_d')
+#     for key, value in cross_attention_weights.items():
+#         if 'EncDecAttention.q.weight' in key:
+#             new_key = key.replace(key, 'W_q')
+#         elif 'EncDecAttention.k.weight' in key:
+#             new_key = key.replace(key, 'W_k')
+#         elif 'EncDecAttention.v.weight' in key:
+#             new_key = key.replace(key, 'W_v')
+#         elif 'EncDecAttention.o.weight' in key:
+#             new_key = key.replace(key, 'W_d')
 
-        renamed_weights[new_key] = value
-    return renamed_weights
-
-
-def rename_feed_forward_keys(feed_forward_weights):
-    renamed_weights = {}
-
-    for key, value in feed_forward_weights.items():
-        if 'intermediate.dense.weight' in key or 'DenseReluDense.wi.weight' in key:
-            new_key = key.replace(key, 'W_int')
-        elif 'intermediate.dense.bias' in key or 'DenseReluDense.wi.bias' in key:
-            new_key = key.replace(key, 'b_int')
-        elif 'output.dense.weight' in key or 'DenseReluDense.wo.weight' in key:
-            new_key = key.replace(key, 'W_out')
-        elif 'output.dense.bias' in key or 'DenseReluDense.wo.bias' in key:
-            new_key = key.replace(key, 'b_out')
-
-        renamed_weights[new_key] = value
-    return renamed_weights
+#         renamed_weights[new_key] = value
+#     return renamed_weights
 
 
-def rename_pooler_keys(pooler_weights):
-    renamed_weights = {}
-    for key, value in pooler_weights.items():
-        if 'pooler.dense.weight' in key:
-            new_key = key.replace(key, 'W_p')
-        elif 'pooler.dense.bias' in key:
-            new_key = key.replace(key, 'b_p')
+# def rename_feed_forward_keys(feed_forward_weights):
+#     renamed_weights = {}
 
-        renamed_weights[new_key] = value
-    return renamed_weights
+#     for key, value in feed_forward_weights.items():
+#         if 'intermediate.dense.weight' in key or 'DenseReluDense.wi.weight' in key:
+#             new_key = key.replace(key, 'W_int')
+#         elif 'intermediate.dense.bias' in key or 'DenseReluDense.wi.bias' in key:
+#             new_key = key.replace(key, 'b_int')
+#         elif 'output.dense.weight' in key or 'DenseReluDense.wo.weight' in key:
+#             new_key = key.replace(key, 'W_out')
+#         elif 'output.dense.bias' in key or 'DenseReluDense.wo.bias' in key:
+#             new_key = key.replace(key, 'b_out')
+
+#         renamed_weights[new_key] = value
+#     return renamed_weights
 
 
-def rename_classifier_keys(classifier_weights):
-    renamed_weights = {}
-    for key, value in classifier_weights.items():
-        if 'classifier.weight' in key:
-            new_key = key.replace(key, 'W_cls')
-        elif 'classifier.bias' in key:
-            new_key = key.replace(key, 'b_cls')
+# def rename_pooler_keys(pooler_weights):
+#     renamed_weights = {}
+#     for key, value in pooler_weights.items():
+#         if 'pooler.dense.weight' in key:
+#             new_key = key.replace(key, 'W_p')
+#         elif 'pooler.dense.bias' in key:
+#             new_key = key.replace(key, 'b_p')
 
-        renamed_weights[new_key] = value
-    return renamed_weights
+#         renamed_weights[new_key] = value
+#     return renamed_weights
+
+
+# def rename_classifier_keys(classifier_weights):
+#     renamed_weights = {}
+#     for key, value in classifier_weights.items():
+#         if 'classifier.weight' in key:
+#             new_key = key.replace(key, 'W_cls')
+#         elif 'classifier.bias' in key:
+#             new_key = key.replace(key, 'b_cls')
+
+#         renamed_weights[new_key] = value
+#     return renamed_weights
 
 
 def rename_decoder_lm_head(lm_head_weights):
@@ -112,19 +112,19 @@ def rename_decoder_lm_head(lm_head_weights):
     return renamed_weights
 
 
-def rename_llama_feed_forward_keys(feed_forward_weights):
-    renamed_weights = {}
+# def rename_llama_feed_forward_keys(feed_forward_weights):
+#     renamed_weights = {}
 
-    for key, value in feed_forward_weights.items():
-        if 'mlp.gate_proj.weight' in key:
-            new_key = key.replace(key, 'W_g')
-        elif 'mlp.up_proj.weight' in key:
-            new_key = key.replace(key, 'W_u')
-        elif 'mlp.down_proj.weight' in key:
-            new_key = key.replace(key, 'W_d')
+#     for key, value in feed_forward_weights.items():
+#         if 'mlp.gate_proj.weight' in key:
+#             new_key = key.replace(key, 'W_g')
+#         elif 'mlp.up_proj.weight' in key:
+#             new_key = key.replace(key, 'W_u')
+#         elif 'mlp.down_proj.weight' in key:
+#             new_key = key.replace(key, 'W_d')
 
-        renamed_weights[new_key] = value
-    return renamed_weights
+#         renamed_weights[new_key] = value
+#     return renamed_weights
 
 
 def rename_jetmoe_feed_forward_keys(feed_forward_weights):
