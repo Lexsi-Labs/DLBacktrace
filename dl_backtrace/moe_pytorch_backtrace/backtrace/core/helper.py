@@ -30,6 +30,12 @@ def rename_self_attention_keys(attention_weights):
         elif 'output.dense.bias' in key or 'SelfAttention.o.bias' in key:
             new_key = key.replace(key, 'b_d')
             renamed_weights[new_key] = value
+        elif 'self_attn.q_norm' in key:
+            new_key = key.replace(key, 'q_norm')
+            renamed_weights[new_key] = value
+        elif 'self_attn.k_norm' in key:
+            new_key = key.replace(key, 'k_norm')
+            renamed_weights[new_key] = value
 
     return renamed_weights
 
@@ -186,3 +192,27 @@ def rename_olmoe_feed_forward_keys(feed_forward_weights):
                     renamed_weights[key][new_key] = v
 
     return renamed_weights 
+
+
+def rename_qwenmoe_feed_forward_keys(feed_forward_weights):
+    renamed_weights = {}
+
+    for key, value in feed_forward_weights.items():
+        if 'mlp.gate' in key:
+            new_key = key.replace(key, 'W_gate')
+            renamed_weights[new_key] = value
+
+        else:
+            renamed_weights[key] = {}
+            for k, v in value.items():
+                if 'gate_proj' in k:
+                    new_key = k.replace(k, 'W_gate_proj')
+                    renamed_weights[key][new_key] = v
+                elif 'up_proj' in k:
+                    new_key = k.replace(k, 'W_up_proj')
+                    renamed_weights[key][new_key] = v
+                elif 'down_proj' in k:
+                    new_key = k.replace(k, 'W_down_proj')
+                    renamed_weights[key][new_key] = v
+
+    return renamed_weights
