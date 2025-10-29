@@ -1,4 +1,5 @@
 import numpy as np
+import re
 import torch
 import torch.nn as nn
 from tqdm import tqdm
@@ -7,6 +8,103 @@ from dl_backtrace.moe_pytorch_backtrace.backtrace.utils import prop as UP
 from dl_backtrace.moe_pytorch_backtrace.backtrace.config import activation_master
 from dl_backtrace.moe_pytorch_backtrace.backtrace.core import jetmoe as jetmoe, olmoe as olmoe, qwen3_moe as qwen3_moe, gpt_oss as gpt_oss, helper as helper
 from dl_backtrace.moe_pytorch_backtrace.backtrace.utils import default_v2 as UD2
+
+
+def t2np32(t):
+        # Cast any torch tensor to float32 on CPU before numpy() to avoid bf16 errors
+        if isinstance(t, torch.Tensor):
+            return t.detach().to(torch.float32).cpu().numpy()
+        return t
+
+def _layer_idx(name: str):
+    m = re.search(r'_(\d+)$', name)
+    return int(m.group(1)) if m else None
+
+def build_attention_plan(layer_stack, config):
+    plan = {}
+    for name in layer_stack:
+        if not name.startswith("decoder_self_attention_"):
+            continue
+        idx = _layer_idx(name)
+        if idx is None:
+            continue
+        is_sliding = (config.layer_types[idx] == "sliding_attention")
+        plan[name] = {
+            "attn_type": "sliding" if is_sliding else "full",
+            "window": config.sliding_window if is_sliding else None,
+        }
+    return plan
+
+def get_model_config(model):
+    """
+    Extracts the configuration object from a model, handling wrapped models.
+
+    Args:
+        model: A model instance or a wrapper around a model.
+
+    Returns:
+        The model's configuration object.
+
+    Raises:
+        AttributeError: If no configuration could be found.
+    """
+    # Check if the object has an underlying model
+    if hasattr(model, 'model'):
+        # It's a wrapper around another model
+        inner_model = model.model
+        if hasattr(inner_model, 'config'):
+            return inner_model.config
+    elif hasattr(model, 'config'):
+        # It's the base model itself
+        return model.config
+
+    raise AttributeError("The provided object does not have a 'config' attribute.")
+
+
+def get_tensor_or_raise(all_in, all_out, key, where="all_out"):
+    x = all_out.get(key, None)
+    if x is None:
+        x = all_in.get(key, None)
+        where = "all_in" if x is not None else where
+    if x is None:
+        raise KeyError(
+            f"Missing tensor for node '{key}'. "
+            f"Have keys(all_out)={list(all_out.keys())} "
+            f"keys(all_in)={list(all_in.keys())}"
+        )
+    # unwrap tuples/lists from hooks
+    if isinstance(x, (tuple, list)):
+        x = x[0]
+    if not torch.is_tensor(x):
+        raise TypeError(f"Node '{key}' is not a tensor (got {type(x)}) from {where}.")
+    return x
+
+def tensor_to_numpy(x):
+    """Convert Tensor, scalar, list/tuple, or ndarray to a NumPy array with memory-efficient float32."""
+    if isinstance(x, np.ndarray):
+        # Downcast float64 to float32 to save memory
+        return x.astype(np.float32) if x.dtype == np.float64 else x
+
+    if isinstance(x, torch.Tensor):
+        # IMPORTANT: cast to float32 *before* .numpy() to avoid bfloat16 error
+        return x.detach().to(torch.float32).cpu().numpy()
+
+    if isinstance(x, (int, float)):
+        return np.array(x, dtype=np.float32)
+
+    if isinstance(x, (list, tuple)):
+        arrs = []
+        for xi in x:
+            converted = tensor_to_numpy(xi) if not isinstance(xi, np.ndarray) else xi
+            if hasattr(converted, 'dtype') and converted.dtype == np.float64:
+                converted = converted.astype(np.float32)
+            arrs.append(converted)
+        try:
+            return np.stack(arrs)
+        except Exception:
+            return np.array(arrs, dtype=object)
+
+    raise TypeError(f"Cannot convert type {type(x)} to numpy")
 
 
 class Backtrace(object):
@@ -366,6 +464,7 @@ class Backtrace(object):
 
     def eval(
             self,
+            all_in,
             all_out,
             mode="default",
             start_wt=[],
@@ -379,6 +478,7 @@ class Backtrace(object):
         # This method is used for evaluating layer-wise relevance based on different modes.
         if mode == "default":
             output = self.proportional_eval(
+                all_in=all_in,
                 all_out=all_out,
                 start_wt=start_wt,
                 multiplier=multiplier,
@@ -389,23 +489,23 @@ class Backtrace(object):
                 task="binary-classification",
             )
             return output
-        elif mode == "contrast":
-            temp_output = self.contrast_eval(
-                all_out=all_out, 
-                multiplier=multiplier,
-                scaler=0,
-                thresholding=0.5,
-                task="binary-classification",
-            )
-            output = {}
-            for k in temp_output[0].keys():
-                output[k] = {}
-                output[k]["Positive"] = temp_output[0][k]
-                output[k]["Negative"] = temp_output[1][k]
-            return output
+        # elif mode == "contrast":
+        #     temp_output = self.contrast_eval(
+        #         all_out=all_out, 
+        #         multiplier=multiplier,
+        #         scaler=0,
+        #         thresholding=0.5,
+        #         task="binary-classification",
+        #     )
+        #     output = {}
+        #     for k in temp_output[0].keys():
+        #         output[k] = {}
+        #         output[k]["Positive"] = temp_output[0][k]
+        #         output[k]["Negative"] = temp_output[1][k]
+        #     return output
 
     def proportional_eval(
-            self, all_out, start_wt=[], multiplier=100.0, 
+            self, all_in, all_out, start_wt=[], multiplier=100.0, 
             scaler=0, max_unit=0, predicted_token=None,
             thresholding=0.5, task="binary-classification", get_layer_implementation=None
     ):
@@ -414,25 +514,29 @@ class Backtrace(object):
 
         model_resource = self.model_resource
         activation_dict = self.activation_dict
+        layer_stack = self.layer_stack
+        all_wts = self.model_weights
         inputcheck = False
-        out_layer = model_resource[2][0]
         all_wt = {}
+
+        out_layer = model_resource['outputs'][0]
+        raw_out = get_tensor_or_raise(all_in, all_out, out_layer, where="out_layer")
+        out_np = tensor_to_numpy(raw_out)
+
         if len(start_wt) == 0:
-            start_wt = UD2.calculate_start_wt(all_out[out_layer].detach().numpy(), scaler=1)
-            all_wt[out_layer] = start_wt * multiplier
-            layer_stack = self.layer_stack
+            start_wt = UD2.calculate_start_wt(out_np, scaler=scaler, task='generation')
+        
+        all_wt[out_layer] = start_wt * multiplier     
                 
         for start_layer in tqdm(layer_stack):
-            if model_resource[1][start_layer]["child"]:
-                child_nodes = model_resource[1][start_layer]["child"]
+            if model_resource['graph'][start_layer]["child"]:
+                child_nodes = model_resource['graph'][start_layer]["child"]
                 for ch in child_nodes:
                     if ch not in all_wt:
-                        if model_resource[1][start_layer]["class"] == 'LSTM':
-                            all_wt[ch] = np.zeros_like(every_temp_out[ch][0])
-                        else:
-                            all_wt[ch] = np.zeros_like(all_out[ch][0].detach().numpy())
+                        x = get_tensor_or_raise(all_in, all_out, ch, where=f"child of {start_layer}")
+                        all_wt[ch] = np.zeros(x.shape, dtype=np.float64)
 
-                if model_resource[1][start_layer]["class"] == "LM_Head":
+                if model_resource['graph'][start_layer]["class"] == "LM_Head":
                     weights = all_wts[start_layer]
                     lm_head_weights = helper.rename_decoder_lm_head(weights)
                     impl = get_layer_implementation("LM_Head")
@@ -446,11 +550,11 @@ class Backtrace(object):
                     )
                     all_wt[child_nodes[0]] += temp_wt
 
-                elif model_resource[1][start_layer]["class"] == 'Layer_Norm':
+                elif model_resource['graph'][start_layer]["class"] == 'Layer_Norm':
                     temp_wt = all_wt[start_layer]
                     all_wt[child_nodes[0]] += temp_wt
 
-                elif model_resource[1][start_layer]["class"] == 'Residual':
+                elif model_resource['graph'][start_layer]["class"] == 'Residual':
                     temp_wt = UP.calculate_wt_residual(
                         all_wt[start_layer],
                         [all_out[ch].detach().numpy() for ch in child_nodes],
@@ -459,59 +563,18 @@ class Backtrace(object):
                     for ind, ch in enumerate(child_nodes):
                         all_wt[ch] += temp_wt[ind]
 
-                elif model_resource[1][start_layer]["class"] == "Reshape":
-                    temp_wt = UP.calculate_wt_rshp(
-                        all_wt[start_layer], all_out[child_nodes[0]][0]
-                    )
-                    all_wt[child_nodes[0]] += temp_wt
-
-                elif model_resource[1][start_layer]["class"] == "Flatten":
-                    temp_wt = UP.calculate_wt_rshp(
-                        all_wt[start_layer], all_out[child_nodes[0]][0]
-                    )
-                    all_wt[child_nodes[0]] += temp_wt
-
-                elif model_resource[1][start_layer]["class"] == "Concatenate":
-                    temp_wt = UP.calculate_wt_concat(
-                        all_wt[start_layer],
-                        [all_out[ch] for ch in child_nodes],
-                        model_resource[0][start_layer].axis,
-                    )
-                    for ind, ch in enumerate(child_nodes):
-                        all_wt[ch] += temp_wt[ind]
-
-                elif model_resource[1][start_layer]["class"] == "Add":
-                    temp_wt = UP.calculate_wt_add(
-                        all_wt[start_layer], [all_out[ch] for ch in child_nodes]
-                    )
-                    for ind, ch in enumerate(child_nodes):
-                        all_wt[ch] += temp_wt[ind]
-                
-                elif model_resource[1][start_layer]["class"] == 'Cross_Attention':
-                    weights = all_wts[start_layer]
-                    cross_attention_weights = HP.rename_cross_attention_keys(weights)
-                    config = self.model.config
-                    temp_wt = UP.calculate_wt_cross_attention_parallel(
-                        all_wt[start_layer],
-                        [all_out[ch][0].detach().numpy() for ch in child_nodes],
-                        cross_attention_weights,
-                        config
-                    )
-
-                    for ind, ch in enumerate(child_nodes):
-                        all_wt[ch] += temp_wt[ind]
-
-                elif model_resource[1][start_layer]["class"] == "Embedding":
-                    temp_wt = all_wt[start_layer]
-                    temp_wt = np.mean(temp_wt,axis=1)
-                    all_wt[child_nodes[0]] = all_wt[child_nodes[0]] + temp_wt
+                # elif model_resource['graph'][start_layer]["class"] == "Embedding":
+                #     temp_wt = all_wt[start_layer]
+                #     temp_wt = np.mean(temp_wt,axis=1)
+                #     all_wt[child_nodes[0]] = all_wt[child_nodes[0]] + temp_wt
                 
                 # -------------------- For JetMoE ---------------------
-                elif model_resource[1][start_layer]["class"] == 'JetMoE_Feed_Forward':
+                elif model_resource['graph'][start_layer]["class"] == 'JetMoE_Feed_Forward':
                     weights = all_wts[start_layer]
-                    feed_forward_weights = HP.rename_jetmoe_feed_forward_keys(weights)
+                    feed_forward_weights = helper.rename_jetmoe_feed_forward_keys(weights)
                     
-                    temp_wt, ff_expert = UP.calculate_wt_jetmoe_feed_forward(
+                    temp_wt, ff_expert = UD2.launch_jetmoe_feed_forward(  #) UP.calculate_wt_jetmoe_feed_forward(
+                        impl,
                         all_wt[start_layer],
                         all_out[child_nodes[0]][0].detach().numpy(),
                         feed_forward_weights,
@@ -522,11 +585,12 @@ class Backtrace(object):
                     layer = f"{start_layer}_ff_expert"
                     self.all_layer_expert_relevance[layer] = ff_expert
                 
-                elif model_resource[1][start_layer]["class"] == 'JetMoE_Self_Attention':
+                elif model_resource['graph'][start_layer]["class"] == 'JetMoE_Self_Attention':
                     weights = all_wts[start_layer]
-                    self_attention_weights = HP.rename_jetmoe_self_attention_keys(weights)
+                    self_attention_weights = helper.rename_jetmoe_self_attention_keys(weights)
                     
-                    temp_wt, attention_expert = UP.calculate_wt_jetmoe_self_attention_parallel(
+                    temp_wt, attention_expert =UD2.launch_jetmoe_self_attention(   # UP.calculate_wt_jetmoe_self_attention_parallel(
+                        impl,
                         all_wt[start_layer],
                         all_out[child_nodes[0]][0],
                         self_attention_weights, 
@@ -538,11 +602,12 @@ class Backtrace(object):
                     self.all_layer_expert_relevance[layer] = attention_expert
 
                 # -------------------- For OLMoE ---------------------
-                elif model_resource[1][start_layer]["class"] == 'OLMoE_Feed_Forward':
+                elif model_resource['graph'][start_layer]["class"] == 'OLMoE_Feed_Forward':
                     weights = all_wts[start_layer]
-                    feed_forward_weights = HP.rename_olmoe_feed_forward_keys(weights)
+                    feed_forward_weights = helper.rename_olmoe_feed_forward_keys(weights)
                     
-                    temp_wt, ff_expert = UP.calculate_wt_olmoe_feed_forward_parallel(
+                    temp_wt, ff_expert = UD2.launch_olmoe_feed_forward(    # UP.calculate_wt_olmoe_feed_forward_parallel(
+                        impl,
                         all_wt[start_layer],
                         all_out[child_nodes[0]][0].detach().numpy(),
                         feed_forward_weights,
@@ -553,10 +618,10 @@ class Backtrace(object):
                     layer = f"{start_layer}_ff_expert"
                     self.all_layer_expert_relevance[layer] = ff_expert
                 
-                elif model_resource[1][start_layer]["class"] == "Self_Attention":
+                elif model_resource['graph'][start_layer]["class"] == "Self_Attention":
                     weights = all_wts[start_layer]
-                    self_attention_weights = HP.rename_self_attention_keys(weights)
-                    config = self.model.config
+                    self_attention_weights = helper.rename_self_attention_keys(weights)
+                    config = get_model_config(self.model)
                     temp_wt = UP.calculate_wt_self_attention_parallel(
                         all_wt[start_layer],
                         all_out[child_nodes[0]][0].detach().numpy(),
@@ -566,10 +631,80 @@ class Backtrace(object):
                     all_wt[child_nodes[0]] += temp_wt
 
                 # -------------------- For Qwen3-MoE ---------------------
+                elif model_resource["graph"][start_layer]["class"] == 'Qwen_Feed_Forward':
+                    weights = all_wts[start_layer]
+                    feed_forward_weights = helper.rename_qwenmoe_feed_forward_keys(weights)
+                    config = get_model_config(self.model)
 
+                    temp_wt, ff_expert = UD2.launch_qwen3_moe_feed_forward(
+                        impl,
+                        all_wt[start_layer],
+                        all_in[child_nodes[0]].detach().numpy(),  # all_out[child_nodes[0]].detach().numpy(),
+                        feed_forward_weights,
+                        config
+                    )
+
+                    all_wt[child_nodes[0]] += temp_wt
+
+                    layer = f"{start_layer}_ff_expert"
+                    self.all_layer_expert_relevance[layer] = ff_expert
+
+                elif model_resource["graph"][start_layer]["class"] == 'Grouped_Query_Attention':
+                    weights = all_wts[start_layer]
+                    # print(f"weights: {weights.keys()}")
+                    self_attention_weights = helper.rename_self_attention_keys(weights)
+                    config = get_model_config(self.model)
+
+                    temp_wt = UD2.launch_qwen3_moe_self_attention(    # calculate_wt_self_attention_parallel(
+                        impl,
+                        all_wt[start_layer],
+                        all_in[child_nodes[0]].detach().numpy(),  # all_out[child_nodes[0]].detach().numpy(),
+                        self_attention_weights,
+                        config
+                    )
+
+                    all_wt[child_nodes[0]] += temp_wt
 
                 # -------------------- For GPT-OSS MoE ---------------------
-                
+                elif model_resource["graph"][start_layer]["class"] == 'GPT_OSS_Feed_Forward':
+                    weights = all_wts[start_layer]
+                    feed_forward_weights = helper.rename_gptoss_feed_forward_keys(weights) #rename_feed_forward_keys(weights)
+                    config = get_model_config(self.model)
+
+                    temp_wt, ff_expert = UD2.launch_gpt_oss_feed_forward(   # calculate_wt_gpt_oss_feed_forward_parallel(
+                        impl,
+                        all_wt[start_layer],
+                        t2np32(all_in[child_nodes[0]]),  # all_out[child_nodes[0]].detach().numpy(),
+                        feed_forward_weights,
+                        config
+                    )
+
+                    all_wt[child_nodes[0]] += temp_wt
+
+                    layer = f"{start_layer}_ff_expert"
+                    self.all_layer_expert_relevance[layer] = ff_expert
+
+                elif model_resource["graph"][start_layer]["class"] in 'GPT_OSS_Self_Attention':
+                    weights = all_wts[start_layer]
+                    # print(f"weights: {weights.keys()}")
+                    self_attention_weights = helper.rename_self_attention_keys(weights)
+                    config = get_model_config(self.model)
+
+                    ATTN_PLAN = build_attention_plan(layer_stack, config)
+                    attn_info = ATTN_PLAN.get(start_layer, {"attn_type": "full", "window": None})
+
+                    temp_wt = UD2.launch_gpt_oss_self_attention(    # calculate_wt_self_attention_parallel(
+                        impl,
+                        all_wt[start_layer],
+                        t2np32(all_in[child_nodes[0]]),  # all_out[child_nodes[0]].detach().numpy(),
+                        self_attention_weights,
+                        config,
+                        attn_type=attn_info["attn_type"],
+                        sliding_window=attn_info["window"],
+                    )
+
+                    all_wt[child_nodes[0]] += temp_wt
+                    print(f"temp_wt: {np.sum(temp_wt):.2f}")
                 
                 # Default calling 
                 else:
@@ -588,259 +723,3 @@ class Backtrace(object):
             all_wt = temp_dict
 
         return all_wt
-
-    def contrast_eval(self, all_out, multiplier=100.0,
-                            scaler=None,thresholding=0.5,
-                            task="binary-classification"):
-        model_resource = self.model_resource
-        activation_dict = self.activation_dict
-        inputcheck = False
-        out_layer = model_resource[2][0]
-        all_wt_pos = {}
-        all_wt_neg = {}
-        start_wt_pos, start_wt_neg = UC.calculate_start_wt(all_out[out_layer],scaler,thresholding,task)
-        all_wt_pos[out_layer] = start_wt_pos * multiplier
-        all_wt_neg[out_layer] = start_wt_neg * multiplier
-        layer_stack = [out_layer]
-
-        while len(layer_stack) > 0:
-            start_layer = layer_stack.pop(0)
-            if model_resource[1][start_layer]["child"]:
-                child_nodes = model_resource[1][start_layer]["child"]
-                for ch in child_nodes:
-                    if ch not in all_wt_pos:
-                        all_wt_pos[ch] = np.zeros_like(all_out[ch][0])
-                        all_wt_neg[ch] = np.zeros_like(all_out[ch][0])
-                if model_resource[1][start_layer]["class"] == "Linear":
-                    l1 = model_resource[0][start_layer]
-                    w1 = l1.state_dict()['weight']
-                    b1 = l1.state_dict()['bias']
-                    temp_wt_pos, temp_wt_neg = UC.calculate_wt_fc(
-                        all_wt_pos[start_layer],
-                        all_wt_neg[start_layer],
-                        all_out[child_nodes[0]][0],
-                        w1,
-                        b1,
-                        activation_dict[model_resource[1][start_layer]["name"]],
-                    )
-                    all_wt_pos[child_nodes[0]] += temp_wt_pos
-                    all_wt_neg[child_nodes[0]] += temp_wt_neg
-                elif model_resource[1][start_layer]["class"] == "Conv2d":
-                    l1 = model_resource[0][start_layer]
-                    w1 = l1.state_dict()['weight']
-                    b1 = l1.state_dict()['bias']
-                    pad1 = l1.padding
-                    strides1 = l1.stride
-                    temp_wt_pos, temp_wt_neg = UC.calculate_wt_conv(
-                        all_wt_pos[start_layer],
-                        all_wt_neg[start_layer],
-                        all_out[child_nodes[0]][0],
-                        w1,
-                        b1,
-                        pad1,
-                        strides1,
-                        activation_dict[model_resource[1][start_layer]["name"]],
-                    )
-                    all_wt_pos[child_nodes[0]] += temp_wt_pos.T
-                    all_wt_neg[child_nodes[0]] += temp_wt_neg.T
-                elif model_resource[1][start_layer]["class"] == "ConvTranspose2d":
-                    l1 = model_resource[0][start_layer]
-                    w1 = l1.state_dict()['weight']
-                    b1 = l1.state_dict()['bias']
-                    pad1 = l1.padding
-                    strides1 = l1.stride
-                    temp_wt_pos,temp_wt_neg = UC.calculate_wt_conv2d_transpose(
-                        all_wt_pos[start_layer],
-                        all_wt_neg[start_layer],
-                        all_out[child_nodes[0]][0],
-                        w1,
-                        b1,
-                        pad1, 
-                        strides1,
-                        activation_dict[model_resource[1][start_layer]["name"]],
-                    )
-                    all_wt_pos[child_nodes[0]] += temp_wt_pos.T
-                    all_wt_neg[child_nodes[0]] += temp_wt_neg.T
-                elif model_resource[1][start_layer]["class"] == 'Conv1d':
-                    l1 = model_resource[0][start_layer]
-                    w1 = l1.state_dict()['weight']
-                    b1 = l1.state_dict()['bias']
-                    pad1 = l1.padding[0]
-                    strides1 = l1.stride[0]
-                    temp_wt_pos,temp_wt_neg = UC.calculate_wt_conv_1d(all_wt_pos[start_layer],
-                                                                all_wt_neg[start_layer],
-                                                                all_out[child_nodes[0]][0],
-                                                                w1,b1, pad1, strides1,
-                                                                activation_dict[model_resource[1][start_layer]['name']])
-                    all_wt_pos[child_nodes[0]] += temp_wt_pos.T
-                    all_wt_neg[child_nodes[0]] += temp_wt_neg.T
-                elif model_resource[1][start_layer]["class"] == "ConvTranspose1d":
-                    l1 = model_resource[0][start_layer]
-                    w1 = l1.state_dict()['weight']
-                    b1 = l1.state_dict()['bias']
-                    pad1 = l1.padding[0]
-                    strides1 = l1.stride[0]
-                    temp_wt_pos,temp_wt_neg = UC.calculate_wt_conv1d_transpose(all_wt_pos[start_layer],
-                                                                            all_wt_neg[start_layer],
-                                                                            all_out[child_nodes[0]][0],
-                                                                            w1,b1, pad1, strides1,
-                                                                            activation_dict[model_resource[1][start_layer]['name']])
-                    all_wt_pos[child_nodes[0]] += temp_wt_pos.T
-                    all_wt_neg[child_nodes[0]] += temp_wt_neg.T
-                elif model_resource[1][start_layer]["class"] == "Reshape":
-                    temp_wt_pos = UC.calculate_wt_rshp(
-                        all_wt_pos[start_layer], all_out[child_nodes[0]][0]
-                    )
-                    temp_wt_neg = UC.calculate_wt_rshp(
-                        all_wt_neg[start_layer], all_out[child_nodes[0]][0]
-                    )
-                    all_wt_pos[child_nodes[0]] += temp_wt_pos
-                    all_wt_neg[child_nodes[0]] += temp_wt_neg
-                elif (
-                        model_resource[1][start_layer]["class"] == "AdaptiveAvgPool2d"
-                ):
-                    temp_wt_pos, temp_wt_neg = UC.calculate_wt_gavgpool(
-                        all_wt_pos[start_layer],
-                        all_wt_neg[start_layer],
-                        all_out[child_nodes[0]][0],
-                    )
-                    all_wt_pos[child_nodes[0]] += temp_wt_pos.T
-                    all_wt_neg[child_nodes[0]] += temp_wt_neg.T
-                elif model_resource[1][start_layer]["class"] == "Flatten":
-                    temp_wt = UC.calculate_wt_rshp(
-                        all_wt_pos[start_layer], all_out[child_nodes[0]][0]
-                    )
-                    all_wt_pos[child_nodes[0]] += temp_wt
-                    temp_wt = UC.calculate_wt_rshp(
-                        all_wt_neg[start_layer], all_out[child_nodes[0]][0]
-                    )
-                    all_wt_neg[child_nodes[0]] += temp_wt
-                elif (
-                        model_resource[1][start_layer]["class"] == "AdaptiveAvgPool2d"
-                ):
-                    temp_wt_pos, temp_wt_neg = UC.calculate_wt_gavgpool(
-                        all_wt_pos[start_layer],
-                        all_wt_neg[start_layer],
-                        all_out[child_nodes[0]][0],
-                    )
-                    all_wt_pos[child_nodes[0]] += temp_wt_pos.T
-                    all_wt_neg[child_nodes[0]] += temp_wt_neg.T
-                elif model_resource[1][start_layer]["class"] == "MaxPool2d":
-                    l1 = model_resource[0][start_layer]
-                    temp_wt = UC.calculate_wt_maxpool(
-                        all_wt_pos[start_layer],
-                        all_out[child_nodes[0]][0],
-                        (l1.kernel_size, l1.kernel_size),
-                    )
-                    all_wt_pos[child_nodes[0]] += temp_wt.T
-                    temp_wt = UC.calculate_wt_maxpool(
-                        all_wt_neg[start_layer],
-                        all_out[child_nodes[0]][0],
-                        (l1.kernel_size, l1.kernel_size),
-                    )
-                    all_wt_neg[child_nodes[0]] += temp_wt.T
-                elif model_resource[1][start_layer]["class"] == "MaxPool1d":
-                    l1 = model_resource[0][start_layer]
-                    pad1 = l1.padding
-                    strides1 = l1.stride
-                    temp_wt = UC.calculate_wt_maxpool_1d(
-                        all_wt_pos[start_layer],
-                        all_out[child_nodes[0]][0],
-                        l1.kernel_size, pad1, strides1
-                    )
-                    all_wt_pos[child_nodes[0]] += temp_wt.T
-                    temp_wt = UC.calculate_wt_maxpool_1d(
-                        all_wt_neg[start_layer],
-                        all_out[child_nodes[0]][0],
-                        l1.kernel_size, pad1, strides1
-                    )
-                    all_wt_neg[child_nodes[0]] += temp_wt.T
-                elif model_resource[1][start_layer]["class"] == "AvgPool2d":
-                    l1 = model_resource[0][start_layer]
-                    temp_wt_pos, temp_wt_neg = UC.calculate_wt_avgpool(
-                        all_wt_pos[start_layer],
-                        all_wt_neg[start_layer],
-                        all_out[child_nodes[0]][0],
-                        (l1.kernel_size, l1.kernel_size),
-                    )
-                    all_wt_pos[child_nodes[0]] += temp_wt_pos.T
-                    all_wt_neg[child_nodes[0]] += temp_wt_neg.T
-                elif model_resource[1][start_layer]["class"] == "AvgPool1d":
-                    l1 = model_resource[0][start_layer]
-                    pad1 = l1.padding
-                    strides1 = l1.stride
-                    temp_wt_pos, temp_wt_neg = UC.calculate_wt_avgpool_1d(
-                        all_wt_pos[start_layer],
-                        all_wt_neg[start_layer],
-                        all_out[child_nodes[0]][0],
-                        l1.kernel_size, pad1, strides1
-                    )
-                    all_wt_pos[child_nodes[0]] += temp_wt_pos.T
-                    all_wt_neg[child_nodes[0]] += temp_wt_neg.T
-                elif model_resource[1][start_layer]["class"] == "Concatenate":
-                    temp_wt = UC.calculate_wt_concat(
-                        all_wt_pos[start_layer],
-                        [all_out[ch] for ch in child_nodes],
-                        model_resource[0][start_layer].axis,
-                    )
-                    for ind, ch in enumerate(child_nodes):
-                        all_wt_pos[ch] += temp_wt[ind]
-                    temp_wt = UC.calculate_wt_concat(
-                        all_wt_neg[start_layer],
-                        [all_out[ch] for ch in child_nodes],
-                        model_resource[0][start_layer].axis,
-                    )
-                    for ind, ch in enumerate(child_nodes):
-                        all_wt_neg[ch] += temp_wt[ind]
-                elif model_resource[1][start_layer]["class"] == "Add":
-                    temp_wt = UC.calculate_wt_add(
-                        all_wt_pos[start_layer],
-                        all_wt_neg[start_layer],
-                        [all_out[ch] for ch in child_nodes],
-                    )
-                    for ind, ch in enumerate(child_nodes):
-                        all_wt_pos[ch] += temp_wt[ind][0]
-                        all_wt_neg[ch] += temp_wt[ind][1]
-                elif model_resource[1][start_layer]["class"] == "LSTM":
-                    l1 = model_resource[0][start_layer]
-                    return_sequence = l1.return_sequences
-                    units = l1.units
-                    num_of_cells = l1.input_shape[1]
-                    lstm_obj_f = UC.LSTM_forward(
-                        num_of_cells, units, l1.weights, return_sequence, False
-                    )
-                    lstm_obj_b = UC.LSTM_backtrace(
-                        num_of_cells,
-                        units,
-                        [i.numpy() for i in l1.weights],
-                        return_sequence,
-                        False,
-                    )
-                    temp_out_f = lstm_obj_f.calculate_lstm_wt(
-                        all_out[child_nodes[0]][0]
-                    )
-                    temp_wt_pos, temp_wt_neg = lstm_obj_b.calculate_lstm_wt(
-                        all_wt_pos[start_layer],
-                        all_wt_neg[start_layer],
-                        lstm_obj_f.compute_log,
-                    )
-                    all_wt_pos[child_nodes[0]] = temp_wt_pos
-                    all_wt_neg[child_nodes[0]] = temp_wt_neg
-                elif model_resource[1][start_layer]["class"] == "Embedding":
-                    temp_wt_pos = all_wt_pos[start_layer]
-                    temp_wt_neg = all_wt_neg[start_layer]
-
-                    temp_wt_pos = np.mean(temp_wt_pos,axis=1)
-                    temp_wt_neg = np.mean(temp_wt_neg,axis=1)
-
-                    all_wt_pos[child_nodes[0]] = all_wt_pos[child_nodes[0]] + temp_wt_pos
-                    all_wt_neg[child_nodes[0]] = all_wt_neg[child_nodes[0]] + temp_wt_neg
-                else:
-                    temp_wt_pos = all_wt_pos[start_layer]
-                    temp_wt_neg = all_wt_neg[start_layer]
-                    all_wt_pos[child_nodes[0]] += temp_wt_pos
-                    all_wt_neg[child_nodes[0]] += temp_wt_neg
-                for ch in child_nodes:
-                    if not (ch in layer_stack):
-                        layer_stack.append(ch)
-        return all_wt_pos, all_wt_neg
