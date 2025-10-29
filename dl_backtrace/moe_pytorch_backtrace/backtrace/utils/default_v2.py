@@ -55,20 +55,19 @@ from .cuda_utils.JetMoE.refactored_version import calculate_wt_jetmoe_feed_forwa
 from .cuda_utils.JetMoE.pytorch_version import calculate_wt_jetmoe_feed_forward as calculate_wt_jetmoe_feed_forward_pytorch, calculate_wt_jetmoe_self_attention_parallel as calculate_wt_jetmoe_self_attention_parallel_pytorch
 
 # OLMoE Layer
-from .cuda_utils.OLMoE.original_version import calculate_wt_olmoe_feed_forward as calculate_wt_olmoe_feed_forward_original, calculate_wt_olmoe_self_attention_parallel as calculate_wt_olmoe_self_attention_parallel_original
-from .cuda_utils.OLMoE.refactored_version import calculate_wt_olmoe_feed_forward as calculate_wt_olmoe_feed_forward_refactored, calculate_wt_olmoe_self_attention_parallel as calculate_wt_olmoe_self_attention_parallel_refactored
-from .cuda_utils.OLMoE.pytorch_version import calculate_wt_olmoe_feed_forward as calculate_wt_olmoe_feed_forward_pytorch, calculate_wt_olmoe_self_attention_parallel as calculate_wt_olmoe_self_attention_parallel_pytorch
+from .cuda_utils.OLMOE_feed_forward.original_version import calculate_wt_olmoe_feed_forward_parallel as calculate_wt_olmoe_feed_forward_original
+from .cuda_utils.OLMOE_feed_forward.refactored_version import calculate_wt_olmoe_feed_forward_parallel as calculate_wt_olmoe_feed_forward_refactored
+from .cuda_utils.OLMOE_feed_forward.pytorch_version import calculate_wt_olmoe_feed_forward_parallel as calculate_wt_olmoe_feed_forward_pytorch 
 
 # Qwen3-MoE Layer
-from .cuda_utils.QwenMoE.original_version import calculate_wt_feed_forward as calculate_wt_feed_forward_original, calculate_wt_self_attention_parallel as calculate_wt_self_attention_parallel_original 
-from .cuda_utils.QwenMoE.refactored_version import calculate_wt_feed_forward as calculate_wt_feed_forward_refactored, calculate_wt_self_attention as calculate_wt_jetmoe_self_attention_parallel_refactored
-from .cuda_utils.QwenMoE.pytorch_version import calculate_wt_feed_forward as calculate_wt_feed_forward_pytorch, calculate_wt_self_attention as calculate_wt_self_attention_pytorch 
+from .cuda_utils.Qwen_MoE.original_version import calculate_wt_feed_forward as calculate_wt_feed_forward_original, calculate_wt_self_attention_parallel as calculate_wt_self_attention_parallel_original 
+from .cuda_utils.Qwen_MoE.refactored_version import calculate_wt_feed_forward as calculate_wt_feed_forward_refactored, calculate_wt_self_attention as calculate_wt_jetmoe_self_attention_parallel_refactored
+from .cuda_utils.Qwen_MoE.pytorch_version import calculate_wt_feed_forward as calculate_wt_feed_forward_pytorch, calculate_wt_self_attention as calculate_wt_self_attention_pytorch 
 
 # GPT-OSS Layer
 from .cuda_utils.GPT_oss.original_version import calculate_wt_lm_head as calculate_wt_lm_head_original, calculate_wt_gpt_oss_feed_forward_parallel as calculate_wt_gpt_oss_feed_forward_parallel_original, calculate_wt_self_attention_parallel as calculate_wt_self_attention_parallel_original
 from .cuda_utils.GPT_oss.refactored_version import calculate_wt_lm_head as calculate_wt_lm_head_refactored, calculate_wt_gpt_oss_feed_forward_parallel as calculate_wt_gpt_oss_feed_forward_parallel_refactored, calculate_wt_self_attention_parallel as calculate_wt_self_attention_parallel_refactored
-from .cuda_utils.GPT_oss.pytorch_version import calculate_wt_lm_head as calculate_wt_lm_head_pytorch, calculate_wt_gpt_oss_feed_forward_parallel as calculate_wt_gpt_oss_feed_forward_parallel_pytorch, calculate_wt_self_attention_parallel as calculate_wt_self_attention_parallel_pytorch
-
+from .cuda_utils.GPT_oss.pytorch_version import calculate_wt_lm_head as calculate_wt_lm_head_pytorch, calculate_wt_gpt_oss_feed_forward_parallel as calculate_wt_gpt_oss_feed_forward_parallel_pytorch, calculate_wt_self_attention_parallel_torch as calculate_wt_self_attention_parallel_pytorch
 
 def _prepare_tensors(device, *arrays):
     return [torch.tensor(arr, dtype=torch.float32, device=device) for arr in arrays]
@@ -79,10 +78,10 @@ def launch_lm_head(version, wts, inp, w, b, act):
         return func(wts, inp, w, b, act)
     elif version == 'cuda':
         try:
-            result = calculate_wt_lm_head_cuda(wts, inp, w, b, act)
+            result = calculate_wt_lm_head_pytorch(wts, inp, w, b, act)
             if result is None:
                 print(f"⚠️  CUDA LM head implementation returned None, falling back to original")
-                return func(wts, inp, w, b, act)
+                return calculate_wt_lm_head_original(wts, inp, w, b, act)
             return result
         except Exception as e:
             print(f"⚠️  CUDA LM head implementation failed: {e}")
@@ -91,127 +90,129 @@ def launch_lm_head(version, wts, inp, w, b, act):
     else:
         raise ValueError(f"Unknown version for LM head: {version}")
 
-def launch_gpt_oss_self_attention(version, wts, inp, w, b, act):
+def launch_gpt_oss_self_attention(version, wts, inp, w, attn_type, sliding_window):
     if version == 'original':
         func = calculate_wt_self_attention_parallel_original if version == 'original' else calculate_wt_self_attention_parallel_refactored
-        return func(wts, inp, w, b, act)
+        return func(wts, inp, w, attn_type, sliding_window)
     elif version == 'cuda':
         try:
-            result = calculate_wt_self_attention_parallel(wts, inp, w, b, act)
+            result = calculate_wt_self_attention_parallel_pytorch(wts, inp, w, attn_type, sliding_window)
             if result is None:
                 print(f"⚠️  CUDA GPT-OSS self attention implementation returned None, falling back to original")
-                return func(wts, inp, w, b, act)
+                return calculate_wt_self_attention_parallel_original(wts, inp, w, attn_type, sliding_window)
             return result
         except Exception as e:
             print(f"⚠️  CUDA GPT-OSS self attention implementation failed: {e}")
             print(f"   Falling back to original implementation")
-            return calculate_wt_self_attention_parallel_original(wts, inp, w, b, act)
+            return calculate_wt_self_attention_parallel_original(wts, inp, w, attn_type, sliding_window)
     else:
         raise ValueError(f"Unknown version for GPT-OSS self attention: {version}")
 
-def launch_gpt_oss_feed_forward(version, wts, inp, w, b, act):
+def launch_gpt_oss_feed_forward(version, wts, inp, w, config):
     if version == 'original':
         func = calculate_wt_gpt_oss_feed_forward_parallel_original if version == 'original' else calculate_wt_gpt_oss_feed_forward_parallel_refactored
-        return func(wts, inp, w, b, act)
+        return func(wts, inp, w, config)
     elif version == 'cuda':
-        return calculate_wt_gpt_oss_feed_forward_parallel_cuda(wts, inp, w, b, act)
+        try:
+            result = calculate_wt_gpt_oss_feed_forward_parallel_pytorch(wts, inp, w, config)
             if result is None:
                 print(f"⚠️  CUDA GPT-OSS feed forward implementation returned None, falling back to original")
-                return func(wts, inp, w, b, act)
+                return calculate_wt_gpt_oss_feed_forward_parallel_original(wts, inp, w, config)
             return result
         except Exception as e:
             print(f"⚠️  CUDA GPT-OSS feed forward implementation failed: {e}")
             print(f"   Falling back to original implementation")
-            return calculate_wt_gpt_oss_feed_forward_parallel_original(wts, inp, w, b, act)
+            return calculate_wt_gpt_oss_feed_forward_parallel_original(wts, inp, w, config)
     else:
         raise ValueError(f"Unknown version for GPT-OSS feed forward: {version}")
 
-def launch_qwen3_moe_self_attention(version, wts, inp, w, b, act):
+def launch_qwen3_moe_self_attention(version, wts, inp, w, config):
     if version == 'original':
         func = calculate_wt_self_attention_parallel_original if version == 'original' else calculate_wt_self_attention_parallel_refactored
-        return func(wts, inp, w, b, act)
+        return func(wts, inp, w, config)
     elif version == 'cuda':
-        return calculate_wt_self_attention_parallel_cuda(wts, inp, w, b, act)
+        try:
+            result = calculate_wt_self_attention_pytorch(wts, inp, w, config)
             if result is None:
                 print(f"⚠️  CUDA Qwen3-MoE self attention implementation returned None, falling back to original")
-                return func(wts, inp, w, b, act)
+                return calculate_wt_self_attention_parallel_original(wts, inp, w, config)
             return result
         except Exception as e:
             print(f"⚠️  CUDA Qwen3-MoE self attention implementation failed: {e}")
             print(f"   Falling back to original implementation")
-            return calculate_wt_self_attention_parallel_original(wts, inp, w, b, act)
+            return calculate_wt_self_attention_parallel_original(wts, inp, w, config)
     else:
         raise ValueError(f"Unknown version for Qwen3-MoE self attention: {version}")
 
-def launch_qwen3_moe_feed_forward(version, wts, inp, w, b, act):
+def launch_qwen3_moe_feed_forward(version, wts, inp, w, config):
     if version == 'original':
         func = calculate_wt_feed_forward_original if version == 'original' else calculate_wt_feed_forward_refactored
-        return func(wts, inp, w, b, act)
+        return func(wts, inp, w, config)
     elif version == 'cuda':
         try:
-            result = calculate_wt_feed_forward_cuda(wts, inp, w, b, act)
+            result = calculate_wt_feed_forward_pytorch(wts, inp, w, config)
             if result is None:
                 print(f"⚠️  CUDA Qwen3-MoE feed forward implementation returned None, falling back to original")
-                return func(wts, inp, w, b, act)
+                return calculate_wt_feed_forward_original(wts, inp, w, config)
             return result
         except Exception as e:
             print(f"⚠️  CUDA Qwen3-MoE feed forward implementation failed: {e}")
             print(f"   Falling back to original implementation")
-            return calculate_wt_feed_forward_original(wts, inp, w, b, act)
+            return calculate_wt_feed_forward_original(wts, inp, w, config)
     else:
         raise ValueError(f"Unknown version for Qwen3-MoE feed forward: {version}")
 
-def launch_olmoe_feed_forward(version, wts, inp, w, b, act):
+def launch_olmoe_feed_forward(version, wts, inp, w, model):
     if version == 'original':
         func = calculate_wt_olmoe_feed_forward_original if version == 'original' else calculate_wt_olmoe_feed_forward_refactored
-        return func(wts, inp, w, b, act)
+        return func(wts, inp, w, model)
     elif version == 'cuda':
         try:
-            result = calculate_wt_olmoe_feed_forward_cuda(wts, inp, w, b, act)
+            result = calculate_wt_olmoe_feed_forward_pytorch(wts, inp, w, model)
             if result is None:
                 print(f"⚠️  CUDA OLMoE feed forward implementation returned None, falling back to original")
-                return func(wts, inp, w, b, act)
+                return calculate_wt_olmoe_feed_forward_original(wts, inp, w, model)
             return result
         except Exception as e:
             print(f"⚠️  CUDA OLMoE feed forward implementation failed: {e}")
             print(f"   Falling back to original implementation")
-            return calculate_wt_olmoe_feed_forward_original(wts, inp, w, b, act)
+            return calculate_wt_olmoe_feed_forward_original(wts, inp, w, model)
     else:
         raise ValueError(f"Unknown version for OLMoE feed forward: {version}")
 
-def launch_jetmoe_self_attention(version, wts, inp, w, b, act):
+def launch_jetmoe_self_attention(version, wts, inp, w, model):
     if version == 'original':
         func = calculate_wt_jetmoe_self_attention_parallel_original if version == 'original' else calculate_wt_jetmoe_self_attention_parallel_refactored
-        return func(wts, inp, w, b, act)
+        return func(wts, inp, w, model)
     elif version == 'cuda':
         try:
-            result = calculate_wt_jetmoe_self_attention_parallel(wts, inp, w, b, act)
+            result = calculate_wt_jetmoe_self_attention_parallel_pytorch(wts, inp, w, model)
             if result is None:
                 print(f"⚠️  CUDA JetMoE self attention implementation returned None, falling back to original")
-                return func(wts, inp, w, b, act)
+                return calculate_wt_jetmoe_self_attention_parallel_original(wts, inp, w, model)
             return result
         except Exception as e:
             print(f"⚠️  CUDA JetMoE self attention implementation failed: {e}")
             print(f"   Falling back to original implementation")
-            return calculate_wt_jetmoe_self_attention_parallel_original(wts, inp, w, b, act)
+            return calculate_wt_jetmoe_self_attention_parallel_original(wts, inp, w, model)
     else:
         raise ValueError(f"Unknown version for JetMoE self attention: {version}")
 
-def launch_jetmoe_feed_forward(version, wts, inp, w, b, act):
+def launch_jetmoe_feed_forward(version, wts, inp, w, model):
     if version == 'original':
         func = calculate_wt_jetmoe_feed_forward_original if version == 'original' else calculate_wt_jetmoe_feed_forward_refactored
-        return func(wts, inp, w, b, act)
+        return func(wts, inp, w, model)
     elif version == 'cuda':
         try:
-            result = calculate_wt_jetmoe_feed_forward_cuda(wts, inp, w, b, act)
+            result = calculate_wt_jetmoe_feed_forward_pytorch(wts, inp, w, model)
             if result is None:
                 print(f"⚠️  CUDA JetMoE feed forward implementation returned None, falling back to original")
-                return calculate_wt_jetmoe_feed_forward_original(wts, inp, w, b, act)
+                return calculate_wt_jetmoe_feed_forward_original(wts, inp, w, model)
             return result
         except Exception as e:
             print(f"⚠️  CUDA JetMoE feed forward implementation failed: {e}")
             print(f"   Falling back to original implementation")
-            return calculate_wt_jetmoe_feed_forward_original(wts, inp, w, b, act)
+            return calculate_wt_jetmoe_feed_forward_original(wts, inp, w, model)
     else:
         raise ValueError(f"Unknown version for JetMoE feed forward: {version}")
 
