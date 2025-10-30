@@ -358,3 +358,136 @@ def calculate_wt_olmoe_feed_forward_parallel(
     final_relevance_input = (wts_torch / final_relevance_input) * final_relevance_input
 
     return final_relevance_input.cpu().numpy(), relevance_expert.cpu().numpy()
+
+def calculate_relevance_QK(wts: torch.Tensor, QK_output: torch.Tensor) -> torch.Tensor:
+    
+    # Softmax activation properties (constant across all iterations)
+    act_range_lower = -1
+    act_range_upper = 2
+    
+    # Create positive and negative masks (boolean tensors for efficiency)
+    p_mask = QK_output > 0
+    n_mask = QK_output < 0
+    
+    # Compute positive and negative values using masking
+    p_values = torch.where(p_mask, QK_output, torch.tensor(0.0, device=QK_output.device, dtype=QK_output.dtype))
+    n_values = torch.where(n_mask, QK_output, torch.tensor(0.0, device=QK_output.device, dtype=QK_output.dtype))
+    
+    # Scalar sums
+    p_sum = torch.sum(p_values)
+    n_sum = -torch.sum(n_values)
+    t_sum = p_sum - n_sum
+    
+    # Apply monotonic activation range constraints
+    if t_sum < act_range_lower:
+        p_sum = torch.tensor(0.0, device=p_sum.device, dtype=p_sum.dtype)
+    if t_sum > act_range_upper:
+        n_sum = torch.tensor(0.0, device=n_sum.device, dtype=n_sum.dtype)
+    
+    # Calculate aggregate weights
+    p_agg_wt = p_sum / (p_sum + n_sum) if p_sum > 0 else torch.tensor(0.0, device=p_sum.device, dtype=p_sum.dtype)
+    n_agg_wt = n_sum / (p_sum + n_sum) if n_sum > 0 else torch.tensor(0.0, device=n_sum.device, dtype=n_sum.dtype)
+    
+    # Safe denominators for normalization
+    p_sum_safe = p_sum if p_sum != 0 else torch.tensor(1.0, device=p_sum.device, dtype=p_sum.dtype)
+    n_sum_safe = n_sum if n_sum != 0 else torch.tensor(1.0, device=n_sum.device, dtype=n_sum.dtype)
+    
+    # Precompute normalized contributions
+    p_normalized = torch.where(p_mask, QK_output / p_sum_safe, torch.tensor(0.0, device=QK_output.device, dtype=QK_output.dtype))
+    n_normalized = torch.where(n_mask, QK_output / n_sum_safe, torch.tensor(0.0, device=QK_output.device, dtype=QK_output.dtype))
+    
+    # KEY OPTIMIZATION: Vectorize the nested loops
+    # The original nested loop computes:
+    # sum over i,j of: (p_normalized * wts[i,j] * p_agg_wt + n_normalized * wts[i,j] * n_agg_wt * -1)
+    # This simplifies to: (p_normalized * p_agg_wt - n_normalized * n_agg_wt) * sum(wts)
+    total_weight = torch.sum(wts)
+    
+    wt_mat_QK_total = (p_normalized * p_agg_wt * total_weight - 
+                       n_normalized * n_agg_wt * total_weight)
+    
+    return wt_mat_QK_total
+
+import torch
+import torch.nn.functional as F
+from typing import Tuple
+
+
+def calculate_wt_attention_output_projection(
+    wts: torch.Tensor,
+    proj_output: torch.Tensor
+) -> torch.Tensor:
+    """
+    Computes weighted attention output projection with positive/negative component separation.
+    
+    This function processes attention weights and projection outputs by:
+    1. Separating positive and negative components of the projection
+    2. Computing normalized aggregate weights for each component
+    3. Applying attention weights across all heads and tokens
+    4. Summing contributions to produce final weighted output
+    
+    Args:
+        wts: Attention weights tensor of shape (num_heads, num_tokens).
+        proj_output: Projection output tensor of shape (num_tokens, num_features).
+    
+    Returns:
+        Weighted projection output tensor of shape (num_tokens, num_features).
+        Represents the aggregated contribution across all attention heads.
+    
+    Note:
+        This function is autograd-compatible and can be used in training loops.
+        Uses torch.compile for optimized execution.
+    """
+    # Create positive and negative masks
+    # Shape: (num_tokens, num_features)
+    p_mask = proj_output > 0
+    n_mask = proj_output < 0
+    
+    # Compute positive and negative sums using masked selection
+    # More efficient than full array indexing
+    p_sum = torch.sum(proj_output * p_mask.float())
+    n_sum = torch.sum(proj_output * n_mask.float()) * -1.0
+    
+    # Compute aggregate weights with vectorized conditional logic
+    total_sum = p_sum + n_sum
+    # Using torch.where for differentiable conditional logic
+    p_agg_wt = torch.where(p_sum > 0, p_sum / total_sum, torch.zeros_like(p_sum))
+    n_agg_wt = torch.where(n_sum > 0, n_sum / total_sum, torch.zeros_like(n_sum))
+    
+    # Safe division: replace zero denominators with 1.0
+    p_sum_safe = torch.where(p_sum != 0, p_sum, torch.ones_like(p_sum))
+    n_sum_safe = torch.where(n_sum != 0, n_sum, torch.ones_like(n_sum))
+    
+    # Vectorized computation of weighted contributions
+    # Shape: (num_tokens, num_features)
+    p_component = torch.where(
+        p_mask,
+        proj_output / p_sum_safe,
+        torch.zeros_like(proj_output)
+    )
+    
+    n_component = torch.where(
+        n_mask,
+        proj_output / n_sum_safe,
+        torch.zeros_like(proj_output)
+    )
+    
+    # Broadcast weights: (num_heads, num_tokens, 1)
+    wts_broadcast = wts.unsqueeze(-1)
+    
+    # Compute weighted contributions with broadcasting
+    # (num_heads, num_tokens, 1) * (num_tokens, num_features) -> (num_heads, num_tokens, num_features)
+    weighted_p = wts_broadcast * p_component * p_agg_wt
+    weighted_n = wts_broadcast * n_component * n_agg_wt * -1.0
+    
+    # Sum over heads and tokens dimensions
+    # Shape: (num_tokens, num_features)
+    wt_mat_proj_output_total = torch.sum(weighted_p + weighted_n, dim=(0, 1))
+    
+    return wt_mat_proj_output_total
+
+
+# Compile the function for optimized execution
+calculate_wt_attention_output_projection_compiled = torch.compile(
+    calculate_wt_attention_output_projection,
+    mode='default'  # Can use 'reduce-overhead' or 'max-autotune' for different optimization strategies
+)
