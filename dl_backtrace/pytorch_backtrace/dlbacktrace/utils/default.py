@@ -88,64 +88,99 @@ def np_tanh(x):
     z = np.tanh(x)
     return z.astype(np.float32)
 
-def calculate_start_wt(arg, scaler=1,*args, **kwargs):
-    task = kwargs.get('task', None)  # Access 'task' from kwargs, default to None if not provided
-    
-    if task == "binary-classification":
-        # x = np.argmax(arg, axis=2)  # max along features
-        # m = np.max(arg, axis=2)
-        # y = np.zeros_like(arg)
+def calculate_start_wt(arg, scaler=1, *args, **kwargs):
+    """
+    Initialize relevance for backprop.
 
-        # batch_size, seq_len, _ = arg.shape
-        # for i in range(batch_size):
-        #     for j in range(seq_len):
-        #         if scaler:
-        #             y[i, j, x[i, j]] = scaler
-        #         else:
-        #             y[i, j, x[i, j]] = m[i, j]
-        # log(y.shape,"y")
-        predicted_class = np.argmax(arg, axis=-1, keepdims=True)  # [B, 1] 
+    Expected shapes in current code:
+      - task == "binary-classification":
+            arg: [B, C]
+            we create target_relevance: [B, C]
+      - task == "generation":
+            arg: [B, T, V]   (logits over vocab for each time step)
+            we only care about the *last* position T-1
+            we create target_relevance: [B, T, V] with 1.0 at (b, T-1, chosen_token)
+
+    NEW:
+      kwargs may include `target_indices` (or `target_token_ids`) for generation.
+      If provided, we seed relevance at those indices instead of greedy argmax.
+      This is ONLY applied for task == "generation".
+      Classification path is unchanged.
+    """
+
+    task = kwargs.get("task", None)
+    # Allow either name for clarity
+    target_indices = kwargs.get("target_indices", None)
+    if target_indices is None:
+        target_indices = kwargs.get("target_token_ids", None)
+
+    if task == "binary-classification":
+        # --- ORIGINAL BEHAVIOR (unchanged) ---
+        predicted_class = np.argmax(arg, axis=-1, keepdims=True)  # [B, 1]
         print(f"predicted_class: {predicted_class}")
 
-        # Create sparse relevance: only 1 class matters
         target_relevance = np.zeros_like(arg, dtype=np.float32)
 
-        # Set the 1.0 at predicted indices
         for b, t in enumerate(predicted_class):
-            print(f"batch: {b}, predicted_class: {t.item()}") 
+            print(f"batch: {b}, predicted_class: {t.item()}")
             target_relevance[b, t] = 1.0
-        
-        print(f"target_relevance --- original array: {target_relevance}, value: {np.sum(target_relevance):.4f}, shape: {target_relevance.shape}")
+
+        print(
+            f"target_relevance --- original array: {target_relevance}, "
+            f"value: {np.sum(target_relevance):.4f}, shape: {target_relevance.shape}"
+        )
 
     elif task == "generation":
-        # code here
-        print("======arg.shape=====",arg.shape)
-        # x = np.argmax(arg, axis=2)
-        # print("===x.shape============",x.shape)
-        # y = np.zeros_like(arg)
-        # value = 1 / arg.shape[1]
+        # --- MOSTLY ORIGINAL BEHAVIOR ---
+        # arg is [B, T, V]
+        print("======arg.shape=====", arg.shape)
 
-        # batch_size, seq_len, _ = arg.shape
-        # for i in range(batch_size):
-        #     for j in range(seq_len):
-        #         y[i, j, x[i, j]] = value 
-
-        # print("====y.shape=======",y.shape)
-
-        next_token_logit = arg[:, -1, :]
+        # Focus only on logits for the last generated position
+        next_token_logit = arg[:, -1, :]           # [B, V]
         print(f"next_token_logit: {next_token_logit.shape}")
-        predicted_token = np.argmax(next_token_logit, axis=-1, keepdims=True)  # [B, 1]
-        print(f"predicted_token: {predicted_token}")
 
-        # Create target relevance
+        if target_indices is not None:
+            # We were told exactly which token(s) got chosen by sampling / beam.
+            # Normalize to numpy array of shape [B]
+            ti = np.array(target_indices).reshape(-1)
+            if ti.shape[0] == 1 and next_token_logit.shape[0] > 1:
+                # broadcast single id across batch if needed
+                ti = np.repeat(ti, next_token_logit.shape[0])
+
+            if ti.shape[0] != next_token_logit.shape[0]:
+                raise ValueError(
+                    f"target_indices batch mismatch: got {ti.shape[0]} "
+                    f"for batch {next_token_logit.shape[0]}"
+                )
+
+            predicted_token = ti[:, None]  # [B, 1]
+            print(f"predicted_token (from target_indices): {predicted_token}")
+
+        else:
+            # Greedy fallback = original behavior
+            predicted_token = np.argmax(next_token_logit, axis=-1, keepdims=True)  # [B, 1]
+            print(f"predicted_token (greedy argmax): {predicted_token}")
+
+        # Create relevance tensor same shape as arg
         target_relevance = np.zeros_like(arg, dtype=np.float32)
 
-        # Set the 1.0 at predicted indices
+        # Set 1.0 at the chosen token index for the LAST position only
         for b, t in enumerate(predicted_token):
             print(f"batch: {b}, token: {t}")
             target_relevance[b, -1, t] = 1.0
-        
-        print(f"target_relevance --- value: {np.sum(target_relevance):.4f}, shape: {target_relevance.shape}")
+
+        print(
+            f"target_relevance --- value: {np.sum(target_relevance):.4f}, "
+            f"shape: {target_relevance.shape}"
+        )
+
+    else:
+        # Fallback: if task wasn't passed or is unknown,
+        # just mimic the binary-classification logic (argmax on last dim).
+        predicted_class = np.argmax(arg, axis=-1, keepdims=True)
+        target_relevance = np.zeros_like(arg, dtype=np.float32)
+        for b, t in enumerate(predicted_class):
+            target_relevance[b, t] = 1.0
 
     return target_relevance
 
