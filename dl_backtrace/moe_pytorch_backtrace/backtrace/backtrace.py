@@ -200,6 +200,30 @@ class Backtrace(object):
             self.activation_dict = None
             
             self.all_layer_expert_relevance = {}    # Storing the relevance of experts
+    
+    def _parse_device_to_implementation(self, device):
+        """
+        Parse device configuration to determine implementation version.
+        
+        Args:
+            device (str): Either "cpu" or "cuda"
+            
+        Returns:
+            str: Implementation version ("original" for CPU, "cuda" for CUDA)
+        """
+        if device not in ["cpu", "cuda"]:
+            raise ValueError(f"device must be 'cpu' or 'cuda', got: {device}")
+        
+        if device == "cpu":
+            # CPU mode: use original implementations
+            return "original"
+        else:  # device == "cuda"
+            # Check CUDA availability
+            if not torch.cuda.is_available():
+                print("⚠️  CUDA device requested but CUDA not available. Falling back to CPU mode.")
+                return "original"
+            # CUDA mode: use CUDA implementations
+            return "cuda"
             
     #     else:
     #         self.model_type = model_type
@@ -474,7 +498,16 @@ class Backtrace(object):
             predicted_token=None,
             thresholding=0.5,
             task="binary-classification",
+            device="cpu",
     ):
+        """
+        Evaluate layer-wise relevance based on different modes.
+        
+        Args:
+            device (str): Compute device for layer implementations. Options:
+                - "cpu": Use optimized refactored/original implementations
+                - "cuda": Use CUDA-accelerated implementations where available
+        """
         # This method is used for evaluating layer-wise relevance based on different modes.
         if mode == "default":
             output = self.proportional_eval(
@@ -487,6 +520,7 @@ class Backtrace(object):
                 predicted_token=predicted_token,
                 thresholding=0.5,
                 task="binary-classification",
+                device=device,
             )
             return output
         # elif mode == "contrast":
@@ -507,11 +541,11 @@ class Backtrace(object):
     def proportional_eval(
             self, all_in, all_out, start_wt=[], multiplier=100.0, 
             scaler=0, max_unit=0, predicted_token=None,
-            thresholding=0.5, task="binary-classification", get_layer_implementation=None
+            thresholding=0.5, task="binary-classification", device="cpu"
     ):
-        if get_layer_implementation is None:
-            get_layer_implementation = lambda x: "original"
-
+        # Parse device configuration to determine implementation
+        impl = self._parse_device_to_implementation(device)
+        
         model_resource = self.model_resource
         activation_dict = self.activation_dict
         layer_stack = self.layer_stack
@@ -539,8 +573,7 @@ class Backtrace(object):
                 if model_resource['graph'][start_layer]["class"] == "LM_Head":
                     weights = all_wts[start_layer]
                     lm_head_weights = helper.rename_decoder_lm_head(weights)
-                    impl = get_layer_implementation("LM_Head")
-                    temp_wt = UD2.launch_lm_head(  # .calculate_wt_lm_head_parallel(
+                    temp_wt = UD2.launch_lm_head(
                         impl,
                         all_wt[start_layer],
                         all_out[child_nodes[0]][0].detach().numpy(),
