@@ -316,3 +316,203 @@ def calculate_wt_olmoe_feed_forward_parallel(wts, inp, w, model):
     final_relevance_input = (wts / final_relevance_input) * final_relevance_input
 
     return final_relevance_input, relevance_expert    
+
+def calculate_relevance_QK(wts: np.ndarray, QK_output: np.ndarray) -> np.ndarray:
+
+    num_heads, num_tokens = wts.shape
+    wt_mat_QK_total = np.zeros_like(QK_output)
+    
+    # Softmax activation properties (constant across all iterations)
+    act_range_lower = -1
+    act_range_upper = 2
+    
+    # Create positive and negative masks once (broadcasting handles the rest)
+    p_mask = QK_output > 0  # Shape: (tokens, tokens) or (tokens, features)
+    n_mask = QK_output < 0
+    
+    # Precompute positive and negative sums
+    p_values = np.where(p_mask, QK_output, 0)  # Positive values, zero elsewhere
+    n_values = np.where(n_mask, QK_output, 0)  # Negative values, zero elsewhere
+    
+    p_sum = np.sum(p_values)  # Scalar sum of all positive values
+    n_sum = -np.sum(n_values)  # Scalar sum of absolute values of negatives
+    t_sum = p_sum - n_sum
+    
+    # Apply monotonic activation range constraints
+    # Replicating original logic: set to 0 if outside range
+    if t_sum < act_range_lower:
+        p_sum = 0
+    if t_sum > act_range_upper:
+        n_sum = 0
+    
+    # Calculate aggregate weights
+    # Using exact same conditional checks as original
+    p_agg_wt = p_sum / (p_sum + n_sum) if p_sum > 0 else 0
+    n_agg_wt = n_sum / (p_sum + n_sum) if n_sum > 0 else 0
+    
+    # Prevent division by zero in normalization (replicating original approach)
+    p_sum_safe = p_sum if p_sum != 0 else 1
+    n_sum_safe = n_sum if n_sum != 0 else 1
+    
+    # Precompute normalized contributions
+    # Shape matches QK_output
+    p_normalized = np.where(p_mask, QK_output / p_sum_safe, 0)
+    n_normalized = np.where(n_mask, QK_output / n_sum_safe, 0)
+    
+    # Vectorized outer loop over heads and tokens
+    # Broadcasting: wts[i, j] is scalar, multiplied with entire matrix
+    for i in range(num_heads):
+        wt_mat_QK = np.zeros_like(QK_output)
+        
+        for j in range(num_tokens):
+            wt = wts[i, j]
+            
+            # Vectorized accumulation
+            # Positive contributions
+            wt_mat_QK += p_normalized * wt * p_agg_wt
+            
+            # Negative contributions
+            wt_mat_QK += n_normalized * wt * n_agg_wt * -1.0
+        
+        wt_mat_QK_total += wt_mat_QK
+    
+    return wt_mat_QK_total
+
+def calculate_wt_attention_output_projection(
+    wts: np.ndarray, 
+    proj_output: np.ndarray
+) -> np.ndarray:
+
+    num_heads, num_tokens = wts.shape
+    
+    # Create positive and negative masks (broadcast-compatible)
+    # Shape: (tokens, features)
+    p_mask = proj_output > 0
+    n_mask = proj_output < 0
+    
+    # Compute positive and negative sums
+    # Shape: scalar for each
+    p_sum = np.sum(proj_output[p_mask])
+    n_sum = np.sum(proj_output[n_mask]) * -1
+    
+    # Compute aggregate weights (matching original conditional logic)
+    # Replicating: p_agg_wt = p_sum / (p_sum + n_sum) if p_sum > 0 else 0
+    total_sum = p_sum + n_sum
+    p_agg_wt = (p_sum / total_sum) if p_sum > 0 else 0.0
+    n_agg_wt = (n_sum / total_sum) if n_sum > 0 else 0.0
+    
+    # Prevent division by zero (matching original: replace 0 with 1)
+    p_sum_safe = p_sum if p_sum != 0 else 1.0
+    n_sum_safe = n_sum if n_sum != 0 else 1.0
+    
+    # Vectorized computation of weighted contributions
+    # Shape: (tokens, features) for each component
+    p_component = np.where(
+        p_mask,
+        proj_output / p_sum_safe,  # Normalized positive values
+        0.0
+    )
+    
+    n_component = np.where(
+        n_mask,
+        proj_output / n_sum_safe,  # Normalized negative values 
+        0.0
+    )
+    
+    # Broadcast weights across all heads and tokens
+    # Shape: (heads, tokens, 1) to broadcast with (tokens, features)
+    wts_broadcast = wts[:, :, np.newaxis]
+    
+    # Compute weighted contributions for all heads and tokens simultaneously
+    # Broadcasting: (heads, tokens, 1) * (tokens, features) -> (heads, tokens, features)
+    weighted_p = wts_broadcast * p_component * p_agg_wt
+    weighted_n = wts_broadcast * n_component * n_agg_wt * -1.0
+    
+    # Sum over heads and tokens dimensions
+    # Shape: (tokens, features)
+    wt_mat_proj_output_total = np.sum(weighted_p + weighted_n, axis=(0, 1))
+    
+    return wt_mat_proj_output_total
+
+def calculate_wt_self_attention_parallel(wts, inp, w):
+    '''
+    Input:
+        wts:  relevance score of the layer
+        inp: input to the layer
+        w: weights of the layer- ['W_q', 'W_k', 'W_v', 'W_o']
+
+    Outputs:
+        Step-1: outputs = torch.matmul(input_a, input_b)
+        Step-2: outputs = F.softmax(inputs, dim=dim, dtype=dtype)
+        Step-3: outputs = input_a * input_b
+    '''
+
+
+    query_output = np.einsum('ij,kj->ik', inp, w['W_q'])
+    key_output = np.einsum('ij,kj->ik', inp, w['W_k'])
+    value_output = np.einsum('ij,kj->ik', inp, w['W_v'])
+
+    config = model.config
+    num_heads = config.num_attention_heads
+    hidden_size = config.hidden_size
+    # Check if the config has 'num_key_value_heads' attribute
+    if hasattr(config, 'num_key_value_heads'):
+        num_key_value_heads = config.num_key_value_heads
+    else:
+        num_key_value_heads = config.num_heads
+    head_dim = hidden_size // num_heads  # dimension of each attention head
+
+    query_states = np.einsum('thd->htd', query_output.reshape(query_output.shape[0], num_heads, head_dim))  # (num_heads, num_tokens, head_dim)
+    key_states = np.einsum('thd->htd', key_output.reshape(key_output.shape[0], num_key_value_heads, head_dim))  # (num_key_value_heads, num_tokens, head_dim)
+    value_states = np.einsum('thd->htd', value_output.reshape(value_output.shape[0], num_key_value_heads, head_dim))  # (num_key_value_heads, num_tokens, head_dim)
+
+    # calculate how many times we need to repeat the key/value heads
+    n_rep = num_heads // num_key_value_heads
+    key_states = np.repeat(key_states, n_rep, axis=0)
+    value_states = np.repeat(value_states, n_rep, axis=0)
+
+    QK_output = np.einsum('hqd,hkd->hqk', query_states, key_states)    # (num_heads, num_tokens, num_tokens)
+    attn_weights = QK_output / np.sqrt(head_dim)
+
+    # Apply softmax along the last dimension (softmax over key dimension)
+    attn_weights = np.exp(attn_weights - np.max(attn_weights, axis=-1, keepdims=True))  # Numerically stable softmax
+    attn_weights = attn_weights / np.sum(attn_weights, axis=-1, keepdims=True)
+
+    # Weighted sum of values (num_heads, num_tokens, head_dim)
+    attn_output = np.einsum('hqk,hkl->hql', attn_weights, value_states)
+
+    # Reshape attention output back to original shape (num_tokens, hidden_size)
+    attn_output = np.einsum('hqd->qhd', attn_output)
+    attn_output = attn_output.reshape(attn_output.shape[0], num_heads * head_dim)
+
+    # Perform final linear projection (num_tokens, hidden_size)
+    final_output = np.einsum('qd,dh->qh', attn_output, w['W_d'])
+
+    # ------------- Relevance calculation for Final Linear Projection -------------
+    # wt_mat_attn_proj = calculate_wt_attention_output_projection(wts, final_output)
+    wt_mat_attn_proj = calculate_wt_attention_output_projection(wts, final_output)
+
+    # --------------- Relevance Calculation for Step-3 -----------------------
+    relevance_V = wt_mat_attn_proj / 2
+    relevance_QK = wt_mat_attn_proj / 2
+
+    # --------------- Relevance Calculation for V --------------------------------
+    wt_mat_V = calculate_wt_attention_output_projection(relevance_V, value_states)
+
+    # --------------- Transformed Relevance QK ----------------------------------
+    wt_mat_QK = calculate_relevance_QK(relevance_QK, QK_output)
+
+    # --------------- Relevance Calculation for K and Q --------------------------------
+    stabilized_QK_output = stabilize(QK_output * 2)
+    norm_wt_mat_QK = wt_mat_QK / stabilized_QK_output
+
+    wt_mat_Q = np.einsum('htd,hdb->htb', norm_wt_mat_QK, key_states) * query_states
+    wt_mat_K = np.einsum('htd,htb->hbd', query_states, norm_wt_mat_QK) * key_states
+
+    wt_mat = wt_mat_V + wt_mat_K + wt_mat_Q
+
+    # Reshape wt_mat
+    wt_mat = np.einsum('htd->thd', wt_mat)
+    wt_mat = wt_mat.reshape(wt_mat.shape[0], wt_mat.shape[1] * wt_mat.shape[2])  # reshaped_array = array.reshape(8, 32 * 128)
+
+    return wt_mat
