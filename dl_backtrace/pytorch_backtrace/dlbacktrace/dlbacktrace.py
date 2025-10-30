@@ -473,7 +473,7 @@ class DLBacktraceFX:
         # If all recovery attempts fail, raise the original error
         raise original_error
 
-    def evaluation(self, mode="default", start_wt=[], multiplier=100.0, scaler=1.0, thresholding=0.5, task="binary-classification", debug=False):
+    def evaluation(self, mode="default", start_wt=[], multiplier=100.0, scaler=1.0, thresholding=0.5, task="binary-classification", target_token_ids=None, debug=False):
         evaluator = RelevancePropagator(
             graph=self.graph,
             node_io=self.node_io,
@@ -487,6 +487,7 @@ class DLBacktraceFX:
             scaler=scaler,
             thresholding=thresholding,
             task=task,
+            target_token_ids=target_token_ids,
             debug=debug
         )
         return self.all_wt
