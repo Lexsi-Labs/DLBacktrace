@@ -184,6 +184,74 @@ class DLBAutoSampler:
             sc.append(MaxTimeCriteria(max_time=float(max_time)))
         return sc
 
+    def _compute_relevance(
+        self,
+        target_token_ids,
+        *,
+        mode="default",
+        multiplier=100.0,
+        scaler=1.0,
+        thresholding=0.5,
+        task="generation",
+        debug=False,
+    ):
+        """
+        Compute relevance for the *actual* chosen token(s), not greedy argmax.
+
+        target_token_ids:
+            torch.Tensor shape [1] or [beam] or list[int]
+            We turn this into a Python list[int] and pass it through.
+        """
+        # normalize to list[int] or None
+        if target_token_ids is None:
+            tti = None
+        elif torch.is_tensor(target_token_ids):
+            tti = [int(x) for x in target_token_ids.view(-1).tolist()]
+        elif isinstance(target_token_ids, (list, tuple)):
+            tti = [int(x) for x in target_token_ids]
+        else:
+            tti = [int(target_token_ids)]
+
+        rel_dict = self.dlb.evaluation(
+            mode=mode,
+            start_wt=[],
+            multiplier=multiplier,
+            scaler=scaler,
+            thresholding=thresholding,
+            task=task,                   # <- "generation" during decoding
+            target_token_ids=tti,        # <- this is now plumbed all the way down
+            debug=debug,
+        )
+
+        return rel_dict
+
+    def _summarize_relevance(self, rel_dict):
+        """
+        Turn self.dlb.all_wt (rel_dict) into a lightweight scalar so we don't
+        explode memory every token.
+
+        Currently: sum of all entries.
+        You can change this to anything you want.
+        """
+        total = 0.0
+
+        def add_val(x):
+            nonlocal total
+            if torch.is_tensor(x):
+                total += float(x.detach().cpu().sum().item())
+            elif hasattr(x, "sum") and hasattr(x, "shape"):
+                # numpy-like
+                total += float(x.sum())
+            elif isinstance(x, (list, tuple)):
+                for v in x:
+                    add_val(v)
+            elif isinstance(x, dict):
+                for v in x.values():
+                    add_val(v)
+
+        add_val(rel_dict)
+        return total
+
     # ---------- public API ----------
 
     @torch.no_grad()
@@ -215,6 +283,7 @@ class DLBAutoSampler:
         length_penalty: float = 1.0,
         # misc
         return_scores: bool = False,
+        return_relevance: bool = False,
         debug: bool = False,
     ):
         """
@@ -316,6 +385,7 @@ class DLBAutoSampler:
             generated = self._as_long(input_ids.clone())
             attn = self._as_long(attention_mask.clone())
             scores_trace = [] if return_scores else None
+            relevance_trace = [] if return_relevance else None
 
             stopped_by = None
             for _ in range(max_new_tokens if max_new_tokens is not None else 10_000_000):
@@ -342,6 +412,22 @@ class DLBAutoSampler:
                 if return_scores:
                     scores_trace.append(scores.detach().to("cpu"))
 
+                if return_relevance:
+                    # We already ran self.dlb.predict(...) above, so self.dlb.node_io
+                    # matches the current prefix `generated`.
+                    # But relevance seeding wants the token we are OUTPUTTING *now*.
+                    rel_dict = self._compute_relevance(
+                        target_token_ids=next_tokens.view(-1),  # torch.Tensor([token_id])
+                        mode="default",
+                        multiplier=100.0,
+                        scaler=1.0,
+                        thresholding=0.5,
+                        task="generation",
+                        debug=False,
+                    )
+                    rel_scalar = self._summarize_relevance(rel_dict)
+                    relevance_trace.append(rel_scalar)
+
                 generated = torch.cat([generated, self._as_long(next_tokens)], dim=1)
                 attn = torch.cat(
                     [attn, torch.ones((1, 1), dtype=attn.dtype, device=attn.device)],
@@ -366,7 +452,16 @@ class DLBAutoSampler:
             if debug:
                 print(f"[greedy/sampling] stopped_by={stopped_by}")
 
-            return (generated, scores_trace) if return_scores else generated  # [1, T]
+            want_extras = return_scores or return_relevance
+            if not want_extras:
+                return generated  # [1, T]
+
+            info = {}
+            if return_scores:
+                info["scores_trace"] = scores_trace
+            if return_relevance:
+                info["relevance_trace"] = relevance_trace
+            return generated, info  # ([1, T], dict)
 
         # ======================
         # Beam search path (deterministic, no sampling) — always return top-1
@@ -403,6 +498,9 @@ class DLBAutoSampler:
         # Keep top-k tensors from the last step (needed by some HF versions)
         last_topk_tokens: Optional[torch.Tensor] = None
         last_topk_indices: Optional[torch.Tensor] = None
+
+        scores_trace_beam = [] if return_scores else None
+        relevance_trace_beam = [] if return_relevance else None
 
         stopped_by = None
         for _ in range(max_new_tokens if max_new_tokens is not None else 10_000_000):
@@ -458,6 +556,9 @@ class DLBAutoSampler:
                 beam_indices=None,
             )
 
+            if return_scores:
+                scores_trace_beam.append(next_scores.detach().to("cpu"))
+
             # Rebuild the new beam batch using public keys
             next_beam_scores = beam_outputs["next_beam_scores"]      # [beams]
             next_beam_tokens = beam_outputs["next_beam_tokens"]      # [beams]
@@ -474,6 +575,32 @@ class DLBAutoSampler:
             )
             beam_scores = self._as_float(next_beam_scores)
             cur_len += 1
+
+            if return_relevance:
+                step_rel_scores = []
+                for b in range(beams):
+                    # refresh node_io for beam b *after* extension
+                    self.dlb.predict(
+                        generated[b:b+1],
+                        attn[b:b+1],
+                        debug=False,
+                        temperature=1.0,
+                    )
+
+                    chosen_tok_b = next_beam_tokens[b:b+1]  # tensor([token_id])
+                    rel_dict_b = self._compute_relevance(
+                        target_token_ids=chosen_tok_b,
+                        mode="default",
+                        multiplier=100.0,
+                        scaler=1.0,
+                        thresholding=0.5,
+                        task="generation",
+                        debug=False,
+                    )
+                    rel_scalar_b = self._summarize_relevance(rel_dict_b)
+                    step_rel_scores.append(rel_scalar_b)
+
+                relevance_trace_beam.append(step_rel_scores)
 
             # Stopping: HF early stopping OR stopping criteria
             if beam_scorer.is_done:
@@ -519,4 +646,21 @@ class DLBAutoSampler:
 
         sequences = final["sequences"]  # [1, T_total] because num_beam_hyps_to_keep=1
         out_top1 = sequences[:1, :]     # ensure [1, T_total]
-        return out_top1
+
+        want_extras = return_scores or return_relevance
+        if not want_extras:
+            return out_top1
+
+
+        info_beam = {}
+        if return_scores:
+            info_beam["scores_trace"] = scores_trace_beam
+        if return_relevance:
+            # relevance_trace_beam is:
+            #   [
+            #     [rel_beam0_at_step0, rel_beam1_at_step0, ...],
+            #     [rel_beam0_at_step1, rel_beam1_at_step1, ...],
+            #      ...
+            #   ]
+            info_beam["relevance_trace"] = relevance_trace_beam
+        return out_top1, info_beam
