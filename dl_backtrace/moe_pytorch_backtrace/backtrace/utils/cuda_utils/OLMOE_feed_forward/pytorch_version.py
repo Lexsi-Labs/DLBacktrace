@@ -10,6 +10,16 @@ def torch_swish(x: torch.Tensor, beta: float = 0.75) -> torch.Tensor:
     z = torch.sigmoid(torch.clamp(beta * x, -500, 500))
     return x * z
 
+def stabilize(matrix: torch.Tensor, epsilon: float = 1e-6) -> torch.Tensor:
+    abs_matrix = torch.abs(matrix)
+    sign_matrix = torch.where(matrix == 0, 
+                             torch.ones_like(matrix), 
+                             torch.sign(matrix))
+    
+    return torch.where(abs_matrix < epsilon, 
+                      epsilon * sign_matrix, 
+                      matrix)
+
 def process_single_relevance_router_logits(
     wts: torch.Tensor, 
     input_tensor: torch.Tensor, 
@@ -358,3 +368,227 @@ def calculate_wt_olmoe_feed_forward_parallel(
     final_relevance_input = (wts_torch / final_relevance_input) * final_relevance_input
 
     return final_relevance_input.cpu().numpy(), relevance_expert.cpu().numpy()
+
+def calculate_relevance_QK(wts: torch.Tensor, QK_output: torch.Tensor) -> torch.Tensor:
+    
+    # Softmax activation properties (constant across all iterations)
+    act_range_lower = -1
+    act_range_upper = 2
+    
+    # Create positive and negative masks (boolean tensors for efficiency)
+    p_mask = QK_output > 0
+    n_mask = QK_output < 0
+    
+    # Compute positive and negative values using masking
+    p_values = torch.where(p_mask, QK_output, torch.tensor(0.0, device=QK_output.device, dtype=QK_output.dtype))
+    n_values = torch.where(n_mask, QK_output, torch.tensor(0.0, device=QK_output.device, dtype=QK_output.dtype))
+    
+    # Scalar sums
+    p_sum = torch.sum(p_values)
+    n_sum = -torch.sum(n_values)
+    t_sum = p_sum - n_sum
+    
+    # Apply monotonic activation range constraints
+    if t_sum < act_range_lower:
+        p_sum = torch.tensor(0.0, device=p_sum.device, dtype=p_sum.dtype)
+    if t_sum > act_range_upper:
+        n_sum = torch.tensor(0.0, device=n_sum.device, dtype=n_sum.dtype)
+    
+    # Calculate aggregate weights
+    p_agg_wt = p_sum / (p_sum + n_sum) if p_sum > 0 else torch.tensor(0.0, device=p_sum.device, dtype=p_sum.dtype)
+    n_agg_wt = n_sum / (p_sum + n_sum) if n_sum > 0 else torch.tensor(0.0, device=n_sum.device, dtype=n_sum.dtype)
+    
+    # Safe denominators for normalization
+    p_sum_safe = p_sum if p_sum != 0 else torch.tensor(1.0, device=p_sum.device, dtype=p_sum.dtype)
+    n_sum_safe = n_sum if n_sum != 0 else torch.tensor(1.0, device=n_sum.device, dtype=n_sum.dtype)
+    
+    # Precompute normalized contributions
+    p_normalized = torch.where(p_mask, QK_output / p_sum_safe, torch.tensor(0.0, device=QK_output.device, dtype=QK_output.dtype))
+    n_normalized = torch.where(n_mask, QK_output / n_sum_safe, torch.tensor(0.0, device=QK_output.device, dtype=QK_output.dtype))
+    
+    # KEY OPTIMIZATION: Vectorize the nested loops
+    # The original nested loop computes:
+    # sum over i,j of: (p_normalized * wts[i,j] * p_agg_wt + n_normalized * wts[i,j] * n_agg_wt * -1)
+    # This simplifies to: (p_normalized * p_agg_wt - n_normalized * n_agg_wt) * sum(wts)
+    total_weight = torch.sum(wts)
+    
+    wt_mat_QK_total = (p_normalized * p_agg_wt * total_weight - 
+                       n_normalized * n_agg_wt * total_weight)
+    
+    return wt_mat_QK_total
+
+def calculate_wt_attention_output_projection(
+    wts: torch.Tensor,
+    proj_output: torch.Tensor
+) -> torch.Tensor:
+    """
+    Computes weighted attention output projection with positive/negative component separation.
+    
+    This function processes attention weights and projection outputs by:
+    1. Separating positive and negative components of the projection
+    2. Computing normalized aggregate weights for each component
+    3. Applying attention weights across all heads and tokens
+    4. Summing contributions to produce final weighted output
+    
+    Args:
+        wts: Attention weights tensor of shape (num_heads, num_tokens).
+        proj_output: Projection output tensor of shape (num_tokens, num_features).
+    
+    Returns:
+        Weighted projection output tensor of shape (num_tokens, num_features).
+        Represents the aggregated contribution across all attention heads.
+    
+    Note:
+        This function is autograd-compatible and can be used in training loops.
+        Uses torch.compile for optimized execution.
+    """
+    # Create positive and negative masks
+    # Shape: (num_tokens, num_features)
+    p_mask = proj_output > 0
+    n_mask = proj_output < 0
+    
+    # Compute positive and negative sums using masked selection
+    # More efficient than full array indexing
+    p_sum = torch.sum(proj_output * p_mask.float())
+    n_sum = torch.sum(proj_output * n_mask.float()) * -1.0
+    
+    # Compute aggregate weights with vectorized conditional logic
+    total_sum = p_sum + n_sum
+    # Using torch.where for differentiable conditional logic
+    p_agg_wt = torch.where(p_sum > 0, p_sum / total_sum, torch.zeros_like(p_sum))
+    n_agg_wt = torch.where(n_sum > 0, n_sum / total_sum, torch.zeros_like(n_sum))
+    
+    # Safe division: replace zero denominators with 1.0
+    p_sum_safe = torch.where(p_sum != 0, p_sum, torch.ones_like(p_sum))
+    n_sum_safe = torch.where(n_sum != 0, n_sum, torch.ones_like(n_sum))
+    
+    # Vectorized computation of weighted contributions
+    # Shape: (num_tokens, num_features)
+    p_component = torch.where(
+        p_mask,
+        proj_output / p_sum_safe,
+        torch.zeros_like(proj_output)
+    )
+    
+    n_component = torch.where(
+        n_mask,
+        proj_output / n_sum_safe,
+        torch.zeros_like(proj_output)
+    )
+    
+    # Broadcast weights: (num_heads, num_tokens, 1)
+    wts_broadcast = wts.unsqueeze(-1)
+    
+    # Compute weighted contributions with broadcasting
+    # (num_heads, num_tokens, 1) * (num_tokens, num_features) -> (num_heads, num_tokens, num_features)
+    weighted_p = wts_broadcast * p_component * p_agg_wt
+    weighted_n = wts_broadcast * n_component * n_agg_wt * -1.0
+    
+    # Sum over heads and tokens dimensions
+    # Shape: (num_tokens, num_features)
+    wt_mat_proj_output_total = torch.sum(weighted_p + weighted_n, dim=(0, 1))
+    
+    return wt_mat_proj_output_total
+
+@torch.compile
+def calculate_wt_self_attention_parallel(
+    wts: torch.Tensor,
+    inp: torch.Tensor,
+    w: Dict[str, torch.Tensor],
+    model: Any
+) -> torch.Tensor:
+
+    device = inp.device
+    
+    # Compute Q, K, V projections using einsum
+    query_output = torch.einsum('ij,kj->ik', inp, w['W_q'])
+    key_output = torch.einsum('ij,kj->ik', inp, w['W_k'])
+    value_output = torch.einsum('ij,kj->ik', inp, w['W_v'])
+    
+    # Get configuration parameters
+    config = model.config
+    num_heads = config.num_attention_heads
+    hidden_size = config.hidden_size
+    
+    # Handle grouped query attention
+    if hasattr(config, 'num_key_value_heads'):
+        num_key_value_heads = config.num_key_value_heads
+    else:
+        num_key_value_heads = config.num_heads
+    
+    head_dim = hidden_size // num_heads
+    
+    # Reshape to multi-head format and transpose
+    # (num_tokens, num_heads, head_dim) -> (num_heads, num_tokens, head_dim)
+    query_states = query_output.reshape(query_output.shape[0], num_heads, head_dim).permute(1, 0, 2)
+    key_states = key_output.reshape(key_output.shape[0], num_key_value_heads, head_dim).permute(1, 0, 2)
+    value_states = value_output.reshape(value_output.shape[0], num_key_value_heads, head_dim).permute(1, 0, 2)
+    
+    # Repeat key/value heads for grouped query attention
+    n_rep = num_heads // num_key_value_heads
+    key_states = key_states.repeat_interleave(n_rep, dim=0)
+    value_states = value_states.repeat_interleave(n_rep, dim=0)
+    
+    # Compute attention scores: (num_heads, num_tokens, num_tokens)
+    QK_output = torch.einsum('hqd,hkd->hqk', query_states, key_states)
+    attn_weights = QK_output / torch.sqrt(torch.tensor(head_dim, dtype=QK_output.dtype, device=device))
+    
+    # Apply softmax with numerical stability
+    attn_weights = attn_weights - torch.max(attn_weights, dim=-1, keepdim=True).values
+    attn_weights = torch.exp(attn_weights)
+    attn_weights = attn_weights / torch.sum(attn_weights, dim=-1, keepdim=True)
+    
+    # Weighted sum of values: (num_heads, num_tokens, head_dim)
+    attn_output = torch.einsum('hqk,hkl->hql', attn_weights, value_states)
+    
+    # Reshape attention output back to original shape: (num_tokens, hidden_size)
+    attn_output = attn_output.permute(1, 0, 2)  # (num_tokens, num_heads, head_dim)
+    attn_output = attn_output.reshape(attn_output.shape[0], num_heads * head_dim)
+    
+    # Perform final linear projection: (num_tokens, hidden_size)
+    final_output = torch.einsum('qd,dh->qh', attn_output, w['W_d'])
+    
+    # ============= Relevance Calculation =============
+    
+    # Step 1: Relevance for final linear projection
+    # wts shape: (num_heads, num_tokens)
+    # final_output shape: (num_tokens, hidden_size)
+    wt_mat_attn_proj = calculate_wt_attention_output_projection(wts, final_output)
+    
+    # Step 2: Split relevance for V and QK paths
+    # wt_mat_attn_proj shape: (num_tokens, hidden_size)
+    relevance_V = wt_mat_attn_proj / 2
+    relevance_QK = wt_mat_attn_proj / 2
+    
+    # Reshape to multi-head format for relevance propagation
+    # (num_tokens, hidden_size) -> (num_tokens, num_heads, head_dim) -> (num_heads, num_tokens, head_dim)
+    relevance_V_reshaped = relevance_V.reshape(relevance_V.shape[0], num_heads, head_dim).permute(1, 0, 2)
+    relevance_QK_reshaped = relevance_QK.reshape(relevance_QK.shape[0], num_heads, head_dim).permute(1, 0, 2)
+    
+    # Step 3: Relevance calculation for V
+    # We need to create dummy wts for the helper function - using attention weights shape
+    dummy_wts = torch.ones_like(attn_weights[:, :, 0])  # (num_heads, num_tokens)
+    wt_mat_V = relevance_V_reshaped  # Direct propagation through value path
+    
+    # Step 4: Relevance calculation for QK
+    # Use relevance_QK to compute weighted QK matrix
+    wt_mat_QK = calculate_relevance_QK(dummy_wts, QK_output)
+    
+    # Scale by actual relevance
+    wt_mat_QK = wt_mat_QK * relevance_QK_reshaped.sum() / wt_mat_QK.sum() if wt_mat_QK.sum() != 0 else wt_mat_QK
+    
+    # Step 5: Relevance calculation for K and Q
+    stabilized_QK_output = stabilize(QK_output * 2)
+    norm_wt_mat_QK = wt_mat_QK / stabilized_QK_output
+    
+    wt_mat_Q = torch.einsum('htd,hdb->htb', norm_wt_mat_QK, key_states) * query_states
+    wt_mat_K = torch.einsum('htd,htb->hbd', query_states, norm_wt_mat_QK) * key_states
+    
+    # Combine all relevance contributions
+    wt_mat = wt_mat_V + wt_mat_K + wt_mat_Q
+    
+    # Reshape back to (num_tokens, hidden_size)
+    wt_mat = wt_mat.permute(1, 0, 2)  # (num_tokens, num_heads, head_dim)
+    wt_mat = wt_mat.reshape(wt_mat.shape[0], wt_mat.shape[1] * wt_mat.shape[2])
+    
+    return wt_mat
