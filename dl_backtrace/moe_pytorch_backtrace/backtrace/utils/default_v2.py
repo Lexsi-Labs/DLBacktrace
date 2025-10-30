@@ -74,9 +74,10 @@ def _prepare_tensors(device, *arrays):
 
 def launch_lm_head(version, wts, inp, w, b, act):
     if version == 'original':
-        func = calculate_wt_lm_head_original if version == 'original' else calculate_wt_lm_head_refactored
-        return func(wts, inp, w, b, act)
+        # CPU mode: use original implementation
+        return calculate_wt_lm_head_original(wts, inp, w, b, act)
     elif version == 'cuda':
+        # CUDA mode: use PyTorch implementation
         try:
             result = calculate_wt_lm_head_pytorch(wts, inp, w, b, act)
             if result is None:
@@ -92,9 +93,10 @@ def launch_lm_head(version, wts, inp, w, b, act):
 
 def launch_gpt_oss_self_attention(version, wts, inp, w, config, attn_type="full", sliding_window=None):
     if version == 'original':
-        func = calculate_wt_self_attention_parallel_original if version == 'original' else calculate_wt_self_attention_parallel_refactored
-        return func(wts, inp, w, config, attn_type, sliding_window)
+        # CPU mode: use original implementation
+        return calculate_wt_self_attention_parallel_original(wts, inp, w, config, attn_type, sliding_window)
     elif version == 'cuda':
+        # CUDA mode: use PyTorch implementation
         try:
             result = calculate_wt_self_attention_parallel_pytorch(wts, inp, w, config, attn_type, sliding_window)
             if result is None:
@@ -110,9 +112,10 @@ def launch_gpt_oss_self_attention(version, wts, inp, w, config, attn_type="full"
 
 def launch_gpt_oss_feed_forward(version, wts, inp, w, config):
     if version == 'original':
-        func = calculate_wt_gpt_oss_feed_forward_parallel_original if version == 'original' else calculate_wt_gpt_oss_feed_forward_parallel_refactored
-        return func(wts, inp, w, config)
+        # CPU mode: use original implementation
+        return calculate_wt_gpt_oss_feed_forward_parallel_original(wts, inp, w, config)
     elif version == 'cuda':
+        # CUDA mode: use PyTorch implementation
         try:
             result = calculate_wt_gpt_oss_feed_forward_parallel_pytorch(wts, inp, w, config)
             if result is None:
@@ -128,9 +131,10 @@ def launch_gpt_oss_feed_forward(version, wts, inp, w, config):
 
 def launch_qwen3_moe_self_attention(version, wts, inp, w, config):
     if version == 'original':
-        func = calculate_wt_self_attention_parallel_original if version == 'original' else calculate_wt_self_attention_parallel_refactored
-        return func(wts, inp, w, config)
+        # CPU mode: use original implementation
+        return calculate_wt_self_attention_parallel_original(wts, inp, w, config)
     elif version == 'cuda':
+        # CUDA mode: use PyTorch implementation
         try:
             result = calculate_wt_self_attention_pytorch(wts, inp, w, config)
             if result is None:
@@ -146,9 +150,10 @@ def launch_qwen3_moe_self_attention(version, wts, inp, w, config):
 
 def launch_qwen3_moe_feed_forward(version, wts, inp, w, config):
     if version == 'original':
-        func = calculate_wt_feed_forward_original if version == 'original' else calculate_wt_feed_forward_refactored
-        return func(wts, inp, w, config)
+        # CPU mode: use original implementation
+        return calculate_wt_feed_forward_original(wts, inp, w, config)
     elif version == 'cuda':
+        # CUDA mode: use PyTorch implementation
         try:
             result = calculate_wt_feed_forward_pytorch(wts, inp, w, config)
             if result is None:
@@ -164,9 +169,10 @@ def launch_qwen3_moe_feed_forward(version, wts, inp, w, config):
 
 def launch_olmoe_feed_forward(version, wts, inp, w, model):
     if version == 'original':
-        func = calculate_wt_olmoe_feed_forward_original if version == 'original' else calculate_wt_olmoe_feed_forward_refactored
-        return func(wts, inp, w, model)
+        # CPU mode: use original implementation
+        return calculate_wt_olmoe_feed_forward_original(wts, inp, w, model)
     elif version == 'cuda':
+        # CUDA mode: use PyTorch implementation
         try:
             result = calculate_wt_olmoe_feed_forward_pytorch(wts, inp, w, model)
             if result is None:
@@ -182,9 +188,10 @@ def launch_olmoe_feed_forward(version, wts, inp, w, model):
 
 def launch_jetmoe_self_attention(version, wts, inp, w, model):
     if version == 'original':
-        func = calculate_wt_jetmoe_self_attention_parallel_original if version == 'original' else calculate_wt_jetmoe_self_attention_parallel_refactored
-        return func(wts, inp, w, model)
+        # CPU mode: use original implementation
+        return calculate_wt_jetmoe_self_attention_parallel_original(wts, inp, w, model)
     elif version == 'cuda':
+        # CUDA mode: use PyTorch implementation
         try:
             result = calculate_wt_jetmoe_self_attention_parallel_pytorch(wts, inp, w, model)
             if result is None:
@@ -200,9 +207,10 @@ def launch_jetmoe_self_attention(version, wts, inp, w, model):
 
 def launch_jetmoe_feed_forward(version, wts, inp, w, model):
     if version == 'original':
-        func = calculate_wt_jetmoe_feed_forward_original if version == 'original' else calculate_wt_jetmoe_feed_forward_refactored
-        return func(wts, inp, w, model)
+        # CPU mode: use original implementation
+        return calculate_wt_jetmoe_feed_forward_original(wts, inp, w, model)
     elif version == 'cuda':
+        # CUDA mode: use PyTorch implementation
         try:
             result = calculate_wt_jetmoe_feed_forward_pytorch(wts, inp, w, model)
             if result is None:
