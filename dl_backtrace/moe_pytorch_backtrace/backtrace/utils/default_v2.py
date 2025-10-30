@@ -90,21 +90,21 @@ def launch_lm_head(version, wts, inp, w, b, act):
     else:
         raise ValueError(f"Unknown version for LM head: {version}")
 
-def launch_gpt_oss_self_attention(version, wts, inp, w, attn_type, sliding_window):
+def launch_gpt_oss_self_attention(version, wts, inp, w, config, attn_type="full", sliding_window=None):
     if version == 'original':
         func = calculate_wt_self_attention_parallel_original if version == 'original' else calculate_wt_self_attention_parallel_refactored
-        return func(wts, inp, w, attn_type, sliding_window)
+        return func(wts, inp, w, config, attn_type, sliding_window)
     elif version == 'cuda':
         try:
-            result = calculate_wt_self_attention_parallel_pytorch(wts, inp, w, attn_type, sliding_window)
+            result = calculate_wt_self_attention_parallel_pytorch(wts, inp, w, config, attn_type, sliding_window)
             if result is None:
                 print(f"⚠️  CUDA GPT-OSS self attention implementation returned None, falling back to original")
-                return calculate_wt_self_attention_parallel_original(wts, inp, w, attn_type, sliding_window)
+                return calculate_wt_self_attention_parallel_original(wts, inp, w, config, attn_type, sliding_window)
             return result
         except Exception as e:
             print(f"⚠️  CUDA GPT-OSS self attention implementation failed: {e}")
             print(f"   Falling back to original implementation")
-            return calculate_wt_self_attention_parallel_original(wts, inp, w, attn_type, sliding_window)
+            return calculate_wt_self_attention_parallel_original(wts, inp, w, config, attn_type, sliding_window)
     else:
         raise ValueError(f"Unknown version for GPT-OSS self attention: {version}")
 
