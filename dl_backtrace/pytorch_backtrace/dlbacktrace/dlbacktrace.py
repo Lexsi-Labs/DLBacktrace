@@ -9,7 +9,7 @@ from .core.trace_utils import (
 )
 from .core.config import activation_master
 from .core.relevance_propagation import RelevancePropagator
-from .core.visualization import visualize_graph, visualize_relevance
+from .core.visualization import visualize_graph, visualize_relevance, visualize_relevance_auto 
 
 import numpy as np 
 import torch
@@ -493,7 +493,13 @@ class DLBacktraceFX:
         visualize_graph(self.graph, save_path)
 
     def visualize_dlbacktrace(self, output_path="backtrace_graph", top_k=None, relevance_threshold=None):
-        visualize_relevance(self.graph, self.all_wt, output_path, top_k, relevance_threshold)
+        visualize_relevance_auto(
+            self.graph,
+            self.all_wt,
+            output_path=output_path,
+            node_threshold=500,
+            fast_output_path="backtrace_collapsed_fast",
+        )
     
     def debug_execution_differences(self, *test_inputs):
         """
