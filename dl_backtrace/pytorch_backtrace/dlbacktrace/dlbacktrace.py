@@ -8,6 +8,7 @@ from .core.trace_utils import (
     get_weight_from_placeholder
 )
 from .core.config import activation_master
+from .core.dlb_auto_sampler import DLBAutoSampler
 from .core.relevance_propagation import RelevancePropagator
 from .core.visualization import visualize_graph, visualize_relevance, visualize_relevance_auto 
 
@@ -36,13 +37,15 @@ class DLBacktraceFX:
             strict_cpu (bool): When running on CPU, disable MKL-DNN and pin threads for stricter determinism.
         """
         # 🔧 CRITICAL: Set up deterministic environment for consistent tracing
+        print("Setting up DL-Bactrace", flush=True)
         self.verbose = verbose
         self.strict_cpu = strict_cpu
         self._setup_deterministic_environment(seed=42, verbose=self.verbose, strict_cpu=self.strict_cpu)
         
         self.model = model
         if self.verbose:
-            print("---------------------------v1------------------------------------------")
+            print("---------------------------v1------------------------------------------", flush=True)
+            print("🔧 Initializing DL-Backtrace FX...", flush=True)
         self.input_for_graph = input_for_graph
         # Normalize sample inputs to a tuple for exporter compatibility
         if isinstance(self.input_for_graph, torch.Tensor):
@@ -52,88 +55,103 @@ class DLBacktraceFX:
         self.dynamic_shapes = dynamic_shapes
         self.model.eval()
         self.model.requires_grad_(False)
-        # Parse device configuration and create layer implementation mapping
-        self.layer_implementation = self._parse_device_config(device)
+        # Handle both string and dict layer implementation configurations
+        self.layer_implementation = self._parse_layer_implementation(layer_implementation)
+        
+        if self.verbose:
+            print(f"🚀 Layer Implementation Configuration:", flush=True)
+            if isinstance(self.layer_implementation, str):
+                print(f"   Global: {self.layer_implementation.upper()}", flush=True)
+            else:
+                print(f"   Layer-specific configuration:", flush=True)
+                for layer_type, impl in self.layer_implementation.items():
+                    print(f"     {layer_type}: {impl.upper()}", flush=True)
         
         # Cache manager removed - using non-cache execution only
         if self.verbose:
-            print("---------------------------v2------------------------------------------")
+            print("---------------------------v2------------------------------------------", flush=True)
+            print("🔧 Exporting and tracing model...", flush=True)
         # Export and trace model
         self._trace_model()
         if self.verbose:
-            print("---------------------------v3------------------------------------------")
+            print("---------------------------v3------------------------------------------", flush=True)
+            print("🔧 Extracting placeholders...", flush=True)
         # Placeholder mapping
         self.fx_placeholders = extract_placeholders(self.exported_program)
         if self.verbose:
-            print("---------------------------v4------------------------------------------")
+            print("---------------------------v4------------------------------------------", flush=True)
+            print("🔧 Mapping placeholders to state dict...", flush=True)
         self.placeholder_to_real_name = map_placeholders_to_state_dict(
             self.exported_program, self.model
         )
         if self.verbose:
-            print("---------------------------v5------------------------------------------")
+            print("---------------------------v5------------------------------------------", flush=True)
+            print("🔧 Extracting weights...", flush=True)
         self.extracted_weights = {
             p: get_weight_from_placeholder(
                 p, self.exported_program, self.model, self.placeholder_to_real_name
             ) for p in self.fx_placeholders
         }
         if self.verbose:
-            print("---------------------------v6------------------------------------------")
+            print("---------------------------v6------------------------------------------", flush=True)
+            print("🔧 Building computation graph...", flush=True)
 
         # Graph + metadata
         self.graph, self.layer_stack = build_graph(
             self.tracer, self.extracted_weights
         )
         if self.verbose:
-            print("---------------------------v7------------------------------------------")
+            print("---------------------------v7------------------------------------------", flush=True)
+            print("🔧 Initializing I/O and bookkeeping...", flush=True)
         # I/O and bookkeeping
         self.node_io = {}
         self.activation_dict = {}
         if self.verbose:
-            print("---------------------------v8------------------------------------------")
+            print("---------------------------v8------------------------------------------", flush=True)
+            print("✅ DL-Backtrace FX initialization complete!", flush=True)
     
-    def _parse_device_config(self, device):
-        """
-        Parse device configuration and create layer-specific implementation mapping.
+    def _parse_layer_implementation(self, layer_implementation):
+        """Parse and validate layer implementation configuration."""
+        valid_implementations = ["original", "cuda", "pytorch", "refactored"]
         
-        Args:
-            device (str): Either "cpu" or "cuda"
+        if isinstance(layer_implementation, str):
+            # Global configuration
+            if layer_implementation not in valid_implementations:
+                raise ValueError(f"layer_implementation must be one of {valid_implementations}, got: {layer_implementation}")
             
-        Returns:
-            dict: Layer-specific implementation mapping
-        """
-        if device not in ["cpu", "cuda"]:
-            raise ValueError(f"device must be 'cpu' or 'cuda', got: {device}")
+            # Check CUDA availability if requested
+            if layer_implementation == "cuda" and not torch.cuda.is_available():
+                print("⚠️  CUDA implementation requested but CUDA not available. Falling back to 'original' implementation.")
+                return "original"
+            
+            return layer_implementation
+            
+        elif isinstance(layer_implementation, dict):
+            # Layer-specific configuration
+            valid_layer_types = ["linear", "conv2d", "attention", "embedding", "wt_add_equal", "wt_mul", "default"]
+            
+            # Validate all implementations
+            for layer_type, impl in layer_implementation.items():
+                if layer_type not in valid_layer_types:
+                    print(f"⚠️  Unknown layer type '{layer_type}'. Valid types: {valid_layer_types}")
+                
+                if impl not in valid_implementations:
+                    raise ValueError(f"Implementation for '{layer_type}' must be one of {valid_implementations}, got: {impl}")
+                
+                # Check CUDA availability
+                if impl == "cuda" and not torch.cuda.is_available():
+                    print(f"⚠️  CUDA requested for '{layer_type}' but not available. Using 'original' instead.")
+                    layer_implementation[layer_type] = "original"
+            
+            # Ensure default is specified
+            if "default" not in layer_implementation:
+                layer_implementation["default"] = "original"
+                print("ℹ️  No default implementation specified. Using 'original' as default.")
+            
+            return layer_implementation
         
-        if device == "cpu":
-            # CPU mode: use refactored implementations for all layers
-            config = {
-                "linear": "original",
-                "conv2d": "refactored",
-                "attention": "original",
-                "embedding": "refactored",
-                "wt_add_equal": "refactored",
-                "wt_mul": "refactored",
-                "default": "refactored"
-            }
-            
-        else:  # device == "cuda"
-            # Check CUDA availability
-            if not torch.cuda.is_available():
-                print("⚠️  CUDA device requested but CUDA not available. Falling back to CPU mode.")
-                return self._parse_device_config("cpu")
-            
-            # CUDA mode: use CUDA implementations where available
-            config = {
-                "linear": "cuda",
-                "embedding": "cuda",
-                "attention": "cuda",
-                "conv2d": "cuda",  
-                "wt_add_equal": "refactored",  
-                "wt_mul": "refactored",
-                "default": "refactored"
-            }
-        
-        return config
+        else:
+            raise TypeError(f"layer_implementation must be string or dict, got: {type(layer_implementation)}")
     
     def get_layer_implementation(self, layer_type):
         """Get the implementation to use for a specific layer type."""
@@ -451,7 +469,7 @@ class DLBacktraceFX:
         # If all recovery attempts fail, raise the original error
         raise original_error
 
-    def evaluation(self, mode="default", start_wt=[], multiplier=100.0, scaler=1.0, thresholding=0.5, task="binary-classification", debug=False):
+    def evaluation(self, mode="default", start_wt=[], multiplier=100.0, scaler=1.0, thresholding=0.5, task="binary-classification", target_token_ids=None, debug=False):
         evaluator = RelevancePropagator(
             graph=self.graph,
             node_io=self.node_io,
@@ -465,9 +483,143 @@ class DLBacktraceFX:
             scaler=scaler,
             thresholding=thresholding,
             task=task,
+            target_token_ids=target_token_ids,
             debug=debug
         )
         return self.all_wt
+
+    def sample_auto(self, tokenizer, input_ids, attention_mask=None, **kwargs):
+        """
+        Wrapper for DLB-based generation (greedy / sampling / beam).
+        Accepts kwargs: temp, top_k, top_p, max_new_tokens, min_new_tokens, max_time,
+                        early_stopping, repetition_penalty, no_repeat_ngram_size,
+                        bad_words_ids, bos_token_id, eos_token_id, pad_token_id,
+                        num_beams, num_return_sequences, length_penalty, return_scores, debug
+
+        Returns:
+            - Always a single sequence with shape [1, T_total]
+            (If return_scores=True on sampling path, returns (sequence, scores_trace))
+            - Beam path returns the top-1 sequence (num_return_sequences is ignored on return).
+        """
+
+        # --- helpers ---
+        def _pick_device():
+            mdl = getattr(self, "model", None)
+            dev = getattr(mdl, "device", None)
+            if isinstance(dev, torch.device):
+                return dev
+            return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        def _to_long_tensor(x, device):
+            if isinstance(x, torch.Tensor):
+                t = x
+            elif isinstance(x, (list, tuple)):
+                t = torch.tensor(x)
+            else:
+                try:
+                    import numpy as np  # noqa: F401
+                    if isinstance(x, np.ndarray):
+                        t = torch.from_numpy(x)
+                    else:
+                        raise TypeError
+                except Exception:
+                    raise TypeError(
+                        f"input must be Tensor/list/tuple/ndarray; got {type(x).__name__}"
+                    )
+            if t.dim() == 1:
+                t = t.unsqueeze(0)  # ensure [B=1, T]
+            return t.to(device=device, dtype=torch.long, non_blocking=True)
+
+        def _ensure_mask(mask, ids, pad_id, device):
+            if mask is None:
+                if pad_id is not None:
+                    m = (ids != int(pad_id)).long()
+                else:
+                    m = torch.ones_like(ids, dtype=torch.long, device=device)
+            else:
+                m = _to_long_tensor(mask, device)
+                if m.shape != ids.shape:
+                    raise ValueError(
+                        f"attention_mask shape {tuple(m.shape)} does not match input_ids shape {tuple(ids.shape)}"
+                    )
+            return m
+
+        # --- device & core tensors ---
+        device = _pick_device()
+        input_ids = _to_long_tensor(input_ids, device)
+
+        # Enforce B=1 (DLB export/engine assumes batch-static B=1)
+        if input_ids.size(0) != 1:
+            raise AssertionError("DLBAutoSampler currently assumes batch size = 1. Provide a single prompt.")
+
+        # --- auto-fill token IDs from tokenizer if absent ---
+        for kid in ("bos_token_id", "eos_token_id", "pad_token_id"):
+            if kwargs.get(kid) is None and hasattr(tokenizer, kid):
+                v = getattr(tokenizer, kid)
+                if v is not None:
+                    kwargs[kid] = v
+
+        pad_id = kwargs.get("pad_token_id", None)
+        attention_mask = _ensure_mask(attention_mask, input_ids, pad_id, device)
+
+        # --- sanitize knobs / lengths ---
+        temp = kwargs.get("temp", None)
+        if temp is not None and float(temp) <= 0.0:
+            raise ValueError("temp must be > 0 when provided")
+
+        top_k = kwargs.get("top_k", None)
+        if top_k is not None and int(top_k) < 0:
+            raise ValueError("top_k must be >= 0")
+
+        top_p = kwargs.get("top_p", None)
+        if top_p is not None and not (0.0 < float(top_p) <= 1.0):
+            raise ValueError("top_p must be in (0, 1]")
+
+        max_new_tokens = kwargs.get("max_new_tokens", 50)
+        if int(max_new_tokens) <= 0:
+            raise ValueError("max_new_tokens must be a positive integer")
+        kwargs["max_new_tokens"] = int(max_new_tokens)
+
+        mnt = kwargs.get("min_new_tokens", None)
+        if mnt is not None:
+            mnt = int(mnt)
+            if mnt < 0:
+                raise ValueError("min_new_tokens must be >= 0")
+            if mnt > max_new_tokens:
+                mnt = max_new_tokens
+            kwargs["min_new_tokens"] = mnt
+
+        # --- sanitize beams ---
+        num_beams = int(kwargs.get("num_beams", 1))
+        if num_beams < 1:
+            raise ValueError("num_beams must be >= 1")
+        kwargs["num_beams"] = num_beams
+
+        # even though the generator returns top-1 for beams, keep HF internals happy:
+        nret = int(kwargs.get("num_return_sequences", 1))
+        if nret < 1:
+            nret = 1
+        if nret > num_beams:
+            nret = num_beams
+        kwargs["num_return_sequences"] = nret
+
+        # --- normalize bad_words_ids to List[List[int]] ---
+        bwi = kwargs.get("bad_words_ids", None)
+        if bwi is not None:
+            norm = []
+            if isinstance(bwi, (list, tuple)):
+                for seq in bwi:
+                    if isinstance(seq, (list, tuple)):
+                        norm.append([int(t) for t in seq])
+                    else:
+                        norm.append([int(seq)])
+            else:
+                norm.append([int(bwi)])
+            kwargs["bad_words_ids"] = norm
+
+        # --- create engine & dispatch ---
+        eng = DLBAutoSampler(self, tokenizer)  # `self` is the DLB engine (has .model and .predict)
+        return eng.generate(input_ids=input_ids, attention_mask=attention_mask, **kwargs) 
 
     def print_all_relevance_info(self):
         """ 

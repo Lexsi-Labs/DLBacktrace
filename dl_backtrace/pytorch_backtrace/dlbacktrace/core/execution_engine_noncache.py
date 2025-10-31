@@ -486,6 +486,197 @@ def ensure_embedding_consistency(weight, indices, node_name):
         logger.error(f"❌ Embedding consistency failed: {e}")
         return weight, indices
 
+def smart_broadcast_tensors(a, b, node_name, operation_name="operation"):
+    """
+    Enhanced broadcasting function for tensor operations following PyTorch broadcasting rules.
+    
+    PyTorch Broadcasting Rules:
+    1. Two tensors are "broadcastable" if:
+       - Each tensor has at least one dimension
+       - When iterating over the dimension sizes, starting at the trailing dimension,
+         the dimension sizes must either be equal, or one of them is 1, or one of them does not exist
+    2. After broadcasting, each tensor behaves as if it had shape equal to the element-wise maximum
+       of shapes of the two input tensors
+    3. Any dimension of size 1 can be expanded to any size without copying data
+    
+    Args:
+        a: First tensor
+        b: Second tensor  
+        node_name: Name of the node for logging
+        operation_name: Name of the operation for error messages
+        
+    Returns:
+        Tuple of broadcasted tensors (a_broadcast, b_broadcast)
+    """
+    if not isinstance(a, torch.Tensor) or not isinstance(b, torch.Tensor):
+        return a, b
+
+    if a.shape == b.shape:
+        return a, b
+
+    logger = get_logger()
+    logger.debug(f"[{node_name}] 🔧 Broadcasting for {operation_name}: {a.shape} × {b.shape}")
+
+    # Strategy 1: PyTorch's native broadcasting (most efficient and correct)
+    try:
+        a_broadcast, b_broadcast = torch.broadcast_tensors(a, b)
+        logger.debug(f"[{node_name}] ✅ Native broadcasting: {a.shape} → {a_broadcast.shape}, {b.shape} → {b_broadcast.shape}")
+        return a_broadcast, b_broadcast
+    except RuntimeError as e:
+        logger.debug(f"[{node_name}] ⚠️ Native broadcasting failed: {e}")
+        # Fall through to manual strategies
+
+    # Strategy 2: Manual broadcasting following PyTorch rules
+    try:
+        # Check if tensors are broadcastable according to PyTorch rules
+        def is_broadcastable(a, b):
+            """Check if two tensors are broadcastable according to PyTorch rules"""
+            a_dims = list(a.shape)
+            b_dims = list(b.shape)
+            
+            # Pad shorter tensor with 1s on the left
+            while len(a_dims) < len(b_dims):
+                a_dims.insert(0, 1)
+            while len(b_dims) < len(a_dims):
+                b_dims.insert(0, 1)
+            
+            # Check each dimension
+            for a_dim, b_dim in zip(a_dims, b_dims):
+                if a_dim != b_dim and a_dim != 1 and b_dim != 1:
+                    return False
+            return True
+
+        if not is_broadcastable(a, b):
+            raise RuntimeError(f"Tensors are not broadcastable: {a.shape} × {b.shape}")
+
+        # Manual broadcasting implementation
+        a_dims = list(a.shape)
+        b_dims = list(b.shape)
+        
+        # Pad shorter tensor with 1s on the left
+        while len(a_dims) < len(b_dims):
+            a_dims.insert(0, 1)
+        while len(b_dims) < len(a_dims):
+            b_dims.insert(0, 1)
+        
+        # Create target shape
+        target_shape = []
+        for a_dim, b_dim in zip(a_dims, b_dims):
+            target_shape.append(max(a_dim, b_dim))
+        
+        # Expand tensors to target shape
+        a_expanded = a
+        b_expanded = b
+        
+        # Add dimensions to a if needed
+        while a_expanded.dim() < len(target_shape):
+            a_expanded = a_expanded.unsqueeze(0)
+        
+        # Add dimensions to b if needed
+        while b_expanded.dim() < len(target_shape):
+            b_expanded = b_expanded.unsqueeze(0)
+        
+        # Expand to target shape
+        a_broadcast = a_expanded.expand(target_shape)
+        b_broadcast = b_expanded.expand(target_shape)
+        
+        logger.debug(f"[{node_name}] ✅ Manual broadcasting: {a.shape} → {a_broadcast.shape}, {b.shape} → {b_broadcast.shape}")
+        return a_broadcast, b_broadcast
+
+    except Exception as expand_error:
+        logger.debug(f"[{node_name}] ⚠️ Manual broadcasting failed: {expand_error}")
+
+    # If all strategies fail, provide detailed error information
+    logger.error(f"[{node_name}] ❌ All broadcasting strategies failed for {operation_name}")
+    logger.error(f"[{node_name}] ❌ Tensor a: shape={a.shape}, dtype={a.dtype}, device={a.device}")
+    logger.error(f"[{node_name}] ❌ Tensor b: shape={b.shape}, dtype={b.dtype}, device={b.device}")
+    logger.error(f"[{node_name}] ❌ Shape compatibility check:")
+    logger.error(f"[{node_name}]   - a.dim() = {a.dim()}, b.dim() = {b.dim()}")
+    logger.error(f"[{node_name}]   - a.numel() = {a.numel()}, b.numel() = {b.numel()}")
+    
+    raise RuntimeError(f"[{node_name}] ❌ Cannot broadcast tensors for {operation_name}: "
+                    f"a={a.shape} (dtype={a.dtype}) × b={b.shape} (dtype={b.dtype}). "
+                    f"Tensors must be broadcastable according to PyTorch broadcasting rules.")
+
+def needs_broadcasting(func_name):
+    """
+    Determine if an operation needs broadcasting support based on PyTorch API documentation.
+    
+    Returns:
+        bool: True if operation supports broadcasting, False otherwise
+    """
+    # Operations that support broadcasting (element-wise operations)
+    broadcasting_ops = {
+        # Arithmetic operations
+        "add", "add_", "sub", "sub_", "mul", "mul_", "div", "div_", 
+        "rsub", "rdiv", "pow", "pow_", "fmod", "remainder",
+        
+        # Comparison operations  
+        "eq", "ne", "lt", "le", "gt", "ge", "equal", "not_equal",
+        
+        # Logical operations
+        "logical_and", "logical_or", "logical_xor", "logical_not",
+        "bitwise_and", "bitwise_or", "bitwise_xor", "bitwise_not",
+        
+        # Mathematical functions
+        "atan2", "hypot", "nextafter", "ldexp", "copysign",
+        
+        # Element-wise functions
+        "maximum", "minimum", "clamp", "clamp_", "where",
+        
+        # Advanced operations
+        "lerp", "slerp", "addcdiv", "addcmul",
+    }
+    
+    return func_name in broadcasting_ops
+
+def apply_smart_broadcasting(func_name, inputs, node_name, operation_name=None):
+    """
+    Apply smart broadcasting to inputs if the operation supports it.
+    
+    Args:
+        func_name: Name of the operation
+        inputs: List or tuple of input tensors
+        node_name: Name of the node for logging
+        operation_name: Optional custom operation name for logging
+        
+    Returns:
+        Processed inputs with broadcasting applied if needed
+    """
+    if not needs_broadcasting(func_name):
+        return inputs
+    
+    if not isinstance(inputs, (list, tuple)) or len(inputs) < 2:
+        return inputs
+    
+    # Find tensor inputs
+    tensor_inputs = [inp for inp in inputs if isinstance(inp, torch.Tensor)]
+    if len(tensor_inputs) < 2:
+        return inputs
+    
+    # Apply broadcasting to the first two tensor inputs
+    a, b = tensor_inputs[0], tensor_inputs[1]
+    op_name = operation_name or func_name
+    
+    try:
+        a_broadcast, b_broadcast = smart_broadcast_tensors(a, b, node_name, op_name)
+        
+        # Replace the original tensors with broadcasted versions
+        result = list(inputs)
+        for i, inp in enumerate(result):
+            if isinstance(inp, torch.Tensor):
+                if inp is a:
+                    result[i] = a_broadcast
+                elif inp is b:
+                    result[i] = b_broadcast
+        
+        return tuple(result) if isinstance(inputs, tuple) else result
+        
+    except Exception as e:
+        logger = get_logger()
+        logger.warning(f"[{node_name}] ⚠️ Broadcasting failed for {op_name}: {e}")
+        return inputs
+
 def ensure_operation_consistency(operation_name, inputs, weights, node_name):
     """Ensure any operation produces consistent results"""
     logger = get_logger()
@@ -690,6 +881,7 @@ def _precheck_embedding(indices, weight, node_name):
 def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, method_args, parents, node_io, node_name,tensor_map, children=None, model_dtype=None):
     logger = get_logger()
     logger.debug(f"🔧 Executing aten operation: {func_name}")
+    print(f"🔧 EXECUTING ATEN OPERATION: {func_name} (node: {node_name})")
     logger.debug(f"🔧 Node name: {node_name}")
     logger.debug(f"🔧 Children: {children}")
     logger.debug(f"🔧 Parents: {parents}")
@@ -1464,31 +1656,99 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                            layer_hyperparams["index"])
 
         elif func_name == "arange":
+            logger.debug("🚨 ARANGE OPERATION DETECTED - ENTERING ENHANCED LOGIC")
             start = layer_hyperparams.get("start", None)
             end = layer_hyperparams.get("end", None)
             step = layer_hyperparams.get("step", 1)
             dtype = layer_hyperparams.get("dtype", None)
             device = layer_hyperparams.get("device", None)
-            if len(parents) == 1 and end == 10:
-                end = tensor_map[parents[0]]
-            
+            logger.debug(f"🔧 arange: start={start}, end={end}, step={step}, dtype={dtype}, device={device}")
+            logger.debug(f"🔧 arange: parents={parents}, layer_in={layer_in}")
 
-            # Function to resolve parameters to scalars
-            def resolve_param(param):
+            # 🔧 ENHANCED: Better parameter resolution for arange
+            def resolve_arange_param(param):
+                """Resolve arange parameter to scalar value"""
+                if param is None:
+                    return None
                 if isinstance(param, torch.Tensor):
                     return param.item()
                 elif isinstance(param, torch.fx.Node):
-                    return tensor_map[str(param)].item()
-                    #return node_io[str(param)]['output_values'].item()
+                    if str(param) in tensor_map:
+                        val = tensor_map[str(param)]
+                        return val.item() if isinstance(val, torch.Tensor) else val
+                    return None
                 elif isinstance(param, torch.SymInt):
-                    return tensor_map[str(param)].item()
-                    #return int(param.node._value) if hasattr(param.node, "_value") else 1
-                return param
+                    return int(param)
+                elif isinstance(param, (int, float)):
+                    return param
+                return None
 
-            # Resolve parameters
-            start = resolve_param(start)
-            end = resolve_param(end)
-            step = resolve_param(step)
+            # Resolve parameters first
+            start = resolve_arange_param(start)
+            end = resolve_arange_param(end)
+            step = resolve_arange_param(step)
+            
+            # 🔧 CRITICAL FIX: Handle parameter extraction issues
+            # The main issue is that arange parameters are often extracted incorrectly
+            # We need to infer the correct parameters from context
+            
+            # Case 1: If we have parents, try to get sequence length from them
+            if len(parents) > 0:
+                for parent in parents:
+                    if parent in tensor_map:
+                        parent_value = tensor_map[parent]
+                        if isinstance(parent_value, torch.Tensor) and parent_value.dim() > 0:
+                            # Use the last dimension size as sequence length
+                            seq_len = parent_value.shape[-1]
+                            logger.debug(f"🔧 arange: Using parent {parent} sequence length: {seq_len}")
+                            if end is None:  # Only override if end is None
+                                end = seq_len
+                                start = 0
+                            break
+            
+            # Case 2: If no parents or parents didn't help, try to infer from layer_in
+            if end is None:
+                if hasattr(layer_in, '__len__') and len(layer_in) > 0:
+                    if isinstance(layer_in, (list, tuple)) and len(layer_in) > 0:
+                        first_input = layer_in[0]
+                        if isinstance(first_input, torch.Tensor) and first_input.dim() > 0:
+                            seq_len = first_input.shape[-1]
+                            logger.debug(f"🔧 arange: Inferring sequence length from input: {seq_len}")
+                            end = seq_len
+                            start = 0
+                elif isinstance(layer_in, torch.Tensor) and layer_in.dim() > 0:
+                    seq_len = layer_in.shape[-1]
+                    logger.debug(f"🔧 arange: Inferring sequence length from layer_in: {seq_len}")
+                    end = seq_len
+                    start = 0
+            
+            # Case 3: Handle common parameter extraction bugs
+            if start is not None and end is not None:
+                if start > end:
+                    # This is likely a bug - swap them
+                    logger.debug(f"🔧 arange: Detected start={start} > end={end}, swapping to start=0, end={start}")
+                    original_start = start
+                    start = 0
+                    end = original_start
+                elif start == 0 and end > 1000:
+                    # This might be a sequence length
+                    logger.debug(f"🔧 arange: Detected potential sequence length: end={end}")
+                    # Keep as is, this looks correct
+
+            # Ensure we have valid parameters
+            if start is None:
+                start = 0
+            if end is None:
+                # No hardcoded fallback - this should be an error
+                raise RuntimeError(f"🔧 arange: Cannot determine 'end' parameter. "
+                                f"start={start}, end={end}, step={step}. "
+                                f"Please check parameter extraction in graph builder.")
+            if step is None:
+                step = 1
+                
+            logger.debug(f"🔧 arange: Final parameters - start={start}, end={end}, step={step}, dtype={dtype}, device={device}")
+            logger.debug(f"🔧 arange: Parents count={len(parents)}, parents={parents}")
+            logger.debug(f"🔧 arange: tensor_map keys={list(tensor_map.keys())}")
 
             def get_overload_name(op_overload_obj):
                 try:
@@ -1497,25 +1757,46 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                     return None
 
             arange_overload = get_overload_name(aten_op)
+            logger.debug(f"🔧 arange: Overload detected: {arange_overload}")
 
             try:
+                # 🔧 ENHANCED: Better overload handling
                 if arange_overload in ("start_step", "Scalar", "Scalar_"):
                     # aten::arange.start_step(start, end, step, *, dtype, device)
+                    logger.debug(f"🔧 arange: Using start_step overload with start={start}, end={end}, step={step}")
                     output = aten_op(start, end, step, dtype=dtype, device=device)
-                elif "start" in str(arange_overload) :
+                elif "start" in str(arange_overload):
                     # aten::arange.start(start, end, *, dtype, device)
+                    logger.debug(f"🔧 arange: Using start overload with start={start}, end={end}")
                     output = aten_op(start, end, dtype=dtype, device=device)
-                elif "default" in str(arange_overload) :
+                elif "default" in str(arange_overload):
                     # aten::arange.default(end, *, dtype, device)
+                    logger.debug(f"🔧 arange: Using default overload with end={end}")
                     output = aten_op(end, dtype=dtype, device=device)
                 else:
-                    # Other overloads like aten::arange.Scalar support step
-                    output = aten_op(start, end, step, dtype=dtype, device=device)
+                    # Fallback: try different combinations
+                    try:
+                        logger.debug(f"🔧 arange: Trying start_step fallback with start={start}, end={end}, step={step}")
+                        output = aten_op(start, end, step, dtype=dtype, device=device)
+                    except:
+                        try:
+                            logger.debug(f"🔧 arange: Trying start fallback with start={start}, end={end}")
+                            output = aten_op(start, end, dtype=dtype, device=device)
+                        except:
+                            logger.debug(f"🔧 arange: Trying default fallback with end={end}")
+                            output = aten_op(end, dtype=dtype, device=device)
+                            
+                logger.debug(f"🔧 arange: Successfully created tensor with shape: {output.shape}")
+                return output
+                
             except Exception as e:
+                logger.error(f"🔧 arange: All overload attempts failed")
+                logger.error(f"🔧 arange: Parameters: start={start}, end={end}, step={step}, dtype={dtype}, device={device}")
+                logger.error(f"🔧 arange: Overload: {arange_overload}")
+                logger.error(f"🔧 arange: Error: {str(e)}")
                 raise RuntimeError(f"Failed to call aten::arange with resolved args. "
                                 f"start={start}, end={end}, step={step}, dtype={dtype}, device={device}. "
                                 f"Overload: {arange_overload}. Error: {str(e)}")
-            return output
 
         elif func_name == "slice":
             # 🔧 CRITICAL FIX: Robust slice operation without hyperparameter corruption
@@ -1747,7 +2028,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                     layer_hyperparams["sparse"])
 
         elif func_name in ("mul", "mul_"):
-
+            # 🔧 ENHANCED MUL OPERATION: Fixed broadcasting and improved error handling
+            
             # Extract operands a and b robustly
             a = b = None
             if isinstance(layer_in, list):
@@ -1774,125 +2056,69 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             if hasattr(b, 'node') and hasattr(b.node, '_value'):
                 b = b.node._value
 
-            # Utility: unwrap 0-dim tensors carefully
-            def unwrap_scalar(x):
+            # 🔧 IMPROVED: Simplified and more robust tensor handling
+            def normalize_tensor(x):
+                """Normalize input to appropriate tensor format"""
                 if isinstance(x, torch.nn.Parameter):
                     x = x.detach()
-                if isinstance(x, torch.Tensor) and x.ndim == 0:
-                    val = x.item()
-                    if isinstance(val, (int, float)) and abs(val) > 1e10:
-                        return x.to(dtype=torch.float32)  # keep as tensor
-                    return val
+                
+                if isinstance(x, torch.Tensor):
+                    if x.ndim == 0:  # Scalar tensor
+                        val = x.item()
+                        # Keep large values as tensors to avoid precision loss
+                        if abs(val) > 1e10:
+                            return x.to(dtype=torch.float32)
+                        return val
+                    return x
+                
                 if isinstance(x, (int, float)):
+                    # Convert large numbers to tensors to avoid precision issues
                     if abs(x) > 1e10:
                         return torch.tensor(x, dtype=torch.float32)
                     return x
+                
                 return x
 
-            a = unwrap_scalar(a)
-            b = unwrap_scalar(b)
+            a = normalize_tensor(a)
+            b = normalize_tensor(b)
 
-            # Final promotion to safe tensor if needed
-            def to_safe_tensor(val, ref):
+            # 🔧 IMPROVED: Better tensor promotion with consistent dtype/device handling
+            def promote_to_tensor(val, reference=None):
+                """Promote value to tensor with consistent dtype and device"""
                 if isinstance(val, (int, float)):
-                    if abs(val) > 1e10:
-                        return torch.tensor(val, dtype=torch.float32, device=ref.device if isinstance(ref, torch.Tensor) else 'cpu')
-                    return torch.tensor(val, dtype=ref.dtype if isinstance(ref, torch.Tensor) else torch.float32,
-                                        device=ref.device if isinstance(ref, torch.Tensor) else 'cpu')
+                    if reference is not None and isinstance(reference, torch.Tensor):
+                        return torch.tensor(val, dtype=reference.dtype, device=reference.device)
+                    return torch.tensor(val, dtype=torch.float32)
                 return val
 
-            a = to_safe_tensor(a, b)
-            b = to_safe_tensor(b, a)
+            a = promote_to_tensor(a, b)
+            b = promote_to_tensor(b, a)
 
-            def expand_to_match(a, b):
-                if not isinstance(a, torch.Tensor) or not isinstance(b, torch.Tensor):
-                    return a, b
+            # Use the shared smart broadcasting function
 
-                if a.shape == b.shape:
-                    return a, b
-
-                # 🔧 CRITICAL FIX: Enhanced broadcasting with better error handling
-                try:
-                    # Try PyTorch's automatic broadcasting first
-                    a_broadcast, b_broadcast = torch.broadcast_tensors(a, b)
-                    logger.debug(f"[{node_name}] ✅ Broadcasting successful: {a.shape} -> {a_broadcast.shape}, {b.shape} -> {b_broadcast.shape}")
-                    return a_broadcast, b_broadcast
-                except RuntimeError as e:
-                    # 🔧 ENHANCED FIX: Try alternative broadcasting strategies
-                    logger.warning(f"[{node_name}] ⚠️ Standard broadcasting failed: {e}")
-                    
-                    # Strategy 1: Try to expand smaller tensor to match larger one
-                    try:
-                        if a.numel() < b.numel():
-                            # Try to expand 'a' to match 'b'
-                            if a.dim() == 1 and b.dim() == 2 and a.shape[0] == b.shape[1]:
-                                a_expanded = a.unsqueeze(0).expand_as(b)
-                                logger.debug(f"[{node_name}] ✅ Expanded a: {a.shape} -> {a_expanded.shape}")
-                                return a_expanded, b
-                            elif a.dim() == 2 and b.dim() == 2 and a.shape[0] == 1:
-                                a_expanded = a.expand_as(b)
-                                logger.debug(f"[{node_name}] ✅ Expanded a: {a.shape} -> {a_expanded.shape}")
-                                return a_expanded, b
-                        elif b.numel() < a.numel():
-                            # Try to expand 'b' to match 'a'
-                            if b.dim() == 1 and a.dim() == 2 and b.shape[0] == a.shape[1]:
-                                b_expanded = b.unsqueeze(0).expand_as(a)
-                                logger.debug(f"[{node_name}] ✅ Expanded b: {b.shape} -> {b_expanded.shape}")
-                                return a, b_expanded
-                            elif b.dim() == 2 and a.dim() == 2 and b.shape[0] == 1:
-                                b_expanded = b.expand_as(a)
-                                logger.debug(f"[{node_name}] ✅ Expanded b: {b.shape} -> {b_expanded.shape}")
-                                return a, b_expanded
-                    except Exception as expand_error:
-                        logger.debug(f"[{node_name}] ⚠️ Expansion strategy failed: {expand_error}")
-                    
-                    # Strategy 2: Try element-wise operations with compatible shapes
-                    try:
-                        if a.numel() == 1:
-                            # 'a' is a scalar, broadcast it
-                            a_scalar = a.item() if a.numel() == 1 else a
-                            logger.debug(f"[{node_name}] ✅ Using scalar a: {a_scalar}")
-                            return a_scalar, b
-                        elif b.numel() == 1:
-                            # 'b' is a scalar, broadcast it
-                            b_scalar = b.item() if b.numel() == 1 else b
-                            logger.debug(f"[{node_name}] ✅ Using scalar b: {b_scalar}")
-                            return a, b_scalar
-                    except Exception as scalar_error:
-                        logger.debug(f"[{node_name}] ⚠️ Scalar strategy failed: {scalar_error}")
-                    
-                    # If all strategies fail, provide a detailed error message
-                    logger.error(f"[{node_name}] ❌ All broadcasting strategies failed")
-                    logger.error(f"[{node_name}] ❌ Tensor a: shape={a.shape}, dtype={a.dtype}, device={a.device}")
-                    logger.error(f"[{node_name}] ❌ Tensor b: shape={b.shape}, dtype={b.dtype}, device={b.device}")
-                    raise RuntimeError(f"[{node_name}] ❌ Cannot broadcast tensors: a={a.shape}, b={b.shape}. "
-                                    f"Original error: {e}. "
-                                    f"Consider checking if the operation is intended for these tensor shapes.")
-
-                return a, b
-
-            # Execute op
+            # Execute the multiplication operation
             try:
                 if isinstance(a, torch.Tensor) and isinstance(b, torch.Tensor):
-                    # 🔧 CRITICAL FIX: Ensure dtype and device consistency for CPU compatibility
+                    # Ensure dtype and device consistency
                     a, b = ensure_tensor_consistency([a, b])
                     
-                    logger.debug(f"Before ---  a: {a.shape}, b: {b.shape}")
-                    logger.debug("Aligning the shapes")
-                    a, b = expand_to_match(a, b)
-                    logger.debug(f"After ---  a: {a.shape}, b: {b.shape}") 
+                    logger.debug(f"[{node_name}] 🔧 Before broadcasting: a={a.shape}, b={b.shape}")
+                    a, b = smart_broadcast_tensors(a, b, node_name, "mul")
+                    logger.debug(f"[{node_name}] 🔧 After broadcasting: a={a.shape}, b={b.shape}")
+                
                 output = aten_op(a, b)
+                logger.debug(f"[{node_name}] ✅ mul output shape: {output.shape}")
+                
             except Exception as e:
-                raise RuntimeError(
-                    f"[{node_name}] ❌ failed in `{func_name}` with a={type(a)}, b={type(b)}; "
-                    f"shapes: {getattr(a, 'shape', None)}, {getattr(b, 'shape', None)}. Error: {e}"
-                )
+                logger.error(f"[{node_name}] ❌ mul operation failed:")
+                logger.error(f"[{node_name}]   - a: type={type(a)}, shape={getattr(a, 'shape', None)}, dtype={getattr(a, 'dtype', None)}")
+                logger.error(f"[{node_name}]   - b: type={type(b)}, shape={getattr(b, 'shape', None)}, dtype={getattr(b, 'dtype', None)}")
+                raise RuntimeError(f"[{node_name}] ❌ mul operation failed: {e}")
 
-            logger.debug(f"node_name: {node_name}, mul output shape: {output.shape}")
             return output
 
         elif func_name in {"add", "add_", "sub", "div", "rsub", "pow", "gt", "ge", "lt", "eq"}:
-            # 🔧 CRITICAL FIX: Robust comparison and arithmetic operations
+            # 🔧 ENHANCED: Robust arithmetic and comparison operations with smart broadcasting
             logger = get_logger()
             logger.debug(f"🔧 {func_name}: input type={type(layer_in)}, length={len(layer_in) if isinstance(layer_in, (list, tuple)) else 'single'}")
             logger.debug(f"🔧 {func_name}: method_args={method_args}")
@@ -1902,6 +2128,10 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                 layer_in = [enforce_precision_consistency(x) for x in layer_in]
             else:
                 layer_in = enforce_precision_consistency(layer_in)
+            
+            # 🔧 BROADCASTING FIX: Apply smart broadcasting for supported operations
+            if isinstance(layer_in, (list, tuple)) and len(layer_in) >= 2:
+                layer_in = apply_smart_broadcasting(func_name, layer_in, node_name)
             
             # 🔧 FIX: Handle list inputs with proper validation
             if isinstance(layer_in, list):
@@ -1932,15 +2162,6 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                         a, b = layer_in[0], layer_in[1]
                         if not isinstance(a, torch.Tensor) or not isinstance(b, torch.Tensor):
                             raise TypeError(f"[{node_name}] ❌ {func_name}: both inputs must be tensors, got {type(a)} and {type(b)}")
-                        
-                        # 🔧 FIX: Ensure tensors can be compared
-                        if a.shape != b.shape:
-                            try:
-                                # Try broadcasting
-                                a, b = torch.broadcast_tensors(a, b)
-                                logger.debug(f"[{node_name}] 🔧 {func_name}: broadcasted shapes to {a.shape}")
-                            except Exception as e:
-                                raise RuntimeError(f"[{node_name}] ❌ {func_name}: cannot broadcast shapes {a.shape} and {b.shape}: {e}")
                     
                     output = aten_op(layer_in[0], layer_in[1], *method_args)
                     
@@ -2471,7 +2692,9 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                     y = y.to(device=target_device)
                 
                 try:
-                    cond_, x_, y_ = torch.broadcast_tensors(cond, x, y)
+                    # Use smart broadcasting for where operation
+                    cond_, x_ = smart_broadcast_tensors(cond, x, node_name, "where_cond_x")
+                    x_, y_ = smart_broadcast_tensors(x_, y, node_name, "where_x_y")
                     return aten_op(cond_, x_, y_)
                 except Exception as e:
                     # Safe fallback: expand cond to match if it's missing a dimension
@@ -2498,7 +2721,7 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                     cond = cond.to(torch.bool)
 
                 try:
-                    cond_, x_ = torch.broadcast_tensors(cond, x)
+                    cond_, x_ = smart_broadcast_tensors(cond, x, node_name, "where_scalar_self")
                     return torch.where(cond_, x_, torch.zeros_like(x_))  # Default y = 0
                 except Exception as e:
                     raise RuntimeError(
@@ -2643,7 +2866,7 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             return aten_op(layer_in, *method_args)
 
         elif func_name in {"ne", "eq", "lt", "le", "gt", "ge"}:
-            # 🔧 NEW OPERATION: Comparison operations with consistency checks
+            # 🔧 ENHANCED: Comparison operations with smart broadcasting
             logger.debug(f"[{node_name}] 🔧 {func_name}: processing inputs, layer_in type={type(layer_in)}")
             
             # Handle different input scenarios
@@ -2689,8 +2912,9 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                 a_tensor = torch.tensor(a, dtype=b.dtype, device=b.device)
                 output = aten_op(a_tensor, b)
             elif isinstance(a, torch.Tensor) and isinstance(b, torch.Tensor):
-                # Tensor vs tensor - ensure consistency and compare
+                # Tensor vs tensor - ensure consistency and apply smart broadcasting
                 a, b = ensure_tensor_consistency([a, b])
+                a, b = smart_broadcast_tensors(a, b, node_name, func_name)
                 output = aten_op(a, b)
             else:
                 # Both scalars - convert to tensors and compare
@@ -3515,6 +3739,29 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             except Exception as e:
                 raise RuntimeError(f"[{node_name}] ❌ addmv failed with shapes: bias={bias.shape}, mat={mat.shape}, vec={vec.shape}. Error: {e}")
 
+        elif func_name == "alias":
+            # 🔧 NEW OPERATION: Alias operation - creates a view of tensor without copying
+            logger.debug(f"[{node_name}] 🔧 alias: processing input, layer_in type={type(layer_in)}")
+            
+            # Handle different input scenarios
+            if isinstance(layer_in, (list, tuple)):
+                if len(layer_in) == 1:
+                    input_tensor = layer_in[0]
+                else:
+                    raise RuntimeError(f"[{node_name}] ❌ alias expects 1 input, got {len(layer_in)}")
+            elif isinstance(layer_in, torch.Tensor):
+                input_tensor = layer_in
+            else:
+                raise RuntimeError(f"[{node_name}] ❌ alias expects tensor input, got {type(layer_in)}")
+            
+            # Apply consistency checks for exact reproducibility
+            input_tensor = enforce_precision_consistency(input_tensor)
+            
+            # Execute operation - aten::alias() creates a view of the input tensor
+            output = aten_op(input_tensor)
+            logger.debug(f"[{node_name}] ✅ alias: input shape={input_tensor.shape}, output shape={output.shape}")
+            return output
+
         else:
             # 🔧 UNHANDLED OPERATION: Print with emojis for easy identification
             logger.warning(f"🚨 UNHANDLED OPERATION: `{func_name}` - needs implementation!")
@@ -3846,8 +4093,11 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
         
         # 🔧 DEBUG: Check for extreme values that could indicate precision issues
         if isinstance(processed_output, torch.Tensor):
+            # 🔧 CRITICAL FIX: Check for empty tensors first
+            if processed_output.numel() == 0:
+                logger.debug(f"[DEBUG:EMPTY] Node `{node_name}` produced empty tensor → shape: {processed_output.shape}")
             # 🔧 CRITICAL FIX: Only check abs for numeric tensors, not boolean tensors
-            if processed_output.dtype in [torch.bool]:
+            elif processed_output.dtype in [torch.bool]:
                 # For boolean tensors, just check basic properties
                 logger.debug(f"[DEBUG:BOOL] Node `{node_name}` produced boolean tensor → shape: {processed_output.shape}")
             elif torch.is_floating_point(processed_output) or torch.is_complex(processed_output):

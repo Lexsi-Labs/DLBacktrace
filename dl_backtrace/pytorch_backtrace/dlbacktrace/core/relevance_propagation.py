@@ -429,10 +429,17 @@ def run_evaluation(
     scaler=1.0,
     thresholding=0.5,
     task="binary-classification",
+    target_token_ids=None,
     get_layer_implementation=None,
 ):
     """
     Perform LRP-style backtrace through node_io.
+
+    target_token_ids:
+        - Only meaningful for task=="generation".
+        - A token id (or list of token ids, batch-aligned) that we actually chose
+          during decoding. For classification tasks this is ignored.
+
     Returns: dict node_name -> relevance (np.ndarray or list of).
     """
     all_wt = {}
@@ -451,7 +458,13 @@ def run_evaluation(
     if DEBUG:
         log(f"out_np: {out_np.shape}")
     
-    seed = UD2.calculate_start_wt(out_np, scaler=scaler, thresholding=thresholding, task=task)
+    seed = UD.calculate_start_wt(
+        out_np, 
+        scaler=scaler, 
+        task=task,
+        target_indices=target_token_ids,  # NEW: only matters when task=="generation"
+        thresholding=thresholding,
+    )
     
     if DEBUG:
         log(f"seed: {np.sum(seed):.8f},  shape: {seed.shape}")
@@ -1172,6 +1185,7 @@ class RelevancePropagator:
         scaler=1.0,
         thresholding=0.5,
         task="binary-classification",
+        target_token_ids=None,
         debug=False,
     ):
         global DEBUG
@@ -1185,5 +1199,6 @@ class RelevancePropagator:
             scaler=scaler,
             thresholding=thresholding,
             task=task,
+            target_token_ids=target_token_ids,
             get_layer_implementation=self.get_layer_implementation,
         )
