@@ -10,6 +10,16 @@ def torch_swish(x: torch.Tensor, beta: float = 0.75) -> torch.Tensor:
     z = torch.sigmoid(torch.clamp(beta * x, -500, 500))
     return x * z
 
+def stabilize(matrix: torch.Tensor, epsilon: float = 1e-6) -> torch.Tensor:
+    abs_matrix = torch.abs(matrix)
+    sign_matrix = torch.where(matrix == 0, 
+                             torch.ones_like(matrix), 
+                             torch.sign(matrix))
+    
+    return torch.where(abs_matrix < epsilon, 
+                      epsilon * sign_matrix, 
+                      matrix)
+
 def process_single_relevance_router_logits(
     wts: torch.Tensor, 
     input_tensor: torch.Tensor, 
@@ -407,11 +417,6 @@ def calculate_relevance_QK(wts: torch.Tensor, QK_output: torch.Tensor) -> torch.
     
     return wt_mat_QK_total
 
-import torch
-import torch.nn.functional as F
-from typing import Tuple
-
-
 def calculate_wt_attention_output_projection(
     wts: torch.Tensor,
     proj_output: torch.Tensor
@@ -485,9 +490,106 @@ def calculate_wt_attention_output_projection(
     
     return wt_mat_proj_output_total
 
+@torch.compile
+def calculate_wt_self_attention_parallel(
+    wts: torch.Tensor,
+    inp: torch.Tensor,
+    w: Dict[str, torch.Tensor],
+    model: Any
+) -> torch.Tensor:
 
-# Compile the function for optimized execution
-calculate_wt_attention_output_projection_compiled = torch.compile(
-    calculate_wt_attention_output_projection,
-    mode='default'  # Can use 'reduce-overhead' or 'max-autotune' for different optimization strategies
-)
+    device = inp.device
+    
+    # Compute Q, K, V projections using einsum
+    query_output = torch.einsum('ij,kj->ik', inp, w['W_q'])
+    key_output = torch.einsum('ij,kj->ik', inp, w['W_k'])
+    value_output = torch.einsum('ij,kj->ik', inp, w['W_v'])
+    
+    # Get configuration parameters
+    config = model.config
+    num_heads = config.num_attention_heads
+    hidden_size = config.hidden_size
+    
+    # Handle grouped query attention
+    if hasattr(config, 'num_key_value_heads'):
+        num_key_value_heads = config.num_key_value_heads
+    else:
+        num_key_value_heads = config.num_heads
+    
+    head_dim = hidden_size // num_heads
+    
+    # Reshape to multi-head format and transpose
+    # (num_tokens, num_heads, head_dim) -> (num_heads, num_tokens, head_dim)
+    query_states = query_output.reshape(query_output.shape[0], num_heads, head_dim).permute(1, 0, 2)
+    key_states = key_output.reshape(key_output.shape[0], num_key_value_heads, head_dim).permute(1, 0, 2)
+    value_states = value_output.reshape(value_output.shape[0], num_key_value_heads, head_dim).permute(1, 0, 2)
+    
+    # Repeat key/value heads for grouped query attention
+    n_rep = num_heads // num_key_value_heads
+    key_states = key_states.repeat_interleave(n_rep, dim=0)
+    value_states = value_states.repeat_interleave(n_rep, dim=0)
+    
+    # Compute attention scores: (num_heads, num_tokens, num_tokens)
+    QK_output = torch.einsum('hqd,hkd->hqk', query_states, key_states)
+    attn_weights = QK_output / torch.sqrt(torch.tensor(head_dim, dtype=QK_output.dtype, device=device))
+    
+    # Apply softmax with numerical stability
+    attn_weights = attn_weights - torch.max(attn_weights, dim=-1, keepdim=True).values
+    attn_weights = torch.exp(attn_weights)
+    attn_weights = attn_weights / torch.sum(attn_weights, dim=-1, keepdim=True)
+    
+    # Weighted sum of values: (num_heads, num_tokens, head_dim)
+    attn_output = torch.einsum('hqk,hkl->hql', attn_weights, value_states)
+    
+    # Reshape attention output back to original shape: (num_tokens, hidden_size)
+    attn_output = attn_output.permute(1, 0, 2)  # (num_tokens, num_heads, head_dim)
+    attn_output = attn_output.reshape(attn_output.shape[0], num_heads * head_dim)
+    
+    # Perform final linear projection: (num_tokens, hidden_size)
+    final_output = torch.einsum('qd,dh->qh', attn_output, w['W_d'])
+    
+    # ============= Relevance Calculation =============
+    
+    # Step 1: Relevance for final linear projection
+    # wts shape: (num_heads, num_tokens)
+    # final_output shape: (num_tokens, hidden_size)
+    wt_mat_attn_proj = calculate_wt_attention_output_projection(wts, final_output)
+    
+    # Step 2: Split relevance for V and QK paths
+    # wt_mat_attn_proj shape: (num_tokens, hidden_size)
+    relevance_V = wt_mat_attn_proj / 2
+    relevance_QK = wt_mat_attn_proj / 2
+    
+    # Reshape to multi-head format for relevance propagation
+    # (num_tokens, hidden_size) -> (num_tokens, num_heads, head_dim) -> (num_heads, num_tokens, head_dim)
+    relevance_V_reshaped = relevance_V.reshape(relevance_V.shape[0], num_heads, head_dim).permute(1, 0, 2)
+    relevance_QK_reshaped = relevance_QK.reshape(relevance_QK.shape[0], num_heads, head_dim).permute(1, 0, 2)
+    
+    # Step 3: Relevance calculation for V
+    # We need to create dummy wts for the helper function - using attention weights shape
+    dummy_wts = torch.ones_like(attn_weights[:, :, 0])  # (num_heads, num_tokens)
+    wt_mat_V = relevance_V_reshaped  # Direct propagation through value path
+    
+    # Step 4: Relevance calculation for QK
+    # Use relevance_QK to compute weighted QK matrix
+    wt_mat_QK = calculate_relevance_QK(dummy_wts, QK_output)
+    
+    # Scale by actual relevance
+    wt_mat_QK = wt_mat_QK * relevance_QK_reshaped.sum() / wt_mat_QK.sum() if wt_mat_QK.sum() != 0 else wt_mat_QK
+    
+    # Step 5: Relevance calculation for K and Q
+    stabilized_QK_output = stabilize(QK_output * 2)
+    norm_wt_mat_QK = wt_mat_QK / stabilized_QK_output
+    
+    wt_mat_Q = torch.einsum('htd,hdb->htb', norm_wt_mat_QK, key_states) * query_states
+    wt_mat_K = torch.einsum('htd,htb->hbd', query_states, norm_wt_mat_QK) * key_states
+    
+    # Combine all relevance contributions
+    wt_mat = wt_mat_V + wt_mat_K + wt_mat_Q
+    
+    # Reshape back to (num_tokens, hidden_size)
+    wt_mat = wt_mat.permute(1, 0, 2)  # (num_tokens, num_heads, head_dim)
+    wt_mat = wt_mat.reshape(wt_mat.shape[0], wt_mat.shape[1] * wt_mat.shape[2])
+    
+    return wt_mat
+
