@@ -458,7 +458,7 @@ def run_evaluation(
     if DEBUG:
         log(f"out_np: {out_np.shape}")
     
-    seed = UD.calculate_start_wt(
+    seed = UD2.calculate_start_wt(
         out_np, 
         scaler=scaler, 
         task=task,
