@@ -384,6 +384,7 @@ def visualize_relevance_auto(
     fast_output_path="backtrace_collapsed_fast",
 ):
     num_nodes = len(graph.nodes)
+    print(f"num_nodes: {num_nodes}")
 
     if num_nodes < node_threshold:
         # small graph → original pretty version
@@ -394,10 +395,12 @@ def visualize_relevance_auto(
         )
     else:
         # big graph → collapse then fast
+        print(f"big graph → collapsing it ...")
         simp_graph, collapsed_map = simplify_graph_by_collapsing_degree2(
             graph,
             protect_types=("Placeholder", "Model_Input", "Output", "Attention"),
         )
+        print(f"Calculate relevance using `visualize_relevance_fast(...)`")
         visualize_relevance_fast(
             simp_graph,
             all_wt,
