@@ -55,8 +55,8 @@ class DLBacktraceFX:
         self.dynamic_shapes = dynamic_shapes
         self.model.eval()
         self.model.requires_grad_(False)
-        # Handle both string and dict layer implementation configurations
-        self.layer_implementation = self._parse_layer_implementation(layer_implementation)
+        # Parse device configuration and create layer implementation mapping
+        self.layer_implementation = self._parse_device_config(device)
         
         if self.verbose:
             print(f"🚀 Layer Implementation Configuration:", flush=True)
@@ -110,48 +110,49 @@ class DLBacktraceFX:
             print("---------------------------v8------------------------------------------", flush=True)
             print("✅ DL-Backtrace FX initialization complete!", flush=True)
     
-    def _parse_layer_implementation(self, layer_implementation):
-        """Parse and validate layer implementation configuration."""
-        valid_implementations = ["original", "cuda", "pytorch", "refactored"]
+    def _parse_device_config(self, device):
+        """
+        Parse device configuration and create layer-specific implementation mapping.
         
-        if isinstance(layer_implementation, str):
-            # Global configuration
-            if layer_implementation not in valid_implementations:
-                raise ValueError(f"layer_implementation must be one of {valid_implementations}, got: {layer_implementation}")
+        Args:
+            device (str): Either "cpu" or "cuda"
             
-            # Check CUDA availability if requested
-            if layer_implementation == "cuda" and not torch.cuda.is_available():
-                print("⚠️  CUDA implementation requested but CUDA not available. Falling back to 'original' implementation.")
-                return "original"
-            
-            return layer_implementation
-            
-        elif isinstance(layer_implementation, dict):
-            # Layer-specific configuration
-            valid_layer_types = ["linear", "conv2d", "attention", "embedding", "wt_add_equal", "wt_mul", "default"]
-            
-            # Validate all implementations
-            for layer_type, impl in layer_implementation.items():
-                if layer_type not in valid_layer_types:
-                    print(f"⚠️  Unknown layer type '{layer_type}'. Valid types: {valid_layer_types}")
-                
-                if impl not in valid_implementations:
-                    raise ValueError(f"Implementation for '{layer_type}' must be one of {valid_implementations}, got: {impl}")
-                
-                # Check CUDA availability
-                if impl == "cuda" and not torch.cuda.is_available():
-                    print(f"⚠️  CUDA requested for '{layer_type}' but not available. Using 'original' instead.")
-                    layer_implementation[layer_type] = "original"
-            
-            # Ensure default is specified
-            if "default" not in layer_implementation:
-                layer_implementation["default"] = "original"
-                print("ℹ️  No default implementation specified. Using 'original' as default.")
-            
-            return layer_implementation
+        Returns:
+            dict: Layer-specific implementation mapping
+        """
+        if device not in ["cpu", "cuda"]:
+            raise ValueError(f"device must be 'cpu' or 'cuda', got: {device}")
         
-        else:
-            raise TypeError(f"layer_implementation must be string or dict, got: {type(layer_implementation)}")
+        if device == "cpu":
+            # CPU mode: use refactored implementations for all layers
+            config = {
+                "linear": "original",
+                "conv2d": "refactored",
+                "attention": "original",
+                "embedding": "refactored",
+                "wt_add_equal": "refactored",
+                "wt_mul": "refactored",
+                "default": "refactored"
+            }
+            
+        else:  # device == "cuda"
+            # Check CUDA availability
+            if not torch.cuda.is_available():
+                print("⚠️  CUDA device requested but CUDA not available. Falling back to CPU mode.")
+                return self._parse_device_config("cpu")
+            
+            # CUDA mode: use CUDA implementations where available
+            config = {
+                "linear": "cuda",
+                "embedding": "cuda",
+                "attention": "cuda",
+                "conv2d": "cuda",  
+                "wt_add_equal": "refactored",  
+                "wt_mul": "refactored",
+                "default": "refactored"
+            }
+        
+        return config
     
     def get_layer_implementation(self, layer_type):
         """Get the implementation to use for a specific layer type."""
