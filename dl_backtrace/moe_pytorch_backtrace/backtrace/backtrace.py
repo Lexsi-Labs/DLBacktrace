@@ -113,7 +113,7 @@ class Backtrace(object):
     It takes two optional parameters: model (a neural network model) and activation_dict (a dictionary that maps layer names to activation functions).
     """
 
-    def __init__(self, model=None, activation_dict={}, model_type=None):
+    def __init__(self, model=None, activation_dict={}, model_type=None, input_text=None, tokenizer=None, max_length=None, device="cpu"):
         # if model_type == 'encoder':
         #     self.model = model
         #     self.model_type = model_type
