@@ -425,8 +425,8 @@ class DLBAutoSampler:
                         task="generation",
                         debug=False,
                     )
-                    rel_scalar = self._summarize_relevance(rel_dict)
-                    relevance_trace.append(rel_scalar)
+                    # rel_scalar = self._summarize_relevance(rel_dict)
+                    relevance_trace.append(rel_dict)
 
                 generated = torch.cat([generated, self._as_long(next_tokens)], dim=1)
                 attn = torch.cat(
@@ -597,8 +597,8 @@ class DLBAutoSampler:
                         task="generation",
                         debug=False,
                     )
-                    rel_scalar_b = self._summarize_relevance(rel_dict_b)
-                    step_rel_scores.append(rel_scalar_b)
+                    # rel_scalar_b = self._summarize_relevance(rel_dict_b)
+                    step_rel_scores.append(rel_dict_b)
 
                 relevance_trace_beam.append(step_rel_scores)
 
