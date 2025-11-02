@@ -492,7 +492,7 @@ class DLBacktraceFX:
     def sample_auto(self, tokenizer, input_ids, attention_mask=None, **kwargs):
         """
         Wrapper for DLB-based generation (greedy / sampling / beam).
-        Accepts kwargs: temp, top_k, top_p, max_new_tokens, min_new_tokens, max_time,
+        Accepts kwargs: temperature, top_k, top_p, max_new_tokens, min_new_tokens, max_time,
                         early_stopping, repetition_penalty, no_repeat_ngram_size,
                         bad_words_ids, bos_token_id, eos_token_id, pad_token_id,
                         num_beams, num_return_sequences, length_penalty, return_scores, debug
@@ -564,9 +564,9 @@ class DLBacktraceFX:
         attention_mask = _ensure_mask(attention_mask, input_ids, pad_id, device)
 
         # --- sanitize knobs / lengths ---
-        temp = kwargs.get("temp", None)
-        if temp is not None and float(temp) <= 0.0:
-            raise ValueError("temp must be > 0 when provided")
+        temperature = kwargs.get("temperature", None)
+        if temperature is not None and float(temperature) <= 0.0:
+            raise ValueError("temperature must be > 0 when provided")
 
         top_k = kwargs.get("top_k", None)
         if top_k is not None and int(top_k) < 0:
