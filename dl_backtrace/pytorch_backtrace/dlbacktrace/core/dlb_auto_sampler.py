@@ -51,7 +51,7 @@ if torch.cuda.is_available():
 class DLBAutoSampler:
     """
     DLB-native text generation (single-prompt => B=1) supporting:
-      • Greedy (temp/top_k/top_p all None)
+      • Greedy (temperature/top_k/top_p all None)
       • Sampling: temperature / top-k / top-p (when num_beams == 1)
       • Deterministic beam search via HF BeamSearchScorer (when num_beams > 1)
 
@@ -261,7 +261,7 @@ class DLBAutoSampler:
         attention_mask: Optional[torch.Tensor] = None,
         *,
         # sampling knobs
-        temp: Optional[float] = None,
+        temperature: Optional[float] = None,
         top_k: Optional[int] = None,
         top_p: Optional[float] = None,
         # lengths / stopping
@@ -309,7 +309,7 @@ class DLBAutoSampler:
             attention_mask = self._as_long(attention_mask)
 
         # Normalize knobs
-        T, K, P = self._clean_sampling_knobs(temp, top_k, top_p)
+        T, K, P = self._clean_sampling_knobs(temperature, top_k, top_p)
         do_sample = self._decide_do_sample(T, K, P)
 
         start_len = input_ids.shape[1]
