@@ -272,6 +272,64 @@ dlb.visualize_dlbacktrace(top_k=15)  # Top 15 nodes
 
 ---
 
+## Advanced Capabilities
+
+DL-Backtrace includes powerful features for advanced use cases:
+
+### High-Level Pipeline Interface
+
+Simplify your workflow with the Pipeline interface:
+
+```python
+from dl_backtrace.pytorch_backtrace.dlbacktrace.pipeline import DLBacktracePipeline
+
+# One-line setup
+pipeline = DLBacktracePipeline.create_simple(
+    model_name="bert-base",
+    device="cuda"
+)
+
+# One-line analysis
+results = pipeline.run_simple_analysis(text, label)
+```
+
+**[Learn more about Pipeline →](pytorch/pipeline.md)**
+
+### MoE Model Support
+
+Analyze Mixture of Experts models with expert-level tracking:
+
+- **JetMoE**, **OLMoE**, **Qwen MoE**, **GPT-OSS**
+- Track which experts contribute most
+- Understand expert routing patterns
+- CUDA-accelerated MoE layer implementations
+
+**[Learn more about MoE Models →](pytorch/moe-models.md)**
+
+### DLB Auto Sampler
+
+Advanced text generation with explainability:
+
+- Multiple sampling strategies (greedy, temperature, top-k, top-p, beam search)
+- Token-level relevance tracking
+- HuggingFace-compatible generation API
+- Full control over generation parameters
+
+**[Learn more about Auto Sampler →](pytorch/auto-sampler.md)**
+
+### Temperature Scaling
+
+Control generation diversity and model confidence:
+
+- Adjust prediction confidence without retraining
+- Fine-tune randomness in text generation
+- Improve probability calibration
+- Zero-overhead implementation
+
+**[Learn more about Temperature Scaling →](pytorch/temperature-scaling.md)**
+
+---
+
 ## What's Next?
 
 Now that you understand the basics, dive deeper into specific topics:
@@ -281,6 +339,10 @@ Now that you understand the basics, dive deeper into specific topics:
 === "PyTorch Users"
     - [PyTorch Overview](pytorch/overview.md)
     - [DLBacktraceFX Guide](pytorch/dlbacktracefx.md)
+    - [Pipeline Interface](pytorch/pipeline.md) - High-level workflows
+    - [MoE Models](pytorch/moe-models.md) - Expert-level analysis
+    - [Auto Sampler](pytorch/auto-sampler.md) - Advanced generation
+    - [Temperature Scaling](pytorch/temperature-scaling.md) - Control diversity
     - [Execution Engines](pytorch/execution-engines.md)
 
 ### Learn by Topic

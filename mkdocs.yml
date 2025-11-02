@@ -132,6 +132,10 @@ nav:
     - PyTorch Backend:
       - Overview: guide/pytorch/overview.md
       - DLBacktraceFX: guide/pytorch/dlbacktracefx.md
+      - Pipeline: guide/pytorch/pipeline.md
+      - DLB Auto Sampler: guide/pytorch/auto-sampler.md
+      - Temperature Scaling: guide/pytorch/temperature-scaling.md
+      - MoE Models: guide/pytorch/moe-models.md
       - Execution Engines: guide/pytorch/execution-engines.md
       - Supported Operations: guide/pytorch/operations.md
       - Model Tracing: guide/pytorch/tracing.md

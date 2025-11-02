@@ -243,6 +243,79 @@ print("✅ BERT analysis complete!")
 
 ---
 
+## Simplified Pipeline Approach
+
+For even faster setup, use the high-level **Pipeline** interface:
+
+### Text Classification with Pipeline
+
+```python
+from dl_backtrace.pytorch_backtrace.dlbacktrace.pipeline import DLBacktracePipeline
+
+# Create pipeline with one line
+pipeline = DLBacktracePipeline.create_simple(
+    model_name="bert-base",
+    device="cpu"
+)
+
+# Run analysis with one line
+results = pipeline.run_simple_analysis(
+    "This product exceeded my expectations!",
+    label="positive"
+)
+
+print(f"Prediction: {results['predictions'][0]}")
+print(f"Relevance computed: {results['relevance_computed']}")
+```
+
+### Image Classification with Pipeline
+
+```python
+from PIL import Image
+
+# Create pipeline
+pipeline = DLBacktracePipeline.create_simple(
+    model_name="resnet",
+    device="cuda"
+)
+
+# Load image and classify
+image = Image.open("cat.jpg")
+results = pipeline.run_simple_analysis(image, label="cat")
+
+print(f"Prediction: {results['predictions'][0]}")
+```
+
+### Text Generation with Pipeline
+
+```python
+# Create pipeline for generation
+pipeline = DLBacktracePipeline.create_simple(
+    model_name="llama3.2-1b",
+    device="cuda"
+)
+
+# Generate text with relevance analysis
+results = pipeline.run_text_generation(
+    prompts=["The future of AI is"],
+    max_new_tokens=50,
+    temperature=0.8,
+    return_relevance=True
+)
+
+print(f"Generated: {results['generated_texts'][0]}")
+```
+
+**Pipeline Benefits:**
+- 🔧 Automatic model loading
+- ⚙️ Sensible defaults
+- 📊 Built-in result management
+- 🎯 Task-specific methods
+
+[Learn more about Pipeline →](../guide/pytorch/pipeline.md)
+
+---
+
 ## Understanding the Output
 
 ### Node I/O Dictionary
@@ -307,12 +380,89 @@ The visualization methods save files to your current directory:
 
 ---
 
+## Advanced Features
+
+### Temperature Scaling
+
+Control generation diversity and prediction confidence:
+
+```python
+# For classification - adjust confidence
+node_io = dlb.predict(test_input, temperature=0.8)
+
+# For generation - control randomness
+from dl_backtrace.pytorch_backtrace.dlbacktrace.core.dlb_auto_sampler import DLBAutoSampler
+
+sampler = DLBAutoSampler(dlb=dlb, tokenizer=tokenizer)
+output = sampler.generate(
+    input_ids=input_ids,
+    max_new_tokens=50,
+    temperature=1.2  # Higher = more creative
+)
+```
+
+[Learn more →](../guide/pytorch/temperature-scaling.md)
+
+### MoE Models
+
+Analyze Mixture of Experts models with expert-level tracking:
+
+```python
+from dl_backtrace.moe_pytorch_backtrace.backtrace import Backtrace
+
+# Supported: JetMoE, OLMoE, Qwen MoE, GPT-OSS
+backtrace = Backtrace(
+    model=moe_model,
+    model_type='jetmoe',
+    device="cuda"
+)
+
+# Track expert contributions
+relevance = backtrace.eval(all_in, all_out, device="cuda")
+expert_relevance = backtrace.all_layer_expert_relevance
+```
+
+[Learn more →](../guide/pytorch/moe-models.md)
+
+### DLB Auto Sampler
+
+Advanced text generation with multiple sampling strategies:
+
+```python
+from dl_backtrace.pytorch_backtrace.dlbacktrace.core.dlb_auto_sampler import DLBAutoSampler
+
+sampler = DLBAutoSampler(dlb=dlb, tokenizer=tokenizer)
+
+# Greedy decoding
+output_greedy = sampler.generate(input_ids, temperature=None)
+
+# Nucleus sampling
+output_nucleus = sampler.generate(
+    input_ids,
+    temperature=0.8,
+    top_p=0.9,
+    top_k=50
+)
+
+# Beam search
+output_beam = sampler.generate(
+    input_ids,
+    num_beams=5,
+    early_stopping=True
+)
+```
+
+[Learn more →](../guide/pytorch/auto-sampler.md)
+
+---
+
 ## Next Steps
 
 Now that you've run your first example, dive deeper:
 
 ### Learn the Concepts
 - [Introduction to DL-Backtrace](../guide/introduction.md)
+- [Pipeline Interface](../guide/pytorch/pipeline.md) - High-level workflows
 - [Understanding Relevance Propagation](../guide/relevance/overview.md)
 - [Execution Engines Explained](../guide/pytorch/execution-engines.md)
 
