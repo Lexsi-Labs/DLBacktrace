@@ -881,7 +881,7 @@ def _precheck_embedding(indices, weight, node_name):
 def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, method_args, parents, node_io, node_name,tensor_map, children=None, model_dtype=None):
     logger = get_logger()
     logger.debug(f"🔧 Executing aten operation: {func_name}")
-    print(f"🔧 EXECUTING ATEN OPERATION: {func_name} (node: {node_name})")
+    logger.debug(f"🔧 EXECUTING ATEN OPERATION: {func_name} (node: {node_name})")
     logger.debug(f"🔧 Node name: {node_name}")
     logger.debug(f"🔧 Children: {children}")
     logger.debug(f"🔧 Parents: {parents}")
