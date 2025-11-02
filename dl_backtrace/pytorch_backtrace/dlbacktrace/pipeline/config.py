@@ -3,7 +3,7 @@ Configuration for DL-Backtrace Pipeline
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple, Any, Union
 from enum import Enum
 
 
@@ -35,6 +35,7 @@ class PipelineConfig:
     # Model configuration
     model_kwargs: Dict[str, Any] = field(default_factory=dict)
     tokenizer_kwargs: Dict[str, Any] = field(default_factory=dict)
+    processor_kwargs: Dict[str, Any] = field(default_factory=dict)
     
     # DL-Backtrace configuration
     dynamic_shapes: Optional[Dict] = None
@@ -44,6 +45,21 @@ class PipelineConfig:
     # Input configuration
     batch_size: int = 1
     max_length: int = 512
+    image_size: Tuple[int, int] = (224, 224)
+    
+    # Classification configuration (for both text and image)
+    labels: Optional[List[str]] = None  # Ground truth labels for classification
+    
+    # Generation configuration
+    top_p: float = 0.9
+    top_k: int = 50
+    temperature: float = 1.0
+    early_stopping: bool = True
+    num_beams: int = 1
+    num_return_sequences: int = 1
+    max_new_tokens: int = 50
+    return_scores: bool = False
+    return_relevance: bool = True
     
     # Evaluation configuration
     mode: str = "default"
@@ -52,9 +68,6 @@ class PipelineConfig:
     scaler: float = 1.0
     thresholding: float = 0.5
     task: str = "binary-classification"
-    
-    # Temperature scaling
-    temperature: float = 1.0
     
     # Debug configuration
     debug: bool = False
@@ -82,6 +95,24 @@ class PipelineConfig:
         
         if self.temperature <= 0:
             raise ValueError("temperature must be > 0")
+        
+        if self.top_p <= 0 or self.top_p > 1:
+            raise ValueError("top_p must be in (0, 1]")
+        
+        if self.top_k < 0:
+            raise ValueError("top_k must be >= 0")
+        
+        if self.num_beams < 1:
+            raise ValueError("num_beams must be >= 1")
+        
+        if self.num_return_sequences < 1:
+            raise ValueError("num_return_sequences must be >= 1")
+        
+        if self.max_new_tokens < 1:
+            raise ValueError("max_new_tokens must be >= 1")
+        
+        if len(self.image_size) != 2 or any(s <= 0 for s in self.image_size):
+            raise ValueError("image_size must be a tuple of two positive integers")
     
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> 'PipelineConfig':
@@ -96,18 +127,29 @@ class PipelineConfig:
             'device': self.device,
             'model_kwargs': self.model_kwargs,
             'tokenizer_kwargs': self.tokenizer_kwargs,
+            'processor_kwargs': self.processor_kwargs,
             'dynamic_shapes': self.dynamic_shapes,
             'verbose': self.verbose,
             'strict_cpu': self.strict_cpu,
             'batch_size': self.batch_size,
             'max_length': self.max_length,
+            'image_size': self.image_size,
+            'labels': self.labels,
+            'top_p': self.top_p,
+            'top_k': self.top_k,
+            'temperature': self.temperature,
+            'early_stopping': self.early_stopping,
+            'num_beams': self.num_beams,
+            'num_return_sequences': self.num_return_sequences,
+            'max_new_tokens': self.max_new_tokens,
+            'return_scores': self.return_scores,
+            'return_relevance': self.return_relevance,
             'mode': self.mode,
             'start_wt': self.start_wt,
             'multiplier': self.multiplier,
             'scaler': self.scaler,
             'thresholding': self.thresholding,
             'task': self.task,
-            'temperature': self.temperature,
             'debug': self.debug,
             'save_results': self.save_results,
             'output_dir': self.output_dir,
