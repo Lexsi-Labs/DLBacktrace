@@ -1,34 +1,46 @@
 # DL-Backtrace
-A powerful explainable AI (XAI) framework for deep learning model interpretability using TensorFlow and PyTorch
+A powerful explainable AI (XAI) framework for deep learning model interpretability
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![DL-Backtrace Logo](assets/images/dlb_logo.png)
+
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Lexsi-Labs/DLBacktrace/blob/main/LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://python.org)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.6%2B-red.svg)](https://pytorch.org)
-[![TensorFlow](https://img.shields.io/badge/TensorFlow-2.0%2B-orange.svg)](https://tensorflow.org)
 
 ## Overview
 
-DL-Backtrace is a powerful explainable AI framework developed by AryaXAI for enhancing the interpretability of deep learning models. It provides comprehensive layer-wise relevance propagation and model tracing capabilities across various architectures and tasks, with robust execution engines optimized for both CPU and GPU environments.
+DL-Backtrace is a powerful explainable AI framework developed by **Lexsi Labs** for enhancing the interpretability of deep learning models. It provides comprehensive layer-wise relevance propagation and model tracing capabilities across various architectures and tasks, with robust execution engines optimized for both CPU and GPU environments.
+
+**Website**: [https://lexsi.ai/](https://lexsi.ai/)  
+**Documentation**: [Full Documentation](https://lexsi-labs.github.io/DLBacktrace/)  
+**Repository**: [https://github.com/Lexsi-Labs/DLBacktrace](https://github.com/Lexsi-Labs/DLBacktrace)
 
 ## Key Features
 
+### Core Capabilities
 - **🔍 Deep Model Interpretability:** Gain comprehensive insights into your AI models using advanced relevance propagation algorithms
 - **🎯 Multi-Task Support:** Binary/multi-class classification, object detection, segmentation, and text generation
-- **🏗️ Architecture Agnostic:** Support for CNN, RNN, Transformer, and custom architectures
+- **🏗️ Architecture Agnostic:** Support for CNN, RNN, Transformer, and custom architectures including Mixture of Experts (MoE)
 - **⚡ High Performance:** Optimized execution engine with CUDA acceleration and deterministic tracing
 - **🔧 Robust Operations:** Full support for negative indexing and complex tensor operations
 - **📊 Comprehensive Tracing:** Layer-wise activation and relevance analysis with detailed execution tracking
 - **🛡️ Production Ready:** Deterministic execution environment with comprehensive error handling
-- **🚀 Enhanced Execution Engine:** Recently improved with critical fixes for RoBERTa, LLaMA, and other transformer models
+
+### Advanced Features
+- **🚀 High-Level Pipeline Interface:** Simplified API for text/image classification and generation with automatic model loading and configuration
+- **🎲 DLB Auto Sampler:** Advanced text generation with multiple sampling strategies (greedy, temperature, top-k, top-p, beam search) and token-level relevance tracking
+- **🧠 Mixture of Experts (MoE) Support:** Built-in support for MoE architectures (JetMoE, OLMoE, Qwen3-MoE, GPT-OSS) with expert-level relevance analysis
+- **🌡️ Temperature Scaling:** Control generation diversity and model confidence with flexible temperature parameters
 - **💾 Memory Efficient:** Both disk-cached and in-memory execution options for different use cases
+- **🔄 Enhanced Execution Engine:** Critical fixes for RoBERTa, LLaMA, and other transformer models
 
 ## Installation
 
 ### From Source (Recommended)
 
 ```bash
-git clone https://github.com/aryaxai/DL-Backtrace.git
-cd DL-Backtrace
+git clone https://github.com/Lexsi-Labs/DLBacktrace.git
+cd DLBacktrace
 pip install -r requirements.txt
 pip install -e .
 ```
@@ -37,7 +49,6 @@ pip install -e .
 
 - Python 3.8+
 - PyTorch 2.6+ (with CUDA 12.6 support recommended)
-- TensorFlow 2.0+ (for TensorFlow backend)
 - Additional dependencies: transformers, matplotlib, seaborn, graphviz, joblib, zstandard
 
 See `requirements.txt` for the complete list of dependencies.
@@ -63,7 +74,7 @@ You'll need a Hugging Face account and access token. Get your token from [https:
 ```python
 import torch
 import torch.nn as nn
-from dl_backtrace.pytorch_backtrace import DLBacktraceFX
+from dl_backtrace.pytorch_backtrace import DLBacktrace
 
 # Define your model
 class MyModel(nn.Module):
@@ -79,7 +90,7 @@ model = MyModel()
 x = torch.randn(1, 10)  # Example input
 
 # Create DL-Backtrace instance
-dlb = DLBacktraceFX(
+dlb = DLBacktrace(
     model=model,
     input_for_graph=(x,),
     layer_implementation="pytorch"
@@ -96,31 +107,103 @@ relevance = dlb.evaluation(
 )
 ```
 
-### TensorFlow-Keras Models
+### Using the High-Level Pipeline
 
 ```python
-from dl_backtrace.tf_backtrace import Backtrace as B
+from dl_backtrace.pytorch_backtrace.dlbacktrace import DLBPipeline
 
-# Initialize with your Keras model
-backtrace = B(model=keras_model)
-
-# Get layer outputs
-layer_outputs = backtrace.predict(test_data[0])
-
-# Calculate relevance
-relevance = backtrace.eval(
-    layer_outputs,
-    mode='default',
-    scaler=1,
-    thresholding=0.5,
-    task="binary-classification"
+# Initialize pipeline for text classification
+pipeline = DLBPipeline(
+    task="text-classification",
+    model_name="distilbert-base-uncased-finetuned-sst-2-english",
+    device="cuda"
 )
+
+# Run prediction with relevance
+result = pipeline(
+    "This is an amazing product!",
+    return_relevance=True
+)
+
+print(f"Prediction: {result['label']}")
+print(f"Confidence: {result['score']:.2%}")
 ```
 
 ## Advanced Features
 
-### Execution Engines
-DL-Backtrace provides two execution engines optimized for different use cases:
+### 🚀 High-Level Pipeline Interface
+Simplified API for common ML tasks with automatic model loading and configuration:
+
+```python
+from dl_backtrace.pytorch_backtrace.dlbacktrace import DLBPipeline
+
+# Text classification with relevance
+pipeline = DLBPipeline(task="text-classification", model_name="bert-base-uncased")
+result = pipeline("Sample text", return_relevance=True)
+
+# Text generation with Auto Sampler
+gen_pipeline = DLBPipeline(task="text-generation", model_name="gpt2")
+output = gen_pipeline("Once upon a time", max_length=50, sampling_strategy="top_p")
+```
+
+### 🎲 DLB Auto Sampler
+Advanced text generation with multiple sampling strategies and token-level relevance tracking:
+
+```python
+from dl_backtrace.pytorch_backtrace.dlbacktrace.core.dlb_auto_sampler import DLBAutoSampler
+
+sampler = DLBAutoSampler(model, tokenizer)
+
+# Greedy sampling
+output = sampler.generate("Prompt", strategy="greedy", max_length=50)
+
+# Top-k and Top-p sampling
+output = sampler.generate("Prompt", strategy="top_k", top_k=50, temperature=0.8)
+output = sampler.generate("Prompt", strategy="top_p", top_p=0.9, temperature=0.8)
+
+# Beam search
+output = sampler.generate("Prompt", strategy="beam_search", num_beams=5)
+
+# Access token-level relevance
+print(output['relevance_scores'])
+```
+
+### 🧠 Mixture of Experts (MoE) Support
+Built-in support for MoE architectures with expert-level relevance analysis:
+
+```python
+from dl_backtrace.moe_pytorch_backtrace.backtrace import Backtrace
+
+# Supported MoE models: JetMoE, OLMoE, Qwen3-MoE, GPT-OSS
+backtrace = Backtrace(
+    model=moe_model,
+    model_type="jetmoe",  # or "olmoe", "qwen", "gpt_oss"
+    input_text="Sample input",
+    tokenizer=tokenizer
+)
+
+# Get expert-level relevance
+expert_relevance = backtrace.all_layer_expert_relevance()
+```
+
+### 🌡️ Temperature Scaling
+Control generation diversity and model confidence:
+
+```python
+from dl_backtrace.pytorch_backtrace.dlbacktrace import DLBacktrace
+
+dlb = DLBacktrace(model, input_for_graph=(input_tensor,))
+
+# Apply temperature scaling for generation
+output = dlb.generate_with_temperature(
+    input_ids,
+    temperature=0.7,  # Lower = more focused, Higher = more diverse
+    max_length=100
+)
+```
+
+### ⚡ Execution Engines
+DL-Backtrace provides optimized execution engines:
 
 #### ExecutionEngineNoCache (Recommended)
 - **Memory-efficient**: Runs entirely in RAM for faster execution
@@ -128,15 +211,14 @@ DL-Backtrace provides two execution engines optimized for different use cases:
 - **Enhanced Operations**: Supports 100+ PyTorch operations with robust error handling
 - **Recent Improvements**: Critical fixes for transformer models (RoBERTa, LLaMA, BERT)
 
-
-### Deterministic Execution Environment
+### 🛡️ Deterministic Execution Environment
 DL-Backtrace automatically sets up a deterministic environment for consistent results:
 - ✅ CUDA memory management and synchronization
 - ✅ Deterministic algorithms and cuDNN settings
 - ✅ Random seed control and environment variables
 - ✅ Warning suppression for cleaner output
 
-### Robust Tensor Operations
+### 🔧 Robust Tensor Operations
 Full support for PyTorch's negative indexing and complex operations:
 - ✅ `transpose(-1, -2)`, `permute([-1, -2, 0])`
 - ✅ `unsqueeze(-1)`, `squeeze(-1)`
@@ -154,26 +236,8 @@ Full support for PyTorch's negative indexing and complex operations:
 | `task`       | Model task type | `binary-classification`, `multi-class classification`, `bbox-regression`, `binary-segmentation` |
 | `model-type` | Model architecture type | `Encoder`, `Encoder_Decoder` |
 
-## Example Notebooks : 
+## Example Notebooks
 
-### Tensorflow-Keras : 
-
-| Name        | Task        | Link                          |
-|-------------|-------------|-------------------------------|
-| Backtrace Loan Classification Tabular Dataset | Binary Classification | [Colab Link](https://colab.research.google.com/drive/1H5jaryVPEAQuqk9XPP71UIL4cemli98K?usp=sharing) |
-| Backtrace Image FMNIST Dataset | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1BZsdo7IWYGhdy0Pg_m8r7c3COczuW_tG?usp=sharing)  |
-| Backtrace CUB Bounding Box Regression Image Dataset | Single Object Detection | [Colab Link](https://colab.research.google.com/drive/15mmJ2aGt-_Ho7RdPWjNEEoFXE9mu9HLV?usp=sharing) |
-| Backtrace Next Word Generation Textual Dataset | Next Word Generation | [Colab Link](https://colab.research.google.com/drive/14R3DuDLjvgowA2ucsoccpyN7Lp-ZOAz4?usp=sharing) |
-| Backtrace ImDB Sentiment Classification Textual Dataset | Sentiment Classification | [Colab Link](https://colab.research.google.com/drive/1Kgthc7rbaNsSqLuH7RPm_vRIPB98uoCW?usp=sharing)|
-| Backtrace Binary Classification Textual Dataset | Binary Classification | [Colab Link](https://colab.research.google.com/drive/1C1M2uNXi1WjpC1N74wl3bbQOIFNm57No?usp=sharing) |
-| Backtrace Multi-Class NewsGroup20 Classification Textual Dataset | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1xqBuix5qk0mDSxMScubO4ENeMb8F9IgE?usp=sharing) |
-| Backtrace CVC-ClinicDB Colonoscopy Binary Segmentation | Organ Segmentation | [Colab Link](https://colab.research.google.com/drive/1cUNUao7fahDgndVI-cpn2iSByTiWaB4j?usp=sharing) | 
-| Backtrace CamVid Road Car Binary Segmentation | Binary Segmentation | [Colab Link](https://colab.research.google.com/drive/1OAY7aAraKq_ucyVt5AYPBD8LkQOIuy1C?usp=sharing) |
-| Backtrace Transformer Encoder for Sentiment Analysis | Binary Classification | [Colab Link](https://colab.research.google.com/drive/1H7-4ox3YWMtoH0vptYGXaN63PRJFbTrX?usp=sharing) |
-| Backtrace Transformer Encoder-Decoder Model for Neural Machine Translation | Neural Machine Translation | [Colab Link](https://colab.research.google.com/drive/1NApbrd11TEqlrqGCBYPmgMvBbZBJhpWD?usp=sharing) |
-| Backtrace Transformer Encoder-Decoder Model for Text Summarization | Text Summarization | [Colab Link](https://colab.research.google.com/drive/18CPNnEJzGlCPJ2sSXX4mArAzK1NLe9Lj?usp=sharing) |
-
-### Pytorch :  
 | Name        | Task        | Link                          |
 |-------------|-------------|-------------------------------|
 | Custom Tabular Model | Binary Classification | [Colab Link](https://colab.research.google.com/drive/1TqgeeBqQ1G9UGWfHV0MUloCccalpsRCh?usp=sharing)|
@@ -195,23 +259,6 @@ Full support for PyTorch's negative indexing and complex operations:
 For more detailed examples and use cases, check out our documentation.
 
 ## Supported Layers
-
-### TensorFlow-Keras
-
-- [x] **Dense (Fully Connected) Layer**
-- [x] **Convolutional Layers** (Conv2D, Conv1D)
-- [x] **Transpose Convolutional Layers** (Conv2DTranspose, Conv1DTranspose)
-- [x] **Reshape & Flatten Layers**
-- [x] **Pooling Layers** (Global Max/Average, Max/Average Pooling 2D & 1D)
-- [x] **Concatenate & Add Layers**
-- [x] **LSTM Layer**
-- [x] **Dropout Layer**
-- [x] **Embedding Layer**
-- [x] **TextVectorization Layer**
-- [x] **Attention Layers** (Self-Attention, Cross-Attention)
-- [x] **Feed-Forward & Pooler Layers**
-- [x] **Decoder LM Head**
-- [ ] Other Custom Layers
 
 ### PyTorch
 
@@ -272,11 +319,19 @@ python benchmarks/benchmark_linear.py
 DL-Backtrace has been extensively tested with:
 - **Vision Models**: ResNet, VGG, DenseNet, EfficientNet, MobileNet, ViT
 - **NLP Models**: BERT, ALBERT, RoBERTa, DistilBERT, ELECTRA, XLNet, LLaMA-3.2
-- **Tasks**: Classification, Object Detection, Segmentation, Text Generation
+- **MoE Models**: JetMoE, OLMoE (Open Language Model with Experts), Qwen3-MoE, GPT-OSS
+- **Tasks**: Classification, Object Detection, Segmentation, Text Generation, Expert-Level Analysis
 
 ## Getting Started
 
-If you're new to DL-Backtrace, check out our comprehensive example notebooks above. For detailed documentation and advanced usage, visit our documentation portal.
+If you're new to DL-Backtrace:
+
+1. **📖 Read the Documentation**: [https://lexsi-labs.github.io/DLBacktrace/](https://lexsi-labs.github.io/DLBacktrace/)
+2. **🚀 Try the Quick Start**: See examples above for PyTorch models
+3. **💻 Explore Notebooks**: Check out our comprehensive example notebooks for various use cases
+4. **🧪 Run Tests**: Validate your installation with the benchmark scripts
+
+For advanced features like the Pipeline Interface, Auto Sampler, MoE models, and Temperature Scaling, refer to the full documentation.
 
 ## Contributing
 
@@ -286,16 +341,38 @@ We welcome contributions from the community! Please follow our contribution guid
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Recent Updates & Critical Fixes
+## Recent Updates & New Features
 
-For detailed information about recent critical fixes and improvements, see:
+### Latest Release (2025)
+
+**New Features:**
+- 🚀 **High-Level Pipeline Interface**: Simplified API for text/image classification and generation
+- 🎲 **DLB Auto Sampler**: Advanced text generation with multiple sampling strategies
+- 🧠 **MoE Model Support**: Built-in support for Mixture of Experts architectures (JetMoE, OLMoE, Qwen3-MoE, GPT-OSS)
+- 🌡️ **Temperature Scaling**: Flexible control over generation diversity and model confidence
+
+**Critical Fixes & Improvements:**
+- 🔧 Enhanced execution engine with robust handling of complex tensor operations
+- ⚡ Deterministic environment setup for consistent, reproducible results
+- 🛡️ Comprehensive error handling for production use
+- 🚨 Critical fixes for transformer models (RoBERTa, LLaMA, BERT)
+- 🧠 Smart attention detection for bidirectional vs causal attention
+- 💾 Memory optimization and improved OOM error handling
+
+For detailed information about critical fixes and improvements, see:
 - [CRITICAL_FIXES_SUMMARY.md](CRITICAL_FIXES_SUMMARY.md) - Overview of recent critical fixes
-- [EXECUTION_ENGINE_CRITICAL_FIXES.md](EXECUTION_ENGINE_CRITICAL_FIXES.md) - Detailed technical documentation of execution engine improvements
+- [EXECUTION_ENGINE_CRITICAL_FIXES.md](EXECUTION_ENGINE_CRITICAL_FIXES.md) - Detailed technical documentation
 
 ## Contact
 
-For any inquiries, support, or collaboration opportunities, please contact [AryaXAI Support](mailto:support@aryaxai.com).
+For any inquiries, support, or collaboration opportunities:
+
+- **Email**: [support@lexsi.ai](mailto:support@lexsi.ai)
+- **Website**: [https://lexsi.ai/](https://lexsi.ai/)
+- **GitHub Issues**: [https://github.com/Lexsi-Labs/DLBacktrace/issues](https://github.com/Lexsi-Labs/DLBacktrace/issues)
+- **Documentation**: [https://lexsi-labs.github.io/DLBacktrace/](https://lexsi-labs.github.io/DLBacktrace/)
 
 ---
 
-**DL-Backtrace** - Making AI Transparent and Explainable 🚀
+**DL-Backtrace** - Making AI Transparent and Explainable 🚀  
+*Developed by Lexsi Labs*
