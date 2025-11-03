@@ -283,6 +283,7 @@ class DLBAutoSampler:
         length_penalty: float = 1.0,
         # misc
         return_scores: bool = False,
+        return_layerwise_output: bool = False,
         return_relevance: bool = False,
         debug: bool = False,
     ):
@@ -386,6 +387,7 @@ class DLBAutoSampler:
             attn = self._as_long(attention_mask.clone())
             scores_trace = [] if return_scores else None
             relevance_trace = [] if return_relevance else None
+            io_data_trace = [] if return_layerwise_output else None
 
             stopped_by = None
             for _ in range(max_new_tokens if max_new_tokens is not None else 10_000_000):
@@ -411,6 +413,9 @@ class DLBAutoSampler:
 
                 if return_scores:
                     scores_trace.append(scores.detach().to("cpu"))
+
+                if return_layerwise_output:
+                    io_data_trace.append(io_data)
 
                 if return_relevance:
                     # We already ran self.dlb.predict(...) above, so self.dlb.node_io
@@ -461,7 +466,10 @@ class DLBAutoSampler:
                 info["scores_trace"] = scores_trace
             if return_relevance:
                 info["relevance_trace"] = relevance_trace
+            if return_layerwise_output:
+                info["layerwise_output_trace"] = io_data_trace
             return generated, info  # ([1, T], dict)
+
 
         # ======================
         # Beam search path (deterministic, no sampling) — always return top-1
@@ -501,6 +509,7 @@ class DLBAutoSampler:
 
         scores_trace_beam = [] if return_scores else None
         relevance_trace_beam = [] if return_relevance else None
+        io_data_trace_beam = [] if return_layerwise_output else None 
 
         stopped_by = None
         for _ in range(max_new_tokens if max_new_tokens is not None else 10_000_000):
@@ -513,13 +522,26 @@ class DLBAutoSampler:
 
             # ---- Query DLB per beam ----
             next_logits_list: List[torch.Tensor] = []
+            io_data_step: List[dict] = [] if return_layerwise_output else None 
+
             for b in range(beams):
-                io_b = self.dlb.predict(generated[b:b+1], attn[b:b+1], debug=False, temperature=1.0)
+                io_b = self.dlb.predict(
+                    generated[b:b+1], 
+                    attn[b:b+1], 
+                    debug=False, 
+                    temperature=1.0
+                )
+                if return_layerwise_output:
+                    io_data_step.append(io_b)
+
                 logits_b = self._extract_last_logits(io_b)         # [1, T_cur, V]
                 nl_b = self._as_float(logits_b[:, -1, :])          # [1, V]
                 next_logits_list.append(nl_b)
                 if vocab_size is None:
                     vocab_size = nl_b.size(-1)
+
+            if return_layerwise_output:
+                io_data_trace_beam.append(io_data_step)  # <— per-step, per-beam list
 
             next_logits = torch.cat(next_logits_list, dim=0)       # [beams, V]
 
@@ -663,4 +685,12 @@ class DLBAutoSampler:
             #      ...
             #   ]
             info_beam["relevance_trace"] = relevance_trace_beam
+        if return_layerwise_output:
+            # io_data_trace_beam is:
+            # [
+            #     [io_b_step0_beam0, io_b_step0_beam1, ...],
+            #     [io_b_step1_beam0, io_b_step1_beam1, ...],
+            #     ...
+            # ] 
+            info_beam["layerwise_output_trace"] = io_data_trace_beam 
         return out_top1, info_beam
