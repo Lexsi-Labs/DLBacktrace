@@ -19,7 +19,7 @@ Let's start with a simple PyTorch model and make it explainable.
 ```python
 import torch
 import torch.nn as nn
-from dl_backtrace.pytorch_backtrace import DLBacktraceFX
+from dl_backtrace.pytorch_backtrace import DLBacktrace
 
 # Define a simple CNN model
 class SimpleCNN(nn.Module):
@@ -53,7 +53,7 @@ model.eval()  # Set to evaluation mode
 dummy_input = torch.randn(1, 3, 32, 32)
 
 # Initialize DL-Backtrace
-dlb = DLBacktraceFX(
+dlb = DLBacktrace(
     model=model,
     input_for_graph=(dummy_input,),
     device="cuda"
@@ -109,7 +109,7 @@ Here's the complete code in one block:
 ```python
 import torch
 import torch.nn as nn
-from dl_backtrace.pytorch_backtrace import DLBacktraceFX
+from dl_backtrace.pytorch_backtrace import DLBacktrace
 
 # 1. Define Model
 class SimpleCNN(nn.Module):
@@ -134,7 +134,7 @@ model = SimpleCNN(num_classes=10)
 model.eval()
 
 dummy_input = torch.randn(1, 3, 32, 32)
-dlb = DLBacktraceFX(
+dlb = DLBacktrace(
     model=model,
     input_for_graph=(dummy_input,),
     device="cpu"
@@ -165,7 +165,7 @@ print("✅ Analysis complete!")
 ```python
 import torch
 import torchvision.models as models
-from dl_backtrace.pytorch_backtrace import DLBacktraceFX
+from dl_backtrace.pytorch_backtrace import DLBacktrace
 
 # Load pre-trained ResNet
 model = models.resnet18(pretrained=True)
@@ -173,7 +173,7 @@ model.eval()
 
 # Initialize DL-Backtrace
 dummy_input = torch.randn(1, 3, 224, 224)
-dlb = DLBacktraceFX(
+dlb = DLBacktrace(
     model=model,
     input_for_graph=(dummy_input,),
     device="cuda"
@@ -211,7 +211,7 @@ dlb.visualize_dlbacktrace(top_k=20)
 ```python
 import torch
 from transformers import AutoTokenizer, AutoModel
-from dl_backtrace.pytorch_backtrace import DLBacktraceFX
+from dl_backtrace.pytorch_backtrace import DLBacktrace
 
 # Load pre-trained BERT
 model_name = "bert-base-uncased"
@@ -224,7 +224,7 @@ text = "DL-Backtrace makes AI explainable!"
 inputs = tokenizer(text, return_tensors="pt", padding=True)
 
 # Initialize DL-Backtrace
-dlb = DLBacktraceFX(
+dlb = DLBacktrace(
     model=model,
     input_for_graph=(inputs['input_ids'], inputs['attention_mask']),
     device="cuda"
@@ -354,7 +354,7 @@ The visualization methods save files to your current directory:
 
 ## Common Parameters
 
-### DLBacktraceFX Initialization
+### DLBacktrace Initialization
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|

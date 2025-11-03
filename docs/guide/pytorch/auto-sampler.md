@@ -22,7 +22,7 @@ DLB Auto Sampler provides:
 ### Basic Generation
 
 ```python
-from dl_backtrace.pytorch_backtrace.dlbacktrace import DLBacktraceFX
+from dl_backtrace.pytorch_backtrace.dlbacktrace import DLBacktrace
 from dl_backtrace.pytorch_backtrace.dlbacktrace.core.dlb_auto_sampler import DLBAutoSampler
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
@@ -34,7 +34,7 @@ tokenizer.pad_token = tokenizer.eos_token
 
 # Initialize DL-Backtrace
 sample_input = torch.randint(0, 1000, (1, 10))
-dlb = DLBacktraceFX(
+dlb = DLBacktrace(
     model=model,
     input_for_graph=(sample_input,),
     device="cuda"
@@ -350,7 +350,7 @@ This is different from applying temperature to final outputs - it affects the ge
 For faster generation, use CUDA device:
 
 ```python
-dlb = DLBacktraceFX(
+dlb = DLBacktrace(
     model=model,
     input_for_graph=(sample_input,),
     device="cuda"  # Enable CUDA acceleration
@@ -516,7 +516,7 @@ output = sampler.generate(..., max_new_tokens=30)  # Instead of 100
 **2. Slow Generation**
 ```python
 # Solution: Use CUDA
-dlb = DLBacktraceFX(..., device="cuda")
+dlb = DLBacktrace(..., device="cuda")
 ```
 
 **3. Repetitive Output**

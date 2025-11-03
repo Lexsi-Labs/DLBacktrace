@@ -20,7 +20,7 @@ The **ExecutionEngineNoCache** is the recommended engine for most use cases.
 
 ```python
 # Automatically used by default
-dlb = DLBacktraceFX(
+dlb = DLBacktrace(
     model=model,
     input_for_graph=(dummy_input,),
     layer_implementation="pytorch"
@@ -62,7 +62,7 @@ The engine automatically manages memory:
 Model is traced to create a computational graph:
 
 ```python
-dlb = DLBacktraceFX(
+dlb = DLBacktrace(
     model=model,
     input_for_graph=(dummy_input,)
 )

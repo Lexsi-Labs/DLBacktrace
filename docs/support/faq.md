@@ -20,7 +20,7 @@ Yes! DL-Backtrace is released under the MIT License and is completely free to us
 
 ### Who develops DL-Backtrace?
 
-DL-Backtrace is developed by [AryaXAI](https://xai.arya.ai), with contributions from the community.
+DL-Backtrace is developed by [Lexsi Labs](https://lexsi.ai), with contributions from the community.
 
 ---
 
@@ -29,7 +29,7 @@ DL-Backtrace is developed by [AryaXAI](https://xai.arya.ai), with contributions 
 ### How do I install DL-Backtrace?
 
 ```bash
-git clone https://github.com/aryaxai/DL-Backtrace.git
+git clone https://github.com/Lexsi-Labs/DLBacktrace.git
 cd DL-Backtrace
 pip install -r requirements.txt
 pip install -e .
@@ -56,9 +56,9 @@ Currently, installation from source is recommended. PyPI distribution is planned
 ### How do I trace my model?
 
 ```python
-from dl_backtrace.pytorch_backtrace import DLBacktraceFX
+from dl_backtrace.pytorch_backtrace import DLBacktrace
 
-dlb = DLBacktraceFX(
+dlb = DLBacktrace(
     model=model,
     input_for_graph=(dummy_input,)
 )
@@ -272,13 +272,13 @@ torch.save(relevance, 'relevance.pt')
 
 ### Where can I ask questions?
 
-- [GitHub Issues](https://github.com/aryaxai/DL-Backtrace/issues)
-- [GitHub Discussions](https://github.com/aryaxai/DL-Backtrace/discussions)
-- Email: [support@aryaxai.com](mailto:support@aryaxai.com)
+- [GitHub Issues](https://github.com/Lexsi-Labs/DLBacktrace/issues)
+- [GitHub Discussions](https://github.com/Lexsi-Labs/DLBacktrace/discussions)
+- Email: [support@lexsi.ai](mailto:support@lexsi.ai)
 
 ### How do I report bugs?
 
-1. Check [existing issues](https://github.com/aryaxai/DL-Backtrace/issues)
+1. Check [existing issues](https://github.com/Lexsi-Labs/DLBacktrace/issues)
 2. Create a new issue with:
    - Description of the problem
    - Steps to reproduce
@@ -287,7 +287,7 @@ torch.save(relevance, 'relevance.pt')
 
 ### How do I request features?
 
-Open a [feature request](https://github.com/aryaxai/DL-Backtrace/issues/new) on GitHub with:
+Open a [feature request](https://github.com/Lexsi-Labs/DLBacktrace/issues/new) on GitHub with:
 - Description of the feature
 - Use case
 - Example code (if applicable)
@@ -298,12 +298,12 @@ Open a [feature request](https://github.com/aryaxai/DL-Backtrace/issues/new) on 
 
 If your question isn't answered here:
 
-1. Search [GitHub Issues](https://github.com/aryaxai/DL-Backtrace/issues)
-2. Ask in [GitHub Discussions](https://github.com/aryaxai/DL-Backtrace/discussions)
-3. Email us: [support@aryaxai.com](mailto:support@aryaxai.com)
+1. Search [GitHub Issues](https://github.com/Lexsi-Labs/DLBacktrace/issues)
+2. Ask in [GitHub Discussions](https://github.com/Lexsi-Labs/DLBacktrace/discussions)
+3. Email us: [support@lexsi.ai](mailto:support@lexsi.ai)
 
 ---
 
 **Can't find what you're looking for?**
 
-[Ask on GitHub →](https://github.com/aryaxai/DL-Backtrace/discussions){ .md-button }
+[Ask on GitHub →](https://github.com/Lexsi-Labs/DLBacktrace/discussions){ .md-button }

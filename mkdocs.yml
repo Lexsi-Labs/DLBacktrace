@@ -1,65 +1,33 @@
 site_name: DL-Backtrace Documentation
 site_description: A powerful explainable AI (XAI) framework for deep learning model interpretability
-site_author: AryaXAI
-site_url: https://aryaxai.github.io/DL-Backtrace/
+site_author: Lexsi Labs
+site_url: https://lexsi.ai/
 
-repo_name: aryaxai/DL-Backtrace
-repo_url: https://github.com/aryaxai/DL-Backtrace
+repo_name: Lexsi-Labs/DLBacktrace
+repo_url: https://github.com/Lexsi-Labs/DLBacktrace
 edit_uri: edit/main/docs/
 
-copyright: Copyright &copy; 2025 AryaXAI
+copyright: Copyright &copy; 2025 Lexsi Labs
 
 theme:
-  name: material
-  palette:
-    # Palette toggle for light mode
-    - scheme: default
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
-    # Palette toggle for dark mode
-    - scheme: slate
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/brightness-4
-        name: Switch to light mode
-  font:
-    text: Roboto
-    code: Roboto Mono
-  features:
-    - navigation.instant
-    - navigation.tracking
-    - navigation.tabs
-    - navigation.tabs.sticky
-    - navigation.sections
-    - navigation.expand
-    - navigation.path
-    - navigation.top
-    - navigation.footer
-    - search.suggest
-    - search.highlight
-    - search.share
-    - content.code.copy
-    - content.code.annotate
-    - content.tabs.link
-    - toc.follow
-  icon:
-    repo: fontawesome/brands/github
-  logo: assets/images/arya-logo-mini.png
+  name: cinder
+  logo: assets/images/dlb_logo.png
+  favicon: assets/images/dlb_logo.png
+  highlightjs: true
+  hljs_languages:
+    - python
+    - yaml
+    - bash
+    - javascript
 
 extra:
   social:
-    - icon: fontawesome/brands/github
-      link: https://github.com/aryaxai
-    - icon: fontawesome/solid/globe
-      link: https://www.aryaxai.com/
-    - icon: fontawesome/solid/envelope
-      link: mailto:support@aryaxai.com
-  version:
-    provider: mike
+    - type: github
+      link: https://github.com/Lexsi-Labs
+    - type: globe
+      link: https://www.lexsi.ai/
+    - type: envelope
+      link: mailto:support@lexsi.ai
 
 markdown_extensions:
   - abbr
@@ -67,45 +35,28 @@ markdown_extensions:
   - attr_list
   - def_list
   - footnotes
-  - md_in_html
   - toc:
       permalink: true
   - pymdownx.arithmatex:
       generic: true
   - pymdownx.betterem:
       smart_enable: all
-  - pymdownx.blocks.caption
   - pymdownx.caret
   - pymdownx.details
-  - pymdownx.emoji:
-      emoji_index: !!python/name:material.extensions.emoji.twemoji
-      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - pymdownx.highlight:
-      anchor_linenums: true
-      line_spans: __span
-      pygments_lang_class: true
+      use_pygments: true
   - pymdownx.inlinehilite
   - pymdownx.keys
   - pymdownx.mark
   - pymdownx.smartsymbols
-  - pymdownx.superfences:
-      custom_fences:
-        - name: mermaid
-          class: mermaid
-          format: !!python/name:pymdownx.superfences.fence_code_format
-  - pymdownx.tabbed:
-      alternate_style: true
+  - pymdownx.superfences
+  - pymdownx.tabbed
   - pymdownx.tasklist:
       custom_checkbox: true
   - pymdownx.tilde
 
 plugins:
-  - search:
-      separator: '[\s\-,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
-  - minify:
-      minify_html: true
-  - git-revision-date-localized:
-      enable_creation_date: true
+  - search
 
 extra_javascript:
   - javascripts/mathjax.js
@@ -131,7 +82,7 @@ nav:
     - Introduction: guide/introduction.md
     - PyTorch Backend:
       - Overview: guide/pytorch/overview.md
-      - DLBacktraceFX: guide/pytorch/dlbacktracefx.md
+      - DLBacktrace: guide/pytorch/dlbacktrace.md
       - Pipeline: guide/pytorch/pipeline.md
       - DLB Auto Sampler: guide/pytorch/auto-sampler.md
       - Temperature Scaling: guide/pytorch/temperature-scaling.md

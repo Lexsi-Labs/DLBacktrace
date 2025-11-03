@@ -9,7 +9,7 @@ DL-Backtrace is released under the MIT License.
 ```
 MIT License
 
-Copyright (c) 2024-2025 AryaXAI
+Copyright (c) 2024-2025 Lexsi Labs
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -90,10 +90,10 @@ If you use DL-Backtrace in academic research, please cite:
 
 ```bibtex
 @software{dlbacktrace2025,
-  author = {AryaXAI},
+  author = {Lexsi Labs},
   title = {DL-Backtrace: Explainable AI Framework for Deep Learning},
   year = {2025},
-  url = {https://github.com/aryaxai/DL-Backtrace}
+  url = {https://github.com/Lexsi-Labs/DLBacktrace}
 }
 ```
 
@@ -102,7 +102,7 @@ If you use DL-Backtrace in academic research, please cite:
 If you use DL-Backtrace in your product, consider mentioning it in your documentation or credits:
 
 ```
-This product uses DL-Backtrace (https://github.com/aryaxai/DL-Backtrace)
+This product uses DL-Backtrace (https://github.com/Lexsi-Labs/DLBacktrace)
 for model interpretability.
 ```
 
@@ -132,8 +132,8 @@ See [Contributing Guide](../developer/contributing.md) for details.
 
 For licensing questions:
 
-- **Email**: [support@aryaxai.com](mailto:support@aryaxai.com)
-- **Website**: [https://xai.arya.ai](https://xai.arya.ai)
+- **Email**: [support@lexsi.ai](mailto:support@lexsi.ai)
+- **Website**: [https://lexsi.ai](https://lexsi.ai)
 
 ---
 
@@ -153,7 +153,7 @@ This means:
 
 **Questions about licensing?**
 
-[Contact Us →](mailto:support@aryaxai.com){ .md-button }
+[Contact Us →](mailto:support@lexsi.ai){ .md-button }
 
 </div>
 

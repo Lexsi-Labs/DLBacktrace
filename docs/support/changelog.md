@@ -275,7 +275,7 @@ See [Known Issues](known-issues.md) for details and workarounds.
 
 ### Core Team
 
-- AryaXAI Development Team
+- Lexsi Labs Development Team
 
 ### Community Contributors
 
@@ -298,15 +298,15 @@ Special thanks to:
 
 ### Follow Development
 
-- **GitHub**: [Watch repository](https://github.com/aryaxai/DL-Backtrace)
-- **Releases**: [GitHub Releases](https://github.com/aryaxai/DL-Backtrace/releases)
-- **Issues**: [Track progress](https://github.com/aryaxai/DL-Backtrace/issues)
+- **GitHub**: [Watch repository](https://github.com/Lexsi-Labs/DLBacktrace)
+- **Releases**: [GitHub Releases](https://github.com/Lexsi-Labs/DLBacktrace/releases)
+- **Issues**: [Track progress](https://github.com/Lexsi-Labs/DLBacktrace/issues)
 
 ### Provide Feedback
 
-- **Feature Requests**: [Open an issue](https://github.com/aryaxai/DL-Backtrace/issues/new)
-- **Bug Reports**: [Report bugs](https://github.com/aryaxai/DL-Backtrace/issues/new)
-- **Discussions**: [Join discussions](https://github.com/aryaxai/DL-Backtrace/discussions)
+- **Feature Requests**: [Open an issue](https://github.com/Lexsi-Labs/DLBacktrace/issues/new)
+- **Bug Reports**: [Report bugs](https://github.com/Lexsi-Labs/DLBacktrace/issues/new)
+- **Discussions**: [Join discussions](https://github.com/Lexsi-Labs/DLBacktrace/discussions)
 
 ---
 
@@ -320,7 +320,7 @@ DL-Backtrace is released under the [MIT License](license.md).
 
 **Thank you for using DL-Backtrace!**
 
-[View Latest Release →](https://github.com/aryaxai/DL-Backtrace/releases/latest){ .md-button }
+[View Latest Release →](https://github.com/Lexsi-Labs/DLBacktrace/releases/latest){ .md-button }
 
 </div>
 

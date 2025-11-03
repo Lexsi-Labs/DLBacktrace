@@ -1,6 +1,6 @@
-# DLBacktraceFX Guide
+# DLBacktrace Guide
 
-`DLBacktraceFX` is the main class for analyzing PyTorch models with DL-Backtrace.
+`DLBacktrace` is the main class for analyzing PyTorch models with DL-Backtrace.
 
 ---
 
@@ -9,9 +9,9 @@
 ### Initialization
 
 ```python
-from dl_backtrace.pytorch_backtrace import DLBacktraceFX
+from dl_backtrace.pytorch_backtrace import DLBacktrace
 
-dlb = DLBacktraceFX(
+dlb = DLBacktrace(
     model=model,
     input_for_graph=(dummy_input,),
     device="cuda"
@@ -139,7 +139,7 @@ dlb.visualize_dlbacktrace(
 ```python
 import torch
 import torch.nn as nn
-from dl_backtrace.pytorch_backtrace import DLBacktraceFX
+from dl_backtrace.pytorch_backtrace import DLBacktrace
 
 # Define model
 class CNN(nn.Module):
@@ -159,7 +159,7 @@ model = CNN()
 model.eval()
 
 dummy_input = torch.randn(1, 3, 32, 32)
-dlb = DLBacktraceFX(
+dlb = DLBacktrace(
     model=model,
     input_for_graph=(dummy_input,),
     device="cpu"

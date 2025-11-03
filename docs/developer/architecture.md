@@ -13,7 +13,7 @@ Understanding DL-Backtrace's architecture.
          │
          ▼
 ┌─────────────────┐
-│ DLBacktraceFX   │  ← Main Entry Point
+│ DLBacktrace   │  ← Main Entry Point
 └────────┬────────┘
          │
          ├─────────────────────┐

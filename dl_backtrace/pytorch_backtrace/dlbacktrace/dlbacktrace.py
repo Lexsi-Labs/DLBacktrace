@@ -16,7 +16,7 @@ import numpy as np
 import torch
 import inspect
 
-class DLBacktraceFX:
+class DLBacktrace:
     def __init__(self, model, input_for_graph, dynamic_shapes=None, device="cpu", verbose=False, strict_cpu=True):
         """
         Initialize DL-Backtrace FX for model tracing and explainability.

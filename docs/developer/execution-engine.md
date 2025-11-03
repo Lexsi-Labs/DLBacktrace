@@ -440,7 +440,7 @@ model = nn.Sequential(
     nn.Linear(20, 10)
 )
 
-dlb = DLBacktraceFX(model, input_for_graph=(torch.randn(1, 10),))
+dlb = DLBacktrace(model, input_for_graph=(torch.randn(1, 10),))
 result = dlb.predict(torch.randn(1, 10))
 ```
 
