@@ -2040,14 +2040,14 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                     b = method_args[0]
                 else:
                     raise RuntimeError(
-                        f"[{node_name}] [DLBacktraceFX] `{func_name}` expects 2 inputs, got list of length {len(layer_in)} and method_args of length {len(method_args)}"
+                        f"[{node_name}] [DLBacktrace] `{func_name}` expects 2 inputs, got list of length {len(layer_in)} and method_args of length {len(method_args)}"
                     )
             elif isinstance(layer_in, (int, float, torch.Tensor)) and len(method_args) == 1:
                 a = layer_in
                 b = method_args[0]
             else:
                 raise RuntimeError(
-                    f"[{node_name}] [DLBacktraceFX] `{func_name}` expects 2 inputs, got: {type(layer_in)} + {method_args}"
+                    f"[{node_name}] [DLBacktrace] `{func_name}` expects 2 inputs, got: {type(layer_in)} + {method_args}"
                 )
 
             # Resolve SymInt or symbolic Node values
@@ -2256,7 +2256,7 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                 
                 output = aten_op(a, b, *method_args)
             else:
-                raise RuntimeError(f"[DLBacktraceFX] matmul expects 2 inputs but got: {layer_in}")
+                raise RuntimeError(f"[DLBacktrace] matmul expects 2 inputs but got: {layer_in}")
             return output
         
         elif func_name == "bmm":
@@ -2746,10 +2746,10 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                 layer_in = layer_in[0]
             
             if layer_in is None:
-                raise RuntimeError(f"[DLBacktraceFX] ❌ _to_copy received `None` as input at node `{node_name}` → likely due to skipped or failed parent node.")
+                raise RuntimeError(f"[DLBacktrace] ❌ _to_copy received `None` as input at node `{node_name}` → likely due to skipped or failed parent node.")
             
             if not isinstance(layer_in, torch.Tensor):
-                raise TypeError(f"[DLBacktraceFX] ❌ _to_copy expected a Tensor but got {type(layer_in)} at node `{node_name}` → value: {layer_in}")
+                raise TypeError(f"[DLBacktrace] ❌ _to_copy expected a Tensor but got {type(layer_in)} at node `{node_name}` → value: {layer_in}")
                        
             output = aten_op(layer_in,
                            memory_format=layer_hyperparams.get("memory_format", torch.contiguous_format),
@@ -2940,7 +2940,7 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                 output = aten_op(layer_in, *method_args)
                 logger.debug(f"rsqrt output shape: {output.shape}")
             else:
-                raise RuntimeError(f"[DLBacktraceFX] rsqrt expects 1 input, got {type(layer_in)}: {layer_in}")
+                raise RuntimeError(f"[DLBacktrace] rsqrt expects 1 input, got {type(layer_in)}: {layer_in}")
             return output
 
         elif func_name == "triu":
