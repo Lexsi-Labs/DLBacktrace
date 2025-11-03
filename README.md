@@ -1,7 +1,8 @@
 # DL-Backtrace
-A powerful explainable AI (XAI) framework for deep learning model interpretability
 
 ![DL-Backtrace Logo](assets/images/dlb_logo.png)
+
+A powerful explainable AI (XAI) framework for deep learning model interpretability
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Lexsi-Labs/DLBacktrace/blob/main/LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://python.org)
