@@ -1,6 +1,6 @@
 # PyTorch Backend Overview
 
-DL-Backtrace provides comprehensive support for PyTorch models through the **DLBacktraceFX** API.
+DL-Backtrace provides comprehensive support for PyTorch models through the **DLBacktrace** API.
 
 ---
 
@@ -10,7 +10,7 @@ The PyTorch backend is built on several key components:
 
 ```mermaid
 graph LR
-    A[PyTorch Model] --> B[DLBacktraceFX]
+    A[PyTorch Model] --> B[DLBacktrace]
     B --> C[Graph Tracing]
     C --> D[Execution Engine]
     D --> E[Relevance Propagation]
@@ -19,7 +19,7 @@ graph LR
 
 ### Components
 
-1. **DLBacktraceFX**: Main entry point for PyTorch models
+1. **DLBacktrace**: Main entry point for PyTorch models
 2. **Graph Builder**: Traces computational graph using `torch.export_for_training`
 3. **Execution Engine**: Executes operations and tracks activations
 4. **Relevance Propagation**: Calculates layer-wise relevance
@@ -56,7 +56,7 @@ Any PyTorch `nn.Module` that uses supported operations.
 Uses PyTorch's `torch.export` for robust graph capture:
 
 ```python
-dlb = DLBacktraceFX(
+dlb = DLBacktrace(
     model=model,
     input_for_graph=(dummy_input,)
 )
@@ -82,7 +82,7 @@ Seamless CPU and GPU support:
 
 ## Next Steps
 
-- [DLBacktraceFX API](dlbacktracefx.md) - Detailed API reference
+- [DLBacktrace API](dlbacktrace.md) - Detailed API reference
 - [Execution Engines](execution-engines.md) - Understanding execution
 - [Supported Operations](operations.md) - Full operation list
 - [Model Tracing](tracing.md) - Graph tracing details

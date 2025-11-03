@@ -1,22 +1,20 @@
-# Welcome to DL-Backtrace
+# Welcome to
 
-<figure markdown="span">
-    ![DL-Backtrace Logo](assets/images/arya-fav.png){ width="300" }
-    <figcaption>A powerful explainable AI (XAI) framework for deep learning model interpretability</figcaption>
-</figure>
+![DL-Backtrace Logo](assets/images/dlb_logo.png)
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/aryaxai/DL-Backtrace/blob/main/LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Lexsi-Labs/DLBacktrace/blob/main/LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://python.org)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.6%2B-red.svg)](https://pytorch.org)
 
 [Get Started](home/quickstart.md){ .md-button .md-button--primary }
-[View on GitHub](https://github.com/aryaxai/DL-Backtrace){ .md-button }
+
+[View on GitHub](https://github.com/Lexsi-Labs/DLBacktrace){ .md-button }
 
 ---
 
 ## Overview
 
-DL-Backtrace is a powerful explainable AI framework developed by **AryaXAI** for enhancing the interpretability of deep learning models. It provides comprehensive layer-wise relevance propagation and model tracing capabilities across various architectures and tasks, with robust execution engines optimized for both CPU and GPU environments.
+DL-Backtrace is a powerful explainable AI framework developed by **Lexsi Labs** for enhancing the interpretability of deep learning models. It provides comprehensive layer-wise relevance propagation and model tracing capabilities across various architectures and tasks, with robust execution engines optimized for both CPU and GPU environments.
 
 Whether you're working with vision models, NLP transformers, MoE's or custom architectures, DL-Backtrace provides insights into feature importance, information flow, and bias, enabling better model interpretation and validation without external dependencies.
 
@@ -47,7 +45,7 @@ Deterministic execution environment with comprehensive error handling. Battle-te
 ```python
 import torch
 import torch.nn as nn
-from dl_backtrace.pytorch_backtrace import DLBacktraceFX
+from dl_backtrace.pytorch_backtrace import DLBacktrace
 
 # Define your model
 class MyModel(nn.Module):
@@ -67,7 +65,7 @@ class MyModel(nn.Module):
 model = MyModel()
 x = torch.randn(1, 3, 224, 224)
 
-dlb = DLBacktraceFX(
+dlb = DLBacktrace(
     model=model,
     input_for_graph=(x,),
     device="cuda"
@@ -130,53 +128,37 @@ Ensures reproducible results across runs with automatic environment configuratio
 
 - **Documentation**: You're reading it! 📚
 - **Examples**: Check out our [example notebooks](examples/colab-notebooks.md)
-- **Issues**: [GitHub Issues](https://github.com/aryaxai/DL-Backtrace/issues)
-- **Email**: [support@aryaxai.com](mailto:support@aryaxai.com)
+- **Issues**: [GitHub Issues](https://github.com/Lexsi-Labs/DLBacktrace/issues)
+- **Email**: [support@lexsi.ai](mailto:support@lexsi.ai)
 
 ---
 
 ## Next Steps
 
-<div class="grid cards" markdown>
+### 🚀 Quick Start
+Get up and running in minutes with our quick start guide.
 
--   :material-clock-fast:{ .lg .middle } __Quick Start__
+→ [Getting Started](home/quickstart.md)
 
-    ---
+### 📚 User Guide
+Learn about features, APIs, and best practices.
 
-    Get up and running in minutes with our quick start guide
+→ [Read the Guide](guide/introduction.md)
 
-    [:octicons-arrow-right-24: Getting started](home/quickstart.md)
+### 💻 Examples
+Interactive notebooks and real-world use cases.
 
--   :material-book-open-variant:{ .lg .middle } __User Guide__
+→ [Explore Examples](examples/colab-notebooks.md)
 
-    ---
+### 🤝 Developer Guide
+Contributing and extending DL-Backtrace.
 
-    Learn about features, APIs, and best practices
-
-    [:octicons-arrow-right-24: Read the guide](guide/introduction.md)
-
--   :material-code-braces:{ .lg .middle } __Examples__
-
-    ---
-
-    Interactive notebooks and real-world use cases
-
-    [:octicons-arrow-right-24: Explore examples](examples/colab-notebooks.md)
-
--   :material-account-group:{ .lg .middle } __Developer Guide__
-
-    ---
-
-    Contributing and extending DL-Backtrace
-
-    [:octicons-arrow-right-24: Developer docs](developer/contributing.md)
-
-</div>
+→ [Developer Docs](developer/contributing.md)
 
 ---
 
 
 DL-Backtrace - Making AI Transparent and Explainable 🚀
 
-Built with ❤️ by [AryaXAI](https://www.aryaxai.com)
+Built with ❤️ by [Lexsi Labs](https://lexsi.ai/)
 

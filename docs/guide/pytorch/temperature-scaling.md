@@ -65,14 +65,14 @@ Where:
 #### For Classification
 
 ```python
-from dl_backtrace.pytorch_backtrace.dlbacktrace import DLBacktraceFX
+from dl_backtrace.pytorch_backtrace.dlbacktrace import DLBacktrace
 import torch
 
 # Initialize DL-Backtrace
 model = ...  # Your classification model
 sample_input = torch.randn(1, 3, 224, 224)
 
-dlb = DLBacktraceFX(
+dlb = DLBacktrace(
     model=model,
     input_for_graph=(sample_input,),
     device="cuda"
@@ -102,7 +102,7 @@ tokenizer = AutoTokenizer.from_pretrained("gpt2")
 
 # Initialize DL-Backtrace
 sample_input = torch.randint(0, 1000, (1, 10))
-dlb = DLBacktraceFX(
+dlb = DLBacktrace(
     model=model,
     input_for_graph=(sample_input,),
     device="cuda"

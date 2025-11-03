@@ -66,7 +66,7 @@ Current limitations and known issues in DL-Backtrace.
 
 ## Workarounds
 
-Report new issues on [GitHub](https://github.com/aryaxai/DL-Backtrace/issues).
+Report new issues on [GitHub](https://github.com/Lexsi-Labs/DLBacktrace/issues).
 
 
 

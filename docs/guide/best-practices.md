@@ -10,7 +10,7 @@ Guidelines for effective use of DL-Backtrace.
 
 ```python
 model.eval()  # Critical!
-dlb = DLBacktraceFX(model, input_for_graph=(dummy,))
+dlb = DLBacktrace(model, input_for_graph=(dummy,))
 ```
 
 ### Match Input Shapes
@@ -42,7 +42,7 @@ Trace once, predict many times:
 
 ```python
 # Trace once
-dlb = DLBacktraceFX(model, input_for_graph=(dummy,))
+dlb = DLBacktrace(model, input_for_graph=(dummy,))
 
 # Use multiple times
 for batch in dataloader:

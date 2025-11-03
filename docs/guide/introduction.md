@@ -61,9 +61,9 @@ Advance model architectures:
 DL-Backtrace first traces your model's computational graph:
 
 ```python
-from dl_backtrace.pytorch_backtrace import DLBacktraceFX
+from dl_backtrace.pytorch_backtrace import DLBacktrace
 
-dlb = DLBacktraceFX(
+dlb = DLBacktrace(
     model=model,
     input_for_graph=(dummy_input,)
 )
@@ -158,9 +158,9 @@ Different tasks require different evaluation approaches:
 Full support for PyTorch 2.6+ models:
 
 ```python
-from dl_backtrace.pytorch_backtrace import DLBacktraceFX
+from dl_backtrace.pytorch_backtrace import DLBacktrace
 
-dlb = DLBacktraceFX(
+dlb = DLBacktrace(
     model=pytorch_model,
     input_for_graph=(dummy_input,),
     device="cuda"
@@ -194,13 +194,13 @@ model.eval()
 ### 2. Initialize DL-Backtrace
 
 ```python
-from dl_backtrace.pytorch_backtrace import DLBacktraceFX
+from dl_backtrace.pytorch_backtrace import DLBacktrace
 
 # Create dummy input for tracing
 dummy_input = torch.randn(1, 3, 224, 224)
 
 # Initialize
-dlb = DLBacktraceFX(
+dlb = DLBacktrace(
     model=model,
     input_for_graph=(dummy_input,),
     device="cuda"
@@ -338,7 +338,7 @@ Now that you understand the basics, dive deeper into specific topics:
 
 === "PyTorch Users"
     - [PyTorch Overview](pytorch/overview.md)
-    - [DLBacktraceFX Guide](pytorch/dlbacktracefx.md)
+    - [DLBacktrace Guide](pytorch/dlbacktrace.md)
     - [Pipeline Interface](pytorch/pipeline.md) - High-level workflows
     - [MoE Models](pytorch/moe-models.md) - Expert-level analysis
     - [Auto Sampler](pytorch/auto-sampler.md) - Advanced generation
@@ -379,9 +379,9 @@ Now that you understand the basics, dive deeper into specific topics:
 If you run into issues:
 
 1. Check the [FAQ](../support/faq.md)
-2. Search [GitHub Issues](https://github.com/aryaxai/DL-Backtrace/issues)
-3. Ask in [GitHub Discussions](https://github.com/aryaxai/DL-Backtrace/discussions)
-4. Email [support@aryaxai.com](mailto:support@aryaxai.com)
+2. Search [GitHub Issues](https://github.com/Lexsi-Labs/DLBacktrace/issues)
+3. Ask in [GitHub Discussions](https://github.com/Lexsi-Labs/DLBacktrace/discussions)
+4. Email [support@lexsi.ai](mailto:support@lexsi.ai)
 
 ---
 

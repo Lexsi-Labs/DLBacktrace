@@ -7,10 +7,10 @@ We welcome contributions from the community! This guide will help you get starte
 ## Ways to Contribute
 
 ### 🐛 Report Bugs
-Found a bug? [Create an issue](https://github.com/aryaxai/DL-Backtrace/issues/new)
+Found a bug? [Create an issue](https://github.com/Lexsi-Labs/DLBacktrace/issues/new)
 
 ### 💡 Suggest Features
-Have an idea? [Open a feature request](https://github.com/aryaxai/DL-Backtrace/issues/new)
+Have an idea? [Open a feature request](https://github.com/Lexsi-Labs/DLBacktrace/issues/new)
 
 ### 📝 Improve Documentation
 Documentation improvements are always welcome!
@@ -150,7 +150,7 @@ To add support for a new PyTorch operation:
    
    # Test tracing
    model = TestModel()
-   dlb = DLBacktraceFX(model, input_for_graph=(dummy,))
+   dlb = DLBacktrace(model, input_for_graph=(dummy,))
    ```
 
 4. **Add to documentation:**
@@ -283,7 +283,7 @@ git push origin feature/your-feature-name
 # tests/test_your_feature.py
 import torch
 import pytest
-from dl_backtrace.pytorch_backtrace import DLBacktraceFX
+from dl_backtrace.pytorch_backtrace import DLBacktrace
 
 def test_your_feature():
     """Test description."""
@@ -292,7 +292,7 @@ def test_your_feature():
     input_tensor = torch.randn(1, 10)
     
     # Act
-    dlb = DLBacktraceFX(model, input_for_graph=(input_tensor,))
+    dlb = DLBacktrace(model, input_for_graph=(input_tensor,))
     result = dlb.predict(input_tensor)
     
     # Assert
@@ -396,9 +396,9 @@ We follow [Semantic Versioning](https://semver.org/):
 
 ### Getting Help
 
-- **Questions**: [GitHub Discussions](https://github.com/aryaxai/DL-Backtrace/discussions)
-- **Issues**: [GitHub Issues](https://github.com/aryaxai/DL-Backtrace/issues)
-- **Email**: [support@aryaxai.com](mailto:support@aryaxai.com)
+- **Questions**: [GitHub Discussions](https://github.com/Lexsi-Labs/DLBacktrace/discussions)
+- **Issues**: [GitHub Issues](https://github.com/Lexsi-Labs/DLBacktrace/issues)
+- **Email**: [support@lexsi.ai](mailto:support@lexsi.ai)
 
 ---
 
@@ -454,8 +454,8 @@ git rebase main
 
 **Ready to contribute?**
 
-[Create an Issue →](https://github.com/aryaxai/DL-Backtrace/issues/new){ .md-button }
-[Fork Repository →](https://github.com/aryaxai/DL-Backtrace/fork){ .md-button }
+[Create an Issue →](https://github.com/Lexsi-Labs/DLBacktrace/issues/new){ .md-button }
+[Fork Repository →](https://github.com/Lexsi-Labs/DLBacktrace/fork){ .md-button }
 
 </div>
 

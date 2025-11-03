@@ -34,7 +34,7 @@ This is the recommended method for getting the latest features and updates.
 
 ```bash
 # Clone the repository
-git clone https://github.com/aryaxai/DL-Backtrace.git
+git clone https://github.com/Lexsi-Labs/DLBacktrace.git
 cd DL-Backtrace
 
 # Install dependencies
@@ -121,7 +121,7 @@ Test your installation with this simple script:
 
 ```python
 import torch
-from dl_backtrace.pytorch_backtrace import DLBacktraceFX
+from dl_backtrace.pytorch_backtrace import DLBacktrace
 
 # Check if PyTorch is installed
 print(f"PyTorch version: {torch.__version__}")
@@ -142,7 +142,7 @@ class SimpleModel(torch.nn.Module):
 model = SimpleModel()
 x = torch.randn(1, 10)
 
-dlb = DLBacktraceFX(
+dlb = DLBacktrace(
     model=model,
     input_for_graph=(x,),
     layer_implementation="pytorch"
@@ -201,9 +201,9 @@ python benchmarks/benchmark_linear.py
 If you encounter issues:
 
 1. Check the [FAQ](../support/faq.md)
-2. Search [GitHub Issues](https://github.com/aryaxai/DL-Backtrace/issues)
+2. Search [GitHub Issues](https://github.com/Lexsi-Labs/DLBacktrace/issues)
 3. Create a new issue with details about your setup
-4. Email support: [support@aryaxai.com](mailto:support@aryaxai.com)
+4. Email support: [support@lexsi.ai](mailto:support@lexsi.ai)
 
 ---
 

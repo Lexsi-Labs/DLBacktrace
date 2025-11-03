@@ -165,7 +165,7 @@ echo "docs.example.com" > docs/CNAME
 ### Code References
 
 ```markdown
-Use backticks for `code` and functions like `DLBacktraceFX()`.
+Use backticks for `code` and functions like `DLBacktrace()`.
 ```
 
 ---
@@ -251,7 +251,7 @@ Review and update documentation when:
 
 **Ready to contribute to documentation?**
 
-[Edit on GitHub →](https://github.com/aryaxai/DL-Backtrace/tree/main/docs){ .md-button }
+[Edit on GitHub →](https://github.com/Lexsi-Labs/DLBacktrace/tree/main/docs){ .md-button }
 
 </div>
 

@@ -241,7 +241,7 @@ If you need support for a custom operation, you can:
 To test if an operation is supported:
 
 ```python
-from dl_backtrace.pytorch_backtrace import DLBacktraceFX
+from dl_backtrace.pytorch_backtrace import DLBacktrace
 
 # Create simple model using the operation
 class TestModel(torch.nn.Module):
@@ -251,7 +251,7 @@ class TestModel(torch.nn.Module):
 # Try to trace it
 try:
     model = TestModel()
-    dlb = DLBacktraceFX(
+    dlb = DLBacktrace(
         model=model,
         input_for_graph=(dummy_input,)
     )

@@ -55,7 +55,7 @@ Full support for LLaMA-3.2 and Qwen3 models:
 **Example:**
 ```python
 from transformers import AutoModelForCausalLM
-from dl_backtrace.pytorch_backtrace import DLBacktraceFX
+from dl_backtrace.pytorch_backtrace import DLBacktrace
 
 model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B")
 # Works seamlessly with DL-Backtrace!
@@ -198,7 +198,7 @@ See our [Contributing Guide](../developer/contributing.md) to get involved.
 
 Special thanks to:
 
-- **AryaXAI Team**: Core development and maintenance
+- **Lexsi Labs Team**: Core development and maintenance
 - **Community Contributors**: Bug reports, feature requests, and code contributions
 - **Users**: Feedback and real-world use cases that drive improvements
 
@@ -206,7 +206,7 @@ Special thanks to:
 
 ## Stay Updated
 
-- **GitHub**: [Watch the repository](https://github.com/aryaxai/DL-Backtrace) for updates
+- **GitHub**: [Watch the repository](https://github.com/Lexsi-Labs/DLBacktrace) for updates
 - **Changelog**: See [detailed changelog](../support/changelog.md)
 - **Email**: Subscribe to our mailing list (coming soon)
 
@@ -238,9 +238,9 @@ Special thanks to:
 
 We'd love to hear from you!
 
-- **Issues**: [GitHub Issues](https://github.com/aryaxai/DL-Backtrace/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/aryaxai/DL-Backtrace/discussions)
-- **Email**: [support@aryaxai.com](mailto:support@aryaxai.com)
+- **Issues**: [GitHub Issues](https://github.com/Lexsi-Labs/DLBacktrace/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Lexsi-Labs/DLBacktrace/discussions)
+- **Email**: [support@lexsi.ai](mailto:support@lexsi.ai)
 
 ---
 

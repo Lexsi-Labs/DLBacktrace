@@ -30,13 +30,13 @@ Node: output (output)
 DL-Backtrace uses PyTorch's `torch.export_for_training` to trace models:
 
 ```python
-from dl_backtrace.pytorch_backtrace import DLBacktraceFX
+from dl_backtrace.pytorch_backtrace import DLBacktrace
 
 # Provide a dummy input for tracing
 dummy_input = torch.randn(1, 3, 224, 224)
 
-# DLBacktraceFX uses torch.export internally
-dlb = DLBacktraceFX(
+# DLBacktrace uses torch.export internally
+dlb = DLBacktrace(
     model=model,
     input_for_graph=(dummy_input,)
 )
@@ -94,7 +94,7 @@ The dummy input must:
 ```python
 import torch
 import torch.nn as nn
-from dl_backtrace.pytorch_backtrace import DLBacktraceFX
+from dl_backtrace.pytorch_backtrace import DLBacktrace
 
 # Define model
 class SimpleCNN(nn.Module):
@@ -121,7 +121,7 @@ model.eval()
 dummy_input = torch.randn(1, 3, 224, 224)
 
 # Trace the model
-dlb = DLBacktraceFX(
+dlb = DLBacktrace(
     model=model,
     input_for_graph=(dummy_input,),
     device="cpu"
@@ -206,7 +206,7 @@ class MultiInputModel(nn.Module):
 dummy_image = torch.randn(1, 3, 224, 224)
 dummy_metadata = torch.randn(1, 100)
 
-dlb = DLBacktraceFX(
+dlb = DLBacktrace(
     model=model,
     input_for_graph=(dummy_image, dummy_metadata)
 )
@@ -227,7 +227,7 @@ dummy_input = torch.randn(1, 128, 768)  # (batch, seq_len, hidden)
 # torch.export creates symbolic dimensions
 # seq_len becomes a symbol (e.g., s0)
 
-dlb = DLBacktraceFX(
+dlb = DLBacktrace(
     model=model,
     input_for_graph=(dummy_input,)
 )
@@ -252,7 +252,7 @@ Trace once, use multiple times:
 
 ```python
 # Trace model
-dlb = DLBacktraceFX(model=model, input_for_graph=(dummy_input,))
+dlb = DLBacktrace(model=model, input_for_graph=(dummy_input,))
 
 # Use with different inputs
 for input_batch in dataloader:
@@ -293,7 +293,7 @@ Tracing requires memory for:
 
 - [Execution Engines](execution-engines.md) - How traced graphs are executed
 - [Supported Operations](operations.md) - What can be traced
-- [DLBacktraceFX Guide](dlbacktracefx.md) - Complete API
+- [DLBacktrace Guide](dlbacktrace.md) - Complete API
 - [Examples](../../examples/colab-notebooks.md) - Tracing examples
 
 

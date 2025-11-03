@@ -27,7 +27,7 @@ pytest --cov=dl_backtrace tests/
 # tests/test_operations.py
 import pytest
 import torch
-from dl_backtrace.pytorch_backtrace import DLBacktraceFX
+from dl_backtrace.pytorch_backtrace import DLBacktrace
 
 def test_linear_layer():
     """Test linear layer tracing."""
@@ -36,7 +36,7 @@ def test_linear_layer():
     
     input_tensor = torch.randn(1, 10)
     
-    dlb = DLBacktraceFX(model, input_for_graph=(input_tensor,))
+    dlb = DLBacktrace(model, input_for_graph=(input_tensor,))
     node_io = dlb.predict(input_tensor)
     
     assert len(node_io) > 0
@@ -52,7 +52,7 @@ def test_full_workflow():
     
     input_tensor = torch.randn(1, 3, 32, 32)
     
-    dlb = DLBacktraceFX(model, input_for_graph=(input_tensor,))
+    dlb = DLBacktrace(model, input_for_graph=(input_tensor,))
     node_io = dlb.predict(input_tensor)
     relevance = dlb.evaluation(
         mode="default",

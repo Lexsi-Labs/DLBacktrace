@@ -293,7 +293,7 @@ Automatic setup for consistent results:
 
 ```python
 
-dlb = DLBacktraceFX(
+dlb = DLBacktrace(
     model=model,
     input_for_graph=(x,),
     device="cuda"
