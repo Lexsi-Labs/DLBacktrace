@@ -415,6 +415,7 @@ def visualize_relevance_auto(
     output_path="backtrace_graph",
     *,
     node_threshold=500,
+    engine_auto_threshold=1500,
     fast_output_path="backtrace_collapsed_fast",
     show=True,
     inline_format="svg",
@@ -446,7 +447,7 @@ def visualize_relevance_auto(
             output_path=fast_output_path,
             collapsed_map=collapsed_map,
             max_parents_per_node=2,
-            engine_auto_threshold=1200,
+            engine_auto_threshold=engine_auto_threshold,
             show=show,
             inline_format=inline_format,
         )
