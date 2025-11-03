@@ -20,6 +20,85 @@ Identify which input features contribute most to predictions:
 
 ---
 
+## 🚀 High-Level Pipeline Interface
+
+### DL-Backtrace Pipeline
+
+Simplified, batteries-included interface for running explainability analysis:
+
+- **🔧 Automatic Model Loading**: Seamless HuggingFace & TorchVision integration
+- **🎯 Multi-Modal Support**: Text classification, image classification, text generation
+- **⚙️ Flexible Configuration**: Comprehensive parameter control
+- **📊 Built-in Relevance**: Automatic layer-wise propagation
+- **💾 Result Management**: Auto-save results and visualizations
+
+```python
+from dl_backtrace.pytorch_backtrace.dlbacktrace.pipeline import DLBacktracePipeline
+
+# Create a simple pipeline
+pipeline = DLBacktracePipeline.create_simple(
+    model_name="bert-base",
+    device="cpu"
+)
+
+# Run analysis
+results = pipeline.run_simple_analysis(
+    "This product is amazing!",
+    label="positive"
+)
+```
+
+[Learn more about Pipeline →](../guide/pytorch/pipeline.md)
+
+---
+
+## 🎨 Advanced Text Generation
+
+### DLB Auto Sampler
+
+Native text generation with explainability built-in:
+
+- **🎯 Multiple Sampling Strategies**: Greedy, temperature, top-k, top-p, beam search
+- **🔍 Token-Level Relevance**: Track relevance for each generated token
+- **🤝 HuggingFace Compatible**: Drop-in replacement for standard generation
+- **🎛️ Flexible Control**: Full parameter customization
+
+```python
+from dl_backtrace.pytorch_backtrace.dlbacktrace.core.dlb_auto_sampler import DLBAutoSampler
+
+sampler = DLBAutoSampler(dlb=dlb, tokenizer=tokenizer)
+
+output = sampler.generate(
+    input_ids=input_ids,
+    max_new_tokens=50,
+    temperature=0.8,
+    top_p=0.9
+)
+```
+
+[Learn more about Auto Sampler →](../guide/pytorch/auto-sampler.md)
+
+### Temperature Scaling
+
+Control generation diversity and model confidence:
+
+- **🎛️ Confidence Control**: Adjust prediction confidence without retraining
+- **🎨 Generation Diversity**: Fine-tune randomness in text generation
+- **⚖️ Calibration**: Improve probability calibration
+- **⚡ Zero Overhead**: Efficient implementation
+
+```python
+# Generate with temperature scaling
+node_io = dlb.predict(
+    input_data,
+    temperature=0.8  # Control confidence/diversity
+)
+```
+
+[Learn more about Temperature Scaling →](../guide/pytorch/temperature-scaling.md)
+
+---
+
 ## 🏗️ Architecture Agnostic
 
 ### Supported Architectures
@@ -36,10 +115,18 @@ Identify which input features contribute most to predictions:
     - Custom transformer architectures
 
 === "Mixture of Experts"
-    - Qwen3 MoE
-    - GPT oss
-    - JetMoE
-    - OLMoE
+    - **JetMoE**: Efficient MoE with sparse activation
+    - **OLMoE**: Open Language MoE
+    - **Qwen MoE**: Advanced routing with grouped query attention
+    - **GPT-OSS**: Configurable expert architecture with sliding window
+    
+    **Expert-Level Tracking:**
+    - Track relevance at expert level
+    - Understand expert routing patterns
+    - Analyze expert contributions
+    - CUDA-accelerated MoE layers
+    
+    [Learn more about MoE Support →](../guide/pytorch/moe-models.md)
 
 === "Recurrent Networks"
     - LSTM networks
