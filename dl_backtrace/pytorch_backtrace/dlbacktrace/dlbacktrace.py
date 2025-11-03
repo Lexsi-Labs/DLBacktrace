@@ -649,9 +649,11 @@ class DLBacktrace:
         visualize_relevance_auto(
             self.graph,
             self.all_wt,
-            output_path=output_path,
+            output_path=output_path,          # pretty path for small graphs
             node_threshold=500,
-            fast_output_path="backtrace_collapsed_fast",
+            fast_output_path="backtrace_collapsed_fast",  # path for large graphs
+            show=True,                        # ⬅️ show in Colab
+            inline_format="svg",              # or "png" if SVG too heavy
         )
     
     def debug_execution_differences(self, *test_inputs):
