@@ -6,25 +6,26 @@ import matplotlib.colors as mcolors
 import graphviz
 from networkx.drawing.nx_pydot import graphviz_layout
 from collections import defaultdict
+from IPython.display import display, SVG, Image as IPyImage
 
 
-def visualize_graph(graph, save_path="graph.png"):
-    """📊 Visualize forward execution graph with dynamic scaling"""
+def visualize_graph(graph, save_path="graph.png", *, show=True, dpi=600):
+    """📊 Visualize forward execution graph with dynamic scaling (shows inline + saves)"""
     num_nodes = len(graph.nodes)
 
     # -- Dynamic sizing for large graphs --
     fig_width = max(40, max(12, num_nodes // 10))
     fig_height = max(30, max(10, num_nodes // 15))
     node_size = min(50, 5000 // (num_nodes + 1))
-    font_size = min(3, 20 - (num_nodes // 50))
-    edge_width = min(0.5, 3 - (num_nodes / 200))
-    arrow_size = min(3, 15 - (num_nodes // 100))
+    font_size = max(3, 20 - (num_nodes // 50))
+    edge_width = max(0.2, 3 - (num_nodes / 200))
+    arrow_size = max(3, 15 - (num_nodes // 100))
 
     plt.figure(figsize=(fig_width, fig_height))
 
     try:
         pos = graphviz_layout(graph, prog='dot')
-    except:
+    except Exception:
         pos = nx.spring_layout(graph, k=5 / (num_nodes ** 0.5))
 
     nx.draw(
@@ -34,14 +35,20 @@ def visualize_graph(graph, save_path="graph.png"):
     )
 
     plt.title(f"Graph Visualization ({num_nodes} nodes)", fontsize=16)
-    plt.savefig(save_path, format="png", dpi=600, bbox_inches="tight")
-    plt.close()
+    plt.savefig(save_path, format="png", dpi=dpi, bbox_inches="tight")
 
+    # --- show inline in Colab/Jupyter ---
+    if show:
+        plt.show()
+
+    plt.close()
     print(f"Graph saved as {save_path} ✅")
 
 
-def visualize_relevance(graph, all_wt, output_path="backtrace_graph", top_k=None, relevance_threshold=None):
-    """🎯 Visualize relevance backtrace using Graphviz"""
+def visualize_relevance(graph, all_wt, output_path="backtrace_graph",
+                        *, top_k=None, relevance_threshold=None,
+                        show=True, inline_format="svg"):
+    """🎯 Visualize relevance backtrace using Graphviz (shows inline + saves)"""
     relevance_data = {}
 
     # --- Extract relevance stats from all_wt ---
@@ -56,7 +63,7 @@ def visualize_relevance(graph, all_wt, output_path="backtrace_graph", top_k=None
             try:
                 val = float(rel)
                 stats = (val, val, val)
-            except:
+            except Exception:
                 stats = (0.0, 0.0, 0.0)
         relevance_data[node_key] = stats
 
@@ -72,7 +79,7 @@ def visualize_relevance(graph, all_wt, output_path="backtrace_graph", top_k=None
     if top_k:
         top_keys = sorted(flat_scores.items(), key=lambda x: abs(x[1]), reverse=True)[:top_k]
         top_node_names = {k for k, _ in top_keys} | force_include
-    elif relevance_threshold:
+    elif relevance_threshold is not None:
         top_node_names = {k for k, v in flat_scores.items() if abs(v) >= relevance_threshold} | force_include
     else:
         top_node_names = set(relevance_data.keys()) | force_include
@@ -94,7 +101,12 @@ def visualize_relevance(graph, all_wt, output_path="backtrace_graph", top_k=None
         "Model_Input": "lightcyan"
     }
 
-    g = graphviz.Digraph("DLBacktrace", format="png", graph_attr={"rankdir": "LR", "splines": "spline"})
+    g = graphviz.Digraph(
+        "DLBacktrace",
+        format="svg",
+        graph_attr={"rankdir": "LR", "splines": "spline"},
+        node_attr={"fontname": "Helvetica", "fontsize": "10"}
+    )
 
     # --- Add nodes with relevance ---
     for node in graph.nodes:
@@ -108,8 +120,6 @@ def visualize_relevance(graph, all_wt, output_path="backtrace_graph", top_k=None
             label=f"{name}\nMean: {rel[0]:.3f}\nMax: {rel[1]:.3f}\nMin: {rel[2]:.3f}",
             style="filled",
             fillcolor=fill,
-            fontname="Helvetica",
-            fontsize="10"
         )
 
     # --- Add edges ---
@@ -122,8 +132,19 @@ def visualize_relevance(graph, all_wt, output_path="backtrace_graph", top_k=None
             if parent_fmt in top_node_names:
                 g.edge(parent_fmt, name)
 
-    g.render(output_path, format="svg", cleanup=True)
+    out = g.render(output_path, format="svg", cleanup=True)
+
+    # --- ALSO show inline in Colab/Jupyter ---
+    if show:
+        if inline_format.lower() == "svg":
+            svg_bytes = g.pipe(format="svg")
+            display(SVG(svg_bytes))
+        else:
+            png_bytes = g.pipe(format="png")
+            display(IPyImage(data=png_bytes))
+
     print(f"📊 DLBacktrace Graph saved at → {output_path}.svg")
+    return g, out
 
 
 # ─────────────────────────────────────────
@@ -233,6 +254,8 @@ def visualize_relevance_fast(
     max_parents_per_node=None,
     engine_auto_threshold=1200,
     disable_concentrate_for_sfdp=True,
+    show=True,
+    inline_format="svg",
 ):
     def _norm(s):
         return s.replace("/", " ").replace(":", " ")
@@ -261,7 +284,7 @@ def visualize_relevance_fast(
             try:
                 x = float(v)
                 rel_map[nk] = (x, x, x)
-            except:
+            except Exception:
                 rel_map[nk] = (0.0, 0.0, 0.0)
 
     # defaults
@@ -372,7 +395,18 @@ def visualize_relevance_fast(
             g.edge(pn, child)
 
     out = g.render(output_path, cleanup=True)
+
+    # --- Also show inline in Colab/Jupyter ---
+    if show:
+        if inline_format.lower() == "svg":
+            svg_bytes = g.pipe(format="svg")
+            display(SVG(svg_bytes))
+        else:
+            png_bytes = g.pipe(format="png")
+            display(IPyImage(data=png_bytes))
+
     print(f"✅ Fast graph saved → {out} (nodes={num_nodes}, engine={engine})")
+    return g, out
 
 
 def visualize_relevance_auto(
@@ -382,7 +416,10 @@ def visualize_relevance_auto(
     *,
     node_threshold=500,
     fast_output_path="backtrace_collapsed_fast",
+    show=True,
+    inline_format="svg",
 ):
+    """Auto-choose pretty vs fast; always show inline and save."""
     num_nodes = len(graph.nodes)
     print(f"num_nodes: {num_nodes}")
 
@@ -392,6 +429,8 @@ def visualize_relevance_auto(
             graph,
             all_wt,
             output_path=output_path,
+            show=show,
+            inline_format=inline_format,
         )
     else:
         # big graph → collapse then fast
@@ -407,5 +446,7 @@ def visualize_relevance_auto(
             output_path=fast_output_path,
             collapsed_map=collapsed_map,
             max_parents_per_node=2,
-            engine_auto_threshold=800,
+            engine_auto_threshold=1200,
+            show=show,
+            inline_format=inline_format,
         )
