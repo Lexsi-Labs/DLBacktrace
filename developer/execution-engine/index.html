@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="A powerful explainable AI (XAI) framework for deep learning model interpretability">
+    <meta name="author" content="Lexsi Labs">
+    <link rel="canonical" href="https://lexsi.ai/developer/execution-engine/">
+    <link rel="shortcut icon" href="../../img/favicon.ico">
+
+    
+    <title>Execution Engine - DL-Backtrace Documentation</title>
+    
+
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/all.css">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/v4-shims.css">
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/hack-font@3.3.0/build/web/hack.min.css">
+    <link href='//rsms.me/inter/inter.css' rel='stylesheet' type='text/css'>
+    <link href='//fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,700italic,400,300,600,700&subset=latin-ext,latin' rel='stylesheet' type='text/css'>
+    <link href="../../css/bootstrap-custom.min.css" rel="stylesheet">
+    <link href="../../css/base.min.css" rel="stylesheet">
+    <link href="../../css/cinder.min.css" rel="stylesheet">
+
+    
+        
+        <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/styles/github.min.css">
+        
+    
+    <link href="https://unpkg.com/katex@0/dist/katex.min.css" rel="stylesheet">
+
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+            <script src="https://cdn.jsdelivr.net/npm/html5shiv@3.7.3/dist/html5shiv.min.js"></script>
+            <script src="https://cdn.jsdelivr.net/npm/respond.js@1.4.2/dest/respond.min.js"></script>
+        <![endif]-->
+
+    
+
+     
+</head>
+
+<body>
+
+    <div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+
+        <!-- Collapsed navigation -->
+        <div class="navbar-header">
+            <!-- Expander button -->
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            
+
+            <!-- Main title -->
+
+            
+              <a class="navbar-brand" href="../..">DL-Backtrace Documentation</a>
+            
+        </div>
+
+        <!-- Expanded navigation -->
+        <div class="navbar-collapse collapse">
+                <!-- Main navigation -->
+                <ul class="nav navbar-nav">
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Home <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../..">Overview</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../home/features/">Key Features</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../home/installation/">Installation</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../home/quickstart/">Quick Start</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../home/whats-new/">What's New</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">User Guide <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../guide/introduction/">Introduction</a>
+</li>
+
+                        
+                            
+  <li class="dropdown-submenu">
+    <a tabindex="-1" href="">PyTorch Backend</a>
+    <ul class="dropdown-menu">
+        
+            
+<li >
+    <a href="../../guide/pytorch/overview/">Overview</a>
+</li>
+
+        
+            
+<li >
+    <a href="../../guide/pytorch/dlbacktrace/">DLBacktrace</a>
+</li>
+
+        
+            
+<li >
+    <a href="../../guide/pytorch/pipeline/">Pipeline</a>
+</li>
+
+        
+            
+<li >
+    <a href="../../guide/pytorch/auto-sampler/">DLB Auto Sampler</a>
+</li>
+
+        
+            
+<li >
+    <a href="../../guide/pytorch/temperature-scaling/">Temperature Scaling</a>
+</li>
+
+        
+            
+<li >
+    <a href="../../guide/pytorch/moe-models/">MoE Models</a>
+</li>
+
+        
+            
+<li >
+    <a href="../../guide/pytorch/execution-engines/">Execution Engines</a>
+</li>
+
+        
+            
+<li >
+    <a href="../../guide/pytorch/operations/">Supported Operations</a>
+</li>
+
+        
+            
+<li >
+    <a href="../../guide/pytorch/tracing/">Model Tracing</a>
+</li>
+
+        
+    </ul>
+  </li>
+
+                        
+                            
+  <li class="dropdown-submenu">
+    <a tabindex="-1" href="">Relevance Propagation</a>
+    <ul class="dropdown-menu">
+        
+            
+<li >
+    <a href="../../guide/relevance/overview/">Overview</a>
+</li>
+
+        
+            
+<li >
+    <a href="../../guide/relevance/parameters/">Parameters</a>
+</li>
+
+        
+    </ul>
+  </li>
+
+                        
+                            
+<li >
+    <a href="../../guide/best-practices/">Best Practices</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Examples <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../examples/colab-notebooks/">Colab Notebooks</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../examples/use-cases/">Use Cases</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown active">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Developer Guide <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../architecture/">Architecture</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../contributing/">Contributing</a>
+</li>
+
+                        
+                            
+<li class="active">
+    <a href="./">Execution Engine</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../cuda-development/">CUDA Development</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../testing/">Testing</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Support <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../support/faq/">FAQ</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../support/known-issues/">Known Issues</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../support/changelog/">Changelog</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../support/license/">License</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                </ul>
+
+            <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="#" data-toggle="modal" data-target="#mkdocs_search_modal">
+                            <i class="fas fa-search"></i> Search
+                        </a>
+                    </li>
+                    <li >
+                        <a rel="prev" href="../contributing/">
+                            <i class="fas fa-arrow-left"></i> Previous
+                        </a>
+                    </li>
+                    <li >
+                        <a rel="next" href="../cuda-development/">
+                            Next <i class="fas fa-arrow-right"></i>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://github.com/Lexsi-Labs/DLBacktrace/edit/main/docs/developer/execution-engine.md">Edit on Lexsi-Labs/DLBacktrace</a>
+                    </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+    <div class="container">
+        
+        
+        <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
+    <ul class="nav bs-sidenav">
+        <li class="first-level active"><a href="#execution-engine-development">Execution Engine Development</a></li>
+            <li class="second-level"><a href="#overview">Overview</a></li>
+                
+            <li class="second-level"><a href="#architecture">Architecture</a></li>
+                
+                <li class="third-level"><a href="#1-centralized-logging-system">1. Centralized Logging System</a></li>
+                <li class="third-level"><a href="#2-consistency-enforcement-functions">2. Consistency Enforcement Functions</a></li>
+                <li class="third-level"><a href="#3-deterministic-environment-setup">3. Deterministic Environment Setup</a></li>
+            <li class="second-level"><a href="#operation-execution">Operation Execution</a></li>
+                
+                <li class="third-level"><a href="#main-dispatcher-execute_aten_operation">Main Dispatcher: execute_aten_operation</a></li>
+                <li class="third-level"><a href="#supported-operation-categories">Supported Operation Categories</a></li>
+            <li class="second-level"><a href="#node-processing-pipeline">Node Processing Pipeline</a></li>
+                
+                <li class="third-level"><a href="#main-function-run_execution_nocache">Main Function: run_execution_nocache</a></li>
+            <li class="second-level"><a href="#node-types-and-handling">Node Types and Handling</a></li>
+                
+                <li class="third-level"><a href="#1-placeholder-nodes">1. Placeholder Nodes</a></li>
+                <li class="third-level"><a href="#2-model_layer-nodes">2. Model_Layer Nodes</a></li>
+                <li class="third-level"><a href="#3-aten-operation-nodes">3. ATen Operation Nodes</a></li>
+            <li class="second-level"><a href="#adding-new-operations">Adding New Operations</a></li>
+                
+                <li class="third-level"><a href="#step-by-step-guide">Step-by-Step Guide</a></li>
+            <li class="second-level"><a href="#best-practices">Best Practices</a></li>
+                
+                <li class="third-level"><a href="#1-always-enforce-consistency">1. Always Enforce Consistency</a></li>
+                <li class="third-level"><a href="#2-handle-list-inputs-properly">2. Handle List Inputs Properly</a></li>
+                <li class="third-level"><a href="#3-validate-inputs-and-parameters">3. Validate Inputs and Parameters</a></li>
+                <li class="third-level"><a href="#4-use-descriptive-logging">4. Use Descriptive Logging</a></li>
+                <li class="third-level"><a href="#5-handle-device-consistency">5. Handle Device Consistency</a></li>
+                <li class="third-level"><a href="#6-support-negative-indexing">6. Support Negative Indexing</a></li>
+            <li class="second-level"><a href="#debugging">Debugging</a></li>
+                
+                <li class="third-level"><a href="#enable-debug-logging">Enable Debug Logging</a></li>
+                <li class="third-level"><a href="#common-issues">Common Issues</a></li>
+            <li class="second-level"><a href="#performance-tips">Performance Tips</a></li>
+                
+            <li class="second-level"><a href="#execution-engine-class">Execution Engine Class</a></li>
+                
+            <li class="second-level"><a href="#see-also">See Also</a></li>
+                
+    </ul>
+</div></div>
+        <div class="col-md-9" role="main">
+
+<h1 id="execution-engine-development">Execution Engine Development<a class="headerlink" href="#execution-engine-development" title="Permanent link">&para;</a></h1>
+<p>Understanding and extending the non-cached execution engine for DL-Backtrace.</p>
+<hr />
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>The execution engine (<code>execution_engine_noncache.py</code>) is the <strong>core runtime system</strong> that executes traced computational graphs. It processes <strong>3,982 lines</strong> of highly optimized code supporting <strong>100+ PyTorch operations</strong> with comprehensive consistency checks, precision handling, and debugging capabilities.</p>
+<p><strong>Key Features:</strong>
+- Deterministic execution with consistency enforcement
+- Support for complex models (transformers, CNNs, hybrid architectures)
+- Device-aware computation (CPU/GPU)
+- Precision-preserving operations (fp16, fp32, int64)
+- Comprehensive error handling and debugging
+- Zero-copy optimization where possible</p>
+<hr />
+<h2 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h2>
+<h3 id="1-centralized-logging-system">1. Centralized Logging System<a class="headerlink" href="#1-centralized-logging-system" title="Permanent link">&para;</a></h3>
+<p><strong>Class: <code>LoggingManager</code></strong> (Lines 10-101)</p>
+<p>Singleton pattern for consistent logging across execution:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Configure logging</span>
+<span class="n">logger</span> <span class="o">=</span> <span class="n">setup_logging</span><span class="p">(</span><span class="n">debug</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;DEBUG&quot;</span><span class="p">)</span>
+
+<span class="c1"># Use in code</span>
+<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Processing node: linear_0&quot;</span><span class="p">)</span>
+<span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Device mismatch detected&quot;</span><span class="p">)</span>
+<span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Operation failed: invalid shape&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><strong>Features:</strong>
+- Console and file logging (when debug=True)
+- Timestamps and structured formatting
+- Log file saved to <code>dlbacktrace_logs/</code>
+- Prevents duplicate handlers
+- Automatic log flushing</p>
+<h3 id="2-consistency-enforcement-functions">2. Consistency Enforcement Functions<a class="headerlink" href="#2-consistency-enforcement-functions" title="Permanent link">&para;</a></h3>
+<p><strong>Critical Functions</strong> (Lines 145-554):</p>
+<p><strong><code>enforce_precision_consistency</code></strong> - Ensures real tensors (not FakeTensors):
+<div class="highlight"><pre><span></span><code><span class="c1"># Converts FakeTensor to real tensor while preserving values</span>
+<span class="n">tensor</span> <span class="o">=</span> <span class="n">enforce_precision_consistency</span><span class="p">(</span><span class="n">tensor</span><span class="p">)</span>
+</code></pre></div></p>
+<p><strong><code>ensure_dtype_consistency</code></strong> - Handles mixed precision (fp16/fp32):
+<div class="highlight"><pre><span></span><code><span class="c1"># Converts all tensors to consistent dtype for CPU compatibility</span>
+<span class="n">tensors</span> <span class="o">=</span> <span class="n">ensure_dtype_consistency</span><span class="p">(</span><span class="n">tensors</span><span class="p">,</span> <span class="n">target_dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+</code></pre></div></p>
+<p><strong><code>ensure_tensor_consistency</code></strong> - Comprehensive dtype and device alignment:
+<div class="highlight"><pre><span></span><code><span class="c1"># Ensures all tensors have same dtype and are on same device</span>
+<span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">ensure_tensor_consistency</span><span class="p">([</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">])</span>
+</code></pre></div></p>
+<p><strong><code>ensure_embedding_consistency</code></strong> - Special handling for embeddings:
+<div class="highlight"><pre><span></span><code><span class="c1"># Ensures weight is float, indices are long, same device</span>
+<span class="n">weight</span><span class="p">,</span> <span class="n">indices</span> <span class="o">=</span> <span class="n">ensure_embedding_consistency</span><span class="p">(</span><span class="n">weight</span><span class="p">,</span> <span class="n">indices</span><span class="p">,</span> <span class="n">node_name</span><span class="p">)</span>
+</code></pre></div></p>
+<h3 id="3-deterministic-environment-setup">3. Deterministic Environment Setup<a class="headerlink" href="#3-deterministic-environment-setup" title="Permanent link">&para;</a></h3>
+<p><strong>Function: <code>setup_consistent_environment</code></strong> (Lines 292-384)</p>
+<p>Sets up deterministic execution:
+- Disables gradients
+- Enables deterministic algorithms
+- Configures cuDNN for reproducibility
+- Sets CUDA workspace config
+- Manages memory for consistency</p>
+<div class="highlight"><pre><span></span><code><span class="n">setup_consistent_environment</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+<span class="c1"># ✅ Warnings suppressed</span>
+<span class="c1"># ✅ Gradients disabled</span>
+<span class="c1"># ✅ Deterministic cuDNN enabled</span>
+<span class="c1"># ✅ CUDA memory cleared</span>
+</code></pre></div>
+<hr />
+<h2 id="operation-execution">Operation Execution<a class="headerlink" href="#operation-execution" title="Permanent link">&para;</a></h2>
+<h3 id="main-dispatcher-execute_aten_operation">Main Dispatcher: <code>execute_aten_operation</code><a class="headerlink" href="#main-dispatcher-execute_aten_operation" title="Permanent link">&para;</a></h3>
+<p><strong>Function</strong> (Lines 690-3541) - <strong>2,851 lines of operation handlers</strong></p>
+<p>Dispatches to specialized handlers for 100+ operations:</p>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">execute_aten_operation</span><span class="p">(</span><span class="n">func_name</span><span class="p">,</span> <span class="n">aten_op</span><span class="p">,</span> <span class="n">layer_in</span><span class="p">,</span> <span class="n">layer_hyperparams</span><span class="p">,</span> 
+                          <span class="n">method_args</span><span class="p">,</span> <span class="n">parents</span><span class="p">,</span> <span class="n">node_io</span><span class="p">,</span> <span class="n">node_name</span><span class="p">,</span> 
+                          <span class="n">tensor_map</span><span class="p">,</span> <span class="n">children</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">model_dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Execute any ATen operation with full consistency checks</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Infer model compute dtype</span>
+    <span class="n">model_compute_dtype</span> <span class="o">=</span> <span class="n">infer_dtype</span><span class="p">(</span><span class="n">layer_in</span><span class="p">,</span> <span class="n">model_dtype</span><span class="p">)</span>
+
+    <span class="c1"># Enforce precision consistency</span>
+    <span class="n">layer_in</span> <span class="o">=</span> <span class="n">enforce_precision_consistency</span><span class="p">(</span><span class="n">layer_in</span><span class="p">)</span>
+
+    <span class="c1"># Dispatch to operation-specific handler</span>
+    <span class="k">if</span> <span class="n">func_name</span> <span class="o">==</span> <span class="s2">&quot;linear&quot;</span><span class="p">:</span>
+        <span class="c1"># ... 30 lines of linear operation handling</span>
+    <span class="k">elif</span> <span class="n">func_name</span> <span class="o">==</span> <span class="s2">&quot;scaled_dot_product_attention&quot;</span><span class="p">:</span>
+        <span class="c1"># ... 100 lines of attention handling</span>
+    <span class="c1"># ... 100+ more operations</span>
+</code></pre></div>
+<h3 id="supported-operation-categories">Supported Operation Categories<a class="headerlink" href="#supported-operation-categories" title="Permanent link">&para;</a></h3>
+<p><strong>1. Linear Algebra</strong> (Lines 762-794, 2029-2060):
+- <code>linear</code> - Fully connected layers with dtype consistency
+- <code>matmul</code> - Matrix multiplication with broadcasting
+- <code>bmm</code> - Batch matrix multiplication
+- <code>mm</code> - 2D matrix multiplication
+- <code>addmm</code> - Matrix multiply-add (A + B @ C)
+- <code>baddbmm</code> - Batch matrix multiply-add
+- <code>addmv</code> - Matrix-vector multiply-add
+- <code>einsum</code> - Einstein summation</p>
+<p><strong>2. Convolution</strong> (Lines 795-837):
+- <code>conv1d</code> - 1D convolution for sequences
+- <code>conv2d</code> - 2D convolution for images
+- Device and dtype consistency enforced</p>
+<p><strong>3. Pooling</strong> (Lines 839-871):
+- <code>max_pool2d</code> - Maximum pooling
+- <code>adaptive_avg_pool2d</code> - Adaptive average pooling
+- <code>avg_pool2d</code> - Average pooling</p>
+<p><strong>4. Normalization</strong> (Lines 1037-1156, 3424-3456):
+- <code>layer_norm</code> - Layer normalization with validation
+- <code>batch_norm</code> - Batch normalization
+- <code>native_layer_norm</code> - Optimized layer norm</p>
+<p><strong>5. Attention</strong> (Lines 1158-1259):
+- <code>scaled_dot_product_attention</code> - Transformer attention
+  - Automatic causal/bidirectional detection
+  - Mask handling and reshaping
+  - Model type inference (BERT vs GPT)</p>
+<p><strong>6. Activations</strong> (Lines 881-924, 2405-2411):
+- <code>relu</code>, <code>relu_</code> - ReLU activation
+- <code>gelu</code> - Gaussian Error Linear Unit
+- <code>tanh</code> - Hyperbolic tangent
+- <code>silu</code> - Sigmoid Linear Unit
+- <code>sigmoid</code> - Sigmoid function</p>
+<p><strong>7. Shape Operations</strong> (Lines 925-997, 1327-1454, 2294-2403):
+- <code>view</code> - Reshape with -1 inference
+- <code>reshape</code> - Reshape tensor
+- <code>transpose</code> - Swap dimensions
+- <code>permute</code> - Reorder dimensions
+- <code>unsqueeze</code> - Add dimension
+- <code>squeeze</code> - Remove dimension
+- <code>flatten</code>, <code>unflatten</code> - Flatten/unflatten
+- <code>expand</code> - Broadcast tensor
+- <code>select</code> - Select along dimension
+- <code>slice</code> - Slice tensor
+- All support negative indexing</p>
+<p><strong>8. Element-wise</strong> (Lines 1749-2003):
+- <code>add</code>, <code>sub</code>, <code>mul</code>, <code>div</code> - Arithmetic
+- <code>pow</code> - Power
+- <code>neg</code> - Negation
+- <code>rsqrt</code> - Reciprocal square root
+- Broadcasting with shape alignment</p>
+<p><strong>9. Comparison</strong> (Lines 1894-2003, 2645-2708):
+- <code>gt</code>, <code>ge</code>, <code>lt</code>, <code>le</code>, <code>eq</code>, <code>ne</code> - Comparisons
+- Scalar and tensor variants
+- Automatic broadcasting</p>
+<p><strong>10. Tensor Creation</strong> (Lines 2063-2142, 2413-2414):
+- <code>full</code> - Create filled tensor
+- <code>zeros</code> - Create zero tensor
+- <code>arange</code> - Create range
+- Symbolic size resolution</p>
+<p><strong>11. Indexing &amp; Gathering</strong> (Lines 3178-3288, 3398-3422):
+- <code>cat</code> - Concatenate tensors
+- <code>split</code> - Split tensor
+- <code>chunk</code> - Split into equal chunks
+- <code>stack</code> - Stack along new dimension
+- <code>gather</code> - Gather values
+- <code>index</code> - Advanced indexing
+- <code>index_select</code> - Select indices</p>
+<p><strong>12. Masking</strong> (Lines 1285-1325, 2460-2511):
+- <code>masked_fill</code> - Fill masked positions
+- <code>where</code> - Conditional selection
+- Preserves -inf values correctly</p>
+<p><strong>13. Other Operations</strong>:
+- <code>embedding</code> - Lookup embeddings (Lines 1713-1747)
+- <code>softmax</code> - Softmax activation (Lines 1695-1704)
+- <code>dropout</code> - Dropout (always disabled in eval) (Lines 873-879)
+- <code>clone</code> - Clone tensor (Lines 2826-2844)
+- <code>contiguous</code> - Make contiguous (Lines 2513-2519)
+- <code>to</code>, <code>_to_copy</code> - Type/device conversion (Lines 1603-1647, 2521-2535)</p>
+<hr />
+<h2 id="node-processing-pipeline">Node Processing Pipeline<a class="headerlink" href="#node-processing-pipeline" title="Permanent link">&para;</a></h2>
+<h3 id="main-function-run_execution_nocache">Main Function: <code>run_execution_nocache</code><a class="headerlink" href="#main-function-run_execution_nocache" title="Permanent link">&para;</a></h3>
+<p><strong>Function</strong> (Lines 3542-3935) - <strong>393 lines</strong></p>
+<p>Executes the entire graph in topological order:</p>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">run_execution_nocache</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">layer_stack</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">extracted_weights</span><span class="p">,</span> 
+                          <span class="n">inputs</span><span class="p">,</span> <span class="n">tracer</span><span class="p">,</span> <span class="n">exported_program</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Main execution loop - processes nodes in dependency order</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        graph: NetworkX graph with node metadata</span>
+<span class="sd">        layer_stack: Topologically sorted node names</span>
+<span class="sd">        model: Original PyTorch model</span>
+<span class="sd">        extracted_weights: Dictionary of model parameters</span>
+<span class="sd">        inputs: Input tensors</span>
+<span class="sd">        tracer: FX tracer instance</span>
+<span class="sd">        exported_program: ExportedProgram for weight mapping</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        node_io: Dictionary mapping node names to execution results</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Setup deterministic environment</span>
+    <span class="n">setup_consistent_environment</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+
+    <span class="c1"># Initialize tracking structures</span>
+    <span class="n">tensor_map</span> <span class="o">=</span> <span class="p">{}</span>  <span class="c1"># Current node outputs</span>
+    <span class="n">node_io</span> <span class="o">=</span> <span class="p">{}</span>     <span class="c1"># Complete execution history</span>
+
+    <span class="c1"># Process each node in topological order</span>
+    <span class="k">for</span> <span class="n">node_name</span> <span class="ow">in</span> <span class="n">layer_stack</span><span class="p">:</span>
+        <span class="n">node_data</span> <span class="o">=</span> <span class="n">graph</span><span class="o">.</span><span class="n">nodes</span><span class="p">[</span><span class="n">node_name</span><span class="p">]</span>
+
+        <span class="c1"># Skip if parents not ready</span>
+        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">p</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">tensor_map</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">parents</span><span class="p">):</span>
+            <span class="k">continue</span>
+
+        <span class="c1"># Get inputs from parent nodes</span>
+        <span class="n">layer_in</span> <span class="o">=</span> <span class="p">[</span><span class="n">tensor_map</span><span class="p">[</span><span class="n">p</span><span class="p">]</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">parents</span><span class="p">]</span>
+
+        <span class="c1"># Process by node type</span>
+        <span class="k">if</span> <span class="n">layer_type</span> <span class="o">==</span> <span class="s2">&quot;Placeholder&quot;</span><span class="p">:</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="n">handle_placeholder</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">layer_type</span> <span class="o">==</span> <span class="s2">&quot;Model_Layer&quot;</span><span class="p">:</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="n">execute_submodule</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">layer_type</span> <span class="o">==</span> <span class="s2">&quot;ATen_Operation&quot;</span><span class="p">:</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="n">execute_aten_operation</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+
+        <span class="c1"># Store output for children</span>
+        <span class="n">tensor_map</span><span class="p">[</span><span class="n">node_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">output</span>
+        <span class="n">node_io</span><span class="p">[</span><span class="n">node_name</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;input_values&quot;</span><span class="p">:</span> <span class="n">layer_in</span><span class="p">,</span>
+            <span class="s2">&quot;output_values&quot;</span><span class="p">:</span> <span class="n">output</span><span class="p">,</span>
+            <span class="s2">&quot;layer_type&quot;</span><span class="p">:</span> <span class="n">layer_type</span><span class="p">,</span>
+            <span class="c1"># ... more metadata</span>
+        <span class="p">}</span>
+
+    <span class="k">return</span> <span class="n">node_io</span>
+</code></pre></div>
+<p><strong>Key Steps:</strong></p>
+<ol>
+<li><strong>Environment Setup</strong> (Lines 3547-3602):</li>
+<li>Deterministic configuration</li>
+<li>Model consistency checks</li>
+<li>Weight synchronization</li>
+<li>
+<p>Device and dtype detection</p>
+</li>
+<li>
+<p><strong>Input Processing</strong> (Lines 3607-3647):</p>
+</li>
+<li>Input validation</li>
+<li>Type-specific casting (input_ids → long)</li>
+<li>Contiguity enforcement</li>
+<li>
+<p>Initial tensor_map population</p>
+</li>
+<li>
+<p><strong>Node Iteration</strong> (Lines 3649-3839):</p>
+</li>
+<li>Topological processing</li>
+<li>Parent dependency checking</li>
+<li>Type-specific execution</li>
+<li>
+<p>Output validation</p>
+</li>
+<li>
+<p><strong>Error Handling</strong> (Lines 3836-3838):</p>
+</li>
+<li>Graceful degradation</li>
+<li>Detailed error logging</li>
+<li>Fallback strategies</li>
+</ol>
+<hr />
+<h2 id="node-types-and-handling">Node Types and Handling<a class="headerlink" href="#node-types-and-handling" title="Permanent link">&para;</a></h2>
+<h3 id="1-placeholder-nodes">1. Placeholder Nodes<a class="headerlink" href="#1-placeholder-nodes" title="Permanent link">&para;</a></h3>
+<p><strong>Lines 3689-3715</strong></p>
+<p>Handle model inputs and parameters:</p>
+<div class="highlight"><pre><span></span><code><span class="k">if</span> <span class="n">layer_type</span> <span class="o">==</span> <span class="s2">&quot;Placeholder&quot;</span><span class="p">:</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="n">extracted_weights</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">node_name</span><span class="p">,</span> <span class="n">inp_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">node_name</span><span class="p">))</span>
+
+    <span class="c1"># Classify by name patterns</span>
+    <span class="k">if</span> <span class="s2">&quot;weight&quot;</span> <span class="ow">in</span> <span class="n">node_name</span><span class="p">:</span>
+        <span class="n">layer_type</span> <span class="o">=</span> <span class="s2">&quot;Weight&quot;</span>
+    <span class="k">elif</span> <span class="s2">&quot;bias&quot;</span> <span class="ow">in</span> <span class="n">node_name</span><span class="p">:</span>
+        <span class="n">layer_type</span> <span class="o">=</span> <span class="s2">&quot;Bias&quot;</span>
+    <span class="k">elif</span> <span class="s2">&quot;running_mean&quot;</span> <span class="ow">in</span> <span class="n">node_name</span><span class="p">:</span>
+        <span class="n">layer_type</span> <span class="o">=</span> <span class="s2">&quot;bn_running_mean&quot;</span>
+    <span class="c1"># ... more types</span>
+</code></pre></div>
+<h3 id="2-model_layer-nodes">2. Model_Layer Nodes<a class="headerlink" href="#2-model_layer-nodes" title="Permanent link">&para;</a></h3>
+<p><strong>Lines 3717-3753</strong></p>
+<p>Execute PyTorch submodules:</p>
+<div class="highlight"><pre><span></span><code><span class="k">elif</span> <span class="n">layer_type</span> <span class="o">==</span> <span class="s2">&quot;Model_Layer&quot;</span><span class="p">:</span>
+    <span class="c1"># Resolve nested module (e.g., &quot;encoder.layer.0.attention&quot;)</span>
+    <span class="n">resolved_layer</span> <span class="o">=</span> <span class="n">model</span>
+    <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="n">layer</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">):</span>
+        <span class="n">resolved_layer</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">resolved_layer</span><span class="p">,</span> <span class="n">attr</span><span class="p">)</span>
+
+    <span class="c1"># Ensure consistency</span>
+    <span class="n">layer_in</span> <span class="o">=</span> <span class="p">[</span><span class="n">enforce_precision_consistency</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">layer_in</span><span class="p">]</span>
+    <span class="n">resolved_layer</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
+    <span class="n">resolved_layer</span><span class="o">.</span><span class="n">requires_grad_</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="c1"># Execute</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="n">resolved_layer</span><span class="p">(</span><span class="o">*</span><span class="n">layer_in</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="3-aten-operation-nodes">3. ATen Operation Nodes<a class="headerlink" href="#3-aten-operation-nodes" title="Permanent link">&para;</a></h3>
+<p><strong>Lines 3761-3828</strong></p>
+<p>Execute PyTorch operations:</p>
+<div class="highlight"><pre><span></span><code><span class="k">elif</span> <span class="n">layer_type</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;ATen_Operation&quot;</span><span class="p">,</span> <span class="s2">&quot;Operation&quot;</span><span class="p">):</span>
+    <span class="c1"># Collect inputs (filter out weights/biases for most ops)</span>
+    <span class="n">layer_in</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">node_x</span> <span class="ow">in</span> <span class="n">parents</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">node_io</span><span class="p">[</span><span class="n">node_x</span><span class="p">][</span><span class="s1">&#39;layer_type&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">excluded_types</span><span class="p">:</span>
+            <span class="n">layer_in</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">node_io</span><span class="p">[</span><span class="n">node_x</span><span class="p">][</span><span class="s1">&#39;output_values&#39;</span><span class="p">])</span>
+
+    <span class="c1"># Process inputs</span>
+    <span class="n">layer_in</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">_process_layer_input</span><span class="p">(</span><span class="n">layer_in</span><span class="p">)</span>
+
+    <span class="c1"># Execute operation</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="n">execute_aten_operation</span><span class="p">(</span>
+        <span class="n">func_name</span><span class="p">,</span> <span class="n">aten_op</span><span class="p">,</span> <span class="n">layer_in</span><span class="p">,</span> <span class="n">layer_hyperparams</span><span class="p">,</span>
+        <span class="n">method_args</span><span class="p">,</span> <span class="n">parents</span><span class="p">,</span> <span class="n">node_io</span><span class="p">,</span> <span class="n">node_name</span><span class="p">,</span>
+        <span class="n">tensor_map</span><span class="p">,</span> <span class="n">children</span><span class="o">=</span><span class="n">children</span><span class="p">,</span> <span class="n">model_dtype</span><span class="o">=</span><span class="n">model_dtype</span>
+    <span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="adding-new-operations">Adding New Operations<a class="headerlink" href="#adding-new-operations" title="Permanent link">&para;</a></h2>
+<h3 id="step-by-step-guide">Step-by-Step Guide<a class="headerlink" href="#step-by-step-guide" title="Permanent link">&para;</a></h3>
+<p><strong>1. Identify Operation Name</strong></p>
+<p>Check FX graph tracing output or error messages:
+<div class="highlight"><pre><span></span><code>🚨 UNHANDLED OPERATION: `my_new_op` - needs implementation!
+</code></pre></div></p>
+<p><strong>2. Add Handler in <code>execute_aten_operation</code></strong></p>
+<p>Add new <code>elif</code> block around line 3518:</p>
+<div class="highlight"><pre><span></span><code><span class="k">elif</span> <span class="n">func_name</span> <span class="o">==</span> <span class="s2">&quot;my_new_op&quot;</span><span class="p">:</span>
+    <span class="c1"># 🔧 NEW OPERATION: Brief description</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[</span><span class="si">{</span><span class="n">node_name</span><span class="si">}</span><span class="s2">] 🔧 my_new_op: input type=</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">layer_in</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Step 1: Validate and unwrap inputs</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer_in</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
+        <span class="n">layer_in</span> <span class="o">=</span> <span class="n">layer_in</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">layer_in</span> <span class="o">=</span> <span class="n">enforce_precision_consistency</span><span class="p">(</span><span class="n">layer_in</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer_in</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[</span><span class="si">{</span><span class="n">node_name</span><span class="si">}</span><span class="s2">] ❌ my_new_op: expected tensor, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">layer_in</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Step 2: Extract hyperparameters</span>
+    <span class="n">param1</span> <span class="o">=</span> <span class="n">layer_hyperparams</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;param1&quot;</span><span class="p">,</span> <span class="n">default_value</span><span class="p">)</span>
+    <span class="n">param2</span> <span class="o">=</span> <span class="n">layer_hyperparams</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;param2&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">param2</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[</span><span class="si">{</span><span class="n">node_name</span><span class="si">}</span><span class="s2">] ❌ my_new_op: missing required parameter &#39;param2&#39;&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Step 3: Handle negative indexing (if applicable)</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">param1</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">and</span> <span class="n">param1</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">param1</span> <span class="o">=</span> <span class="n">layer_in</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span> <span class="o">+</span> <span class="n">param1</span>
+
+    <span class="c1"># Step 4: Validate parameters</span>
+    <span class="k">if</span> <span class="n">param1</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">param1</span> <span class="o">&gt;=</span> <span class="n">layer_in</span><span class="o">.</span><span class="n">dim</span><span class="p">():</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[</span><span class="si">{</span><span class="n">node_name</span><span class="si">}</span><span class="s2">] ❌ my_new_op: param1 out of range&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Step 5: Execute operation with error handling</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="n">aten_op</span><span class="p">(</span><span class="n">layer_in</span><span class="p">,</span> <span class="n">param1</span><span class="p">,</span> <span class="n">param2</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[</span><span class="si">{</span><span class="n">node_name</span><span class="si">}</span><span class="s2">] ✅ my_new_op: output shape=</span><span class="si">{</span><span class="n">output</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">output</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[</span><span class="si">{</span><span class="n">node_name</span><span class="si">}</span><span class="s2">] ❌ my_new_op failed: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><strong>3. Test the Operation</strong></p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Test with a simple model</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span>
+    <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">20</span><span class="p">),</span>
+    <span class="n">MyNewOp</span><span class="p">(),</span>  <span class="c1"># Your operation</span>
+    <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">20</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+<span class="p">)</span>
+
+<span class="n">dlb</span> <span class="o">=</span> <span class="n">DLBacktrace</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">input_for_graph</span><span class="o">=</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">),))</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>
+</code></pre></div>
+<hr />
+<h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
+<h3 id="1-always-enforce-consistency">1. Always Enforce Consistency<a class="headerlink" href="#1-always-enforce-consistency" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># ✅ Good - enforce consistency</span>
+<span class="n">layer_in</span> <span class="o">=</span> <span class="n">enforce_precision_consistency</span><span class="p">(</span><span class="n">layer_in</span><span class="p">)</span>
+
+<span class="c1"># ❌ Bad - skip consistency checks</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">aten_op</span><span class="p">(</span><span class="n">layer_in</span><span class="p">)</span>  <span class="c1"># May have FakeTensors!</span>
+</code></pre></div>
+<h3 id="2-handle-list-inputs-properly">2. Handle List Inputs Properly<a class="headerlink" href="#2-handle-list-inputs-properly" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># ✅ Good - check and unwrap</span>
+<span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer_in</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">layer_in</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">layer_in</span> <span class="o">=</span> <span class="n">layer_in</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">layer_in</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Empty input list&quot;</span><span class="p">)</span>
+
+<span class="c1"># ❌ Bad - assume structure</span>
+<span class="n">layer_in</span> <span class="o">=</span> <span class="n">layer_in</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># May crash!</span>
+</code></pre></div>
+<h3 id="3-validate-inputs-and-parameters">3. Validate Inputs and Parameters<a class="headerlink" href="#3-validate-inputs-and-parameters" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># ✅ Good - comprehensive validation</span>
+<span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer_in</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
+    <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Expected tensor, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">layer_in</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="k">if</span> <span class="n">param</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Missing required parameter&quot;</span><span class="p">)</span>
+
+<span class="c1"># ❌ Bad - no validation</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">aten_op</span><span class="p">(</span><span class="n">layer_in</span><span class="p">,</span> <span class="n">param</span><span class="p">)</span>  <span class="c1"># May crash later</span>
+</code></pre></div>
+<h3 id="4-use-descriptive-logging">4. Use Descriptive Logging<a class="headerlink" href="#4-use-descriptive-logging" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># ✅ Good - structured logging</span>
+<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[</span><span class="si">{</span><span class="n">node_name</span><span class="si">}</span><span class="s2">] 🔧 linear: input shape=</span><span class="si">{</span><span class="n">layer_in</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[</span><span class="si">{</span><span class="n">node_name</span><span class="si">}</span><span class="s2">] ✅ linear: output shape=</span><span class="si">{</span><span class="n">output</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="c1"># ❌ Bad - minimal logging</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;doing linear&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="5-handle-device-consistency">5. Handle Device Consistency<a class="headerlink" href="#5-handle-device-consistency" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># ✅ Good - ensure same device</span>
+<span class="n">target_device</span> <span class="o">=</span> <span class="n">layer_in</span><span class="o">.</span><span class="n">device</span>
+<span class="k">if</span> <span class="n">weight</span><span class="o">.</span><span class="n">device</span> <span class="o">!=</span> <span class="n">target_device</span><span class="p">:</span>
+    <span class="n">weight</span> <span class="o">=</span> <span class="n">weight</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">target_device</span><span class="p">)</span>
+
+<span class="c1"># ❌ Bad - ignore device mismatches</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">aten_op</span><span class="p">(</span><span class="n">layer_in</span><span class="p">,</span> <span class="n">weight</span><span class="p">)</span>  <span class="c1"># May fail on CPU/GPU mismatch</span>
+</code></pre></div>
+<h3 id="6-support-negative-indexing">6. Support Negative Indexing<a class="headerlink" href="#6-support-negative-indexing" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># ✅ Good - handle negative indices</span>
+<span class="n">tensor_rank</span> <span class="o">=</span> <span class="n">layer_in</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span>
+<span class="k">if</span> <span class="n">dim</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+    <span class="n">dim</span> <span class="o">=</span> <span class="n">tensor_rank</span> <span class="o">+</span> <span class="n">dim</span>
+
+<span class="c1"># ❌ Bad - don&#39;t handle negative indices</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">aten_op</span><span class="p">(</span><span class="n">layer_in</span><span class="p">,</span> <span class="n">dim</span><span class="p">)</span>  <span class="c1"># May crash with dim=-1</span>
+</code></pre></div>
+<hr />
+<h2 id="debugging">Debugging<a class="headerlink" href="#debugging" title="Permanent link">&para;</a></h2>
+<h3 id="enable-debug-logging">Enable Debug Logging<a class="headerlink" href="#enable-debug-logging" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Create engine with debug enabled</span>
+<span class="n">engine</span> <span class="o">=</span> <span class="n">ExecutionEngineNoCache</span><span class="p">(</span>
+    <span class="n">model</span><span class="p">,</span> <span class="n">weights</span><span class="p">,</span> <span class="n">graph</span><span class="p">,</span> <span class="n">stack</span><span class="p">,</span> <span class="n">tracer</span><span class="p">,</span> <span class="n">exported_program</span><span class="p">,</span>
+    <span class="n">debug</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>          <span class="c1"># Enable file logging</span>
+    <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;DEBUG&quot;</span>    <span class="c1"># Verbose output</span>
+<span class="p">)</span>
+
+<span class="c1"># Run execution</span>
+<span class="n">node_io</span> <span class="o">=</span> <span class="n">engine</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">inputs</span><span class="p">)</span>
+
+<span class="c1"># Check log file</span>
+<span class="c1"># dlbacktrace_logs/dlbacktrace_debug_YYYYMMDD_HHMMSS.log</span>
+</code></pre></div>
+<h3 id="common-issues">Common Issues<a class="headerlink" href="#common-issues" title="Permanent link">&para;</a></h3>
+<p><strong>1. Device Mismatch</strong>
+<div class="highlight"><pre><span></span><code>Error: Expected all tensors to be on the same device
+</code></pre></div>
+<strong>Fix:</strong> Add device consistency check before operation</p>
+<p><strong>2. Dtype Mismatch</strong>
+<div class="highlight"><pre><span></span><code>Error: expected scalar type Float but found Half
+</code></pre></div>
+<strong>Fix:</strong> Use <code>ensure_tensor_consistency()</code> or <code>ensure_dtype_consistency()</code></p>
+<p><strong>3. Shape Mismatch</strong>
+<div class="highlight"><pre><span></span><code>Error: mat1 and mat2 shapes cannot be multiplied
+</code></pre></div>
+<strong>Fix:</strong> Add broadcasting or shape validation</p>
+<p><strong>4. None Input</strong>
+<div class="highlight"><pre><span></span><code>Error: Cannot perform operation on None
+</code></pre></div>
+<strong>Fix:</strong> Add None check and graceful fallback</p>
+<hr />
+<h2 id="performance-tips">Performance Tips<a class="headerlink" href="#performance-tips" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Avoid Unnecessary Copies</strong>: Use <code>.detach()</code> instead of <code>.clone()</code> when possible</li>
+<li><strong>Reuse Tensors</strong>: Don't create new tensors in hot loops</li>
+<li><strong>Batch Operations</strong>: Process multiple items together when possible</li>
+<li><strong>Profile First</strong>: Use logging to identify bottlenecks</li>
+<li><strong>CUDA Synchronization</strong>: Minimize <code>torch.cuda.synchronize()</code> calls</li>
+</ol>
+<hr />
+<h2 id="execution-engine-class">Execution Engine Class<a class="headerlink" href="#execution-engine-class" title="Permanent link">&para;</a></h2>
+<p><strong>Class: <code>ExecutionEngineNoCache</code></strong> (Lines 3937-3982)</p>
+<p>Wrapper class for the execution engine:</p>
+<div class="highlight"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ExecutionEngineNoCache</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">extracted_weights</span><span class="p">,</span> <span class="n">fx_graph</span><span class="p">,</span> <span class="n">layer_stack</span><span class="p">,</span> 
+                 <span class="n">tracer</span><span class="p">,</span> <span class="n">exported_program</span><span class="p">,</span> <span class="n">debug</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;INFO&quot;</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="n">model</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">extracted_weights</span> <span class="o">=</span> <span class="n">extracted_weights</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">graph</span> <span class="o">=</span> <span class="n">fx_graph</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">layer_stack</span> <span class="o">=</span> <span class="n">layer_stack</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tracer</span> <span class="o">=</span> <span class="n">tracer</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">exported_program</span> <span class="o">=</span> <span class="n">exported_program</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span> <span class="o">=</span> <span class="n">debug</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_level</span> <span class="o">=</span> <span class="n">log_level</span>
+
+        <span class="c1"># Setup logging</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">setup_logging</span><span class="p">(</span><span class="n">debug</span><span class="o">=</span><span class="n">debug</span><span class="p">,</span> <span class="n">log_level</span><span class="o">=</span><span class="n">log_level</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inputs</span><span class="p">,</span> <span class="n">debug</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">log_level</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Execute graph and return node_io dictionary&quot;&quot;&quot;</span>
+        <span class="c1"># Update logging if parameters changed</span>
+        <span class="k">if</span> <span class="n">debug</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">log_level</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">setup_logging</span><span class="p">(</span><span class="n">debug</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">,</span> <span class="n">log_level</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_level</span><span class="p">)</span>
+
+        <span class="c1"># Run execution</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">run_execution_nocache</span><span class="p">(</span>
+            <span class="n">graph</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span>
+            <span class="n">layer_stack</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">layer_stack</span><span class="p">,</span>
+            <span class="n">model</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">,</span>
+            <span class="n">extracted_weights</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">extracted_weights</span><span class="p">,</span>
+            <span class="n">inputs</span><span class="o">=</span><span class="n">inputs</span><span class="p">,</span>
+            <span class="n">tracer</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">tracer</span><span class="p">,</span>
+            <span class="n">exported_program</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">exported_program</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Flush logs</span>
+        <span class="n">flush_logs</span><span class="p">()</span>
+
+        <span class="k">return</span> <span class="n">result</span>
+</code></pre></div>
+<hr />
+<h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../cuda-development/">CUDA Development</a> - Writing CUDA kernels for custom operations</li>
+<li><a href="../architecture/">Architecture</a> - Overall system architecture</li>
+<li><a href="../contributing/">Contributing</a> - Development guidelines</li>
+</ul></div>
+        
+        
+    </div>
+
+    
+      <footer class="col-md-12 text-center">
+          
+          
+            <hr>
+            <p>
+            <small>Copyright &copy; 2025 Lexsi Labs</small><br>
+            
+            <small>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</small>
+            </p>
+          
+
+          
+          
+      </footer>
+    
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script src="../../js/bootstrap-3.0.3.min.js"></script>
+
+    
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/highlight.min.js"></script>
+        
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/python.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/yaml.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/bash.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/javascript.min.js"></script>
+        
+    <script>hljs.initHighlightingOnLoad();</script>
+    
+
+    <script>var base_url = "../.."</script>
+    
+    <script src="../../js/base.js"></script>
+    <script src="../../javascripts/mathjax.js"></script>
+    <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="../../javascripts/katex.js"></script>
+    <script src="https://unpkg.com/katex@0/dist/katex.min.js"></script>
+    <script src="https://unpkg.com/katex@0/dist/contrib/auto-render.min.js"></script>
+    <script src="../../search/main.js"></script>
+
+    <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    <span aria-hidden="true">&times;</span>
+                    <span class="sr-only">Close</span>
+                </button>
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+            </div>
+            <div class="modal-body">
+                <p>
+                    From here you can search these documents. Enter
+                    your search terms below.
+                </p>
+                <form>
+                    <div class="form-group">
+                        <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+    </body>
+
+</html>

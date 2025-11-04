@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="A powerful explainable AI (XAI) framework for deep learning model interpretability">
+    <meta name="author" content="Lexsi Labs">
+    <link rel="canonical" href="https://lexsi.ai/support/faq/">
+    <link rel="shortcut icon" href="../../img/favicon.ico">
+
+    
+    <title>FAQ - DL-Backtrace Documentation</title>
+    
+
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/all.css">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/v4-shims.css">
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/hack-font@3.3.0/build/web/hack.min.css">
+    <link href='//rsms.me/inter/inter.css' rel='stylesheet' type='text/css'>
+    <link href='//fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,700italic,400,300,600,700&subset=latin-ext,latin' rel='stylesheet' type='text/css'>
+    <link href="../../css/bootstrap-custom.min.css" rel="stylesheet">
+    <link href="../../css/base.min.css" rel="stylesheet">
+    <link href="../../css/cinder.min.css" rel="stylesheet">
+
+    
+        
+        <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/styles/github.min.css">
+        
+    
+    <link href="https://unpkg.com/katex@0/dist/katex.min.css" rel="stylesheet">
+
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+            <script src="https://cdn.jsdelivr.net/npm/html5shiv@3.7.3/dist/html5shiv.min.js"></script>
+            <script src="https://cdn.jsdelivr.net/npm/respond.js@1.4.2/dest/respond.min.js"></script>
+        <![endif]-->
+
+    
+
+     
+</head>
+
+<body>
+
+    <div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+
+        <!-- Collapsed navigation -->
+        <div class="navbar-header">
+            <!-- Expander button -->
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            
+
+            <!-- Main title -->
+
+            
+              <a class="navbar-brand" href="../..">DL-Backtrace Documentation</a>
+            
+        </div>
+
+        <!-- Expanded navigation -->
+        <div class="navbar-collapse collapse">
+                <!-- Main navigation -->
+                <ul class="nav navbar-nav">
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Home <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../..">Overview</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../home/features/">Key Features</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../home/installation/">Installation</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../home/quickstart/">Quick Start</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../home/whats-new/">What's New</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">User Guide <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../guide/introduction/">Introduction</a>
+</li>
+
+                        
+                            
+  <li class="dropdown-submenu">
+    <a tabindex="-1" href="">PyTorch Backend</a>
+    <ul class="dropdown-menu">
+        
+            
+<li >
+    <a href="../../guide/pytorch/overview/">Overview</a>
+</li>
+
+        
+            
+<li >
+    <a href="../../guide/pytorch/dlbacktrace/">DLBacktrace</a>
+</li>
+
+        
+            
+<li >
+    <a href="../../guide/pytorch/pipeline/">Pipeline</a>
+</li>
+
+        
+            
+<li >
+    <a href="../../guide/pytorch/auto-sampler/">DLB Auto Sampler</a>
+</li>
+
+        
+            
+<li >
+    <a href="../../guide/pytorch/temperature-scaling/">Temperature Scaling</a>
+</li>
+
+        
+            
+<li >
+    <a href="../../guide/pytorch/moe-models/">MoE Models</a>
+</li>
+
+        
+            
+<li >
+    <a href="../../guide/pytorch/execution-engines/">Execution Engines</a>
+</li>
+
+        
+            
+<li >
+    <a href="../../guide/pytorch/operations/">Supported Operations</a>
+</li>
+
+        
+            
+<li >
+    <a href="../../guide/pytorch/tracing/">Model Tracing</a>
+</li>
+
+        
+    </ul>
+  </li>
+
+                        
+                            
+  <li class="dropdown-submenu">
+    <a tabindex="-1" href="">Relevance Propagation</a>
+    <ul class="dropdown-menu">
+        
+            
+<li >
+    <a href="../../guide/relevance/overview/">Overview</a>
+</li>
+
+        
+            
+<li >
+    <a href="../../guide/relevance/parameters/">Parameters</a>
+</li>
+
+        
+    </ul>
+  </li>
+
+                        
+                            
+<li >
+    <a href="../../guide/best-practices/">Best Practices</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Examples <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../examples/colab-notebooks/">Colab Notebooks</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../examples/use-cases/">Use Cases</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Developer Guide <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../developer/architecture/">Architecture</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../developer/contributing/">Contributing</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../developer/execution-engine/">Execution Engine</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../developer/cuda-development/">CUDA Development</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../developer/testing/">Testing</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown active">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Support <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li class="active">
+    <a href="./">FAQ</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../known-issues/">Known Issues</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../changelog/">Changelog</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../license/">License</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                </ul>
+
+            <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="#" data-toggle="modal" data-target="#mkdocs_search_modal">
+                            <i class="fas fa-search"></i> Search
+                        </a>
+                    </li>
+                    <li >
+                        <a rel="prev" href="../../developer/testing/">
+                            <i class="fas fa-arrow-left"></i> Previous
+                        </a>
+                    </li>
+                    <li >
+                        <a rel="next" href="../known-issues/">
+                            Next <i class="fas fa-arrow-right"></i>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://github.com/Lexsi-Labs/DLBacktrace/edit/main/docs/support/faq.md">Edit on Lexsi-Labs/DLBacktrace</a>
+                    </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+    <div class="container">
+        
+        
+        <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
+    <ul class="nav bs-sidenav">
+        <li class="first-level active"><a href="#frequently-asked-questions">Frequently Asked Questions</a></li>
+            <li class="second-level"><a href="#general-questions">General Questions</a></li>
+                
+                <li class="third-level"><a href="#what-is-dl-backtrace">What is DL-Backtrace?</a></li>
+                <li class="third-level"><a href="#which-frameworks-does-it-support">Which frameworks does it support?</a></li>
+                <li class="third-level"><a href="#is-it-free-and-open-source">Is it free and open source?</a></li>
+                <li class="third-level"><a href="#who-develops-dl-backtrace">Who develops DL-Backtrace?</a></li>
+            <li class="second-level"><a href="#installation-questions">Installation Questions</a></li>
+                
+                <li class="third-level"><a href="#how-do-i-install-dl-backtrace">How do I install DL-Backtrace?</a></li>
+                <li class="third-level"><a href="#do-i-need-a-gpu">Do I need a GPU?</a></li>
+                <li class="third-level"><a href="#what-python-version-is-required">What Python version is required?</a></li>
+                <li class="third-level"><a href="#can-i-install-it-via-pip">Can I install it via pip?</a></li>
+            <li class="second-level"><a href="#usage-questions">Usage Questions</a></li>
+                
+                <li class="third-level"><a href="#how-do-i-trace-my-model">How do I trace my model?</a></li>
+                <li class="third-level"><a href="#my-model-fails-to-trace-what-should-i-do">My model fails to trace. What should I do?</a></li>
+                <li class="third-level"><a href="#how-do-i-interpret-relevance-scores">How do I interpret relevance scores?</a></li>
+                <li class="third-level"><a href="#can-i-use-it-with-pre-trained-models">Can I use it with pre-trained models?</a></li>
+            <li class="second-level"><a href="#performance-questions">Performance Questions</a></li>
+                
+                <li class="third-level"><a href="#how-long-does-tracing-take">How long does tracing take?</a></li>
+                <li class="third-level"><a href="#how-much-memory-does-it-use">How much memory does it use?</a></li>
+                <li class="third-level"><a href="#can-i-speed-up-execution">Can I speed up execution?</a></li>
+                <li class="third-level"><a href="#does-it-slow-down-inference">Does it slow down inference?</a></li>
+            <li class="second-level"><a href="#compatibility-questions">Compatibility Questions</a></li>
+                
+                <li class="third-level"><a href="#which-models-are-supported">Which models are supported?</a></li>
+                <li class="third-level"><a href="#are-all-pytorch-operations-supported">Are all PyTorch operations supported?</a></li>
+                <li class="third-level"><a href="#can-i-use-custom-layers">Can I use custom layers?</a></li>
+                <li class="third-level"><a href="#does-it-work-with-dynamic-graphs">Does it work with dynamic graphs?</a></li>
+            <li class="second-level"><a href="#technical-questions">Technical Questions</a></li>
+                
+                <li class="third-level"><a href="#what-is-relevance-propagation">What is relevance propagation?</a></li>
+                <li class="third-level"><a href="#how-is-it-different-from-gradients">How is it different from gradients?</a></li>
+                <li class="third-level"><a href="#can-i-use-it-for-model-debugging">Can I use it for model debugging?</a></li>
+                <li class="third-level"><a href="#is-execution-deterministic">Is execution deterministic?</a></li>
+            <li class="second-level"><a href="#error-questions">Error Questions</a></li>
+                
+                <li class="third-level"><a href="#i-get-cuda-out-of-memory-errors">I get "CUDA out of memory" errors</a></li>
+                <li class="third-level"><a href="#i-get-operation-not-supported-errors">I get "Operation not supported" errors</a></li>
+                <li class="third-level"><a href="#tracing-hangs-or-takes-forever">Tracing hangs or takes forever</a></li>
+                <li class="third-level"><a href="#i-get-dtype-mismatch-errors">I get dtype mismatch errors</a></li>
+            <li class="second-level"><a href="#licensing-questions">Licensing Questions</a></li>
+                
+                <li class="third-level"><a href="#can-i-use-it-commercially">Can I use it commercially?</a></li>
+                <li class="third-level"><a href="#do-i-need-to-cite-it">Do I need to cite it?</a></li>
+                <li class="third-level"><a href="#can-i-modify-the-code">Can I modify the code?</a></li>
+                <li class="third-level"><a href="#can-i-contribute">Can I contribute?</a></li>
+            <li class="second-level"><a href="#advanced-questions">Advanced Questions</a></li>
+                
+                <li class="third-level"><a href="#can-i-add-support-for-new-operations">Can I add support for new operations?</a></li>
+                <li class="third-level"><a href="#can-i-use-it-in-production">Can I use it in production?</a></li>
+                <li class="third-level"><a href="#can-i-export-explanations">Can I export explanations?</a></li>
+            <li class="second-level"><a href="#getting-help">Getting Help</a></li>
+                
+                <li class="third-level"><a href="#where-can-i-find-more-documentation">Where can I find more documentation?</a></li>
+                <li class="third-level"><a href="#where-can-i-ask-questions">Where can I ask questions?</a></li>
+                <li class="third-level"><a href="#how-do-i-report-bugs">How do I report bugs?</a></li>
+                <li class="third-level"><a href="#how-do-i-request-features">How do I request features?</a></li>
+            <li class="second-level"><a href="#still-have-questions">Still Have Questions?</a></li>
+                
+    </ul>
+</div></div>
+        <div class="col-md-9" role="main">
+
+<h1 id="frequently-asked-questions">Frequently Asked Questions<a class="headerlink" href="#frequently-asked-questions" title="Permanent link">&para;</a></h1>
+<p>Common questions and answers about DL-Backtrace.</p>
+<hr />
+<h2 id="general-questions">General Questions<a class="headerlink" href="#general-questions" title="Permanent link">&para;</a></h2>
+<h3 id="what-is-dl-backtrace">What is DL-Backtrace?<a class="headerlink" href="#what-is-dl-backtrace" title="Permanent link">&para;</a></h3>
+<p>DL-Backtrace is an explainable AI (XAI) framework that helps you understand how deep learning models make decisions through layer-wise relevance propagation.</p>
+<h3 id="which-frameworks-does-it-support">Which frameworks does it support?<a class="headerlink" href="#which-frameworks-does-it-support" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>PyTorch</strong> 2.6+ (full support)</li>
+</ul>
+<h3 id="is-it-free-and-open-source">Is it free and open source?<a class="headerlink" href="#is-it-free-and-open-source" title="Permanent link">&para;</a></h3>
+<p>Yes! DL-Backtrace is released under the MIT License and is completely free to use.</p>
+<h3 id="who-develops-dl-backtrace">Who develops DL-Backtrace?<a class="headerlink" href="#who-develops-dl-backtrace" title="Permanent link">&para;</a></h3>
+<p>DL-Backtrace is developed by <a href="https://lexsi.ai">Lexsi Labs</a>, with contributions from the community.</p>
+<hr />
+<h2 id="installation-questions">Installation Questions<a class="headerlink" href="#installation-questions" title="Permanent link">&para;</a></h2>
+<h3 id="how-do-i-install-dl-backtrace">How do I install DL-Backtrace?<a class="headerlink" href="#how-do-i-install-dl-backtrace" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/Lexsi-Labs/DLBacktrace.git
+<span class="nb">cd</span><span class="w"> </span>DL-Backtrace
+pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>requirements.txt
+pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
+</code></pre></div>
+<p>See the <a href="../../home/installation/">Installation Guide</a> for details.</p>
+<h3 id="do-i-need-a-gpu">Do I need a GPU?<a class="headerlink" href="#do-i-need-a-gpu" title="Permanent link">&para;</a></h3>
+<p>No, DL-Backtrace works on both CPU and GPU. However, GPU significantly speeds up execution for large models.</p>
+<h3 id="what-python-version-is-required">What Python version is required?<a class="headerlink" href="#what-python-version-is-required" title="Permanent link">&para;</a></h3>
+<p>Python 3.8 or higher is required.</p>
+<h3 id="can-i-install-it-via-pip">Can I install it via pip?<a class="headerlink" href="#can-i-install-it-via-pip" title="Permanent link">&para;</a></h3>
+<p>Currently, installation from source is recommended. PyPI distribution is planned for future releases.</p>
+<hr />
+<h2 id="usage-questions">Usage Questions<a class="headerlink" href="#usage-questions" title="Permanent link">&para;</a></h2>
+<h3 id="how-do-i-trace-my-model">How do I trace my model?<a class="headerlink" href="#how-do-i-trace-my-model" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.pytorch_backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">DLBacktrace</span>
+
+<span class="n">dlb</span> <span class="o">=</span> <span class="n">DLBacktrace</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+    <span class="n">input_for_graph</span><span class="o">=</span><span class="p">(</span><span class="n">dummy_input</span><span class="p">,)</span>
+<span class="p">)</span>
+</code></pre></div>
+<p>See the <a href="../../home/quickstart/">Quick Start</a> guide.</p>
+<h3 id="my-model-fails-to-trace-what-should-i-do">My model fails to trace. What should I do?<a class="headerlink" href="#my-model-fails-to-trace-what-should-i-do" title="Permanent link">&para;</a></h3>
+<p>Check:
+1. Model is in eval mode: <code>model.eval()</code>
+2. All operations are supported
+3. No data-dependent control flow
+4. Input shape matches model expectations</p>
+<h3 id="how-do-i-interpret-relevance-scores">How do I interpret relevance scores?<a class="headerlink" href="#how-do-i-interpret-relevance-scores" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Positive relevance</strong>: Feature contributed to the prediction</li>
+<li><strong>Negative relevance</strong>: Feature argued against the prediction</li>
+<li><strong>Zero relevance</strong>: Feature didn't influence the decision</li>
+</ul>
+<p>See <a href="../../guide/relevance/overview/">Relevance Propagation</a>.</p>
+<h3 id="can-i-use-it-with-pre-trained-models">Can I use it with pre-trained models?<a class="headerlink" href="#can-i-use-it-with-pre-trained-models" title="Permanent link">&para;</a></h3>
+<p>Yes! DL-Backtrace works with any PyTorch model, including pre-trained ones from Hugging Face, torchvision, etc.</p>
+<hr />
+<h2 id="performance-questions">Performance Questions<a class="headerlink" href="#performance-questions" title="Permanent link">&para;</a></h2>
+<h3 id="how-long-does-tracing-take">How long does tracing take?<a class="headerlink" href="#how-long-does-tracing-take" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Small models</strong>: &lt; 1 second</li>
+<li><strong>Medium models</strong> (ResNet-50): 1-3 seconds</li>
+<li><strong>Large models</strong> (BERT): 3-10 seconds</li>
+<li><strong>Very large</strong> (LLaMA-3B): 10-30 seconds</li>
+</ul>
+<h3 id="how-much-memory-does-it-use">How much memory does it use?<a class="headerlink" href="#how-much-memory-does-it-use" title="Permanent link">&para;</a></h3>
+<p>Memory usage depends on model size:
+- <strong>Small models</strong>: &lt; 1 GB
+- <strong>Medium models</strong>: 2-4 GB
+- <strong>Large models</strong>: 8-16 GB
+- <strong>Very large</strong>: 20+ GB</p>
+<h3 id="can-i-speed-up-execution">Can I speed up execution?<a class="headerlink" href="#can-i-speed-up-execution" title="Permanent link">&para;</a></h3>
+<p>Yes:
+1. Use GPU instead of CPU
+2. Reduce batch size
+3. Use mixed precision (FP16)
+4. Ensure model is in eval mode</p>
+<h3 id="does-it-slow-down-inference">Does it slow down inference?<a class="headerlink" href="#does-it-slow-down-inference" title="Permanent link">&para;</a></h3>
+<p>Tracing adds overhead, but you only trace once. Subsequent evaluations reuse the traced graph.</p>
+<hr />
+<h2 id="compatibility-questions">Compatibility Questions<a class="headerlink" href="#compatibility-questions" title="Permanent link">&para;</a></h2>
+<h3 id="which-models-are-supported">Which models are supported?<a class="headerlink" href="#which-models-are-supported" title="Permanent link">&para;</a></h3>
+<p><strong>Vision:</strong>
+- CNNs (ResNet, VGG, EfficientNet, etc.)
+- Vision Transformers (ViT)
+- Custom CNN architectures</p>
+<p><strong>NLP:</strong>
+- BERT, RoBERTa, ALBERT, DistilBERT
+- LLaMA-3.2
+- GPT-style models
+- Custom transformers</p>
+<p><strong>Others:</strong>
+- Custom architectures using supported operations</p>
+<h3 id="are-all-pytorch-operations-supported">Are all PyTorch operations supported?<a class="headerlink" href="#are-all-pytorch-operations-supported" title="Permanent link">&para;</a></h3>
+<p>DL-Backtrace supports 100+ common operations. See the <a href="../../guide/pytorch/operations/">operations list</a>.</p>
+<h3 id="can-i-use-custom-layers">Can I use custom layers?<a class="headerlink" href="#can-i-use-custom-layers" title="Permanent link">&para;</a></h3>
+<p>If your custom layers use supported operations, they should work. Otherwise, you may need to decompose them or request support.</p>
+<h3 id="does-it-work-with-dynamic-graphs">Does it work with dynamic graphs?<a class="headerlink" href="#does-it-work-with-dynamic-graphs" title="Permanent link">&para;</a></h3>
+<p>Yes, but with limitations. Data-dependent control flow may cause issues.</p>
+<hr />
+<h2 id="technical-questions">Technical Questions<a class="headerlink" href="#technical-questions" title="Permanent link">&para;</a></h2>
+<h3 id="what-is-relevance-propagation">What is relevance propagation?<a class="headerlink" href="#what-is-relevance-propagation" title="Permanent link">&para;</a></h3>
+<p>Relevance propagation traces the "importance" of input features by backpropagating relevance scores from output to input.</p>
+<h3 id="how-is-it-different-from-gradients">How is it different from gradients?<a class="headerlink" href="#how-is-it-different-from-gradients" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Relevance</strong>: Shows which features contributed to the output</li>
+<li><strong>Gradients</strong>: Show sensitivity to small input changes</li>
+</ul>
+<p>Relevance is better for understanding model decisions.</p>
+<h3 id="can-i-use-it-for-model-debugging">Can I use it for model debugging?<a class="headerlink" href="#can-i-use-it-for-model-debugging" title="Permanent link">&para;</a></h3>
+<p>Yes! DL-Backtrace helps identify:
+- Biases in model decisions
+- Spurious correlations
+- Feature importance
+- Layer contributions</p>
+<h3 id="is-execution-deterministic">Is execution deterministic?<a class="headerlink" href="#is-execution-deterministic" title="Permanent link">&para;</a></h3>
+<p>Yes, DL-Backtrace automatically sets up a deterministic environment for reproducible results.</p>
+<hr />
+<h2 id="error-questions">Error Questions<a class="headerlink" href="#error-questions" title="Permanent link">&para;</a></h2>
+<h3 id="i-get-cuda-out-of-memory-errors">I get "CUDA out of memory" errors<a class="headerlink" href="#i-get-cuda-out-of-memory-errors" title="Permanent link">&para;</a></h3>
+<p>Solutions:
+1. Reduce batch size
+2. Use CPU instead of GPU
+3. Close other GPU applications
+4. Use a GPU with more memory</p>
+<h3 id="i-get-operation-not-supported-errors">I get "Operation not supported" errors<a class="headerlink" href="#i-get-operation-not-supported-errors" title="Permanent link">&para;</a></h3>
+<p>Check if the operation is in the <a href="../../guide/pytorch/operations/">supported list</a>. If not:
+1. Request support on GitHub
+2. Decompose into supported operations
+3. Modify your model</p>
+<h3 id="tracing-hangs-or-takes-forever">Tracing hangs or takes forever<a class="headerlink" href="#tracing-hangs-or-takes-forever" title="Permanent link">&para;</a></h3>
+<p>Possible causes:
+1. Very large model
+2. Infinite loop in model
+3. Memory issues</p>
+<p>Try:
+- Smaller model
+- Check for loops in forward()
+- Monitor memory usage</p>
+<h3 id="i-get-dtype-mismatch-errors">I get dtype mismatch errors<a class="headerlink" href="#i-get-dtype-mismatch-errors" title="Permanent link">&para;</a></h3>
+<p>DL-Backtrace should handle this automatically. If not:
+1. Ensure model and input have same dtype
+2. Convert explicitly: <code>model.float()</code>, <code>input.float()</code>
+3. Report the issue</p>
+<hr />
+<h2 id="licensing-questions">Licensing Questions<a class="headerlink" href="#licensing-questions" title="Permanent link">&para;</a></h2>
+<h3 id="can-i-use-it-commercially">Can I use it commercially?<a class="headerlink" href="#can-i-use-it-commercially" title="Permanent link">&para;</a></h3>
+<p>Yes! DL-Backtrace is under the MIT License, which allows commercial use.</p>
+<h3 id="do-i-need-to-cite-it">Do I need to cite it?<a class="headerlink" href="#do-i-need-to-cite-it" title="Permanent link">&para;</a></h3>
+<p>While not required, we appreciate citations in academic work.</p>
+<h3 id="can-i-modify-the-code">Can I modify the code?<a class="headerlink" href="#can-i-modify-the-code" title="Permanent link">&para;</a></h3>
+<p>Yes! You can modify, distribute, and use it as you wish under the MIT License.</p>
+<h3 id="can-i-contribute">Can I contribute?<a class="headerlink" href="#can-i-contribute" title="Permanent link">&para;</a></h3>
+<p>Absolutely! Contributions are welcome. See the <a href="../../developer/contributing/">Contributing Guide</a>.</p>
+<hr />
+<h2 id="advanced-questions">Advanced Questions<a class="headerlink" href="#advanced-questions" title="Permanent link">&para;</a></h2>
+<h3 id="can-i-add-support-for-new-operations">Can I add support for new operations?<a class="headerlink" href="#can-i-add-support-for-new-operations" title="Permanent link">&para;</a></h3>
+<p>Yes! See the <a href="../../developer/contributing/">Developer Guide</a> for details on adding new operations.</p>
+<h3 id="can-i-use-it-in-production">Can I use it in production?<a class="headerlink" href="#can-i-use-it-in-production" title="Permanent link">&para;</a></h3>
+<p>Yes! DL-Backtrace is production-ready with:
+- Deterministic execution
+- Error handling
+- Performance optimization
+- Extensive testing</p>
+<h3 id="can-i-export-explanations">Can I export explanations?<a class="headerlink" href="#can-i-export-explanations" title="Permanent link">&para;</a></h3>
+<p>Yes, relevance scores are Python dictionaries/tensors that you can save:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="n">torch</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">relevance</span><span class="p">,</span> <span class="s1">&#39;relevance.pt&#39;</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="getting-help">Getting Help<a class="headerlink" href="#getting-help" title="Permanent link">&para;</a></h2>
+<h3 id="where-can-i-find-more-documentation">Where can I find more documentation?<a class="headerlink" href="#where-can-i-find-more-documentation" title="Permanent link">&para;</a></h3>
+<ul>
+<li><a href="../../guide/introduction/">User Guide</a></li>
+<li><a href="../../examples/colab-notebooks/">Examples</a></li>
+<li><a href="../../examples/use-cases/">Use Cases</a></li>
+<li><a href="../../developer/contributing/">Developer Guide</a></li>
+</ul>
+<h3 id="where-can-i-ask-questions">Where can I ask questions?<a class="headerlink" href="#where-can-i-ask-questions" title="Permanent link">&para;</a></h3>
+<ul>
+<li><a href="https://github.com/Lexsi-Labs/DLBacktrace/issues">GitHub Issues</a></li>
+<li><a href="https://github.com/Lexsi-Labs/DLBacktrace/discussions">GitHub Discussions</a></li>
+<li>Email: <a href="mailto:support@lexsi.ai">support@lexsi.ai</a></li>
+</ul>
+<h3 id="how-do-i-report-bugs">How do I report bugs?<a class="headerlink" href="#how-do-i-report-bugs" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Check <a href="https://github.com/Lexsi-Labs/DLBacktrace/issues">existing issues</a></li>
+<li>Create a new issue with:</li>
+<li>Description of the problem</li>
+<li>Steps to reproduce</li>
+<li>Error messages</li>
+<li>System information</li>
+</ol>
+<h3 id="how-do-i-request-features">How do I request features?<a class="headerlink" href="#how-do-i-request-features" title="Permanent link">&para;</a></h3>
+<p>Open a <a href="https://github.com/Lexsi-Labs/DLBacktrace/issues/new">feature request</a> on GitHub with:
+- Description of the feature
+- Use case
+- Example code (if applicable)</p>
+<hr />
+<h2 id="still-have-questions">Still Have Questions?<a class="headerlink" href="#still-have-questions" title="Permanent link">&para;</a></h2>
+<p>If your question isn't answered here:</p>
+<ol>
+<li>Search <a href="https://github.com/Lexsi-Labs/DLBacktrace/issues">GitHub Issues</a></li>
+<li>Ask in <a href="https://github.com/Lexsi-Labs/DLBacktrace/discussions">GitHub Discussions</a></li>
+<li>Email us: <a href="mailto:support@lexsi.ai">support@lexsi.ai</a></li>
+</ol>
+<hr />
+<p><strong>Can't find what you're looking for?</strong></p>
+<p><a class="md-button" href="https://github.com/Lexsi-Labs/DLBacktrace/discussions">Ask on GitHub →</a></p></div>
+        
+        
+    </div>
+
+    
+      <footer class="col-md-12 text-center">
+          
+          
+            <hr>
+            <p>
+            <small>Copyright &copy; 2025 Lexsi Labs</small><br>
+            
+            <small>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</small>
+            </p>
+          
+
+          
+          
+      </footer>
+    
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script src="../../js/bootstrap-3.0.3.min.js"></script>
+
+    
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/highlight.min.js"></script>
+        
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/python.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/yaml.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/bash.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/javascript.min.js"></script>
+        
+    <script>hljs.initHighlightingOnLoad();</script>
+    
+
+    <script>var base_url = "../.."</script>
+    
+    <script src="../../js/base.js"></script>
+    <script src="../../javascripts/mathjax.js"></script>
+    <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="../../javascripts/katex.js"></script>
+    <script src="https://unpkg.com/katex@0/dist/katex.min.js"></script>
+    <script src="https://unpkg.com/katex@0/dist/contrib/auto-render.min.js"></script>
+    <script src="../../search/main.js"></script>
+
+    <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    <span aria-hidden="true">&times;</span>
+                    <span class="sr-only">Close</span>
+                </button>
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+            </div>
+            <div class="modal-body">
+                <p>
+                    From here you can search these documents. Enter
+                    your search terms below.
+                </p>
+                <form>
+                    <div class="form-group">
+                        <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+    </body>
+
+</html>

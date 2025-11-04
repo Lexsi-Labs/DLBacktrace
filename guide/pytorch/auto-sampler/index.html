@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="A powerful explainable AI (XAI) framework for deep learning model interpretability">
+    <meta name="author" content="Lexsi Labs">
+    <link rel="canonical" href="https://lexsi.ai/guide/pytorch/auto-sampler/">
+    <link rel="shortcut icon" href="../../../img/favicon.ico">
+
+    
+    <title>DLB Auto Sampler - DL-Backtrace Documentation</title>
+    
+
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/all.css">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/v4-shims.css">
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/hack-font@3.3.0/build/web/hack.min.css">
+    <link href='//rsms.me/inter/inter.css' rel='stylesheet' type='text/css'>
+    <link href='//fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,700italic,400,300,600,700&subset=latin-ext,latin' rel='stylesheet' type='text/css'>
+    <link href="../../../css/bootstrap-custom.min.css" rel="stylesheet">
+    <link href="../../../css/base.min.css" rel="stylesheet">
+    <link href="../../../css/cinder.min.css" rel="stylesheet">
+
+    
+        
+        <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/styles/github.min.css">
+        
+    
+    <link href="https://unpkg.com/katex@0/dist/katex.min.css" rel="stylesheet">
+
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+            <script src="https://cdn.jsdelivr.net/npm/html5shiv@3.7.3/dist/html5shiv.min.js"></script>
+            <script src="https://cdn.jsdelivr.net/npm/respond.js@1.4.2/dest/respond.min.js"></script>
+        <![endif]-->
+
+    
+
+     
+</head>
+
+<body>
+
+    <div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+
+        <!-- Collapsed navigation -->
+        <div class="navbar-header">
+            <!-- Expander button -->
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            
+
+            <!-- Main title -->
+
+            
+              <a class="navbar-brand" href="../../..">DL-Backtrace Documentation</a>
+            
+        </div>
+
+        <!-- Expanded navigation -->
+        <div class="navbar-collapse collapse">
+                <!-- Main navigation -->
+                <ul class="nav navbar-nav">
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Home <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../..">Overview</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../home/features/">Key Features</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../home/installation/">Installation</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../home/quickstart/">Quick Start</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../home/whats-new/">What's New</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown active">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">User Guide <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../introduction/">Introduction</a>
+</li>
+
+                        
+                            
+  <li class="dropdown-submenu">
+    <a tabindex="-1" href="">PyTorch Backend</a>
+    <ul class="dropdown-menu">
+        
+            
+<li >
+    <a href="../overview/">Overview</a>
+</li>
+
+        
+            
+<li >
+    <a href="../dlbacktrace/">DLBacktrace</a>
+</li>
+
+        
+            
+<li >
+    <a href="../pipeline/">Pipeline</a>
+</li>
+
+        
+            
+<li class="active">
+    <a href="./">DLB Auto Sampler</a>
+</li>
+
+        
+            
+<li >
+    <a href="../temperature-scaling/">Temperature Scaling</a>
+</li>
+
+        
+            
+<li >
+    <a href="../moe-models/">MoE Models</a>
+</li>
+
+        
+            
+<li >
+    <a href="../execution-engines/">Execution Engines</a>
+</li>
+
+        
+            
+<li >
+    <a href="../operations/">Supported Operations</a>
+</li>
+
+        
+            
+<li >
+    <a href="../tracing/">Model Tracing</a>
+</li>
+
+        
+    </ul>
+  </li>
+
+                        
+                            
+  <li class="dropdown-submenu">
+    <a tabindex="-1" href="">Relevance Propagation</a>
+    <ul class="dropdown-menu">
+        
+            
+<li >
+    <a href="../../relevance/overview/">Overview</a>
+</li>
+
+        
+            
+<li >
+    <a href="../../relevance/parameters/">Parameters</a>
+</li>
+
+        
+    </ul>
+  </li>
+
+                        
+                            
+<li >
+    <a href="../../best-practices/">Best Practices</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Examples <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../../examples/colab-notebooks/">Colab Notebooks</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../examples/use-cases/">Use Cases</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Developer Guide <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../../developer/architecture/">Architecture</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../developer/contributing/">Contributing</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../developer/execution-engine/">Execution Engine</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../developer/cuda-development/">CUDA Development</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../developer/testing/">Testing</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Support <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../../support/faq/">FAQ</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../support/known-issues/">Known Issues</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../support/changelog/">Changelog</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../support/license/">License</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                </ul>
+
+            <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="#" data-toggle="modal" data-target="#mkdocs_search_modal">
+                            <i class="fas fa-search"></i> Search
+                        </a>
+                    </li>
+                    <li >
+                        <a rel="prev" href="../pipeline/">
+                            <i class="fas fa-arrow-left"></i> Previous
+                        </a>
+                    </li>
+                    <li >
+                        <a rel="next" href="../temperature-scaling/">
+                            Next <i class="fas fa-arrow-right"></i>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://github.com/Lexsi-Labs/DLBacktrace/edit/main/docs/guide/pytorch/auto-sampler.md">Edit on Lexsi-Labs/DLBacktrace</a>
+                    </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+    <div class="container">
+        
+        
+        <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
+    <ul class="nav bs-sidenav">
+        <li class="first-level active"><a href="#dlb-auto-sampler">DLB Auto Sampler</a></li>
+            <li class="second-level"><a href="#overview">Overview</a></li>
+                
+            <li class="second-level"><a href="#quick-start">Quick Start</a></li>
+                
+                <li class="third-level"><a href="#basic-generation">Basic Generation</a></li>
+            <li class="second-level"><a href="#sampling-strategies">Sampling Strategies</a></li>
+                
+                <li class="third-level"><a href="#1-greedy-decoding">1. Greedy Decoding</a></li>
+                <li class="third-level"><a href="#2-temperature-sampling">2. Temperature Sampling</a></li>
+                <li class="third-level"><a href="#3-top-k-sampling">3. Top-K Sampling</a></li>
+                <li class="third-level"><a href="#4-top-p-nucleus-sampling">4. Top-P (Nucleus) Sampling</a></li>
+                <li class="third-level"><a href="#5-beam-search">5. Beam Search</a></li>
+            <li class="second-level"><a href="#advanced-usage">Advanced Usage</a></li>
+                
+                <li class="third-level"><a href="#combined-sampling">Combined Sampling</a></li>
+                <li class="third-level"><a href="#generation-with-scores">Generation with Scores</a></li>
+                <li class="third-level"><a href="#batch-generation">Batch Generation</a></li>
+            <li class="second-level"><a href="#generation-parameters">Generation Parameters</a></li>
+                
+                <li class="third-level"><a href="#core-parameters">Core Parameters</a></li>
+                <li class="third-level"><a href="#sampling-parameters">Sampling Parameters</a></li>
+                <li class="third-level"><a href="#beam-search-parameters">Beam Search Parameters</a></li>
+                <li class="third-level"><a href="#stopping-criteria">Stopping Criteria</a></li>
+                <li class="third-level"><a href="#output-control">Output Control</a></li>
+            <li class="second-level"><a href="#integration-with-dl-backtrace">Integration with DL-Backtrace</a></li>
+                
+                <li class="third-level"><a href="#token-level-relevance-tracking">Token-Level Relevance Tracking</a></li>
+                <li class="third-level"><a href="#temperature-scaling-in-generation">Temperature Scaling in Generation</a></li>
+            <li class="second-level"><a href="#performance-optimization">Performance Optimization</a></li>
+                
+                <li class="third-level"><a href="#cuda-acceleration">CUDA Acceleration</a></li>
+                <li class="third-level"><a href="#memory-management">Memory Management</a></li>
+                <li class="third-level"><a href="#deterministic-generation">Deterministic Generation</a></li>
+            <li class="second-level"><a href="#comparison-with-huggingface-generate">Comparison with HuggingFace Generate</a></li>
+                
+                <li class="third-level"><a href="#similarities">Similarities</a></li>
+                <li class="third-level"><a href="#differences">Differences</a></li>
+                <li class="third-level"><a href="#when-to-use-each">When to Use Each</a></li>
+            <li class="second-level"><a href="#best-practices">Best Practices</a></li>
+                
+                <li class="third-level"><a href="#1-temperature-selection">1. Temperature Selection</a></li>
+                <li class="third-level"><a href="#2-sampling-strategy-selection">2. Sampling Strategy Selection</a></li>
+                <li class="third-level"><a href="#3-memory-management">3. Memory Management</a></li>
+            <li class="second-level"><a href="#troubleshooting">Troubleshooting</a></li>
+                
+                <li class="third-level"><a href="#common-issues">Common Issues</a></li>
+            <li class="second-level"><a href="#next-steps">Next Steps</a></li>
+                
+    </ul>
+</div></div>
+        <div class="col-md-9" role="main">
+
+<h1 id="dlb-auto-sampler">DLB Auto Sampler<a class="headerlink" href="#dlb-auto-sampler" title="Permanent link">&para;</a></h1>
+<p>The <strong>DLB Auto Sampler</strong> is a powerful text generation module that integrates DL-Backtrace's explainability capabilities directly into the generation process, enabling token-by-token relevance tracking while maintaining compatibility with HuggingFace's generation API.</p>
+<hr />
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>DLB Auto Sampler provides:</p>
+<ul>
+<li><strong>🎯 DLB-Native Generation</strong>: All logits come from DL-Backtrace's execution engine</li>
+<li><strong>⚡ Multiple Sampling Strategies</strong>: Greedy, temperature, top-k, top-p, and beam search</li>
+<li><strong>🔍 Token-Level Relevance</strong>: Track relevance for each generated token</li>
+<li><strong>🤝 HuggingFace Compatible</strong>: Drop-in replacement for standard generation</li>
+<li><strong>🎨 Flexible Control</strong>: Full control over sampling parameters</li>
+<li><strong>⏱️ Efficient Execution</strong>: Optimized for both CPU and CUDA</li>
+</ul>
+<hr />
+<h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
+<h3 id="basic-generation">Basic Generation<a class="headerlink" href="#basic-generation" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.pytorch_backtrace.dlbacktrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">DLBacktrace</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.pytorch_backtrace.dlbacktrace.core.dlb_auto_sampler</span><span class="w"> </span><span class="kn">import</span> <span class="n">DLBAutoSampler</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoModelForCausalLM</span><span class="p">,</span> <span class="n">AutoTokenizer</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+
+<span class="c1"># Load model and tokenizer</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;gpt2&quot;</span><span class="p">)</span>
+<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;gpt2&quot;</span><span class="p">)</span>
+<span class="n">tokenizer</span><span class="o">.</span><span class="n">pad_token</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">eos_token</span>
+
+<span class="c1"># Initialize DL-Backtrace</span>
+<span class="n">sample_input</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1000</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>
+<span class="n">dlb</span> <span class="o">=</span> <span class="n">DLBacktrace</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+    <span class="n">input_for_graph</span><span class="o">=</span><span class="p">(</span><span class="n">sample_input</span><span class="p">,),</span>
+    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
+<span class="p">)</span>
+
+<span class="c1"># Create auto sampler</span>
+<span class="n">sampler</span> <span class="o">=</span> <span class="n">DLBAutoSampler</span><span class="p">(</span><span class="n">dlb</span><span class="o">=</span><span class="n">dlb</span><span class="p">,</span> <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">)</span>
+
+<span class="c1"># Generate text</span>
+<span class="n">prompt</span> <span class="o">=</span> <span class="s2">&quot;The future of artificial intelligence&quot;</span>
+<span class="n">input_ids</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="n">prompt</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">input_ids</span><span class="o">.</span><span class="n">cuda</span><span class="p">()</span>
+
+<span class="n">output</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+    <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>
+    <span class="n">top_p</span><span class="o">=</span><span class="mf">0.9</span>
+<span class="p">)</span>
+
+<span class="c1"># Decode output</span>
+<span class="n">generated_text</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">output</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Generated: </span><span class="si">{</span><span class="n">generated_text</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="sampling-strategies">Sampling Strategies<a class="headerlink" href="#sampling-strategies" title="Permanent link">&para;</a></h2>
+<h3 id="1-greedy-decoding">1. Greedy Decoding<a class="headerlink" href="#1-greedy-decoding" title="Permanent link">&para;</a></h3>
+<p>Select the most probable token at each step (deterministic).</p>
+<div class="highlight"><pre><span></span><code><span class="n">output</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+    <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>  <span class="c1"># Greedy when temperature is None</span>
+    <span class="n">top_k</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">top_p</span><span class="o">=</span><span class="kc">None</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Use Cases:</strong>
+- Deterministic generation
+- Factual completion
+- Code generation</p>
+<p><strong>Characteristics:</strong>
+- ✅ Deterministic and reproducible
+- ✅ Fast execution
+- ⚠️ May produce repetitive text
+- ⚠️ Lower diversity</p>
+<h3 id="2-temperature-sampling">2. Temperature Sampling<a class="headerlink" href="#2-temperature-sampling" title="Permanent link">&para;</a></h3>
+<p>Control randomness in generation with temperature parameter.</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Low temperature (more focused, deterministic)</span>
+<span class="n">output_focused</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+    <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">0.5</span>
+<span class="p">)</span>
+
+<span class="c1"># High temperature (more creative, random)</span>
+<span class="n">output_creative</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+    <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">1.5</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Temperature Effects:</strong>
+- <code>temperature &lt; 1.0</code>: More focused, higher probability tokens preferred
+- <code>temperature = 1.0</code>: No modification (standard distribution)
+- <code>temperature &gt; 1.0</code>: More random, flatter distribution</p>
+<p><strong>Use Cases:</strong>
+- Creative writing: <code>temperature=1.2-1.5</code>
+- Balanced generation: <code>temperature=0.8-1.0</code>
+- Precise completion: <code>temperature=0.5-0.7</code></p>
+<h3 id="3-top-k-sampling">3. Top-K Sampling<a class="headerlink" href="#3-top-k-sampling" title="Permanent link">&para;</a></h3>
+<p>Sample from the k most probable tokens.</p>
+<div class="highlight"><pre><span></span><code><span class="n">output</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+    <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>
+    <span class="n">top_k</span><span class="o">=</span><span class="mi">50</span>  <span class="c1"># Consider only top 50 tokens</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Top-K Values:</strong>
+- <code>top_k=1</code>: Equivalent to greedy
+- <code>top_k=10-50</code>: Balanced quality and diversity
+- <code>top_k=100-200</code>: Higher diversity</p>
+<h3 id="4-top-p-nucleus-sampling">4. Top-P (Nucleus) Sampling<a class="headerlink" href="#4-top-p-nucleus-sampling" title="Permanent link">&para;</a></h3>
+<p>Sample from the smallest set of tokens whose cumulative probability exceeds p.</p>
+<div class="highlight"><pre><span></span><code><span class="n">output</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+    <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>
+    <span class="n">top_p</span><span class="o">=</span><span class="mf">0.9</span>  <span class="c1"># Sample from top 90% probability mass</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Top-P Values:</strong>
+- <code>top_p=0.9</code>: Standard, good balance
+- <code>top_p=0.95</code>: Higher diversity
+- <code>top_p=0.8</code>: More focused</p>
+<h3 id="5-beam-search">5. Beam Search<a class="headerlink" href="#5-beam-search" title="Permanent link">&para;</a></h3>
+<p>Explore multiple generation paths simultaneously.</p>
+<div class="highlight"><pre><span></span><code><span class="n">output</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+    <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+    <span class="n">num_beams</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>  <span class="c1"># Explore 4 parallel paths</span>
+    <span class="n">early_stopping</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">num_return_sequences</span><span class="o">=</span><span class="mi">1</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Beam Parameters:</strong>
+- <code>num_beams=1</code>: Disable beam search (sampling mode)
+- <code>num_beams=3-5</code>: Good balance
+- <code>num_beams=10+</code>: Exhaustive search (slower)</p>
+<p><strong>Use Cases:</strong>
+- Translation
+- Summarization
+- High-quality generation</p>
+<hr />
+<h2 id="advanced-usage">Advanced Usage<a class="headerlink" href="#advanced-usage" title="Permanent link">&para;</a></h2>
+<h3 id="combined-sampling">Combined Sampling<a class="headerlink" href="#combined-sampling" title="Permanent link">&para;</a></h3>
+<p>Combine multiple sampling strategies for fine-grained control.</p>
+<div class="highlight"><pre><span></span><code><span class="n">output</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+    <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>      <span class="c1"># Moderate randomness</span>
+    <span class="n">top_k</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>             <span class="c1"># Limit to top 50 tokens</span>
+    <span class="n">top_p</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span>            <span class="c1"># Nucleus sampling</span>
+    <span class="n">repetition_penalty</span><span class="o">=</span><span class="mf">1.2</span>  <span class="c1"># Penalize repetition</span>
+<span class="p">)</span>
+</code></pre></div>
+<h3 id="generation-with-scores">Generation with Scores<a class="headerlink" href="#generation-with-scores" title="Permanent link">&para;</a></h3>
+<p>Track generation scores for each token.</p>
+<div class="highlight"><pre><span></span><code><span class="n">output</span><span class="p">,</span> <span class="n">scores</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+    <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>
+    <span class="n">return_scores</span><span class="o">=</span><span class="kc">True</span>  <span class="c1"># Return per-token scores</span>
+<span class="p">)</span>
+
+<span class="c1"># Analyze scores</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Generated </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">scores</span><span class="p">)</span><span class="si">}</span><span class="s2"> tokens&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Average score: </span><span class="si">{</span><span class="nb">sum</span><span class="p">(</span><span class="n">scores</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="nb">len</span><span class="p">(</span><span class="n">scores</span><span class="p">)</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Score range: [</span><span class="si">{</span><span class="nb">min</span><span class="p">(</span><span class="n">scores</span><span class="p">)</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="nb">max</span><span class="p">(</span><span class="n">scores</span><span class="p">)</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">]&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="batch-generation">Batch Generation<a class="headerlink" href="#batch-generation" title="Permanent link">&para;</a></h3>
+<p>Generate multiple sequences in parallel (when supported).</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Prepare multiple prompts</span>
+<span class="n">prompts</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;The capital of France is&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;Machine learning is&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;In the year 2050&quot;</span>
+<span class="p">]</span>
+
+<span class="c1"># Tokenize all prompts</span>
+<span class="n">input_ids</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="n">prompts</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">input_ids</span><span class="o">.</span><span class="n">cuda</span><span class="p">()</span>
+
+<span class="c1"># Generate for all prompts</span>
+<span class="n">outputs</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">prompts</span><span class="p">)):</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+        <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">],</span>
+        <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>
+        <span class="n">temperature</span><span class="o">=</span><span class="mf">0.8</span>
+    <span class="p">)</span>
+    <span class="n">outputs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
+
+<span class="c1"># Decode all outputs</span>
+<span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">output</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">outputs</span><span class="p">):</span>
+    <span class="n">text</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">output</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Prompt </span><span class="si">{</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">text</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="generation-parameters">Generation Parameters<a class="headerlink" href="#generation-parameters" title="Permanent link">&para;</a></h2>
+<h3 id="core-parameters">Core Parameters<a class="headerlink" href="#core-parameters" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>input_ids</code></td>
+<td>Tensor</td>
+<td><strong>Required</strong></td>
+<td>Input token IDs</td>
+</tr>
+<tr>
+<td><code>max_new_tokens</code></td>
+<td>int</td>
+<td><code>50</code></td>
+<td>Maximum tokens to generate</td>
+</tr>
+<tr>
+<td><code>max_length</code></td>
+<td>int</td>
+<td><code>None</code></td>
+<td>Maximum total sequence length</td>
+</tr>
+<tr>
+<td><code>min_length</code></td>
+<td>int</td>
+<td><code>0</code></td>
+<td>Minimum sequence length</td>
+</tr>
+</tbody>
+</table>
+<h3 id="sampling-parameters">Sampling Parameters<a class="headerlink" href="#sampling-parameters" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>temperature</code></td>
+<td>float</td>
+<td><code>1.0</code></td>
+<td>Sampling temperature</td>
+</tr>
+<tr>
+<td><code>top_k</code></td>
+<td>int</td>
+<td><code>50</code></td>
+<td>Top-k sampling parameter</td>
+</tr>
+<tr>
+<td><code>top_p</code></td>
+<td>float</td>
+<td><code>0.9</code></td>
+<td>Nucleus sampling threshold</td>
+</tr>
+<tr>
+<td><code>repetition_penalty</code></td>
+<td>float</td>
+<td><code>1.0</code></td>
+<td>Penalize token repetition</td>
+</tr>
+</tbody>
+</table>
+<h3 id="beam-search-parameters">Beam Search Parameters<a class="headerlink" href="#beam-search-parameters" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>num_beams</code></td>
+<td>int</td>
+<td><code>1</code></td>
+<td>Number of beams</td>
+</tr>
+<tr>
+<td><code>early_stopping</code></td>
+<td>bool</td>
+<td><code>True</code></td>
+<td>Stop when all beams complete</td>
+</tr>
+<tr>
+<td><code>num_return_sequences</code></td>
+<td>int</td>
+<td><code>1</code></td>
+<td>Number of sequences to return</td>
+</tr>
+<tr>
+<td><code>length_penalty</code></td>
+<td>float</td>
+<td><code>1.0</code></td>
+<td>Length penalty for beam search</td>
+</tr>
+</tbody>
+</table>
+<h3 id="stopping-criteria">Stopping Criteria<a class="headerlink" href="#stopping-criteria" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>eos_token_id</code></td>
+<td>int</td>
+<td><code>tokenizer.eos_token_id</code></td>
+<td>End-of-sequence token</td>
+</tr>
+<tr>
+<td><code>pad_token_id</code></td>
+<td>int</td>
+<td><code>tokenizer.pad_token_id</code></td>
+<td>Padding token</td>
+</tr>
+<tr>
+<td><code>max_time</code></td>
+<td>float</td>
+<td><code>None</code></td>
+<td>Maximum generation time (seconds)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="output-control">Output Control<a class="headerlink" href="#output-control" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>return_scores</code></td>
+<td>bool</td>
+<td><code>False</code></td>
+<td>Return per-token scores</td>
+</tr>
+<tr>
+<td><code>output_attentions</code></td>
+<td>bool</td>
+<td><code>False</code></td>
+<td>Return attention weights</td>
+</tr>
+<tr>
+<td><code>output_hidden_states</code></td>
+<td>bool</td>
+<td><code>False</code></td>
+<td>Return hidden states</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="integration-with-dl-backtrace">Integration with DL-Backtrace<a class="headerlink" href="#integration-with-dl-backtrace" title="Permanent link">&para;</a></h2>
+<h3 id="token-level-relevance-tracking">Token-Level Relevance Tracking<a class="headerlink" href="#token-level-relevance-tracking" title="Permanent link">&para;</a></h3>
+<p>The Auto Sampler allows relevance computation for generated sequences.</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Generate with DLB</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+    <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">0.8</span>
+<span class="p">)</span>
+
+<span class="c1"># Compute relevance for generated sequence</span>
+<span class="n">generated_ids</span> <span class="o">=</span> <span class="n">output</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">attention_mask</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">ones_like</span><span class="p">(</span><span class="n">generated_ids</span><span class="p">)</span>
+
+<span class="c1"># Get node outputs</span>
+<span class="n">node_io</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">generated_ids</span><span class="p">,</span> <span class="n">attention_mask</span><span class="p">,</span> <span class="n">debug</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+<span class="c1"># Compute relevance</span>
+<span class="n">relevance</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">evaluation</span><span class="p">(</span>
+    <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;default&quot;</span><span class="p">,</span>
+    <span class="n">multiplier</span><span class="o">=</span><span class="mf">100.0</span><span class="p">,</span>
+    <span class="n">task</span><span class="o">=</span><span class="s2">&quot;generation&quot;</span>
+<span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Relevance computed for </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">relevance</span><span class="p">)</span><span class="si">}</span><span class="s2"> layers&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="temperature-scaling-in-generation">Temperature Scaling in Generation<a class="headerlink" href="#temperature-scaling-in-generation" title="Permanent link">&para;</a></h3>
+<p>Temperature is automatically applied during generation:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Temperature is applied to logits before sampling</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+    <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">0.7</span>  <span class="c1"># Scaled logits used for sampling</span>
+<span class="p">)</span>
+</code></pre></div>
+<p>This is different from applying temperature to final outputs - it affects the generation process itself.</p>
+<hr />
+<h2 id="performance-optimization">Performance Optimization<a class="headerlink" href="#performance-optimization" title="Permanent link">&para;</a></h2>
+<h3 id="cuda-acceleration">CUDA Acceleration<a class="headerlink" href="#cuda-acceleration" title="Permanent link">&para;</a></h3>
+<p>For faster generation, use CUDA device:</p>
+<div class="highlight"><pre><span></span><code><span class="n">dlb</span> <span class="o">=</span> <span class="n">DLBacktrace</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+    <span class="n">input_for_graph</span><span class="o">=</span><span class="p">(</span><span class="n">sample_input</span><span class="p">,),</span>
+    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>  <span class="c1"># Enable CUDA acceleration</span>
+<span class="p">)</span>
+
+<span class="n">sampler</span> <span class="o">=</span> <span class="n">DLBAutoSampler</span><span class="p">(</span><span class="n">dlb</span><span class="o">=</span><span class="n">dlb</span><span class="p">,</span> <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">)</span>
+
+<span class="c1"># All tensors should be on CUDA</span>
+<span class="n">input_ids</span> <span class="o">=</span> <span class="n">input_ids</span><span class="o">.</span><span class="n">cuda</span><span class="p">()</span>
+</code></pre></div>
+<p><strong>Performance Impact:</strong>
+- CUDA provides 10-50x speedup depending on model size
+- Especially important for beam search
+- Essential for large models (&gt;1B parameters)</p>
+<h3 id="memory-management">Memory Management<a class="headerlink" href="#memory-management" title="Permanent link">&para;</a></h3>
+<p>For long sequences or large models:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+
+<span class="c1"># Clear cache periodically</span>
+<span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">empty_cache</span><span class="p">()</span>
+
+<span class="c1"># Use smaller batches</span>
+<span class="n">max_new_tokens</span> <span class="o">=</span> <span class="mi">50</span>  <span class="c1"># Instead of 200</span>
+
+<span class="c1"># Disable unnecessary outputs</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+    <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="n">max_new_tokens</span><span class="p">,</span>
+    <span class="n">output_attentions</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">output_hidden_states</span><span class="o">=</span><span class="kc">False</span>
+<span class="p">)</span>
+</code></pre></div>
+<h3 id="deterministic-generation">Deterministic Generation<a class="headerlink" href="#deterministic-generation" title="Permanent link">&para;</a></h3>
+<p>For reproducible results:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">random</span>
+
+<span class="c1"># Set seeds</span>
+<span class="n">torch</span><span class="o">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
+<span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
+<span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
+
+<span class="c1"># Use greedy or low temperature</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+    <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>  <span class="c1"># Low temperature for determinism</span>
+    <span class="n">do_sample</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="comparison-with-huggingface-generate">Comparison with HuggingFace Generate<a class="headerlink" href="#comparison-with-huggingface-generate" title="Permanent link">&para;</a></h2>
+<h3 id="similarities">Similarities<a class="headerlink" href="#similarities" title="Permanent link">&para;</a></h3>
+<ul>
+<li>✅ Compatible parameter names</li>
+<li>✅ Similar behavior for all sampling strategies</li>
+<li>✅ Works with HuggingFace tokenizers</li>
+<li>✅ Supports standard stopping criteria</li>
+</ul>
+<h3 id="differences">Differences<a class="headerlink" href="#differences" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>HuggingFace</th>
+<th>DLB Auto Sampler</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Logits Source</td>
+<td>Model directly</td>
+<td>DL-Backtrace engine</td>
+</tr>
+<tr>
+<td>Relevance Tracking</td>
+<td>❌ No</td>
+<td>✅ Yes</td>
+</tr>
+<tr>
+<td>Batch Generation</td>
+<td>✅ Full support</td>
+<td>⚠️ Single sequence</td>
+</tr>
+<tr>
+<td>Model Caching</td>
+<td>✅ Yes</td>
+<td>❌ No (by design)</td>
+</tr>
+<tr>
+<td>Custom Logits Processing</td>
+<td>Limited</td>
+<td>Full control</td>
+</tr>
+</tbody>
+</table>
+<h3 id="when-to-use-each">When to Use Each<a class="headerlink" href="#when-to-use-each" title="Permanent link">&para;</a></h3>
+<p><strong>Use HuggingFace <code>generate()</code>:</strong>
+- Production inference at scale
+- Batch processing
+- When relevance not needed
+- Maximum speed critical</p>
+<p><strong>Use DLB Auto Sampler:</strong>
+- Need token-level explainability
+- Analyzing generation process
+- Research and debugging
+- Custom generation workflows</p>
+<hr />
+<h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
+<h3 id="1-temperature-selection">1. Temperature Selection<a class="headerlink" href="#1-temperature-selection" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Creative writing</span>
+<span class="n">temperature</span> <span class="o">=</span> <span class="mf">1.2</span>
+
+<span class="c1"># Balanced generation</span>
+<span class="n">temperature</span> <span class="o">=</span> <span class="mf">0.8</span>
+
+<span class="c1"># Focused/factual</span>
+<span class="n">temperature</span> <span class="o">=</span> <span class="mf">0.5</span>
+</code></pre></div>
+<h3 id="2-sampling-strategy-selection">2. Sampling Strategy Selection<a class="headerlink" href="#2-sampling-strategy-selection" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># For coherent, high-quality text</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+    <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>
+    <span class="n">top_p</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span>
+    <span class="n">top_k</span><span class="o">=</span><span class="mi">50</span>
+<span class="p">)</span>
+
+<span class="c1"># For diverse generation</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+    <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">1.2</span><span class="p">,</span>
+    <span class="n">top_p</span><span class="o">=</span><span class="mf">0.95</span>
+<span class="p">)</span>
+
+<span class="c1"># For deterministic output</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+    <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">num_beams</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+    <span class="n">early_stopping</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span>
+</code></pre></div>
+<h3 id="3-memory-management">3. Memory Management<a class="headerlink" href="#3-memory-management" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># For very long sequences</span>
+<span class="n">max_new_tokens</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">desired_length</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>  <span class="c1"># Generate in chunks if needed</span>
+
+<span class="c1"># Monitor memory</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;GPU memory allocated: </span><span class="si">{</span><span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">memory_allocated</span><span class="p">()</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mf">1e9</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> GB&quot;</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<h3 id="common-issues">Common Issues<a class="headerlink" href="#common-issues" title="Permanent link">&para;</a></h3>
+<p><strong>1. Out of Memory</strong>
+<div class="highlight"><pre><span></span><code><span class="c1"># Solution: Reduce sequence length</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>  <span class="c1"># Instead of 100</span>
+</code></pre></div></p>
+<p><strong>2. Slow Generation</strong>
+<div class="highlight"><pre><span></span><code><span class="c1"># Solution: Use CUDA</span>
+<span class="n">dlb</span> <span class="o">=</span> <span class="n">DLBacktrace</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span><span class="p">)</span>
+</code></pre></div></p>
+<p><strong>3. Repetitive Output</strong>
+<div class="highlight"><pre><span></span><code><span class="c1"># Solution: Increase temperature or use repetition penalty</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+    <span class="o">...</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+    <span class="n">repetition_penalty</span><span class="o">=</span><span class="mf">1.2</span>
+<span class="p">)</span>
+</code></pre></div></p>
+<p><strong>4. Low Quality Output</strong>
+<div class="highlight"><pre><span></span><code><span class="c1"># Solution: Use beam search or lower temperature</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+    <span class="o">...</span><span class="p">,</span>
+    <span class="n">num_beams</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">0.7</span>
+<span class="p">)</span>
+</code></pre></div></p>
+<hr />
+<h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Learn about <a href="../temperature-scaling/">Temperature Scaling</a> in detail</li>
+<li>Explore <a href="../moe-models/">MoE Models</a> with Auto Sampler</li>
+<li>Check <a href="../pipeline/">Pipeline</a> for integrated generation workflows</li>
+<li>See <a href="../../../examples/colab-notebooks/">Examples</a> for complete use cases</li>
+</ul></div>
+        
+        
+    </div>
+
+    
+      <footer class="col-md-12 text-center">
+          
+          
+            <hr>
+            <p>
+            <small>Copyright &copy; 2025 Lexsi Labs</small><br>
+            
+            <small>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</small>
+            </p>
+          
+
+          
+          
+      </footer>
+    
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script src="../../../js/bootstrap-3.0.3.min.js"></script>
+
+    
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/highlight.min.js"></script>
+        
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/python.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/yaml.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/bash.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/javascript.min.js"></script>
+        
+    <script>hljs.initHighlightingOnLoad();</script>
+    
+
+    <script>var base_url = "../../.."</script>
+    
+    <script src="../../../js/base.js"></script>
+    <script src="../../../javascripts/mathjax.js"></script>
+    <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="../../../javascripts/katex.js"></script>
+    <script src="https://unpkg.com/katex@0/dist/katex.min.js"></script>
+    <script src="https://unpkg.com/katex@0/dist/contrib/auto-render.min.js"></script>
+    <script src="../../../search/main.js"></script>
+
+    <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    <span aria-hidden="true">&times;</span>
+                    <span class="sr-only">Close</span>
+                </button>
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+            </div>
+            <div class="modal-body">
+                <p>
+                    From here you can search these documents. Enter
+                    your search terms below.
+                </p>
+                <form>
+                    <div class="form-group">
+                        <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+    </body>
+
+</html>

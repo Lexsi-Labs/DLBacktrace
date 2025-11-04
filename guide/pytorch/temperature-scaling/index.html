@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="A powerful explainable AI (XAI) framework for deep learning model interpretability">
+    <meta name="author" content="Lexsi Labs">
+    <link rel="canonical" href="https://lexsi.ai/guide/pytorch/temperature-scaling/">
+    <link rel="shortcut icon" href="../../../img/favicon.ico">
+
+    
+    <title>Temperature Scaling - DL-Backtrace Documentation</title>
+    
+
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/all.css">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/v4-shims.css">
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/hack-font@3.3.0/build/web/hack.min.css">
+    <link href='//rsms.me/inter/inter.css' rel='stylesheet' type='text/css'>
+    <link href='//fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,700italic,400,300,600,700&subset=latin-ext,latin' rel='stylesheet' type='text/css'>
+    <link href="../../../css/bootstrap-custom.min.css" rel="stylesheet">
+    <link href="../../../css/base.min.css" rel="stylesheet">
+    <link href="../../../css/cinder.min.css" rel="stylesheet">
+
+    
+        
+        <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/styles/github.min.css">
+        
+    
+    <link href="https://unpkg.com/katex@0/dist/katex.min.css" rel="stylesheet">
+
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+            <script src="https://cdn.jsdelivr.net/npm/html5shiv@3.7.3/dist/html5shiv.min.js"></script>
+            <script src="https://cdn.jsdelivr.net/npm/respond.js@1.4.2/dest/respond.min.js"></script>
+        <![endif]-->
+
+    
+
+     
+</head>
+
+<body>
+
+    <div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+
+        <!-- Collapsed navigation -->
+        <div class="navbar-header">
+            <!-- Expander button -->
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            
+
+            <!-- Main title -->
+
+            
+              <a class="navbar-brand" href="../../..">DL-Backtrace Documentation</a>
+            
+        </div>
+
+        <!-- Expanded navigation -->
+        <div class="navbar-collapse collapse">
+                <!-- Main navigation -->
+                <ul class="nav navbar-nav">
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Home <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../..">Overview</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../home/features/">Key Features</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../home/installation/">Installation</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../home/quickstart/">Quick Start</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../home/whats-new/">What's New</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown active">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">User Guide <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../introduction/">Introduction</a>
+</li>
+
+                        
+                            
+  <li class="dropdown-submenu">
+    <a tabindex="-1" href="">PyTorch Backend</a>
+    <ul class="dropdown-menu">
+        
+            
+<li >
+    <a href="../overview/">Overview</a>
+</li>
+
+        
+            
+<li >
+    <a href="../dlbacktrace/">DLBacktrace</a>
+</li>
+
+        
+            
+<li >
+    <a href="../pipeline/">Pipeline</a>
+</li>
+
+        
+            
+<li >
+    <a href="../auto-sampler/">DLB Auto Sampler</a>
+</li>
+
+        
+            
+<li class="active">
+    <a href="./">Temperature Scaling</a>
+</li>
+
+        
+            
+<li >
+    <a href="../moe-models/">MoE Models</a>
+</li>
+
+        
+            
+<li >
+    <a href="../execution-engines/">Execution Engines</a>
+</li>
+
+        
+            
+<li >
+    <a href="../operations/">Supported Operations</a>
+</li>
+
+        
+            
+<li >
+    <a href="../tracing/">Model Tracing</a>
+</li>
+
+        
+    </ul>
+  </li>
+
+                        
+                            
+  <li class="dropdown-submenu">
+    <a tabindex="-1" href="">Relevance Propagation</a>
+    <ul class="dropdown-menu">
+        
+            
+<li >
+    <a href="../../relevance/overview/">Overview</a>
+</li>
+
+        
+            
+<li >
+    <a href="../../relevance/parameters/">Parameters</a>
+</li>
+
+        
+    </ul>
+  </li>
+
+                        
+                            
+<li >
+    <a href="../../best-practices/">Best Practices</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Examples <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../../examples/colab-notebooks/">Colab Notebooks</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../examples/use-cases/">Use Cases</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Developer Guide <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../../developer/architecture/">Architecture</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../developer/contributing/">Contributing</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../developer/execution-engine/">Execution Engine</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../developer/cuda-development/">CUDA Development</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../developer/testing/">Testing</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Support <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../../support/faq/">FAQ</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../support/known-issues/">Known Issues</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../support/changelog/">Changelog</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../support/license/">License</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                </ul>
+
+            <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="#" data-toggle="modal" data-target="#mkdocs_search_modal">
+                            <i class="fas fa-search"></i> Search
+                        </a>
+                    </li>
+                    <li >
+                        <a rel="prev" href="../auto-sampler/">
+                            <i class="fas fa-arrow-left"></i> Previous
+                        </a>
+                    </li>
+                    <li >
+                        <a rel="next" href="../moe-models/">
+                            Next <i class="fas fa-arrow-right"></i>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://github.com/Lexsi-Labs/DLBacktrace/edit/main/docs/guide/pytorch/temperature-scaling.md">Edit on Lexsi-Labs/DLBacktrace</a>
+                    </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+    <div class="container">
+        
+        
+        <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
+    <ul class="nav bs-sidenav">
+        <li class="first-level active"><a href="#temperature-scaling">Temperature Scaling</a></li>
+            <li class="second-level"><a href="#overview">Overview</a></li>
+                
+            <li class="second-level"><a href="#understanding-temperature">Understanding Temperature</a></li>
+                
+                <li class="third-level"><a href="#what-is-temperature">What is Temperature?</a></li>
+                <li class="third-level"><a href="#temperature-effects">Temperature Effects</a></li>
+                <li class="third-level"><a href="#temperature-ranges">Temperature Ranges</a></li>
+            <li class="second-level"><a href="#usage-in-dl-backtrace">Usage in DL-Backtrace</a></li>
+                
+                <li class="third-level"><a href="#basic-temperature-scaling">Basic Temperature Scaling</a></li>
+            <li class="second-level"><a href="#temperature-in-different-contexts">Temperature in Different Contexts</a></li>
+                
+                <li class="third-level"><a href="#1-classification-tasks">1. Classification Tasks</a></li>
+                <li class="third-level"><a href="#2-text-generation">2. Text Generation</a></li>
+                <li class="third-level"><a href="#3-model-calibration">3. Model Calibration</a></li>
+            <li class="second-level"><a href="#advanced-usage">Advanced Usage</a></li>
+                
+                <li class="third-level"><a href="#dynamic-temperature-selection">Dynamic Temperature Selection</a></li>
+                <li class="third-level"><a href="#temperature-annealing">Temperature Annealing</a></li>
+                <li class="third-level"><a href="#multi-temperature-ensemble">Multi-Temperature Ensemble</a></li>
+            <li class="second-level"><a href="#best-practices">Best Practices</a></li>
+                
+                <li class="third-level"><a href="#1-task-specific-temperature-selection">1. Task-Specific Temperature Selection</a></li>
+                <li class="third-level"><a href="#2-temperature-calibration-workflow">2. Temperature Calibration Workflow</a></li>
+                <li class="third-level"><a href="#3-monitoring-temperature-effects">3. Monitoring Temperature Effects</a></li>
+            <li class="second-level"><a href="#common-use-cases">Common Use Cases</a></li>
+                
+                <li class="third-level"><a href="#1-uncertainty-estimation">1. Uncertainty Estimation</a></li>
+                <li class="third-level"><a href="#2-ab-testing-generation-styles">2. A/B Testing Generation Styles</a></li>
+                <li class="third-level"><a href="#3-confidence-thresholding">3. Confidence Thresholding</a></li>
+            <li class="second-level"><a href="#performance-considerations">Performance Considerations</a></li>
+                
+            <li class="second-level"><a href="#next-steps">Next Steps</a></li>
+                
+    </ul>
+</div></div>
+        <div class="col-md-9" role="main">
+
+<h1 id="temperature-scaling">Temperature Scaling<a class="headerlink" href="#temperature-scaling" title="Permanent link">&para;</a></h1>
+<p><strong>Temperature scaling</strong> is a powerful technique for controlling the confidence and diversity of model predictions by modulating the softmax distribution of logits. DL-Backtrace provides seamless temperature scaling integration for both inference and generation tasks.</p>
+<hr />
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>Temperature scaling provides:</p>
+<ul>
+<li><strong>🎛️ Confidence Control</strong>: Adjust model confidence without retraining</li>
+<li><strong>🎨 Generation Diversity</strong>: Control randomness in text generation</li>
+<li><strong>⚖️ Calibration</strong>: Improve probability calibration for better uncertainty estimates</li>
+<li><strong>🔍 Analysis</strong>: Study model behavior at different temperature settings</li>
+<li><strong>⚡ Zero Overhead</strong>: Applied efficiently during inference</li>
+</ul>
+<hr />
+<h2 id="understanding-temperature">Understanding Temperature<a class="headerlink" href="#understanding-temperature" title="Permanent link">&para;</a></h2>
+<h3 id="what-is-temperature">What is Temperature?<a class="headerlink" href="#what-is-temperature" title="Permanent link">&para;</a></h3>
+<p>Temperature (<span class="arithmatex">\(T\)</span>) scales the logits before applying softmax:</p>
+<div class="arithmatex">\[
+P(y_i) = \frac{\exp(z_i / T)}{\sum_j \exp(z_j / T)}
+\]</div>
+<p>Where:
+- <span class="arithmatex">\(z_i\)</span> = logit for class <span class="arithmatex">\(i\)</span>
+- <span class="arithmatex">\(T\)</span> = temperature parameter
+- <span class="arithmatex">\(P(y_i)\)</span> = probability for class <span class="arithmatex">\(i\)</span></p>
+<h3 id="temperature-effects">Temperature Effects<a class="headerlink" href="#temperature-effects" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Original logits: [2.0, 1.0, 0.5]</span>
+
+<span class="c1"># T = 0.5 (Lower temperature - more confident)</span>
+<span class="c1"># Probabilities: [0.76, 0.19, 0.05]  ← Sharp distribution</span>
+
+<span class="c1"># T = 1.0 (No scaling - standard)</span>
+<span class="c1"># Probabilities: [0.62, 0.23, 0.15]  ← Normal distribution</span>
+
+<span class="c1"># T = 2.0 (Higher temperature - less confident)</span>
+<span class="c1"># Probabilities: [0.48, 0.30, 0.22]  ← Flat distribution</span>
+</code></pre></div>
+<h3 id="temperature-ranges">Temperature Ranges<a class="headerlink" href="#temperature-ranges" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Temperature</th>
+<th>Effect</th>
+<th>Use Case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><span class="arithmatex">\(T &lt; 0.5\)</span></td>
+<td>Very confident, sharp</td>
+<td>Deterministic tasks</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(T = 0.5 - 0.8\)</span></td>
+<td>Focused, reduced noise</td>
+<td>Factual generation</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(T = 1.0\)</span></td>
+<td>Standard (no scaling)</td>
+<td>Default behavior</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(T = 1.2 - 1.5\)</span></td>
+<td>Increased diversity</td>
+<td>Creative generation</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(T &gt; 2.0\)</span></td>
+<td>Uniform, very random</td>
+<td>Exploration</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="usage-in-dl-backtrace">Usage in DL-Backtrace<a class="headerlink" href="#usage-in-dl-backtrace" title="Permanent link">&para;</a></h2>
+<h3 id="basic-temperature-scaling">Basic Temperature Scaling<a class="headerlink" href="#basic-temperature-scaling" title="Permanent link">&para;</a></h3>
+<h4 id="for-classification">For Classification<a class="headerlink" href="#for-classification" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.pytorch_backtrace.dlbacktrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">DLBacktrace</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+
+<span class="c1"># Initialize DL-Backtrace</span>
+<span class="n">model</span> <span class="o">=</span> <span class="o">...</span>  <span class="c1"># Your classification model</span>
+<span class="n">sample_input</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">224</span><span class="p">,</span> <span class="mi">224</span><span class="p">)</span>
+
+<span class="n">dlb</span> <span class="o">=</span> <span class="n">DLBacktrace</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+    <span class="n">input_for_graph</span><span class="o">=</span><span class="p">(</span><span class="n">sample_input</span><span class="p">,),</span>
+    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
+<span class="p">)</span>
+
+<span class="c1"># Run prediction with temperature scaling</span>
+<span class="n">input_data</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">224</span><span class="p">,</span> <span class="mi">224</span><span class="p">)</span><span class="o">.</span><span class="n">cuda</span><span class="p">()</span>
+
+<span class="n">node_io</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span>
+    <span class="n">input_data</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">0.8</span>  <span class="c1"># Apply temperature scaling</span>
+<span class="p">)</span>
+
+<span class="c1"># Access scaled logits</span>
+<span class="n">logits</span> <span class="o">=</span> <span class="n">node_io</span><span class="p">[</span><span class="s2">&quot;output&quot;</span><span class="p">][</span><span class="s2">&quot;output_values&quot;</span><span class="p">]</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Scaled logits shape: </span><span class="si">{</span><span class="n">logits</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h4 id="for-text-generation">For Text Generation<a class="headerlink" href="#for-text-generation" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoModelForCausalLM</span><span class="p">,</span> <span class="n">AutoTokenizer</span>
+
+<span class="c1"># Load model</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;gpt2&quot;</span><span class="p">)</span>
+<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;gpt2&quot;</span><span class="p">)</span>
+
+<span class="c1"># Initialize DL-Backtrace</span>
+<span class="n">sample_input</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1000</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>
+<span class="n">dlb</span> <span class="o">=</span> <span class="n">DLBacktrace</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+    <span class="n">input_for_graph</span><span class="o">=</span><span class="p">(</span><span class="n">sample_input</span><span class="p">,),</span>
+    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
+<span class="p">)</span>
+
+<span class="c1"># Generate with temperature</span>
+<span class="n">text</span> <span class="o">=</span> <span class="s2">&quot;The future of AI&quot;</span>
+<span class="n">input_ids</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">input_ids</span><span class="o">.</span><span class="n">cuda</span><span class="p">()</span>
+<span class="n">attention_mask</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">ones_like</span><span class="p">(</span><span class="n">input_ids</span><span class="p">)</span>
+
+<span class="c1"># Temperature affects the prediction</span>
+<span class="n">node_io</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span>
+    <span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">attention_mask</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">1.2</span>  <span class="c1"># Higher temperature for creative generation</span>
+<span class="p">)</span>
+
+<span class="n">logits</span> <span class="o">=</span> <span class="n">node_io</span><span class="p">[</span><span class="s2">&quot;output&quot;</span><span class="p">][</span><span class="s2">&quot;output_values&quot;</span><span class="p">]</span>
+</code></pre></div>
+<hr />
+<h2 id="temperature-in-different-contexts">Temperature in Different Contexts<a class="headerlink" href="#temperature-in-different-contexts" title="Permanent link">&para;</a></h2>
+<h3 id="1-classification-tasks">1. Classification Tasks<a class="headerlink" href="#1-classification-tasks" title="Permanent link">&para;</a></h3>
+<p>Control confidence in predictions:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># High confidence (low temperature)</span>
+<span class="n">node_io_confident</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">input_data</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+<span class="n">probs_confident</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">node_io_confident</span><span class="p">[</span><span class="s2">&quot;output&quot;</span><span class="p">][</span><span class="s2">&quot;output_values&quot;</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c1"># Standard confidence</span>
+<span class="n">node_io_standard</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">input_data</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+<span class="n">probs_standard</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">node_io_standard</span><span class="p">[</span><span class="s2">&quot;output&quot;</span><span class="p">][</span><span class="s2">&quot;output_values&quot;</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c1"># Low confidence (high temperature)</span>
+<span class="n">node_io_uncertain</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">input_data</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="mf">2.0</span><span class="p">)</span>
+<span class="n">probs_uncertain</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">node_io_uncertain</span><span class="p">[</span><span class="s2">&quot;output&quot;</span><span class="p">][</span><span class="s2">&quot;output_values&quot;</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Low T distribution: </span><span class="si">{</span><span class="n">probs_confident</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Standard distribution: </span><span class="si">{</span><span class="n">probs_standard</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;High T distribution: </span><span class="si">{</span><span class="n">probs_uncertain</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="2-text-generation">2. Text Generation<a class="headerlink" href="#2-text-generation" title="Permanent link">&para;</a></h3>
+<p>Control generation diversity:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.pytorch_backtrace.dlbacktrace.core.dlb_auto_sampler</span><span class="w"> </span><span class="kn">import</span> <span class="n">DLBAutoSampler</span>
+
+<span class="c1"># Create sampler</span>
+<span class="n">sampler</span> <span class="o">=</span> <span class="n">DLBAutoSampler</span><span class="p">(</span><span class="n">dlb</span><span class="o">=</span><span class="n">dlb</span><span class="p">,</span> <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">)</span>
+
+<span class="c1"># Generate with different temperatures</span>
+<span class="n">prompt</span> <span class="o">=</span> <span class="s2">&quot;Once upon a time&quot;</span>
+<span class="n">input_ids</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="n">prompt</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">input_ids</span><span class="o">.</span><span class="n">cuda</span><span class="p">()</span>
+
+<span class="c1"># Conservative generation (T=0.5)</span>
+<span class="n">output_conservative</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+    <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">0.5</span>
+<span class="p">)</span>
+<span class="n">text_conservative</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">output_conservative</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+<span class="c1"># Balanced generation (T=0.8)</span>
+<span class="n">output_balanced</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+    <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">0.8</span>
+<span class="p">)</span>
+<span class="n">text_balanced</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">output_balanced</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+<span class="c1"># Creative generation (T=1.2)</span>
+<span class="n">output_creative</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+    <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">1.2</span>
+<span class="p">)</span>
+<span class="n">text_creative</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">output_creative</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Conservative (T=0.5): </span><span class="si">{</span><span class="n">text_conservative</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Balanced (T=0.8): </span><span class="si">{</span><span class="n">text_balanced</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Creative (T=1.2): </span><span class="si">{</span><span class="n">text_creative</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="3-model-calibration">3. Model Calibration<a class="headerlink" href="#3-model-calibration" title="Permanent link">&para;</a></h3>
+<p>Improve probability calibration for uncertainty estimation:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="c1"># Find optimal temperature for calibration</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">evaluate_calibration</span><span class="p">(</span><span class="n">dlb</span><span class="p">,</span> <span class="n">validation_data</span><span class="p">,</span> <span class="n">temperatures</span><span class="p">):</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">for</span> <span class="n">temp</span> <span class="ow">in</span> <span class="n">temperatures</span><span class="p">:</span>
+        <span class="n">predictions</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">confidences</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">data</span><span class="p">,</span> <span class="n">label</span> <span class="ow">in</span> <span class="n">validation_data</span><span class="p">:</span>
+            <span class="n">node_io</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="n">temp</span><span class="p">)</span>
+            <span class="n">logits</span> <span class="o">=</span> <span class="n">node_io</span><span class="p">[</span><span class="s2">&quot;output&quot;</span><span class="p">][</span><span class="s2">&quot;output_values&quot;</span><span class="p">]</span>
+            <span class="n">probs</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+
+            <span class="n">pred</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">probs</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">conf</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">probs</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">values</span>
+
+            <span class="n">predictions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pred</span> <span class="o">==</span> <span class="n">label</span><span class="p">)</span>
+            <span class="n">confidences</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">conf</span><span class="o">.</span><span class="n">item</span><span class="p">())</span>
+
+        <span class="c1"># Calculate Expected Calibration Error (ECE)</span>
+        <span class="n">accuracy</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">predictions</span><span class="p">)</span>
+        <span class="n">avg_confidence</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">confidences</span><span class="p">)</span>
+        <span class="n">ece</span> <span class="o">=</span> <span class="nb">abs</span><span class="p">(</span><span class="n">accuracy</span> <span class="o">-</span> <span class="n">avg_confidence</span><span class="p">)</span>
+
+        <span class="n">results</span><span class="p">[</span><span class="n">temp</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;accuracy&#39;</span><span class="p">:</span> <span class="n">accuracy</span><span class="p">,</span>
+            <span class="s1">&#39;confidence&#39;</span><span class="p">:</span> <span class="n">avg_confidence</span><span class="p">,</span>
+            <span class="s1">&#39;ece&#39;</span><span class="p">:</span> <span class="n">ece</span>
+        <span class="p">}</span>
+
+    <span class="k">return</span> <span class="n">results</span>
+
+<span class="c1"># Test different temperatures</span>
+<span class="n">temperatures</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.8</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.2</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">]</span>
+<span class="n">calibration_results</span> <span class="o">=</span> <span class="n">evaluate_calibration</span><span class="p">(</span><span class="n">dlb</span><span class="p">,</span> <span class="n">validation_data</span><span class="p">,</span> <span class="n">temperatures</span><span class="p">)</span>
+
+<span class="c1"># Find best temperature</span>
+<span class="n">best_temp</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">calibration_results</span><span class="o">.</span><span class="n">keys</span><span class="p">(),</span> 
+                <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">t</span><span class="p">:</span> <span class="n">calibration_results</span><span class="p">[</span><span class="n">t</span><span class="p">][</span><span class="s1">&#39;ece&#39;</span><span class="p">])</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Best calibration temperature: </span><span class="si">{</span><span class="n">best_temp</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="advanced-usage">Advanced Usage<a class="headerlink" href="#advanced-usage" title="Permanent link">&para;</a></h2>
+<h3 id="dynamic-temperature-selection">Dynamic Temperature Selection<a class="headerlink" href="#dynamic-temperature-selection" title="Permanent link">&para;</a></h3>
+<p>Adapt temperature based on input characteristics:</p>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">adaptive_temperature</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">base_temp</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">adapt_factor</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Adjust temperature based on logit entropy.</span>
+<span class="sd">    High entropy → increase temperature</span>
+<span class="sd">    Low entropy → decrease temperature</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Calculate entropy of raw logits</span>
+    <span class="n">probs</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">entropy</span> <span class="o">=</span> <span class="o">-</span><span class="n">torch</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">probs</span> <span class="o">*</span> <span class="n">torch</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">probs</span> <span class="o">+</span> <span class="mf">1e-10</span><span class="p">),</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="c1"># Normalize entropy (max entropy = log(num_classes))</span>
+    <span class="n">num_classes</span> <span class="o">=</span> <span class="n">logits</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">max_entropy</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">num_classes</span><span class="p">)</span>
+    <span class="n">normalized_entropy</span> <span class="o">=</span> <span class="n">entropy</span> <span class="o">/</span> <span class="n">max_entropy</span>
+
+    <span class="c1"># Adjust temperature</span>
+    <span class="n">adjusted_temp</span> <span class="o">=</span> <span class="n">base_temp</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">adapt_factor</span> <span class="o">*</span> <span class="n">normalized_entropy</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">adjusted_temp</span>
+
+<span class="c1"># Use adaptive temperature</span>
+<span class="n">node_io</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">input_data</span><span class="p">)</span>
+<span class="n">logits</span> <span class="o">=</span> <span class="n">node_io</span><span class="p">[</span><span class="s2">&quot;output&quot;</span><span class="p">][</span><span class="s2">&quot;output_values&quot;</span><span class="p">]</span>
+
+<span class="c1"># Calculate adaptive temperature</span>
+<span class="n">temp</span> <span class="o">=</span> <span class="n">adaptive_temperature</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">base_temp</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">adapt_factor</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+
+<span class="c1"># Re-run with adjusted temperature</span>
+<span class="n">node_io</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">input_data</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="n">temp</span><span class="o">.</span><span class="n">item</span><span class="p">())</span>
+</code></pre></div>
+<h3 id="temperature-annealing">Temperature Annealing<a class="headerlink" href="#temperature-annealing" title="Permanent link">&para;</a></h3>
+<p>Gradually change temperature during generation:</p>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">generate_with_annealing</span><span class="p">(</span><span class="n">sampler</span><span class="p">,</span> <span class="n">input_ids</span><span class="p">,</span> <span class="n">max_new_tokens</span><span class="p">,</span>
+                           <span class="n">start_temp</span><span class="o">=</span><span class="mf">1.5</span><span class="p">,</span> <span class="n">end_temp</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">steps</span><span class="o">=</span><span class="mi">50</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Generate text with temperature annealing.</span>
+<span class="sd">    Start with high temperature (exploration) and gradually reduce (exploitation).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">generated</span> <span class="o">=</span> <span class="n">input_ids</span><span class="o">.</span><span class="n">clone</span><span class="p">()</span>
+
+    <span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">max_new_tokens</span><span class="p">):</span>
+        <span class="c1"># Calculate current temperature</span>
+        <span class="n">progress</span> <span class="o">=</span> <span class="n">step</span> <span class="o">/</span> <span class="n">max_new_tokens</span>
+        <span class="n">current_temp</span> <span class="o">=</span> <span class="n">start_temp</span> <span class="o">+</span> <span class="p">(</span><span class="n">end_temp</span> <span class="o">-</span> <span class="n">start_temp</span><span class="p">)</span> <span class="o">*</span> <span class="n">progress</span>
+
+        <span class="c1"># Generate next token</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+            <span class="n">input_ids</span><span class="o">=</span><span class="n">generated</span><span class="p">,</span>
+            <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+            <span class="n">temperature</span><span class="o">=</span><span class="n">current_temp</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Append new token</span>
+        <span class="n">generated</span> <span class="o">=</span> <span class="n">output</span>
+
+    <span class="k">return</span> <span class="n">generated</span>
+
+<span class="c1"># Use temperature annealing</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">generate_with_annealing</span><span class="p">(</span>
+    <span class="n">sampler</span><span class="o">=</span><span class="n">sampler</span><span class="p">,</span>
+    <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+    <span class="n">start_temp</span><span class="o">=</span><span class="mf">1.5</span><span class="p">,</span>  <span class="c1"># Start creative</span>
+    <span class="n">end_temp</span><span class="o">=</span><span class="mf">0.5</span>     <span class="c1"># End focused</span>
+<span class="p">)</span>
+
+<span class="n">text</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">output</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Generated with annealing: </span><span class="si">{</span><span class="n">text</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="multi-temperature-ensemble">Multi-Temperature Ensemble<a class="headerlink" href="#multi-temperature-ensemble" title="Permanent link">&para;</a></h3>
+<p>Generate multiple outputs with different temperatures:</p>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">multi_temperature_ensemble</span><span class="p">(</span><span class="n">dlb</span><span class="p">,</span> <span class="n">input_data</span><span class="p">,</span> <span class="n">temperatures</span><span class="p">,</span> <span class="n">weights</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Combine predictions from multiple temperatures.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">weights</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">weights</span> <span class="o">=</span> <span class="p">[</span><span class="mf">1.0</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">temperatures</span><span class="p">)]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">temperatures</span><span class="p">)</span>
+
+    <span class="n">ensemble_probs</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">for</span> <span class="n">temp</span><span class="p">,</span> <span class="n">weight</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">temperatures</span><span class="p">,</span> <span class="n">weights</span><span class="p">):</span>
+        <span class="n">node_io</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">input_data</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="n">temp</span><span class="p">)</span>
+        <span class="n">logits</span> <span class="o">=</span> <span class="n">node_io</span><span class="p">[</span><span class="s2">&quot;output&quot;</span><span class="p">][</span><span class="s2">&quot;output_values&quot;</span><span class="p">]</span>
+        <span class="n">probs</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">ensemble_probs</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">ensemble_probs</span> <span class="o">=</span> <span class="n">weight</span> <span class="o">*</span> <span class="n">probs</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">ensemble_probs</span> <span class="o">+=</span> <span class="n">weight</span> <span class="o">*</span> <span class="n">probs</span>
+
+    <span class="k">return</span> <span class="n">ensemble_probs</span>
+
+<span class="c1"># Use ensemble</span>
+<span class="n">temperatures</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">]</span>
+<span class="n">weights</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.2</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">]</span>  <span class="c1"># Favor standard temperature</span>
+
+<span class="n">ensemble_probs</span> <span class="o">=</span> <span class="n">multi_temperature_ensemble</span><span class="p">(</span>
+    <span class="n">dlb</span><span class="o">=</span><span class="n">dlb</span><span class="p">,</span>
+    <span class="n">input_data</span><span class="o">=</span><span class="n">input_data</span><span class="p">,</span>
+    <span class="n">temperatures</span><span class="o">=</span><span class="n">temperatures</span><span class="p">,</span>
+    <span class="n">weights</span><span class="o">=</span><span class="n">weights</span>
+<span class="p">)</span>
+
+<span class="n">prediction</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">ensemble_probs</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Ensemble prediction: </span><span class="si">{</span><span class="n">prediction</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
+<h3 id="1-task-specific-temperature-selection">1. Task-Specific Temperature Selection<a class="headerlink" href="#1-task-specific-temperature-selection" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Classification tasks</span>
+<span class="n">temperature_classification</span> <span class="o">=</span> <span class="mf">1.0</span>  <span class="c1"># Standard, well-calibrated</span>
+
+<span class="c1"># Factual text generation</span>
+<span class="n">temperature_factual</span> <span class="o">=</span> <span class="mf">0.7</span>  <span class="c1"># Focused, less random</span>
+
+<span class="c1"># Creative text generation</span>
+<span class="n">temperature_creative</span> <span class="o">=</span> <span class="mf">1.2</span>  <span class="c1"># More diverse</span>
+
+<span class="c1"># Code generation</span>
+<span class="n">temperature_code</span> <span class="o">=</span> <span class="mf">0.2</span>  <span class="c1"># Very focused, deterministic</span>
+
+<span class="c1"># Brainstorming</span>
+<span class="n">temperature_brainstorm</span> <span class="o">=</span> <span class="mf">1.5</span>  <span class="c1"># High diversity</span>
+</code></pre></div>
+<h3 id="2-temperature-calibration-workflow">2. Temperature Calibration Workflow<a class="headerlink" href="#2-temperature-calibration-workflow" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># 1. Start with standard temperature</span>
+<span class="n">base_temp</span> <span class="o">=</span> <span class="mf">1.0</span>
+
+<span class="c1"># 2. Evaluate on validation set</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">evaluate_calibration</span><span class="p">(</span><span class="n">dlb</span><span class="p">,</span> <span class="n">validation_data</span><span class="p">,</span> <span class="p">[</span><span class="n">base_temp</span><span class="p">])</span>
+
+<span class="c1"># 3. If overconfident (ECE &gt; threshold), increase temperature</span>
+<span class="k">if</span> <span class="n">results</span><span class="p">[</span><span class="n">base_temp</span><span class="p">][</span><span class="s1">&#39;ece&#39;</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mf">0.1</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">results</span><span class="p">[</span><span class="n">base_temp</span><span class="p">][</span><span class="s1">&#39;confidence&#39;</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">results</span><span class="p">[</span><span class="n">base_temp</span><span class="p">][</span><span class="s1">&#39;accuracy&#39;</span><span class="p">]:</span>
+        <span class="c1"># Model is overconfident</span>
+        <span class="n">calibrated_temp</span> <span class="o">=</span> <span class="n">base_temp</span> <span class="o">*</span> <span class="mf">1.5</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c1"># Model is underconfident</span>
+        <span class="n">calibrated_temp</span> <span class="o">=</span> <span class="n">base_temp</span> <span class="o">*</span> <span class="mf">0.7</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="n">calibrated_temp</span> <span class="o">=</span> <span class="n">base_temp</span>
+
+<span class="c1"># 4. Use calibrated temperature</span>
+<span class="n">node_io</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">input_data</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="n">calibrated_temp</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="3-monitoring-temperature-effects">3. Monitoring Temperature Effects<a class="headerlink" href="#3-monitoring-temperature-effects" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">analyze_temperature_effects</span><span class="p">(</span><span class="n">dlb</span><span class="p">,</span> <span class="n">input_data</span><span class="p">,</span> <span class="n">temperature_range</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Analyze how temperature affects predictions.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">for</span> <span class="n">temp</span> <span class="ow">in</span> <span class="n">temperature_range</span><span class="p">:</span>
+        <span class="n">node_io</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">input_data</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="n">temp</span><span class="p">)</span>
+        <span class="n">logits</span> <span class="o">=</span> <span class="n">node_io</span><span class="p">[</span><span class="s2">&quot;output&quot;</span><span class="p">][</span><span class="s2">&quot;output_values&quot;</span><span class="p">]</span>
+        <span class="n">probs</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="c1"># Compute metrics</span>
+        <span class="n">max_prob</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">probs</span><span class="p">)</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+        <span class="n">entropy</span> <span class="o">=</span> <span class="o">-</span><span class="n">torch</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">probs</span> <span class="o">*</span> <span class="n">torch</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">probs</span> <span class="o">+</span> <span class="mf">1e-10</span><span class="p">))</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+        <span class="n">prediction</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">probs</span><span class="p">)</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+
+        <span class="n">results</span><span class="p">[</span><span class="n">temp</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;max_prob&#39;</span><span class="p">:</span> <span class="n">max_prob</span><span class="p">,</span>
+            <span class="s1">&#39;entropy&#39;</span><span class="p">:</span> <span class="n">entropy</span><span class="p">,</span>
+            <span class="s1">&#39;prediction&#39;</span><span class="p">:</span> <span class="n">prediction</span><span class="p">,</span>
+            <span class="s1">&#39;top3_probs&#39;</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">topk</span><span class="p">(</span><span class="n">probs</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+        <span class="p">}</span>
+
+    <span class="k">return</span> <span class="n">results</span>
+
+<span class="c1"># Analyze</span>
+<span class="n">temps</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.8</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.2</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">]</span>
+<span class="n">analysis</span> <span class="o">=</span> <span class="n">analyze_temperature_effects</span><span class="p">(</span><span class="n">dlb</span><span class="p">,</span> <span class="n">input_data</span><span class="p">,</span> <span class="n">temps</span><span class="p">)</span>
+
+<span class="c1"># Print results</span>
+<span class="k">for</span> <span class="n">temp</span><span class="p">,</span> <span class="n">metrics</span> <span class="ow">in</span> <span class="n">analysis</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Temperature </span><span class="si">{</span><span class="n">temp</span><span class="si">}</span><span class="s2">:&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Max Probability: </span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;max_prob&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Entropy: </span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;entropy&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Prediction: </span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;prediction&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Top 3 Probs: </span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;top3_probs&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="common-use-cases">Common Use Cases<a class="headerlink" href="#common-use-cases" title="Permanent link">&para;</a></h2>
+<h3 id="1-uncertainty-estimation">1. Uncertainty Estimation<a class="headerlink" href="#1-uncertainty-estimation" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># High temperature reveals model uncertainty</span>
+<span class="n">node_io_uncertain</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">input_data</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="mf">2.0</span><span class="p">)</span>
+<span class="n">probs</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">node_io_uncertain</span><span class="p">[</span><span class="s2">&quot;output&quot;</span><span class="p">][</span><span class="s2">&quot;output_values&quot;</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c1"># Calculate prediction entropy</span>
+<span class="n">entropy</span> <span class="o">=</span> <span class="o">-</span><span class="n">torch</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">probs</span> <span class="o">*</span> <span class="n">torch</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">probs</span> <span class="o">+</span> <span class="mf">1e-10</span><span class="p">))</span>
+
+<span class="k">if</span> <span class="n">entropy</span> <span class="o">&gt;</span> <span class="n">threshold</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;High uncertainty - consider manual review&quot;</span><span class="p">)</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Low uncertainty - confident prediction&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="2-ab-testing-generation-styles">2. A/B Testing Generation Styles<a class="headerlink" href="#2-ab-testing-generation-styles" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Test different generation styles</span>
+<span class="n">styles</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;conservative&#39;</span><span class="p">:</span> <span class="mf">0.5</span><span class="p">,</span>
+    <span class="s1">&#39;balanced&#39;</span><span class="p">:</span> <span class="mf">0.8</span><span class="p">,</span>
+    <span class="s1">&#39;creative&#39;</span><span class="p">:</span> <span class="mf">1.2</span><span class="p">,</span>
+    <span class="s1">&#39;experimental&#39;</span><span class="p">:</span> <span class="mf">1.5</span>
+<span class="p">}</span>
+
+<span class="n">outputs</span> <span class="o">=</span> <span class="p">{}</span>
+<span class="k">for</span> <span class="n">style_name</span><span class="p">,</span> <span class="n">temp</span> <span class="ow">in</span> <span class="n">styles</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+        <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
+        <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+        <span class="n">temperature</span><span class="o">=</span><span class="n">temp</span>
+    <span class="p">)</span>
+    <span class="n">outputs</span><span class="p">[</span><span class="n">style_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">output</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+<span class="c1"># Present different styles to users</span>
+<span class="k">for</span> <span class="n">style</span><span class="p">,</span> <span class="n">text</span> <span class="ow">in</span> <span class="n">outputs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="si">{</span><span class="n">style</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="si">}</span><span class="s2"> STYLE:&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="3-confidence-thresholding">3. Confidence Thresholding<a class="headerlink" href="#3-confidence-thresholding" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Only accept predictions above confidence threshold</span>
+<span class="n">min_confidence</span> <span class="o">=</span> <span class="mf">0.9</span>
+<span class="n">temperature</span> <span class="o">=</span> <span class="mf">1.0</span>
+
+<span class="n">node_io</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">input_data</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="n">temperature</span><span class="p">)</span>
+<span class="n">probs</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">node_io</span><span class="p">[</span><span class="s2">&quot;output&quot;</span><span class="p">][</span><span class="s2">&quot;output_values&quot;</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">max_prob</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">probs</span><span class="p">)</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+
+<span class="k">if</span> <span class="n">max_prob</span> <span class="o">&lt;</span> <span class="n">min_confidence</span><span class="p">:</span>
+    <span class="c1"># Try lower temperature for higher confidence</span>
+    <span class="n">node_io</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">input_data</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+    <span class="n">probs</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">node_io</span><span class="p">[</span><span class="s2">&quot;output&quot;</span><span class="p">][</span><span class="s2">&quot;output_values&quot;</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">max_prob</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">probs</span><span class="p">)</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">max_prob</span> <span class="o">&lt;</span> <span class="n">min_confidence</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Prediction rejected - insufficient confidence&quot;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">prediction</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">probs</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Prediction (low T): </span><span class="si">{</span><span class="n">prediction</span><span class="si">}</span><span class="s2"> (confidence: </span><span class="si">{</span><span class="n">max_prob</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="n">prediction</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">probs</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Prediction: </span><span class="si">{</span><span class="n">prediction</span><span class="si">}</span><span class="s2"> (confidence: </span><span class="si">{</span><span class="n">max_prob</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="performance-considerations">Performance Considerations<a class="headerlink" href="#performance-considerations" title="Permanent link">&para;</a></h2>
+<p>Temperature scaling has <strong>minimal performance overhead</strong>:</p>
+<ul>
+<li>Applied efficiently using in-place division</li>
+<li>No additional model forward passes required</li>
+<li>Same computational cost for any temperature value</li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+
+<span class="c1"># Measure overhead</span>
+<span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+<span class="n">node_io_no_temp</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">input_data</span><span class="p">)</span>
+<span class="n">time_no_temp</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span>
+
+<span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+<span class="n">node_io_temp</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">input_data</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="mf">0.8</span><span class="p">)</span>
+<span class="n">time_temp</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Without temperature: </span><span class="si">{</span><span class="n">time_no_temp</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">s&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;With temperature: </span><span class="si">{</span><span class="n">time_temp</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">s&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Overhead: </span><span class="si">{</span><span class="p">(</span><span class="n">time_temp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">time_no_temp</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">1000</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">ms&quot;</span><span class="p">)</span>
+<span class="c1"># Typically &lt;1ms overhead</span>
+</code></pre></div>
+<hr />
+<h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Learn about <a href="../auto-sampler/">DLB Auto Sampler</a> for advanced generation</li>
+<li>Explore <a href="../pipeline/">Pipeline</a> for high-level workflows</li>
+<li>Check <a href="../moe-models/">MoE Models</a> for expert-based generation</li>
+<li>See <a href="../../../examples/colab-notebooks/">Examples</a> for complete use cases</li>
+</ul></div>
+        
+        
+    </div>
+
+    
+      <footer class="col-md-12 text-center">
+          
+          
+            <hr>
+            <p>
+            <small>Copyright &copy; 2025 Lexsi Labs</small><br>
+            
+            <small>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</small>
+            </p>
+          
+
+          
+          
+      </footer>
+    
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script src="../../../js/bootstrap-3.0.3.min.js"></script>
+
+    
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/highlight.min.js"></script>
+        
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/python.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/yaml.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/bash.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/javascript.min.js"></script>
+        
+    <script>hljs.initHighlightingOnLoad();</script>
+    
+
+    <script>var base_url = "../../.."</script>
+    
+    <script src="../../../js/base.js"></script>
+    <script src="../../../javascripts/mathjax.js"></script>
+    <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="../../../javascripts/katex.js"></script>
+    <script src="https://unpkg.com/katex@0/dist/katex.min.js"></script>
+    <script src="https://unpkg.com/katex@0/dist/contrib/auto-render.min.js"></script>
+    <script src="../../../search/main.js"></script>
+
+    <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    <span aria-hidden="true">&times;</span>
+                    <span class="sr-only">Close</span>
+                </button>
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+            </div>
+            <div class="modal-body">
+                <p>
+                    From here you can search these documents. Enter
+                    your search terms below.
+                </p>
+                <form>
+                    <div class="form-group">
+                        <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+    </body>
+
+</html>

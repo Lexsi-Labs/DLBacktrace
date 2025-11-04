@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="A powerful explainable AI (XAI) framework for deep learning model interpretability">
+    <meta name="author" content="Lexsi Labs">
+    <link rel="canonical" href="https://lexsi.ai/guide/pytorch/execution-engines/">
+    <link rel="shortcut icon" href="../../../img/favicon.ico">
+
+    
+    <title>Execution Engines - DL-Backtrace Documentation</title>
+    
+
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/all.css">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/v4-shims.css">
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/hack-font@3.3.0/build/web/hack.min.css">
+    <link href='//rsms.me/inter/inter.css' rel='stylesheet' type='text/css'>
+    <link href='//fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,700italic,400,300,600,700&subset=latin-ext,latin' rel='stylesheet' type='text/css'>
+    <link href="../../../css/bootstrap-custom.min.css" rel="stylesheet">
+    <link href="../../../css/base.min.css" rel="stylesheet">
+    <link href="../../../css/cinder.min.css" rel="stylesheet">
+
+    
+        
+        <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/styles/github.min.css">
+        
+    
+    <link href="https://unpkg.com/katex@0/dist/katex.min.css" rel="stylesheet">
+
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+            <script src="https://cdn.jsdelivr.net/npm/html5shiv@3.7.3/dist/html5shiv.min.js"></script>
+            <script src="https://cdn.jsdelivr.net/npm/respond.js@1.4.2/dest/respond.min.js"></script>
+        <![endif]-->
+
+    
+
+     
+</head>
+
+<body>
+
+    <div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+
+        <!-- Collapsed navigation -->
+        <div class="navbar-header">
+            <!-- Expander button -->
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            
+
+            <!-- Main title -->
+
+            
+              <a class="navbar-brand" href="../../..">DL-Backtrace Documentation</a>
+            
+        </div>
+
+        <!-- Expanded navigation -->
+        <div class="navbar-collapse collapse">
+                <!-- Main navigation -->
+                <ul class="nav navbar-nav">
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Home <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../..">Overview</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../home/features/">Key Features</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../home/installation/">Installation</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../home/quickstart/">Quick Start</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../home/whats-new/">What's New</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown active">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">User Guide <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../introduction/">Introduction</a>
+</li>
+
+                        
+                            
+  <li class="dropdown-submenu">
+    <a tabindex="-1" href="">PyTorch Backend</a>
+    <ul class="dropdown-menu">
+        
+            
+<li >
+    <a href="../overview/">Overview</a>
+</li>
+
+        
+            
+<li >
+    <a href="../dlbacktrace/">DLBacktrace</a>
+</li>
+
+        
+            
+<li >
+    <a href="../pipeline/">Pipeline</a>
+</li>
+
+        
+            
+<li >
+    <a href="../auto-sampler/">DLB Auto Sampler</a>
+</li>
+
+        
+            
+<li >
+    <a href="../temperature-scaling/">Temperature Scaling</a>
+</li>
+
+        
+            
+<li >
+    <a href="../moe-models/">MoE Models</a>
+</li>
+
+        
+            
+<li class="active">
+    <a href="./">Execution Engines</a>
+</li>
+
+        
+            
+<li >
+    <a href="../operations/">Supported Operations</a>
+</li>
+
+        
+            
+<li >
+    <a href="../tracing/">Model Tracing</a>
+</li>
+
+        
+    </ul>
+  </li>
+
+                        
+                            
+  <li class="dropdown-submenu">
+    <a tabindex="-1" href="">Relevance Propagation</a>
+    <ul class="dropdown-menu">
+        
+            
+<li >
+    <a href="../../relevance/overview/">Overview</a>
+</li>
+
+        
+            
+<li >
+    <a href="../../relevance/parameters/">Parameters</a>
+</li>
+
+        
+    </ul>
+  </li>
+
+                        
+                            
+<li >
+    <a href="../../best-practices/">Best Practices</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Examples <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../../examples/colab-notebooks/">Colab Notebooks</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../examples/use-cases/">Use Cases</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Developer Guide <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../../developer/architecture/">Architecture</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../developer/contributing/">Contributing</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../developer/execution-engine/">Execution Engine</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../developer/cuda-development/">CUDA Development</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../developer/testing/">Testing</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Support <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../../support/faq/">FAQ</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../support/known-issues/">Known Issues</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../support/changelog/">Changelog</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../support/license/">License</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                </ul>
+
+            <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="#" data-toggle="modal" data-target="#mkdocs_search_modal">
+                            <i class="fas fa-search"></i> Search
+                        </a>
+                    </li>
+                    <li >
+                        <a rel="prev" href="../moe-models/">
+                            <i class="fas fa-arrow-left"></i> Previous
+                        </a>
+                    </li>
+                    <li >
+                        <a rel="next" href="../operations/">
+                            Next <i class="fas fa-arrow-right"></i>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://github.com/Lexsi-Labs/DLBacktrace/edit/main/docs/guide/pytorch/execution-engines.md">Edit on Lexsi-Labs/DLBacktrace</a>
+                    </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+    <div class="container">
+        
+        
+        <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
+    <ul class="nav bs-sidenav">
+        <li class="first-level active"><a href="#execution-engines">Execution Engines</a></li>
+            <li class="second-level"><a href="#executionenginenocache">ExecutionEngineNoCache</a></li>
+                
+                <li class="third-level"><a href="#features">Features</a></li>
+                <li class="third-level"><a href="#how-it-works">How It Works</a></li>
+                <li class="third-level"><a href="#memory-management">Memory Management</a></li>
+                <li class="third-level"><a href="#performance-characteristics">Performance Characteristics</a></li>
+            <li class="second-level"><a href="#execution-process">Execution Process</a></li>
+                
+                <li class="third-level"><a href="#1-graph-tracing">1. Graph Tracing</a></li>
+                <li class="third-level"><a href="#2-node-processing">2. Node Processing</a></li>
+                <li class="third-level"><a href="#3-output-collection">3. Output Collection</a></li>
+            <li class="second-level"><a href="#device-support">Device Support</a></li>
+                
+                <li class="third-level"><a href="#device-consistency">Device Consistency</a></li>
+            <li class="second-level"><a href="#dtype-handling">Dtype Handling</a></li>
+                
+                <li class="third-level"><a href="#automatic-dtype-consistency">Automatic Dtype Consistency</a></li>
+                <li class="third-level"><a href="#cpu-vs-gpu-dtypes">CPU vs GPU Dtypes</a></li>
+            <li class="second-level"><a href="#operation-support">Operation Support</a></li>
+                
+                <li class="third-level"><a href="#100-supported-operations">100+ Supported Operations</a></li>
+            <li class="second-level"><a href="#deterministic-execution">Deterministic Execution</a></li>
+                
+                <li class="third-level"><a href="#environment-setup">Environment Setup</a></li>
+                <li class="third-level"><a href="#random-seed-control">Random Seed Control</a></li>
+                <li class="third-level"><a href="#reproducible-results">Reproducible Results</a></li>
+            <li class="second-level"><a href="#error-handling">Error Handling</a></li>
+                
+                <li class="third-level"><a href="#robust-validation">Robust Validation</a></li>
+                <li class="third-level"><a href="#clear-error-messages">Clear Error Messages</a></li>
+            <li class="second-level"><a href="#debugging">Debugging</a></li>
+                
+                <li class="third-level"><a href="#enable-debug-logging">Enable Debug Logging</a></li>
+                <li class="third-level"><a href="#inspect-node-io">Inspect Node I/O</a></li>
+            <li class="second-level"><a href="#best-practices">Best Practices</a></li>
+                
+            <li class="second-level"><a href="#troubleshooting">Troubleshooting</a></li>
+                
+                <li class="third-level"><a href="#out-of-memory">Out of Memory</a></li>
+                <li class="third-level"><a href="#slow-execution">Slow Execution</a></li>
+                <li class="third-level"><a href="#inconsistent-results">Inconsistent Results</a></li>
+            <li class="second-level"><a href="#next-steps">Next Steps</a></li>
+                
+    </ul>
+</div></div>
+        <div class="col-md-9" role="main">
+
+<h1 id="execution-engines">Execution Engines<a class="headerlink" href="#execution-engines" title="Permanent link">&para;</a></h1>
+<p>DL-Backtrace provides optimized execution engines for running traced models.</p>
+<hr />
+<h2 id="executionenginenocache">ExecutionEngineNoCache<a class="headerlink" href="#executionenginenocache" title="Permanent link">&para;</a></h2>
+<p>The <strong>ExecutionEngineNoCache</strong> is the recommended engine for most use cases.</p>
+<h3 id="features">Features<a class="headerlink" href="#features" title="Permanent link">&para;</a></h3>
+<p>✅ <strong>In-memory execution</strong> - No disk I/O overhead<br />
+✅ <strong>Memory efficient</strong> - Automatic tensor cleanup<br />
+✅ <strong>CPU/GPU compatible</strong> - Works on both devices<br />
+✅ <strong>Fast execution</strong> - Optimized for speed<br />
+✅ <strong>100+ operations</strong> - Comprehensive operation support</p>
+<h3 id="how-it-works">How It Works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Automatically used by default</span>
+<span class="n">dlb</span> <span class="o">=</span> <span class="n">DLBacktrace</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+    <span class="n">input_for_graph</span><span class="o">=</span><span class="p">(</span><span class="n">dummy_input</span><span class="p">,),</span>
+    <span class="n">layer_implementation</span><span class="o">=</span><span class="s2">&quot;pytorch&quot;</span>
+<span class="p">)</span>
+
+<span class="c1"># Forward pass uses ExecutionEngineNoCache</span>
+<span class="n">node_io</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">input_tensor</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="memory-management">Memory Management<a class="headerlink" href="#memory-management" title="Permanent link">&para;</a></h3>
+<p>The engine automatically manages memory:</p>
+<ol>
+<li><strong>Tensor Storage</strong>: Keeps tensors in RAM</li>
+<li><strong>Automatic Cleanup</strong>: Removes unused tensors</li>
+<li><strong>Efficient Reuse</strong>: Reuses memory where possible</li>
+<li><strong>No Disk I/O</strong>: Never writes to disk</li>
+</ol>
+<h3 id="performance-characteristics">Performance Characteristics<a class="headerlink" href="#performance-characteristics" title="Permanent link">&para;</a></h3>
+<p><strong>Advantages:</strong>
+- Fast execution (no disk I/O)
+- Lower memory footprint
+- Better for large models
+- Simpler implementation</p>
+<p><strong>When to Use:</strong>
+- Large transformer models (BERT, LLaMA)
+- Production environments
+- Memory-constrained systems
+- Real-time applications</p>
+<hr />
+<h2 id="execution-process">Execution Process<a class="headerlink" href="#execution-process" title="Permanent link">&para;</a></h2>
+<h3 id="1-graph-tracing">1. Graph Tracing<a class="headerlink" href="#1-graph-tracing" title="Permanent link">&para;</a></h3>
+<p>Model is traced to create a computational graph:</p>
+<div class="highlight"><pre><span></span><code><span class="n">dlb</span> <span class="o">=</span> <span class="n">DLBacktrace</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+    <span class="n">input_for_graph</span><span class="o">=</span><span class="p">(</span><span class="n">dummy_input</span><span class="p">,)</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>What's Captured:</strong>
+- All operations (conv, linear, etc.)
+- Parameter values (weights, biases)
+- Tensor shapes and dtypes
+- Operation order (topological sort)</p>
+<h3 id="2-node-processing">2. Node Processing<a class="headerlink" href="#2-node-processing" title="Permanent link">&para;</a></h3>
+<p>Nodes are executed in topological order:</p>
+<div class="highlight"><pre><span></span><code>Input → Conv → ReLU → Pool → Linear → Output
+  ↓       ↓      ↓      ↓       ↓       ↓
+ Save   Save   Save   Save    Save    Save
+</code></pre></div>
+<p>Each node:
+1. Retrieves inputs from tensor map
+2. Executes operation
+3. Stores output
+4. Cleans up unused tensors</p>
+<h3 id="3-output-collection">3. Output Collection<a class="headerlink" href="#3-output-collection" title="Permanent link">&para;</a></h3>
+<p>Results are collected as <code>(inputs, output)</code> pairs:</p>
+<div class="highlight"><pre><span></span><code><span class="n">node_io</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;input&quot;</span><span class="p">:</span> <span class="p">([],</span> <span class="n">tensor</span><span class="p">([</span><span class="o">...</span><span class="p">])),</span>
+    <span class="s2">&quot;conv1&quot;</span><span class="p">:</span> <span class="p">([</span><span class="n">input_tensor</span><span class="p">],</span> <span class="n">tensor</span><span class="p">([</span><span class="o">...</span><span class="p">])),</span>
+    <span class="s2">&quot;relu&quot;</span><span class="p">:</span> <span class="p">([</span><span class="n">conv_output</span><span class="p">],</span> <span class="n">tensor</span><span class="p">([</span><span class="o">...</span><span class="p">])),</span>
+    <span class="c1"># ... more nodes</span>
+<span class="p">}</span>
+</code></pre></div>
+<hr />
+<h2 id="device-support">Device Support<a class="headerlink" href="#device-support" title="Permanent link">&para;</a></h2>
+<h3 id="device-consistency">Device Consistency<a class="headerlink" href="#device-consistency" title="Permanent link">&para;</a></h3>
+<p>Ensures all tensors are on the same device:</p>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">ensure_tensor_consistency</span><span class="p">(</span><span class="n">tensors</span><span class="p">,</span> <span class="n">target_device</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Ensures all tensors are on the same device&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">target_device</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">target_device</span> <span class="o">=</span> <span class="n">tensors</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">device</span>
+
+    <span class="k">return</span> <span class="p">[</span><span class="n">t</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">target_device</span><span class="p">)</span> <span class="k">if</span> <span class="n">t</span><span class="o">.</span><span class="n">device</span> <span class="o">!=</span> <span class="n">target_device</span> 
+            <span class="k">else</span> <span class="n">t</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tensors</span><span class="p">]</span>
+</code></pre></div>
+<hr />
+<h2 id="dtype-handling">Dtype Handling<a class="headerlink" href="#dtype-handling" title="Permanent link">&para;</a></h2>
+<h3 id="automatic-dtype-consistency">Automatic Dtype Consistency<a class="headerlink" href="#automatic-dtype-consistency" title="Permanent link">&para;</a></h3>
+<p>The engine ensures dtype consistency across operations:</p>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">ensure_dtype_consistency</span><span class="p">(</span><span class="n">tensors</span><span class="p">,</span> <span class="n">target_dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Ensures all tensors have consistent dtypes&quot;&quot;&quot;</span>
+    <span class="c1"># Automatically converts float16 to float32 on CPU</span>
+    <span class="c1"># Maintains dtype on GPU when appropriate</span>
+</code></pre></div>
+<h3 id="cpu-vs-gpu-dtypes">CPU vs GPU Dtypes<a class="headerlink" href="#cpu-vs-gpu-dtypes" title="Permanent link">&para;</a></h3>
+<p><strong>CPU:</strong>
+- Prefers <code>float32</code> for stability
+- Converts <code>float16</code> → <code>float32</code></p>
+<p><strong>GPU:</strong>
+- Supports <code>float16</code> and <code>float32</code>
+- Uses mixed precision when beneficial</p>
+<hr />
+<h2 id="operation-support">Operation Support<a class="headerlink" href="#operation-support" title="Permanent link">&para;</a></h2>
+<h3 id="100-supported-operations">100+ Supported Operations<a class="headerlink" href="#100-supported-operations" title="Permanent link">&para;</a></h3>
+<p>The execution engine supports comprehensive PyTorch operations:</p>
+<p><strong>Core Operations:</strong>
+- <code>linear</code>, <code>conv2d</code>, <code>conv1d</code>
+- <code>matmul</code>, <code>bmm</code>, <code>addmm</code>
+- <code>relu</code>, <code>gelu</code>, <code>silu</code>
+- <code>max_pool2d</code>, <code>avg_pool2d</code>
+- <code>layer_norm</code>, <code>batch_norm</code></p>
+<p><strong>Tensor Operations:</strong>
+- <code>transpose</code>, <code>permute</code>, <code>reshape</code>
+- <code>slice</code>, <code>cat</code>, <code>split</code>
+- <code>squeeze</code>, <code>unsqueeze</code>
+- <code>index_select</code>, <code>gather</code></p>
+<p><strong>Advanced Operations:</strong>
+- <code>scaled_dot_product_attention</code>
+- <code>embedding</code>
+- <code>softmax</code>, <code>log_softmax</code>
+- <code>dropout</code> (pass-through in eval mode)</p>
+<p>See <a href="../operations/">Supported Operations</a> for the complete list.</p>
+<hr />
+<h2 id="deterministic-execution">Deterministic Execution<a class="headerlink" href="#deterministic-execution" title="Permanent link">&para;</a></h2>
+<h3 id="environment-setup">Environment Setup<a class="headerlink" href="#environment-setup" title="Permanent link">&para;</a></h3>
+<p>DL-Backtrace automatically configures deterministic execution:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Set in reproducibility.py</span>
+<span class="n">torch</span><span class="o">.</span><span class="n">backends</span><span class="o">.</span><span class="n">cudnn</span><span class="o">.</span><span class="n">deterministic</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="n">torch</span><span class="o">.</span><span class="n">backends</span><span class="o">.</span><span class="n">cudnn</span><span class="o">.</span><span class="n">benchmark</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="n">torch</span><span class="o">.</span><span class="n">use_deterministic_algorithms</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="random-seed-control">Random Seed Control<a class="headerlink" href="#random-seed-control" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">set_seed</span><span class="p">(</span><span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">):</span>
+    <span class="n">torch</span><span class="o">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+    <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">manual_seed_all</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+    <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="reproducible-results">Reproducible Results<a class="headerlink" href="#reproducible-results" title="Permanent link">&para;</a></h3>
+<p>Same input + same model = same output, every time.</p>
+<hr />
+<h2 id="error-handling">Error Handling<a class="headerlink" href="#error-handling" title="Permanent link">&para;</a></h2>
+<h3 id="robust-validation">Robust Validation<a class="headerlink" href="#robust-validation" title="Permanent link">&para;</a></h3>
+<p>The engine validates inputs and handles errors gracefully:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Example: Embedding operation</span>
+<span class="k">if</span> <span class="n">weight</span><span class="o">.</span><span class="n">device</span> <span class="o">!=</span> <span class="n">indices</span><span class="o">.</span><span class="n">device</span><span class="p">:</span>
+    <span class="n">indices</span> <span class="o">=</span> <span class="n">indices</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">weight</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Moved indices to device </span><span class="si">{</span><span class="n">weight</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="clear-error-messages">Clear Error Messages<a class="headerlink" href="#clear-error-messages" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+    <span class="sa">f</span><span class="s2">&quot;[</span><span class="si">{</span><span class="n">node_name</span><span class="si">}</span><span class="s2">] ❌ Operation </span><span class="si">{</span><span class="n">func_name</span><span class="si">}</span><span class="s2"> expects 2 inputs, &quot;</span>
+    <span class="sa">f</span><span class="s2">&quot;got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">layer_in</span><span class="p">)</span><span class="si">}</span><span class="s2"> inputs&quot;</span>
+<span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="debugging">Debugging<a class="headerlink" href="#debugging" title="Permanent link">&para;</a></h2>
+<h3 id="enable-debug-logging">Enable Debug Logging<a class="headerlink" href="#enable-debug-logging" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+
+<span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s2">&quot;dl_backtrace&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="inspect-node-io">Inspect Node I/O<a class="headerlink" href="#inspect-node-io" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="n">node_io</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">input_tensor</span><span class="p">)</span>
+
+<span class="k">for</span> <span class="n">node_name</span><span class="p">,</span> <span class="p">(</span><span class="n">inputs</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span> <span class="ow">in</span> <span class="n">node_io</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">node_name</span><span class="si">}</span><span class="s2">:&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Input shapes: </span><span class="si">{</span><span class="p">[</span><span class="n">inp</span><span class="o">.</span><span class="n">shape</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">inp</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">inputs</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Output shape: </span><span class="si">{</span><span class="n">output</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Output dtype: </span><span class="si">{</span><span class="n">output</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
+<div class="admonition tip">
+<p class="admonition-title">Monitor Memory</p>
+<p>Watch GPU memory usage with <code>nvidia-smi</code> or <code>torch.cuda.memory_summary()</code>.</p>
+</div>
+<div class="admonition tip">
+<p class="admonition-title">Enable Determinism</p>
+<p>For reproducible results, ensure deterministic mode is enabled.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Large Models</p>
+<p>Models like LLaMA-3B+ require significant memory. Use GPU with sufficient VRAM.</p>
+</div>
+<hr />
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<h3 id="out-of-memory">Out of Memory<a class="headerlink" href="#out-of-memory" title="Permanent link">&para;</a></h3>
+<p><strong>Solution:</strong>
+- Use smaller batch sizes
+- Run on CPU
+- Use gradient checkpointing</p>
+<h3 id="slow-execution">Slow Execution<a class="headerlink" href="#slow-execution" title="Permanent link">&para;</a></h3>
+<p><strong>Solution:</strong>
+- Use GPU instead of CPU
+- Ensure model is in eval mode
+- Check for disk I/O (shouldn't happen with no-cache)</p>
+<h3 id="inconsistent-results">Inconsistent Results<a class="headerlink" href="#inconsistent-results" title="Permanent link">&para;</a></h3>
+<p><strong>Solution:</strong>
+- Enable deterministic mode
+- Set random seeds
+- Ensure model is in eval mode</p>
+<hr />
+<h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../operations/">Supported Operations</a> - See all supported operations</li>
+<li><a href="../tracing/">Model Tracing</a> - Learn about graph tracing</li>
+<li><a href="../../../examples/colab-notebooks/">Examples</a> - Interactive notebooks</li>
+</ul></div>
+        
+        
+    </div>
+
+    
+      <footer class="col-md-12 text-center">
+          
+          
+            <hr>
+            <p>
+            <small>Copyright &copy; 2025 Lexsi Labs</small><br>
+            
+            <small>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</small>
+            </p>
+          
+
+          
+          
+      </footer>
+    
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script src="../../../js/bootstrap-3.0.3.min.js"></script>
+
+    
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/highlight.min.js"></script>
+        
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/python.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/yaml.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/bash.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/javascript.min.js"></script>
+        
+    <script>hljs.initHighlightingOnLoad();</script>
+    
+
+    <script>var base_url = "../../.."</script>
+    
+    <script src="../../../js/base.js"></script>
+    <script src="../../../javascripts/mathjax.js"></script>
+    <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="../../../javascripts/katex.js"></script>
+    <script src="https://unpkg.com/katex@0/dist/katex.min.js"></script>
+    <script src="https://unpkg.com/katex@0/dist/contrib/auto-render.min.js"></script>
+    <script src="../../../search/main.js"></script>
+
+    <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    <span aria-hidden="true">&times;</span>
+                    <span class="sr-only">Close</span>
+                </button>
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+            </div>
+            <div class="modal-body">
+                <p>
+                    From here you can search these documents. Enter
+                    your search terms below.
+                </p>
+                <form>
+                    <div class="form-group">
+                        <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+    </body>
+
+</html>

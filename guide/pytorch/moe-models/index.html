@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="A powerful explainable AI (XAI) framework for deep learning model interpretability">
+    <meta name="author" content="Lexsi Labs">
+    <link rel="canonical" href="https://lexsi.ai/guide/pytorch/moe-models/">
+    <link rel="shortcut icon" href="../../../img/favicon.ico">
+
+    
+    <title>MoE Models - DL-Backtrace Documentation</title>
+    
+
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/all.css">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/v4-shims.css">
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/hack-font@3.3.0/build/web/hack.min.css">
+    <link href='//rsms.me/inter/inter.css' rel='stylesheet' type='text/css'>
+    <link href='//fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,700italic,400,300,600,700&subset=latin-ext,latin' rel='stylesheet' type='text/css'>
+    <link href="../../../css/bootstrap-custom.min.css" rel="stylesheet">
+    <link href="../../../css/base.min.css" rel="stylesheet">
+    <link href="../../../css/cinder.min.css" rel="stylesheet">
+
+    
+        
+        <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/styles/github.min.css">
+        
+    
+    <link href="https://unpkg.com/katex@0/dist/katex.min.css" rel="stylesheet">
+
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+            <script src="https://cdn.jsdelivr.net/npm/html5shiv@3.7.3/dist/html5shiv.min.js"></script>
+            <script src="https://cdn.jsdelivr.net/npm/respond.js@1.4.2/dest/respond.min.js"></script>
+        <![endif]-->
+
+    
+
+     
+</head>
+
+<body>
+
+    <div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+
+        <!-- Collapsed navigation -->
+        <div class="navbar-header">
+            <!-- Expander button -->
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            
+
+            <!-- Main title -->
+
+            
+              <a class="navbar-brand" href="../../..">DL-Backtrace Documentation</a>
+            
+        </div>
+
+        <!-- Expanded navigation -->
+        <div class="navbar-collapse collapse">
+                <!-- Main navigation -->
+                <ul class="nav navbar-nav">
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Home <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../..">Overview</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../home/features/">Key Features</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../home/installation/">Installation</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../home/quickstart/">Quick Start</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../home/whats-new/">What's New</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown active">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">User Guide <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../introduction/">Introduction</a>
+</li>
+
+                        
+                            
+  <li class="dropdown-submenu">
+    <a tabindex="-1" href="">PyTorch Backend</a>
+    <ul class="dropdown-menu">
+        
+            
+<li >
+    <a href="../overview/">Overview</a>
+</li>
+
+        
+            
+<li >
+    <a href="../dlbacktrace/">DLBacktrace</a>
+</li>
+
+        
+            
+<li >
+    <a href="../pipeline/">Pipeline</a>
+</li>
+
+        
+            
+<li >
+    <a href="../auto-sampler/">DLB Auto Sampler</a>
+</li>
+
+        
+            
+<li >
+    <a href="../temperature-scaling/">Temperature Scaling</a>
+</li>
+
+        
+            
+<li class="active">
+    <a href="./">MoE Models</a>
+</li>
+
+        
+            
+<li >
+    <a href="../execution-engines/">Execution Engines</a>
+</li>
+
+        
+            
+<li >
+    <a href="../operations/">Supported Operations</a>
+</li>
+
+        
+            
+<li >
+    <a href="../tracing/">Model Tracing</a>
+</li>
+
+        
+    </ul>
+  </li>
+
+                        
+                            
+  <li class="dropdown-submenu">
+    <a tabindex="-1" href="">Relevance Propagation</a>
+    <ul class="dropdown-menu">
+        
+            
+<li >
+    <a href="../../relevance/overview/">Overview</a>
+</li>
+
+        
+            
+<li >
+    <a href="../../relevance/parameters/">Parameters</a>
+</li>
+
+        
+    </ul>
+  </li>
+
+                        
+                            
+<li >
+    <a href="../../best-practices/">Best Practices</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Examples <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../../examples/colab-notebooks/">Colab Notebooks</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../examples/use-cases/">Use Cases</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Developer Guide <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../../developer/architecture/">Architecture</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../developer/contributing/">Contributing</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../developer/execution-engine/">Execution Engine</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../developer/cuda-development/">CUDA Development</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../developer/testing/">Testing</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Support <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../../support/faq/">FAQ</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../support/known-issues/">Known Issues</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../support/changelog/">Changelog</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../support/license/">License</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                </ul>
+
+            <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="#" data-toggle="modal" data-target="#mkdocs_search_modal">
+                            <i class="fas fa-search"></i> Search
+                        </a>
+                    </li>
+                    <li >
+                        <a rel="prev" href="../temperature-scaling/">
+                            <i class="fas fa-arrow-left"></i> Previous
+                        </a>
+                    </li>
+                    <li >
+                        <a rel="next" href="../execution-engines/">
+                            Next <i class="fas fa-arrow-right"></i>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://github.com/Lexsi-Labs/DLBacktrace/edit/main/docs/guide/pytorch/moe-models.md">Edit on Lexsi-Labs/DLBacktrace</a>
+                    </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+    <div class="container">
+        
+        
+        <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
+    <ul class="nav bs-sidenav">
+        <li class="first-level active"><a href="#mixture-of-experts-moe-support">Mixture of Experts (MoE) Support</a></li>
+            <li class="second-level"><a href="#overview">Overview</a></li>
+                
+            <li class="second-level"><a href="#supported-moe-models">Supported MoE Models</a></li>
+                
+                <li class="third-level"><a href="#1-jetmoe">1. JetMoE</a></li>
+                <li class="third-level"><a href="#2-olmoe">2. OLMoE</a></li>
+                <li class="third-level"><a href="#3-qwen-moe">3. Qwen MoE</a></li>
+                <li class="third-level"><a href="#4-gpt-oss">4. GPT-OSS</a></li>
+            <li class="second-level"><a href="#moe-specific-features">MoE-Specific Features</a></li>
+                
+                <li class="third-level"><a href="#expert-relevance-tracking">Expert Relevance Tracking</a></li>
+                <li class="third-level"><a href="#layer-types">Layer Types</a></li>
+                <li class="third-level"><a href="#device-configuration">Device Configuration</a></li>
+            <li class="second-level"><a href="#advanced-configuration">Advanced Configuration</a></li>
+                
+                <li class="third-level"><a href="#relevance-propagation-parameters">Relevance Propagation Parameters</a></li>
+                <li class="third-level"><a href="#model-configuration-access">Model Configuration Access</a></li>
+            <li class="second-level"><a href="#expert-analysis-workflow">Expert Analysis Workflow</a></li>
+                
+                <li class="third-level"><a href="#complete-moe-analysis-example">Complete MoE Analysis Example</a></li>
+            <li class="second-level"><a href="#implementation-details">Implementation Details</a></li>
+                
+                <li class="third-level"><a href="#moe-layer-processing">MoE Layer Processing</a></li>
+                <li class="third-level"><a href="#expert-routing">Expert Routing</a></li>
+            <li class="second-level"><a href="#performance-considerations">Performance Considerations</a></li>
+                
+                <li class="third-level"><a href="#memory-usage">Memory Usage</a></li>
+                <li class="third-level"><a href="#computation-time">Computation Time</a></li>
+            <li class="second-level"><a href="#troubleshooting">Troubleshooting</a></li>
+                
+                <li class="third-level"><a href="#common-issues">Common Issues</a></li>
+            <li class="second-level"><a href="#best-practices">Best Practices</a></li>
+                
+            <li class="second-level"><a href="#next-steps">Next Steps</a></li>
+                
+    </ul>
+</div></div>
+        <div class="col-md-9" role="main">
+
+<h1 id="mixture-of-experts-moe-support">Mixture of Experts (MoE) Support<a class="headerlink" href="#mixture-of-experts-moe-support" title="Permanent link">&para;</a></h1>
+<p>DL-Backtrace provides comprehensive support for <strong>Mixture of Experts (MoE)</strong> models, enabling explainability analysis for these advanced architectures with expert-level relevance tracking.</p>
+<hr />
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>MoE models use multiple specialized "expert" networks that are dynamically activated based on the input. DL-Backtrace provides:</p>
+<ul>
+<li><strong>✨ Expert-Level Relevance Tracking</strong>: Track which experts contribute most to predictions</li>
+<li><strong>🎯 Model-Specific Implementations</strong>: Optimized support for popular MoE architectures</li>
+<li><strong>⚡ CUDA Acceleration</strong>: GPU-accelerated relevance propagation for MoE layers</li>
+<li><strong>📊 Expert Routing Analysis</strong>: Understand expert selection and contribution patterns</li>
+<li><strong>🔍 Layer-wise Attribution</strong>: Full relevance flow through MoE feed-forward and attention blocks</li>
+</ul>
+<hr />
+<h2 id="supported-moe-models">Supported MoE Models<a class="headerlink" href="#supported-moe-models" title="Permanent link">&para;</a></h2>
+<h3 id="1-jetmoe">1. JetMoE<a class="headerlink" href="#1-jetmoe" title="Permanent link">&para;</a></h3>
+<p><strong>JetMoE</strong> is an efficient MoE architecture with sparse expert activation.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.moe_pytorch_backtrace.backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">Backtrace</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoModelForCausalLM</span><span class="p">,</span> <span class="n">AutoTokenizer</span>
+
+<span class="c1"># Load JetMoE model</span>
+<span class="n">model_name</span> <span class="o">=</span> <span class="s2">&quot;jetmoe/jetmoe-8b&quot;</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name</span><span class="p">)</span>
+<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name</span><span class="p">)</span>
+
+<span class="c1"># Initialize DL-Backtrace for JetMoE</span>
+<span class="n">backtrace</span> <span class="o">=</span> <span class="n">Backtrace</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+    <span class="n">model_type</span><span class="o">=</span><span class="s1">&#39;jetmoe&#39;</span><span class="p">,</span>
+    <span class="n">input_text</span><span class="o">=</span><span class="s2">&quot;Your prompt here&quot;</span><span class="p">,</span>
+    <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
+    <span class="n">max_length</span><span class="o">=</span><span class="mi">512</span><span class="p">,</span>
+    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
+<span class="p">)</span>
+
+<span class="c1"># Get model outputs</span>
+<span class="n">input_ids</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="s2">&quot;Your prompt&quot;</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">input_ids</span>
+<span class="n">all_in</span><span class="p">,</span> <span class="n">all_out</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">model</span><span class="p">(</span><span class="n">input_ids</span><span class="p">,</span> <span class="n">return_dict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="c1"># Compute relevance with expert tracking</span>
+<span class="n">relevance</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span>
+    <span class="n">all_in</span><span class="o">=</span><span class="n">all_in</span><span class="p">,</span>
+    <span class="n">all_out</span><span class="o">=</span><span class="n">all_out</span><span class="p">,</span>
+    <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;default&quot;</span><span class="p">,</span>
+    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
+<span class="p">)</span>
+
+<span class="c1"># Access expert-level relevance</span>
+<span class="n">expert_relevance</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">all_layer_expert_relevance</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Layers with expert analysis: </span><span class="si">{</span><span class="n">expert_relevance</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><strong>Key Features:</strong>
+- Sparse expert activation
+- Efficient attention mechanisms
+- Expert-level feed-forward and attention tracking</p>
+<h3 id="2-olmoe">2. OLMoE<a class="headerlink" href="#2-olmoe" title="Permanent link">&para;</a></h3>
+<p><strong>OLMoE</strong> (Open Language MoE) is an open-source MoE model optimized for efficiency.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.moe_pytorch_backtrace.backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">Backtrace</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoModelForCausalLM</span><span class="p">,</span> <span class="n">AutoTokenizer</span>
+
+<span class="c1"># Load OLMoE model</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;allenai/OLMoE-1B-7B-0924&quot;</span><span class="p">)</span>
+<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;allenai/OLMoE-1B-7B-0924&quot;</span><span class="p">)</span>
+
+<span class="c1"># Initialize backtrace</span>
+<span class="n">backtrace</span> <span class="o">=</span> <span class="n">Backtrace</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+    <span class="n">model_type</span><span class="o">=</span><span class="s1">&#39;olmoe&#39;</span><span class="p">,</span>
+    <span class="n">input_text</span><span class="o">=</span><span class="s2">&quot;Example text&quot;</span><span class="p">,</span>
+    <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
+    <span class="n">max_length</span><span class="o">=</span><span class="mi">512</span><span class="p">,</span>
+    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
+<span class="p">)</span>
+
+<span class="c1"># Run analysis</span>
+<span class="n">all_in</span><span class="p">,</span> <span class="n">all_out</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">model</span><span class="p">(</span><span class="n">input_ids</span><span class="p">,</span> <span class="n">return_dict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">relevance</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="n">all_in</span><span class="p">,</span> <span class="n">all_out</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span><span class="p">)</span>
+
+<span class="c1"># Analyze expert contributions</span>
+<span class="k">for</span> <span class="n">layer_name</span><span class="p">,</span> <span class="n">expert_rel</span> <span class="ow">in</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">all_layer_expert_relevance</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">layer_name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">expert_rel</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><strong>Key Features:</strong>
+- Open-source architecture
+- Multiple expert configurations
+- Optimized for research and production</p>
+<h3 id="3-qwen-moe">3. Qwen MoE<a class="headerlink" href="#3-qwen-moe" title="Permanent link">&para;</a></h3>
+<p><strong>Qwen MoE</strong> model combines strong language understanding with efficient MoE architecture.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.moe_pytorch_backtrace.backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">Backtrace</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoModelForCausalLM</span><span class="p">,</span> <span class="n">AutoTokenizer</span>
+
+<span class="c1"># Load Qwen MoE model</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;Qwen/Qwen1.5-MoE-A2.7B&quot;</span><span class="p">)</span>
+<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;Qwen/Qwen1.5-MoE-A2.7B&quot;</span><span class="p">)</span>
+
+<span class="c1"># Initialize backtrace</span>
+<span class="n">backtrace</span> <span class="o">=</span> <span class="n">Backtrace</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+    <span class="n">model_type</span><span class="o">=</span><span class="s1">&#39;qwen3_moe&#39;</span><span class="p">,</span>
+    <span class="n">input_text</span><span class="o">=</span><span class="s2">&quot;Your input text&quot;</span><span class="p">,</span>
+    <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
+    <span class="n">max_length</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span>
+    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
+<span class="p">)</span>
+
+<span class="c1"># Compute relevance</span>
+<span class="n">input_ids</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="s2">&quot;Input&quot;</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">input_ids</span>
+<span class="n">all_in</span><span class="p">,</span> <span class="n">all_out</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">model</span><span class="p">(</span><span class="n">input_ids</span><span class="p">,</span> <span class="n">return_dict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="n">relevance</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span>
+    <span class="n">all_in</span><span class="o">=</span><span class="n">all_in</span><span class="p">,</span>
+    <span class="n">all_out</span><span class="o">=</span><span class="n">all_out</span><span class="p">,</span>
+    <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;default&quot;</span><span class="p">,</span>
+    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Key Features:</strong>
+- Grouped query attention
+- Advanced expert routing
+- Strong multilingual capabilities</p>
+<h3 id="4-gpt-oss">4. GPT-OSS<a class="headerlink" href="#4-gpt-oss" title="Permanent link">&para;</a></h3>
+<p><strong>GPT-OSS</strong> is an open-source MoE implementation with configurable expert architectures.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.moe_pytorch_backtrace.backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">Backtrace</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoModelForCausalLM</span><span class="p">,</span> <span class="n">AutoTokenizer</span>
+
+<span class="c1"># Load GPT-OSS model</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;gpt-oss/gpt-oss-model&quot;</span><span class="p">)</span>
+<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;gpt-oss/gpt-oss-model&quot;</span><span class="p">)</span>
+
+<span class="c1"># Initialize backtrace</span>
+<span class="n">backtrace</span> <span class="o">=</span> <span class="n">Backtrace</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+    <span class="n">model_type</span><span class="o">=</span><span class="s1">&#39;gpt_oss&#39;</span><span class="p">,</span>
+    <span class="n">input_text</span><span class="o">=</span><span class="s2">&quot;Example prompt&quot;</span><span class="p">,</span>
+    <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
+    <span class="n">max_length</span><span class="o">=</span><span class="mi">512</span><span class="p">,</span>
+    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
+<span class="p">)</span>
+
+<span class="c1"># Run with sliding window attention support</span>
+<span class="n">all_in</span><span class="p">,</span> <span class="n">all_out</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">model</span><span class="p">(</span><span class="n">input_ids</span><span class="p">,</span> <span class="n">return_dict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">relevance</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="n">all_in</span><span class="p">,</span> <span class="n">all_out</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><strong>Key Features:</strong>
+- Sliding window attention support
+- Flexible expert configuration
+- Full attention and feed-forward MoE layers</p>
+<hr />
+<h2 id="moe-specific-features">MoE-Specific Features<a class="headerlink" href="#moe-specific-features" title="Permanent link">&para;</a></h2>
+<h3 id="expert-relevance-tracking">Expert Relevance Tracking<a class="headerlink" href="#expert-relevance-tracking" title="Permanent link">&para;</a></h3>
+<p>DL-Backtrace tracks relevance at the expert level, allowing you to understand which experts contribute to predictions.</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># After running evaluation</span>
+<span class="n">expert_relevance</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">all_layer_expert_relevance</span>
+
+<span class="c1"># Analyze each layer</span>
+<span class="k">for</span> <span class="n">layer_name</span><span class="p">,</span> <span class="n">expert_scores</span> <span class="ow">in</span> <span class="n">expert_relevance</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="si">{</span><span class="n">layer_name</span><span class="si">}</span><span class="s2">:&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Shape: </span><span class="si">{</span><span class="n">expert_scores</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Mean relevance: </span><span class="si">{</span><span class="n">expert_scores</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Max relevance: </span><span class="si">{</span><span class="n">expert_scores</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Identify most relevant experts</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">expert_scores</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">top_experts</span> <span class="o">=</span> <span class="n">expert_scores</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">argsort</span><span class="p">()[</span><span class="o">-</span><span class="mi">3</span><span class="p">:]</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Top 3 experts: </span><span class="si">{</span><span class="n">top_experts</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="layer-types">Layer Types<a class="headerlink" href="#layer-types" title="Permanent link">&para;</a></h3>
+<p>MoE models have specialized layer types:</p>
+<ul>
+<li><strong>MoE Feed-Forward Layers</strong>: Multiple expert networks with routing</li>
+<li><strong>MoE Self-Attention Layers</strong>: Expert-based attention mechanisms  </li>
+<li><strong>Router Layers</strong>: Gate networks that select experts</li>
+<li><strong>Standard Transformer Layers</strong>: Traditional attention and FFN</li>
+</ul>
+<h3 id="device-configuration">Device Configuration<a class="headerlink" href="#device-configuration" title="Permanent link">&para;</a></h3>
+<p>MoE models benefit significantly from GPU acceleration:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># CPU mode (slower, uses original implementations)</span>
+<span class="n">backtrace</span> <span class="o">=</span> <span class="n">Backtrace</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cpu&quot;</span><span class="p">)</span>
+<span class="n">relevance</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="n">all_in</span><span class="p">,</span> <span class="n">all_out</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cpu&quot;</span><span class="p">)</span>
+
+<span class="c1"># CUDA mode (recommended - much faster)</span>
+<span class="n">backtrace</span> <span class="o">=</span> <span class="n">Backtrace</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span><span class="p">)</span>
+<span class="n">relevance</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="n">all_in</span><span class="p">,</span> <span class="n">all_out</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><strong>Performance Tips:</strong>
+- Always use <code>device="cuda"</code> for MoE models when possible
+- CUDA implementations provide 10-100x speedup for large MoE models
+- Memory usage scales with number of experts and sequence length</p>
+<hr />
+<h2 id="advanced-configuration">Advanced Configuration<a class="headerlink" href="#advanced-configuration" title="Permanent link">&para;</a></h2>
+<h3 id="relevance-propagation-parameters">Relevance Propagation Parameters<a class="headerlink" href="#relevance-propagation-parameters" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="n">relevance</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span>
+    <span class="n">all_in</span><span class="o">=</span><span class="n">all_in</span><span class="p">,</span>
+    <span class="n">all_out</span><span class="o">=</span><span class="n">all_out</span><span class="p">,</span>
+    <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;default&quot;</span><span class="p">,</span>          <span class="c1"># Relevance mode</span>
+    <span class="n">multiplier</span><span class="o">=</span><span class="mf">100.0</span><span class="p">,</span>        <span class="c1"># Scale relevance values</span>
+    <span class="n">scaler</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>                <span class="c1"># Additional scaling</span>
+    <span class="n">max_unit</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>              <span class="c1"># Normalize to max value</span>
+    <span class="n">thresholding</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span>        <span class="c1"># Threshold for binary tasks</span>
+    <span class="n">task</span><span class="o">=</span><span class="s2">&quot;generation&quot;</span><span class="p">,</span>       <span class="c1"># Task type</span>
+    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>            <span class="c1"># Compute device</span>
+<span class="p">)</span>
+</code></pre></div>
+<h3 id="model-configuration-access">Model Configuration Access<a class="headerlink" href="#model-configuration-access" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.moe_pytorch_backtrace.backtrace.backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_model_config</span>
+
+<span class="c1"># Get model configuration</span>
+<span class="n">config</span> <span class="o">=</span> <span class="n">get_model_config</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Hidden size: </span><span class="si">{</span><span class="n">config</span><span class="o">.</span><span class="n">hidden_size</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Num layers: </span><span class="si">{</span><span class="n">config</span><span class="o">.</span><span class="n">num_hidden_layers</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Num experts: </span><span class="si">{</span><span class="nb">getattr</span><span class="p">(</span><span class="n">config</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;num_experts&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;N/A&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Experts per token: </span><span class="si">{</span><span class="nb">getattr</span><span class="p">(</span><span class="n">config</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;num_experts_per_tok&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;N/A&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="expert-analysis-workflow">Expert Analysis Workflow<a class="headerlink" href="#expert-analysis-workflow" title="Permanent link">&para;</a></h2>
+<h3 id="complete-moe-analysis-example">Complete MoE Analysis Example<a class="headerlink" href="#complete-moe-analysis-example" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.moe_pytorch_backtrace.backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">Backtrace</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoModelForCausalLM</span><span class="p">,</span> <span class="n">AutoTokenizer</span>
+
+<span class="c1"># 1. Load model and tokenizer</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;your-moe-model&quot;</span><span class="p">)</span>
+<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;your-moe-model&quot;</span><span class="p">)</span>
+
+<span class="c1"># 2. Prepare input</span>
+<span class="n">text</span> <span class="o">=</span> <span class="s2">&quot;Analyze this important text for expert routing&quot;</span>
+<span class="n">input_ids</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">input_ids</span><span class="o">.</span><span class="n">cuda</span><span class="p">()</span>
+
+<span class="c1"># 3. Initialize backtrace</span>
+<span class="n">backtrace</span> <span class="o">=</span> <span class="n">Backtrace</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+    <span class="n">model_type</span><span class="o">=</span><span class="s1">&#39;jetmoe&#39;</span><span class="p">,</span>  <span class="c1"># or &#39;olmoe&#39;, &#39;qwen3_moe&#39;, &#39;gpt_oss&#39;</span>
+    <span class="n">input_text</span><span class="o">=</span><span class="n">text</span><span class="p">,</span>
+    <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
+    <span class="n">max_length</span><span class="o">=</span><span class="mi">512</span><span class="p">,</span>
+    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
+<span class="p">)</span>
+
+<span class="c1"># 4. Get model outputs</span>
+<span class="n">all_in</span><span class="p">,</span> <span class="n">all_out</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">model</span><span class="p">(</span><span class="n">input_ids</span><span class="p">,</span> <span class="n">return_dict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="c1"># 5. Compute relevance</span>
+<span class="n">relevance</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span>
+    <span class="n">all_in</span><span class="o">=</span><span class="n">all_in</span><span class="p">,</span>
+    <span class="n">all_out</span><span class="o">=</span><span class="n">all_out</span><span class="p">,</span>
+    <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;default&quot;</span><span class="p">,</span>
+    <span class="n">multiplier</span><span class="o">=</span><span class="mf">100.0</span><span class="p">,</span>
+    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
+<span class="p">)</span>
+
+<span class="c1"># 6. Analyze expert routing</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">=== Expert Routing Analysis ===&quot;</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">layer_name</span><span class="p">,</span> <span class="n">expert_rel</span> <span class="ow">in</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">all_layer_expert_relevance</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="si">{</span><span class="n">layer_name</span><span class="si">}</span><span class="s2">:&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Get layer and expert type</span>
+    <span class="k">if</span> <span class="s2">&quot;ff_expert&quot;</span> <span class="ow">in</span> <span class="n">layer_name</span><span class="p">:</span>
+        <span class="n">layer_type</span> <span class="o">=</span> <span class="s2">&quot;Feed-Forward&quot;</span>
+    <span class="k">elif</span> <span class="s2">&quot;attention_expert&quot;</span> <span class="ow">in</span> <span class="n">layer_name</span><span class="p">:</span>
+        <span class="n">layer_type</span> <span class="o">=</span> <span class="s2">&quot;Attention&quot;</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">layer_type</span> <span class="o">=</span> <span class="s2">&quot;Unknown&quot;</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Type: </span><span class="si">{</span><span class="n">layer_type</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Shape: </span><span class="si">{</span><span class="n">expert_rel</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Compute statistics</span>
+    <span class="n">mean_rel</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">expert_rel</span><span class="p">)</span>
+    <span class="n">max_rel</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">expert_rel</span><span class="p">)</span>
+    <span class="n">min_rel</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">expert_rel</span><span class="p">)</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Mean relevance: </span><span class="si">{</span><span class="n">mean_rel</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Max relevance: </span><span class="si">{</span><span class="n">max_rel</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Min relevance: </span><span class="si">{</span><span class="n">min_rel</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Find top experts</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">expert_rel</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">expert_means</span> <span class="o">=</span> <span class="n">expert_rel</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">expert_rel</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">)))</span>
+        <span class="n">top_k</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">expert_means</span><span class="p">))</span>
+        <span class="n">top_experts</span> <span class="o">=</span> <span class="n">expert_means</span><span class="o">.</span><span class="n">argsort</span><span class="p">()[</span><span class="o">-</span><span class="n">top_k</span><span class="p">:][::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Top </span><span class="si">{</span><span class="n">top_k</span><span class="si">}</span><span class="s2"> experts:&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">expert_idx</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">top_experts</span><span class="p">):</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    </span><span class="si">{</span><span class="n">idx</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s2">. Expert </span><span class="si">{</span><span class="n">expert_idx</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">expert_means</span><span class="p">[</span><span class="n">expert_idx</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="c1"># 7. Analyze overall relevance flow</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">=== Overall Relevance Flow ===&quot;</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">layer_name</span><span class="p">,</span> <span class="n">layer_rel</span> <span class="ow">in</span> <span class="n">relevance</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer_rel</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">layer_name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">layer_rel</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">, sum=</span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">layer_rel</span><span class="p">)</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="implementation-details">Implementation Details<a class="headerlink" href="#implementation-details" title="Permanent link">&para;</a></h2>
+<h3 id="moe-layer-processing">MoE Layer Processing<a class="headerlink" href="#moe-layer-processing" title="Permanent link">&para;</a></h3>
+<p>DL-Backtrace processes MoE layers with specialized implementations:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Feed-forward MoE layer</span>
+<span class="k">if</span> <span class="n">model_resource</span><span class="p">[</span><span class="s1">&#39;graph&#39;</span><span class="p">][</span><span class="n">start_layer</span><span class="p">][</span><span class="s2">&quot;class&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;JetMoE_Feed_Forward&#39;</span><span class="p">:</span>
+    <span class="n">weights</span> <span class="o">=</span> <span class="n">all_wts</span><span class="p">[</span><span class="n">start_layer</span><span class="p">]</span>
+    <span class="n">feed_forward_weights</span> <span class="o">=</span> <span class="n">helper</span><span class="o">.</span><span class="n">rename_jetmoe_feed_forward_keys</span><span class="p">(</span><span class="n">weights</span><span class="p">)</span>
+
+    <span class="n">temp_wt</span><span class="p">,</span> <span class="n">ff_expert</span> <span class="o">=</span> <span class="n">UD2</span><span class="o">.</span><span class="n">launch_jetmoe_feed_forward</span><span class="p">(</span>
+        <span class="n">impl</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span><span class="p">,</span>  <span class="c1"># or &quot;original&quot;</span>
+        <span class="n">all_wt</span><span class="p">[</span><span class="n">start_layer</span><span class="p">],</span>
+        <span class="n">all_out</span><span class="p">[</span><span class="n">child_nodes</span><span class="p">[</span><span class="mi">0</span><span class="p">]][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">(),</span>
+        <span class="n">feed_forward_weights</span><span class="p">,</span>
+        <span class="n">model</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Store expert relevance</span>
+    <span class="n">layer</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">start_layer</span><span class="si">}</span><span class="s2">_ff_expert&quot;</span>
+    <span class="n">all_layer_expert_relevance</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span> <span class="o">=</span> <span class="n">ff_expert</span>
+</code></pre></div>
+<h3 id="expert-routing">Expert Routing<a class="headerlink" href="#expert-routing" title="Permanent link">&para;</a></h3>
+<p>The routing mechanism determines which experts process each token:</p>
+<ol>
+<li><strong>Router Network</strong>: Computes scores for each expert</li>
+<li><strong>Top-K Selection</strong>: Selects top experts based on scores</li>
+<li><strong>Expert Execution</strong>: Selected experts process the input</li>
+<li><strong>Weighted Combination</strong>: Expert outputs are weighted by router scores</li>
+</ol>
+<p>DL-Backtrace tracks relevance through this entire routing process.</p>
+<hr />
+<h2 id="performance-considerations">Performance Considerations<a class="headerlink" href="#performance-considerations" title="Permanent link">&para;</a></h2>
+<h3 id="memory-usage">Memory Usage<a class="headerlink" href="#memory-usage" title="Permanent link">&para;</a></h3>
+<p>MoE models require more memory due to multiple expert networks:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Estimate memory requirements</span>
+<span class="n">num_experts</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">num_experts</span>
+<span class="n">expert_size</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">hidden_size</span> <span class="o">*</span> <span class="n">config</span><span class="o">.</span><span class="n">intermediate_size</span>
+<span class="n">memory_per_layer</span> <span class="o">=</span> <span class="n">num_experts</span> <span class="o">*</span> <span class="n">expert_size</span> <span class="o">*</span> <span class="mi">4</span>  <span class="c1"># bytes (float32)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Approx memory per MoE layer: </span><span class="si">{</span><span class="n">memory_per_layer</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mf">1e9</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> GB&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="computation-time">Computation Time<a class="headerlink" href="#computation-time" title="Permanent link">&para;</a></h3>
+<p>CUDA acceleration is essential for reasonable performance:</p>
+<table>
+<thead>
+<tr>
+<th>Model Size</th>
+<th>CPU Time</th>
+<th>CUDA Time</th>
+<th>Speedup</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1B params</td>
+<td>~300s</td>
+<td>~15s</td>
+<td>20x</td>
+</tr>
+<tr>
+<td>7B params</td>
+<td>~2000s</td>
+<td>~60s</td>
+<td>33x</td>
+</tr>
+<tr>
+<td>14B params</td>
+<td>~4500s</td>
+<td>~120s</td>
+<td>37x</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<h3 id="common-issues">Common Issues<a class="headerlink" href="#common-issues" title="Permanent link">&para;</a></h3>
+<p><strong>1. CUDA Out of Memory</strong>
+<div class="highlight"><pre><span></span><code><span class="c1"># Solution: Reduce batch size or sequence length</span>
+<span class="n">backtrace</span> <span class="o">=</span> <span class="n">Backtrace</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">max_length</span><span class="o">=</span><span class="mi">256</span><span class="p">)</span>  <span class="c1"># Reduce from 512</span>
+</code></pre></div></p>
+<p><strong>2. Slow CPU Execution</strong>
+<div class="highlight"><pre><span></span><code><span class="c1"># Solution: Use CUDA</span>
+<span class="n">backtrace</span> <span class="o">=</span> <span class="n">Backtrace</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span><span class="p">)</span>
+<span class="n">relevance</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span><span class="p">)</span>
+</code></pre></div></p>
+<p><strong>3. Missing Expert Relevance</strong>
+<div class="highlight"><pre><span></span><code><span class="c1"># Check if all_layer_expert_relevance is populated</span>
+<span class="k">if</span> <span class="ow">not</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">all_layer_expert_relevance</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No expert relevance computed - check model_type&quot;</span><span class="p">)</span>
+</code></pre></div></p>
+<hr />
+<h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Always use CUDA</strong> for MoE models when possible</li>
+<li><strong>Monitor memory usage</strong> - MoE models are memory-intensive</li>
+<li><strong>Analyze expert specialization</strong> - identify which experts handle specific patterns</li>
+<li><strong>Compare across prompts</strong> - see how expert routing varies</li>
+<li><strong>Use appropriate <code>multiplier</code></strong> - scale relevance for visualization</li>
+</ol>
+<hr />
+<h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Learn about <a href="../auto-sampler/">DLB Auto Sampler</a> for MoE text generation</li>
+<li>Explore <a href="../temperature-scaling/">Temperature Scaling</a> for controlled generation</li>
+<li>Check <a href="../pipeline/">Pipeline</a> for high-level MoE workflows</li>
+<li>See <a href="../../../examples/colab-notebooks/">Examples</a> for complete MoE use cases</li>
+</ul></div>
+        
+        
+    </div>
+
+    
+      <footer class="col-md-12 text-center">
+          
+          
+            <hr>
+            <p>
+            <small>Copyright &copy; 2025 Lexsi Labs</small><br>
+            
+            <small>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</small>
+            </p>
+          
+
+          
+          
+      </footer>
+    
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script src="../../../js/bootstrap-3.0.3.min.js"></script>
+
+    
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/highlight.min.js"></script>
+        
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/python.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/yaml.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/bash.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/javascript.min.js"></script>
+        
+    <script>hljs.initHighlightingOnLoad();</script>
+    
+
+    <script>var base_url = "../../.."</script>
+    
+    <script src="../../../js/base.js"></script>
+    <script src="../../../javascripts/mathjax.js"></script>
+    <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="../../../javascripts/katex.js"></script>
+    <script src="https://unpkg.com/katex@0/dist/katex.min.js"></script>
+    <script src="https://unpkg.com/katex@0/dist/contrib/auto-render.min.js"></script>
+    <script src="../../../search/main.js"></script>
+
+    <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    <span aria-hidden="true">&times;</span>
+                    <span class="sr-only">Close</span>
+                </button>
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+            </div>
+            <div class="modal-body">
+                <p>
+                    From here you can search these documents. Enter
+                    your search terms below.
+                </p>
+                <form>
+                    <div class="form-group">
+                        <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+    </body>
+
+</html>

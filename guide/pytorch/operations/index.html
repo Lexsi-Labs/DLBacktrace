@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="A powerful explainable AI (XAI) framework for deep learning model interpretability">
+    <meta name="author" content="Lexsi Labs">
+    <link rel="canonical" href="https://lexsi.ai/guide/pytorch/operations/">
+    <link rel="shortcut icon" href="../../../img/favicon.ico">
+
+    
+    <title>Supported Operations - DL-Backtrace Documentation</title>
+    
+
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/all.css">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/v4-shims.css">
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/hack-font@3.3.0/build/web/hack.min.css">
+    <link href='//rsms.me/inter/inter.css' rel='stylesheet' type='text/css'>
+    <link href='//fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,700italic,400,300,600,700&subset=latin-ext,latin' rel='stylesheet' type='text/css'>
+    <link href="../../../css/bootstrap-custom.min.css" rel="stylesheet">
+    <link href="../../../css/base.min.css" rel="stylesheet">
+    <link href="../../../css/cinder.min.css" rel="stylesheet">
+
+    
+        
+        <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/styles/github.min.css">
+        
+    
+    <link href="https://unpkg.com/katex@0/dist/katex.min.css" rel="stylesheet">
+
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+            <script src="https://cdn.jsdelivr.net/npm/html5shiv@3.7.3/dist/html5shiv.min.js"></script>
+            <script src="https://cdn.jsdelivr.net/npm/respond.js@1.4.2/dest/respond.min.js"></script>
+        <![endif]-->
+
+    
+
+     
+</head>
+
+<body>
+
+    <div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+
+        <!-- Collapsed navigation -->
+        <div class="navbar-header">
+            <!-- Expander button -->
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            
+
+            <!-- Main title -->
+
+            
+              <a class="navbar-brand" href="../../..">DL-Backtrace Documentation</a>
+            
+        </div>
+
+        <!-- Expanded navigation -->
+        <div class="navbar-collapse collapse">
+                <!-- Main navigation -->
+                <ul class="nav navbar-nav">
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Home <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../..">Overview</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../home/features/">Key Features</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../home/installation/">Installation</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../home/quickstart/">Quick Start</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../home/whats-new/">What's New</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown active">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">User Guide <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../introduction/">Introduction</a>
+</li>
+
+                        
+                            
+  <li class="dropdown-submenu">
+    <a tabindex="-1" href="">PyTorch Backend</a>
+    <ul class="dropdown-menu">
+        
+            
+<li >
+    <a href="../overview/">Overview</a>
+</li>
+
+        
+            
+<li >
+    <a href="../dlbacktrace/">DLBacktrace</a>
+</li>
+
+        
+            
+<li >
+    <a href="../pipeline/">Pipeline</a>
+</li>
+
+        
+            
+<li >
+    <a href="../auto-sampler/">DLB Auto Sampler</a>
+</li>
+
+        
+            
+<li >
+    <a href="../temperature-scaling/">Temperature Scaling</a>
+</li>
+
+        
+            
+<li >
+    <a href="../moe-models/">MoE Models</a>
+</li>
+
+        
+            
+<li >
+    <a href="../execution-engines/">Execution Engines</a>
+</li>
+
+        
+            
+<li class="active">
+    <a href="./">Supported Operations</a>
+</li>
+
+        
+            
+<li >
+    <a href="../tracing/">Model Tracing</a>
+</li>
+
+        
+    </ul>
+  </li>
+
+                        
+                            
+  <li class="dropdown-submenu">
+    <a tabindex="-1" href="">Relevance Propagation</a>
+    <ul class="dropdown-menu">
+        
+            
+<li >
+    <a href="../../relevance/overview/">Overview</a>
+</li>
+
+        
+            
+<li >
+    <a href="../../relevance/parameters/">Parameters</a>
+</li>
+
+        
+    </ul>
+  </li>
+
+                        
+                            
+<li >
+    <a href="../../best-practices/">Best Practices</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Examples <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../../examples/colab-notebooks/">Colab Notebooks</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../examples/use-cases/">Use Cases</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Developer Guide <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../../developer/architecture/">Architecture</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../developer/contributing/">Contributing</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../developer/execution-engine/">Execution Engine</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../developer/cuda-development/">CUDA Development</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../developer/testing/">Testing</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Support <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../../../support/faq/">FAQ</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../support/known-issues/">Known Issues</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../support/changelog/">Changelog</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../../../support/license/">License</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                </ul>
+
+            <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="#" data-toggle="modal" data-target="#mkdocs_search_modal">
+                            <i class="fas fa-search"></i> Search
+                        </a>
+                    </li>
+                    <li >
+                        <a rel="prev" href="../execution-engines/">
+                            <i class="fas fa-arrow-left"></i> Previous
+                        </a>
+                    </li>
+                    <li >
+                        <a rel="next" href="../tracing/">
+                            Next <i class="fas fa-arrow-right"></i>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://github.com/Lexsi-Labs/DLBacktrace/edit/main/docs/guide/pytorch/operations.md">Edit on Lexsi-Labs/DLBacktrace</a>
+                    </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+    <div class="container">
+        
+        
+        <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
+    <ul class="nav bs-sidenav">
+        <li class="first-level active"><a href="#supported-operations">Supported Operations</a></li>
+            <li class="second-level"><a href="#core-operations">Core Operations</a></li>
+                
+                <li class="third-level"><a href="#linear-layers">Linear Layers</a></li>
+                <li class="third-level"><a href="#convolutional-layers">Convolutional Layers</a></li>
+                <li class="third-level"><a href="#pooling-operations">Pooling Operations</a></li>
+                <li class="third-level"><a href="#activation-functions">Activation Functions</a></li>
+            <li class="second-level"><a href="#tensor-operations">Tensor Operations</a></li>
+                
+                <li class="third-level"><a href="#shape-manipulation">Shape Manipulation</a></li>
+                <li class="third-level"><a href="#slicing-indexing">Slicing &amp; Indexing</a></li>
+                <li class="third-level"><a href="#concatenation-stacking">Concatenation &amp; Stacking</a></li>
+            <li class="second-level"><a href="#arithmetic-operations">Arithmetic Operations</a></li>
+                
+                <li class="third-level"><a href="#basic-arithmetic">Basic Arithmetic</a></li>
+                <li class="third-level"><a href="#matrix-operations">Matrix Operations</a></li>
+                <li class="third-level"><a href="#comparison-operations">Comparison Operations</a></li>
+            <li class="second-level"><a href="#normalization">Normalization</a></li>
+                
+            <li class="second-level"><a href="#attention-operations">Attention Operations</a></li>
+                
+            <li class="second-level"><a href="#embedding-operations">Embedding Operations</a></li>
+                
+            <li class="second-level"><a href="#utility-operations">Utility Operations</a></li>
+                
+            <li class="second-level"><a href="#special-operations">Special Operations</a></li>
+                
+                <li class="third-level"><a href="#symbolic-operations">Symbolic Operations</a></li>
+            <li class="second-level"><a href="#negative-indexing-support">Negative Indexing Support</a></li>
+                
+            <li class="second-level"><a href="#operation-categories">Operation Categories</a></li>
+                
+                <li class="third-level"><a href="#fully-supported">✅ Fully Supported</a></li>
+                <li class="third-level"><a href="#in-development">🔄 In Development</a></li>
+                <li class="third-level"><a href="#not-supported">❌ Not Supported</a></li>
+            <li class="second-level"><a href="#custom-operations">Custom Operations</a></li>
+                
+                <li class="third-level"><a href="#adding-custom-operations">Adding Custom Operations</a></li>
+            <li class="second-level"><a href="#testing-operations">Testing Operations</a></li>
+                
+            <li class="second-level"><a href="#next-steps">Next Steps</a></li>
+                
+    </ul>
+</div></div>
+        <div class="col-md-9" role="main">
+
+<h1 id="supported-operations">Supported Operations<a class="headerlink" href="#supported-operations" title="Permanent link">&para;</a></h1>
+<p>DL-Backtrace supports 100+ PyTorch ATen operations. This page lists all supported operations.</p>
+<hr />
+<h2 id="core-operations">Core Operations<a class="headerlink" href="#core-operations" title="Permanent link">&para;</a></h2>
+<h3 id="linear-layers">Linear Layers<a class="headerlink" href="#linear-layers" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Description</th>
+<th>Supported</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>linear</code></td>
+<td>Fully connected layer</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>addmm</code></td>
+<td>Matrix multiply and add</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>mm</code></td>
+<td>Matrix multiply</td>
+<td>✅</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="convolutional-layers">Convolutional Layers<a class="headerlink" href="#convolutional-layers" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Description</th>
+<th>Supported</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>conv2d</code></td>
+<td>2D convolution</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>conv1d</code></td>
+<td>1D convolution</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>conv_transpose2d</code></td>
+<td>2D transposed convolution</td>
+<td>🔄</td>
+</tr>
+<tr>
+<td><code>conv_transpose1d</code></td>
+<td>1D transposed convolution</td>
+<td>🔄</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="pooling-operations">Pooling Operations<a class="headerlink" href="#pooling-operations" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Description</th>
+<th>Supported</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>max_pool2d</code></td>
+<td>2D max pooling</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>avg_pool2d</code></td>
+<td>2D average pooling</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>adaptive_avg_pool2d</code></td>
+<td>Adaptive average pooling 2D</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>adaptive_max_pool2d</code></td>
+<td>Adaptive max pooling 2D</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>max_pool1d</code></td>
+<td>1D max pooling</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>avg_pool1d</code></td>
+<td>1D average pooling</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>adaptive_avg_pool1d</code></td>
+<td>Adaptive average pooling 1D</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>adaptive_max_pool1d</code></td>
+<td>Adaptive max pooling 1D</td>
+<td>✅</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="activation-functions">Activation Functions<a class="headerlink" href="#activation-functions" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Description</th>
+<th>Supported</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>relu</code></td>
+<td>ReLU activation</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>gelu</code></td>
+<td>GELU activation</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>silu</code> / <code>swish</code></td>
+<td>SiLU/Swish activation</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>sigmoid</code></td>
+<td>Sigmoid activation</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>tanh</code></td>
+<td>Tanh activation</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>leaky_relu</code></td>
+<td>Leaky ReLU</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>elu</code></td>
+<td>ELU activation</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>softmax</code></td>
+<td>Softmax activation</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>log_softmax</code></td>
+<td>Log softmax</td>
+<td>✅</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="tensor-operations">Tensor Operations<a class="headerlink" href="#tensor-operations" title="Permanent link">&para;</a></h2>
+<h3 id="shape-manipulation">Shape Manipulation<a class="headerlink" href="#shape-manipulation" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Description</th>
+<th>Supported</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>view</code></td>
+<td>Reshape tensor</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>reshape</code></td>
+<td>Reshape tensor</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>flatten</code></td>
+<td>Flatten tensor</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>squeeze</code></td>
+<td>Remove dimensions of size 1</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>unsqueeze</code></td>
+<td>Add dimension of size 1</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>transpose</code></td>
+<td>Transpose dimensions</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>permute</code></td>
+<td>Permute dimensions</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>contiguous</code></td>
+<td>Make tensor contiguous</td>
+<td>✅</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="slicing-indexing">Slicing &amp; Indexing<a class="headerlink" href="#slicing-indexing" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Description</th>
+<th>Supported</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>slice</code></td>
+<td>Slice tensor along dimension</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>index_select</code></td>
+<td>Select indices</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>gather</code></td>
+<td>Gather values</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>select</code></td>
+<td>Select single index</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>narrow</code></td>
+<td>Narrow tensor</td>
+<td>✅</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="concatenation-stacking">Concatenation &amp; Stacking<a class="headerlink" href="#concatenation-stacking" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Description</th>
+<th>Supported</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cat</code></td>
+<td>Concatenate tensors</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>stack</code></td>
+<td>Stack tensors</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>split</code></td>
+<td>Split tensor</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>chunk</code></td>
+<td>Chunk tensor</td>
+<td>✅</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="arithmetic-operations">Arithmetic Operations<a class="headerlink" href="#arithmetic-operations" title="Permanent link">&para;</a></h2>
+<h3 id="basic-arithmetic">Basic Arithmetic<a class="headerlink" href="#basic-arithmetic" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Description</th>
+<th>Supported</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>add</code></td>
+<td>Addition</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>sub</code></td>
+<td>Subtraction</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>mul</code></td>
+<td>Multiplication</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>div</code></td>
+<td>Division</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>pow</code></td>
+<td>Power</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>sqrt</code></td>
+<td>Square root</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>exp</code></td>
+<td>Exponential</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>log</code></td>
+<td>Logarithm</td>
+<td>✅</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="matrix-operations">Matrix Operations<a class="headerlink" href="#matrix-operations" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Description</th>
+<th>Supported</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>matmul</code></td>
+<td>Matrix multiplication</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>bmm</code></td>
+<td>Batch matrix multiplication</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>addmm</code></td>
+<td>Matrix multiply and add</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>baddbmm</code></td>
+<td>Batch matrix multiply and add</td>
+<td>✅</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="comparison-operations">Comparison Operations<a class="headerlink" href="#comparison-operations" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Description</th>
+<th>Supported</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>eq</code></td>
+<td>Equal</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>ne</code></td>
+<td>Not equal</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>lt</code></td>
+<td>Less than</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>le</code></td>
+<td>Less than or equal</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>gt</code></td>
+<td>Greater than</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>ge</code></td>
+<td>Greater than or equal</td>
+<td>✅</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="normalization">Normalization<a class="headerlink" href="#normalization" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Description</th>
+<th>Supported</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>layer_norm</code></td>
+<td>Layer normalization</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>batch_norm</code></td>
+<td>Batch normalization</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>group_norm</code></td>
+<td>Group normalization</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>instance_norm</code></td>
+<td>Instance normalization</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>---</td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h2 id="attention-operations">Attention Operations<a class="headerlink" href="#attention-operations" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Description</th>
+<th>Supported</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>scaled_dot_product_attention</code></td>
+<td>Scaled dot-product attention</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>softmax</code></td>
+<td>Softmax for attention weights</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>dropout</code></td>
+<td>Dropout (pass-through in eval)</td>
+<td>✅</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="embedding-operations">Embedding Operations<a class="headerlink" href="#embedding-operations" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Description</th>
+<th>Supported</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>embedding</code></td>
+<td>Embedding lookup</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>embedding_bag</code></td>
+<td>Embedding bag</td>
+<td>🔄</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="utility-operations">Utility Operations<a class="headerlink" href="#utility-operations" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Description</th>
+<th>Supported</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>clone</code></td>
+<td>Clone tensor</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>detach</code></td>
+<td>Detach from graph</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>to</code></td>
+<td>Convert dtype/device</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>type</code></td>
+<td>Type conversion</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>arange</code></td>
+<td>Create range</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>zeros</code></td>
+<td>Create zeros</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>ones</code></td>
+<td>Create ones</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>full</code></td>
+<td>Create filled tensor</td>
+<td>✅</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="special-operations">Special Operations<a class="headerlink" href="#special-operations" title="Permanent link">&para;</a></h2>
+<h3 id="symbolic-operations">Symbolic Operations<a class="headerlink" href="#symbolic-operations" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Description</th>
+<th>Supported</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sym_size</code></td>
+<td>Symbolic size</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>sym_numel</code></td>
+<td>Symbolic number of elements</td>
+<td>✅</td>
+</tr>
+</tbody>
+</table>
+<p>These are used internally during graph tracing.</p>
+<hr />
+<h2 id="negative-indexing-support">Negative Indexing Support<a class="headerlink" href="#negative-indexing-support" title="Permanent link">&para;</a></h2>
+<p>All dimension-based operations support PyTorch's negative indexing:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># All of these work!</span>
+<span class="n">x</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">)</span>         <span class="c1"># Last two dimensions</span>
+<span class="n">x</span><span class="o">.</span><span class="n">permute</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>   <span class="c1"># Mix of positive and negative</span>
+<span class="n">x</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>             <span class="c1"># Add dimension at end</span>
+<span class="n">x</span><span class="o">.</span><span class="n">slice</span><span class="p">(</span><span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>        <span class="c1"># Slice last dimension</span>
+<span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">([</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>   <span class="c1"># Concatenate on last dimension</span>
+</code></pre></div>
+<hr />
+<h2 id="operation-categories">Operation Categories<a class="headerlink" href="#operation-categories" title="Permanent link">&para;</a></h2>
+<h3 id="fully-supported">✅ Fully Supported<a class="headerlink" href="#fully-supported" title="Permanent link">&para;</a></h3>
+<p>Operations that are fully implemented and tested.</p>
+<h3 id="in-development">🔄 In Development<a class="headerlink" href="#in-development" title="Permanent link">&para;</a></h3>
+<p>Operations that are planned but not yet implemented.</p>
+<h3 id="not-supported">❌ Not Supported<a class="headerlink" href="#not-supported" title="Permanent link">&para;</a></h3>
+<p>Operations that are not currently supported.</p>
+<hr />
+<h2 id="custom-operations">Custom Operations<a class="headerlink" href="#custom-operations" title="Permanent link">&para;</a></h2>
+<h3 id="adding-custom-operations">Adding Custom Operations<a class="headerlink" href="#adding-custom-operations" title="Permanent link">&para;</a></h3>
+<p>If you need support for a custom operation, you can:</p>
+<ol>
+<li><strong>Request support</strong>: Open an issue on GitHub</li>
+<li><strong>Contribute</strong>: Submit a pull request</li>
+<li><strong>Workaround</strong>: Decompose into supported operations</li>
+</ol>
+<hr />
+<h2 id="testing-operations">Testing Operations<a class="headerlink" href="#testing-operations" title="Permanent link">&para;</a></h2>
+<p>To test if an operation is supported:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.pytorch_backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">DLBacktrace</span>
+
+<span class="c1"># Create simple model using the operation</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">TestModel</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">your_operation</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+<span class="c1"># Try to trace it</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">TestModel</span><span class="p">()</span>
+    <span class="n">dlb</span> <span class="o">=</span> <span class="n">DLBacktrace</span><span class="p">(</span>
+        <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+        <span class="n">input_for_graph</span><span class="o">=</span><span class="p">(</span><span class="n">dummy_input</span><span class="p">,)</span>
+    <span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;✅ Operation supported!&quot;</span><span class="p">)</span>
+<span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;❌ Operation not supported: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../execution-engines/">Execution Engines</a> - Learn how operations are executed</li>
+<li><a href="../tracing/">Model Tracing</a> - Understand graph tracing</li>
+<li><a href="../../../examples/colab-notebooks/">Examples</a> - See operations in action</li>
+<li><a href="../../best-practices/">Best Practices</a> - Optimization tips</li>
+</ul></div>
+        
+        
+    </div>
+
+    
+      <footer class="col-md-12 text-center">
+          
+          
+            <hr>
+            <p>
+            <small>Copyright &copy; 2025 Lexsi Labs</small><br>
+            
+            <small>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</small>
+            </p>
+          
+
+          
+          
+      </footer>
+    
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script src="../../../js/bootstrap-3.0.3.min.js"></script>
+
+    
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/highlight.min.js"></script>
+        
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/python.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/yaml.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/bash.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/javascript.min.js"></script>
+        
+    <script>hljs.initHighlightingOnLoad();</script>
+    
+
+    <script>var base_url = "../../.."</script>
+    
+    <script src="../../../js/base.js"></script>
+    <script src="../../../javascripts/mathjax.js"></script>
+    <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="../../../javascripts/katex.js"></script>
+    <script src="https://unpkg.com/katex@0/dist/katex.min.js"></script>
+    <script src="https://unpkg.com/katex@0/dist/contrib/auto-render.min.js"></script>
+    <script src="../../../search/main.js"></script>
+
+    <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    <span aria-hidden="true">&times;</span>
+                    <span class="sr-only">Close</span>
+                </button>
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+            </div>
+            <div class="modal-body">
+                <p>
+                    From here you can search these documents. Enter
+                    your search terms below.
+                </p>
+                <form>
+                    <div class="form-group">
+                        <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+    </body>
+
+</html>

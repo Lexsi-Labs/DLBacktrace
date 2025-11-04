@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="A powerful explainable AI (XAI) framework for deep learning model interpretability">
+    <meta name="author" content="Lexsi Labs">
+    <link rel="canonical" href="https://lexsi.ai/BUILD_DOCS/">
+    <link rel="shortcut icon" href="../img/favicon.ico">
+
+    
+    <title>Building Documentation - DL-Backtrace Documentation</title>
+    
+
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/all.css">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/v4-shims.css">
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/hack-font@3.3.0/build/web/hack.min.css">
+    <link href='//rsms.me/inter/inter.css' rel='stylesheet' type='text/css'>
+    <link href='//fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,700italic,400,300,600,700&subset=latin-ext,latin' rel='stylesheet' type='text/css'>
+    <link href="../css/bootstrap-custom.min.css" rel="stylesheet">
+    <link href="../css/base.min.css" rel="stylesheet">
+    <link href="../css/cinder.min.css" rel="stylesheet">
+
+    
+        
+        <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/styles/github.min.css">
+        
+    
+    <link href="https://unpkg.com/katex@0/dist/katex.min.css" rel="stylesheet">
+
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+            <script src="https://cdn.jsdelivr.net/npm/html5shiv@3.7.3/dist/html5shiv.min.js"></script>
+            <script src="https://cdn.jsdelivr.net/npm/respond.js@1.4.2/dest/respond.min.js"></script>
+        <![endif]-->
+
+    
+
+     
+</head>
+
+<body>
+
+    <div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+
+        <!-- Collapsed navigation -->
+        <div class="navbar-header">
+            <!-- Expander button -->
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            
+
+            <!-- Main title -->
+
+            
+              <a class="navbar-brand" href="..">DL-Backtrace Documentation</a>
+            
+        </div>
+
+        <!-- Expanded navigation -->
+        <div class="navbar-collapse collapse">
+                <!-- Main navigation -->
+                <ul class="nav navbar-nav">
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Home <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="..">Overview</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../home/features/">Key Features</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../home/installation/">Installation</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../home/quickstart/">Quick Start</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../home/whats-new/">What's New</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">User Guide <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../guide/introduction/">Introduction</a>
+</li>
+
+                        
+                            
+  <li class="dropdown-submenu">
+    <a tabindex="-1" href="">PyTorch Backend</a>
+    <ul class="dropdown-menu">
+        
+            
+<li >
+    <a href="../guide/pytorch/overview/">Overview</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/pytorch/dlbacktrace/">DLBacktrace</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/pytorch/pipeline/">Pipeline</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/pytorch/auto-sampler/">DLB Auto Sampler</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/pytorch/temperature-scaling/">Temperature Scaling</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/pytorch/moe-models/">MoE Models</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/pytorch/execution-engines/">Execution Engines</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/pytorch/operations/">Supported Operations</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/pytorch/tracing/">Model Tracing</a>
+</li>
+
+        
+    </ul>
+  </li>
+
+                        
+                            
+  <li class="dropdown-submenu">
+    <a tabindex="-1" href="">Relevance Propagation</a>
+    <ul class="dropdown-menu">
+        
+            
+<li >
+    <a href="../guide/relevance/overview/">Overview</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/relevance/parameters/">Parameters</a>
+</li>
+
+        
+    </ul>
+  </li>
+
+                        
+                            
+<li >
+    <a href="../guide/best-practices/">Best Practices</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Examples <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../examples/colab-notebooks/">Colab Notebooks</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../examples/use-cases/">Use Cases</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Developer Guide <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../developer/architecture/">Architecture</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../developer/contributing/">Contributing</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../developer/execution-engine/">Execution Engine</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../developer/cuda-development/">CUDA Development</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../developer/testing/">Testing</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Support <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../support/faq/">FAQ</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../support/known-issues/">Known Issues</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../support/changelog/">Changelog</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../support/license/">License</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                </ul>
+
+            <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="#" data-toggle="modal" data-target="#mkdocs_search_modal">
+                            <i class="fas fa-search"></i> Search
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://github.com/Lexsi-Labs/DLBacktrace/edit/main/docs/BUILD_DOCS.md">Edit on Lexsi-Labs/DLBacktrace</a>
+                    </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+    <div class="container">
+        
+        
+        <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
+    <ul class="nav bs-sidenav">
+        <li class="first-level active"><a href="#building-documentation">Building Documentation</a></li>
+            <li class="second-level"><a href="#prerequisites">Prerequisites</a></li>
+                
+            <li class="second-level"><a href="#local-development">Local Development</a></li>
+                
+                <li class="third-level"><a href="#serve-locally">Serve Locally</a></li>
+                <li class="third-level"><a href="#build-documentation">Build Documentation</a></li>
+            <li class="second-level"><a href="#project-structure">Project Structure</a></li>
+                
+            <li class="second-level"><a href="#adding-content">Adding Content</a></li>
+                
+                <li class="third-level"><a href="#create-new-page">Create New Page</a></li>
+                <li class="third-level"><a href="#markdown-features">Markdown Features</a></li>
+            <li class="second-level"><a href="#deployment">Deployment</a></li>
+                
+                <li class="third-level"><a href="#github-pages">GitHub Pages</a></li>
+                <li class="third-level"><a href="#custom-domain">Custom Domain</a></li>
+            <li class="second-level"><a href="#style-guide">Style Guide</a></li>
+                
+                <li class="third-level"><a href="#headers">Headers</a></li>
+                <li class="third-level"><a href="#links">Links</a></li>
+                <li class="third-level"><a href="#images">Images</a></li>
+                <li class="third-level"><a href="#code-references">Code References</a></li>
+            <li class="second-level"><a href="#checking-links">Checking Links</a></li>
+                
+            <li class="second-level"><a href="#updating-theme">Updating Theme</a></li>
+                
+            <li class="second-level"><a href="#troubleshooting">Troubleshooting</a></li>
+                
+                <li class="third-level"><a href="#build-errors">Build Errors</a></li>
+                <li class="third-level"><a href="#port-already-in-use">Port Already in Use</a></li>
+            <li class="second-level"><a href="#resources">Resources</a></li>
+                
+            <li class="second-level"><a href="#maintenance">Maintenance</a></li>
+                
+                <li class="third-level"><a href="#keeping-dependencies-updated">Keeping Dependencies Updated</a></li>
+                <li class="third-level"><a href="#checking-for-broken-links">Checking for Broken Links</a></li>
+                <li class="third-level"><a href="#updating-content">Updating Content</a></li>
+    </ul>
+</div></div>
+        <div class="col-md-9" role="main">
+
+<h1 id="building-documentation">Building Documentation<a class="headerlink" href="#building-documentation" title="Permanent link">&para;</a></h1>
+<p>Guide for building and deploying DL-Backtrace documentation.</p>
+<hr />
+<h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
+<p>Install MkDocs and dependencies:</p>
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>docs-requirements.txt
+</code></pre></div>
+<hr />
+<h2 id="local-development">Local Development<a class="headerlink" href="#local-development" title="Permanent link">&para;</a></h2>
+<h3 id="serve-locally">Serve Locally<a class="headerlink" href="#serve-locally" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>DL-Backtrace
+mkdocs<span class="w"> </span>serve
+</code></pre></div>
+<p>Then open http://localhost:8000 in your browser.</p>
+<p>Changes to markdown files are automatically reflected.</p>
+<h3 id="build-documentation">Build Documentation<a class="headerlink" href="#build-documentation" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>mkdocs<span class="w"> </span>build
+</code></pre></div>
+<p>This creates a <code>site/</code> directory with the static HTML.</p>
+<hr />
+<h2 id="project-structure">Project Structure<a class="headerlink" href="#project-structure" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>DL-Backtrace/
+├── mkdocs.yml              # Configuration
+├── docs/                   # Documentation source
+│   ├── index.md           # Home page
+│   ├── home/              # Getting started
+│   ├── guide/             # User guides
+│   ├── tutorials/         # Step-by-step tutorials
+│   ├── examples/          # Examples and notebooks
+│   ├── api/               # API reference
+│   ├── developer/         # Developer documentation
+│   ├── support/           # FAQ, troubleshooting
+│   └── javascripts/       # Custom JS (MathJax)
+└── site/                  # Built documentation (generated)
+</code></pre></div>
+<hr />
+<h2 id="adding-content">Adding Content<a class="headerlink" href="#adding-content" title="Permanent link">&para;</a></h2>
+<h3 id="create-new-page">Create New Page<a class="headerlink" href="#create-new-page" title="Permanent link">&para;</a></h3>
+<ol>
+<li>
+<p>Create markdown file in appropriate directory:
+   <div class="highlight"><pre><span></span><code>touch<span class="w"> </span>docs/guide/new-topic.md
+</code></pre></div></p>
+</li>
+<li>
+<p>Add to navigation in <code>mkdocs.yml</code>:
+   <div class="highlight"><pre><span></span><code><span class="nt">nav</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Guide</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">New Topic</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">guide/new-topic.md</span>
+</code></pre></div></p>
+</li>
+</ol>
+<h3 id="markdown-features">Markdown Features<a class="headerlink" href="#markdown-features" title="Permanent link">&para;</a></h3>
+<h4 id="admonitions">Admonitions<a class="headerlink" href="#admonitions" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code>!!! tip &quot;Helpful Tip&quot;
+    This is a tip!
+
+!!! warning &quot;Warning&quot;
+    Be careful!
+
+!!! note &quot;Note&quot;
+    Important information.
+</code></pre></div>
+<h4 id="code-blocks">Code Blocks<a class="headerlink" href="#code-blocks" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code>\`\`\`python
+def example():
+    return &quot;Hello&quot;
+\`\`\`
+</code></pre></div>
+<h4 id="tabs">Tabs<a class="headerlink" href="#tabs" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code>=== &quot;PyTorch&quot;
+    PyTorch code here
+
+=== &quot;TensorFlow&quot;
+    TensorFlow code here
+</code></pre></div>
+<h4 id="math">Math<a class="headerlink" href="#math" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code>Inline: \(x^2\)
+Block: \[E = mc^2\]
+</code></pre></div>
+<hr />
+<h2 id="deployment">Deployment<a class="headerlink" href="#deployment" title="Permanent link">&para;</a></h2>
+<h3 id="github-pages">GitHub Pages<a class="headerlink" href="#github-pages" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Deploy to gh-pages branch</span>
+mkdocs<span class="w"> </span>gh-deploy
+</code></pre></div>
+<h3 id="custom-domain">Custom Domain<a class="headerlink" href="#custom-domain" title="Permanent link">&para;</a></h3>
+<p>Add <code>CNAME</code> file to <code>docs/</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;docs.example.com&quot;</span><span class="w"> </span>&gt;<span class="w"> </span>docs/CNAME
+</code></pre></div>
+<hr />
+<h2 id="style-guide">Style Guide<a class="headerlink" href="#style-guide" title="Permanent link">&para;</a></h2>
+<h3 id="headers">Headers<a class="headerlink" href="#headers" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="gh"># Page Title (H1 - once per page)</span>
+
+<span class="gu">## Section (H2)</span>
+
+<span class="gu">### Subsection (H3)</span>
+
+<span class="gu">#### Sub-subsection (H4)</span>
+</code></pre></div>
+<h3 id="links">Links<a class="headerlink" href="#links" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>[<span class="nt">Link text</span>](<span class="na">relative/path.md</span>)
+[<span class="nt">External link</span>](<span class="na">https://example.com</span>)
+</code></pre></div>
+<h3 id="images">Images<a class="headerlink" href="#images" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>![<span class="nt">Alt text</span>](<span class="na">images/screenshot.png</span>)
+</code></pre></div>
+<h3 id="code-references">Code References<a class="headerlink" href="#code-references" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>Use backticks for <span class="sb">`code`</span> and functions like <span class="sb">`DLBacktrace()`</span>.
+</code></pre></div>
+<hr />
+<h2 id="checking-links">Checking Links<a class="headerlink" href="#checking-links" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="c1"># Check for broken links (if installed)</span>
+linkchecker<span class="w"> </span>http://localhost:8000
+</code></pre></div>
+<hr />
+<h2 id="updating-theme">Updating Theme<a class="headerlink" href="#updating-theme" title="Permanent link">&para;</a></h2>
+<p>Theme is configured in <code>mkdocs.yml</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">theme</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">material</span>
+<span class="w">  </span><span class="nt">palette</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">primary</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">indigo</span>
+<span class="w">    </span><span class="nt">accent</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">indigo</span>
+</code></pre></div>
+<p>See <a href="https://squidfunk.github.io/mkdocs-material/">Material for MkDocs</a> for customization options.</p>
+<hr />
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<h3 id="build-errors">Build Errors<a class="headerlink" href="#build-errors" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Verbose output</span>
+mkdocs<span class="w"> </span>build<span class="w"> </span>--verbose
+
+<span class="c1"># Clean build</span>
+rm<span class="w"> </span>-rf<span class="w"> </span>site/
+mkdocs<span class="w"> </span>build
+</code></pre></div>
+<h3 id="port-already-in-use">Port Already in Use<a class="headerlink" href="#port-already-in-use" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Use different port</span>
+mkdocs<span class="w"> </span>serve<span class="w"> </span>-a<span class="w"> </span>localhost:8001
+</code></pre></div>
+<hr />
+<h2 id="resources">Resources<a class="headerlink" href="#resources" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="https://www.mkdocs.org/">MkDocs Documentation</a></li>
+<li><a href="https://squidfunk.github.io/mkdocs-material/">Material for MkDocs</a></li>
+<li><a href="https://facelessuser.github.io/pymdown-extensions/">PyMdown Extensions</a></li>
+</ul>
+<hr />
+<h2 id="maintenance">Maintenance<a class="headerlink" href="#maintenance" title="Permanent link">&para;</a></h2>
+<h3 id="keeping-dependencies-updated">Keeping Dependencies Updated<a class="headerlink" href="#keeping-dependencies-updated" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>--upgrade<span class="w"> </span>-r<span class="w"> </span>docs-requirements.txt
+</code></pre></div>
+<h3 id="checking-for-broken-links">Checking for Broken Links<a class="headerlink" href="#checking-for-broken-links" title="Permanent link">&para;</a></h3>
+<p>Periodically check internal links are still valid.</p>
+<h3 id="updating-content">Updating Content<a class="headerlink" href="#updating-content" title="Permanent link">&para;</a></h3>
+<p>Review and update documentation when:
+- New features are added
+- APIs change
+- User feedback suggests improvements
+- Errors are found</p>
+<hr />
+<div align="center">
+
+**Ready to contribute to documentation?**
+
+[Edit on GitHub →](https://github.com/Lexsi-Labs/DLBacktrace/tree/main/docs){ .md-button }
+
+</div></div>
+        
+        
+    </div>
+
+    
+      <footer class="col-md-12 text-center">
+          
+          
+            <hr>
+            <p>
+            <small>Copyright &copy; 2025 Lexsi Labs</small><br>
+            
+            <small>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</small>
+            </p>
+          
+
+          
+          
+      </footer>
+    
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script src="../js/bootstrap-3.0.3.min.js"></script>
+
+    
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/highlight.min.js"></script>
+        
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/python.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/yaml.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/bash.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/javascript.min.js"></script>
+        
+    <script>hljs.initHighlightingOnLoad();</script>
+    
+
+    <script>var base_url = ".."</script>
+    
+    <script src="../js/base.js"></script>
+    <script src="../javascripts/mathjax.js"></script>
+    <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="../javascripts/katex.js"></script>
+    <script src="https://unpkg.com/katex@0/dist/katex.min.js"></script>
+    <script src="https://unpkg.com/katex@0/dist/contrib/auto-render.min.js"></script>
+    <script src="../search/main.js"></script>
+
+    <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    <span aria-hidden="true">&times;</span>
+                    <span class="sr-only">Close</span>
+                </button>
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+            </div>
+            <div class="modal-body">
+                <p>
+                    From here you can search these documents. Enter
+                    your search terms below.
+                </p>
+                <form>
+                    <div class="form-group">
+                        <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+    </body>
+
+</html>
