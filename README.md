@@ -32,7 +32,6 @@ DL-Backtrace is a powerful explainable AI framework developed by **Lexsi Labs** 
 - **🎲 DLB Auto Sampler:** Advanced text generation with multiple sampling strategies (greedy, temperature, top-k, top-p, beam search) and token-level relevance tracking
 - **🧠 Mixture of Experts (MoE) Support:** Built-in support for MoE architectures (JetMoE, OLMoE, Qwen3-MoE, GPT-OSS) with expert-level relevance analysis
 - **🌡️ Temperature Scaling:** Control generation diversity and model confidence with flexible temperature parameters
-- **💾 Memory Efficient:** Both disk-cached and in-memory execution options for different use cases
 - **🔄 Enhanced Execution Engine:** Critical fixes for RoBERTa, LLaMA, and other transformer models
 
 ## Installation
@@ -206,9 +205,8 @@ output = dlb.generate_with_temperature(
 ### ⚡ Execution Engines
 DL-Backtrace provides optimized execution engines:
 
-#### ExecutionEngineNoCache (Recommended)
+#### ExecutionEngineNoCache 
 - **Memory-efficient**: Runs entirely in RAM for faster execution
-- **CPU/GPU Compatible**: Works seamlessly on both CPU and GPU
 - **Enhanced Operations**: Supports 100+ PyTorch operations with robust error handling
 - **Recent Improvements**: Critical fixes for transformer models (RoBERTa, LLaMA, BERT)
 
