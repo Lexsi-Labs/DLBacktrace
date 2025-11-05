@@ -232,8 +232,7 @@ Full support for PyTorch's negative indexing and complex operations:
 | `multiplier` | Starting relevance at output layer | Float (default: 100.0) |
 | `scaler`     | Relevance scaling factor | Float (default: 1.0) |
 | `thresholding` | Pixel selection threshold for segmentation | Float (default: 0.5) |
-| `task`       | Model task type | `binary-classification`, `multi-class classification`, `bbox-regression`, `binary-segmentation` |
-| `model-type` | Model architecture type | `Encoder`, `Encoder_Decoder` |
+| `task`       | Model task type | `binary-classification`, `multi-class classification` |
 
 ## Example Notebooks
 
