@@ -138,3 +138,8 @@
     color: #000;
     background-color: #f0f0f0;
 }
+
+/* Hide "Edit on ..." link in the top navbar */
+.navbar-nav > li > a[href*="Edit"] {
+    display: none !important;
+}
