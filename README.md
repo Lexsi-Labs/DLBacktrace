@@ -9,7 +9,7 @@ A powerful explainable AI (XAI) framework for deep learning model interpretabili
 
 ## Overview
 
-DL-Backtrace is a powerful explainable AI framework developed by **Lexsi Labs** for enhancing the interpretability of deep learning models. It provides comprehensive layer-wise relevance propagation and model tracing capabilities across various architectures and tasks, with robust execution engines optimized for both CPU and GPU environments.
+DL-Backtrace is a powerful explainable AI framework developed by **Lexsi Labs** for enhancing the interpretability of deep learning models. It provides comprehensive layer-wise relevance propagation and model tracing capabilities across various architectures and tasks, with robust execution optimized for both CPU and GPU environments.
 
 **Website**: [https://lexsi.ai/](https://lexsi.ai/)  
 **Documentation**: [Full Documentation](https://lexsi-labs.github.io/DLBacktrace/)  
