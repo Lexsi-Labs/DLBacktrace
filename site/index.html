@@ -1,41 +1,611 @@
-<!doctype html><html lang=en class=no-js> <head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=description content="A powerful explainable AI (XAI) framework for deep learning model interpretability"><meta name=author content=AryaXAI><link href=https://aryaxai.github.io/DL-Backtrace/ rel=canonical><link href=home/features/ rel=next><link rel=icon href=assets/images/favicon.png><meta name=generator content="mkdocs-1.6.1, mkdocs-material-9.6.22"><title>Overview - DL-Backtrace Documentation</title><link rel=stylesheet href=assets/stylesheets/main.84d31ad4.min.css><link rel=stylesheet href=assets/stylesheets/palette.06af60db.min.css><link rel=preconnect href=https://fonts.gstatic.com crossorigin><link rel=stylesheet href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback"><style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style><link rel=stylesheet href=https://unpkg.com/katex@0/dist/katex.min.css><script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script></head> <body dir=ltr data-md-color-scheme=default data-md-color-primary=indigo data-md-color-accent=indigo> <input class=md-toggle data-md-toggle=drawer type=checkbox id=__drawer autocomplete=off> <input class=md-toggle data-md-toggle=search type=checkbox id=__search autocomplete=off> <label class=md-overlay for=__drawer></label> <div data-md-component=skip> <a href=#welcome-to-dl-backtrace class=md-skip> Skip to content </a> </div> <div data-md-component=announce> </div> <div data-md-color-scheme=default data-md-component=outdated hidden> </div> <header class="md-header md-header--shadow md-header--lifted" data-md-component=header> <nav class="md-header__inner md-grid" aria-label=Header> <a href=. title="DL-Backtrace Documentation" class="md-header__button md-logo" aria-label="DL-Backtrace Documentation" data-md-component=logo> <img src=assets/images/arya-logo-mini.png alt=logo> </a> <label class="md-header__button md-icon" for=__drawer> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg> </label> <div class=md-header__title data-md-component=header-title> <div class=md-header__ellipsis> <div class=md-header__topic> <span class=md-ellipsis> DL-Backtrace Documentation </span> </div> <div class=md-header__topic data-md-component=header-topic> <span class=md-ellipsis> Overview </span> </div> </div> </div> <form class=md-header__option data-md-component=palette> <input class=md-option data-md-color-media data-md-color-scheme=default data-md-color-primary=indigo data-md-color-accent=indigo aria-label="Switch to dark mode" type=radio name=__palette id=__palette_0> <label class="md-header__button md-icon" title="Switch to dark mode" for=__palette_1 hidden> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg> </label> <input class=md-option data-md-color-media data-md-color-scheme=slate data-md-color-primary=indigo data-md-color-accent=indigo aria-label="Switch to light mode" type=radio name=__palette id=__palette_1> <label class="md-header__button md-icon" title="Switch to light mode" for=__palette_0 hidden> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg> </label> </form> <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script> <label class="md-header__button md-icon" for=__search> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg> </label> <div class=md-search data-md-component=search role=dialog> <label class=md-search__overlay for=__search></label> <div class=md-search__inner role=search> <form class=md-search__form name=search> <input type=text class=md-search__input name=query aria-label=Search placeholder=Search autocapitalize=off autocorrect=off autocomplete=off spellcheck=false data-md-component=search-query required> <label class="md-search__icon md-icon" for=__search> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg> </label> <nav class=md-search__options aria-label=Search> <a href=javascript:void(0) class="md-search__icon md-icon" title=Share aria-label=Share data-clipboard data-clipboard-text data-md-component=search-share tabindex=-1> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg> </a> <button type=reset class="md-search__icon md-icon" title=Clear aria-label=Clear tabindex=-1> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg> </button> </nav> <div class=md-search__suggest data-md-component=search-suggest></div> </form> <div class=md-search__output> <div class=md-search__scrollwrap tabindex=0 data-md-scrollfix> <div class=md-search-result data-md-component=search-result> <div class=md-search-result__meta> Initializing search </div> <ol class=md-search-result__list role=presentation></ol> </div> </div> </div> </div> </div> <div class=md-header__source> <a href=https://github.com/aryaxai/DL-Backtrace title="Go to repository" class=md-source data-md-component=source> <div class="md-source__icon md-icon"> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 512 512"><!-- Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg> </div> <div class=md-source__repository> aryaxai/DL-Backtrace </div> </a> </div> </nav> <nav class=md-tabs aria-label=Tabs data-md-component=tabs> <div class=md-grid> <ul class=md-tabs__list> <li class="md-tabs__item md-tabs__item--active"> <a href=. class=md-tabs__link> Home </a> </li> <li class=md-tabs__item> <a href=guide/introduction/ class=md-tabs__link> User Guide </a> </li> <li class=md-tabs__item> <a href=examples/colab-notebooks/ class=md-tabs__link> Examples </a> </li> <li class=md-tabs__item> <a href=developer/architecture/ class=md-tabs__link> Developer Guide </a> </li> <li class=md-tabs__item> <a href=support/faq/ class=md-tabs__link> Support </a> </li> </ul> </div> </nav> </header> <div class=md-container data-md-component=container> <main class=md-main data-md-component=main> <div class="md-main__inner md-grid"> <div class="md-sidebar md-sidebar--primary" data-md-component=sidebar data-md-type=navigation> <div class=md-sidebar__scrollwrap> <div class=md-sidebar__inner> <nav class="md-nav md-nav--primary md-nav--lifted" aria-label=Navigation data-md-level=0> <label class=md-nav__title for=__drawer> <a href=. title="DL-Backtrace Documentation" class="md-nav__button md-logo" aria-label="DL-Backtrace Documentation" data-md-component=logo> <img src=assets/images/arya-logo-mini.png alt=logo> </a> DL-Backtrace Documentation </label> <div class=md-nav__source> <a href=https://github.com/aryaxai/DL-Backtrace title="Go to repository" class=md-source data-md-component=source> <div class="md-source__icon md-icon"> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 512 512"><!-- Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg> </div> <div class=md-source__repository> aryaxai/DL-Backtrace </div> </a> </div> <ul class=md-nav__list data-md-scrollfix> <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested"> <input class="md-nav__toggle md-toggle " type=checkbox id=__nav_1 checked> <label class=md-nav__link for=__nav_1 id=__nav_1_label tabindex> <span class=md-ellipsis> Home </span> <span class="md-nav__icon md-icon"></span> </label> <nav class=md-nav data-md-level=1 aria-labelledby=__nav_1_label aria-expanded=true> <label class=md-nav__title for=__nav_1> <span class="md-nav__icon md-icon"></span> Home </label> <ul class=md-nav__list data-md-scrollfix> <li class="md-nav__item md-nav__item--active"> <input class="md-nav__toggle md-toggle" type=checkbox id=__toc> <label class="md-nav__link md-nav__link--active" for=__toc> <span class=md-ellipsis> Overview </span> <span class="md-nav__icon md-icon"></span> </label> <a href=. class="md-nav__link md-nav__link--active"> <span class=md-ellipsis> Overview </span> </a> <nav class="md-nav md-nav--secondary" aria-label="Table of contents"> <label class=md-nav__title for=__toc> <span class="md-nav__icon md-icon"></span> Table of contents </label> <ul class=md-nav__list data-md-component=toc data-md-scrollfix> <li class=md-nav__item> <a href=#overview class=md-nav__link> <span class=md-ellipsis> Overview </span> </a> </li> <li class=md-nav__item> <a href=#why-dl-backtrace class=md-nav__link> <span class=md-ellipsis> Why DL-Backtrace? </span> </a> <nav class=md-nav aria-label="Why DL-Backtrace?"> <ul class=md-nav__list> <li class=md-nav__item> <a href=#deep-model-interpretability class=md-nav__link> <span class=md-ellipsis> 🔍 Deep Model Interpretability </span> </a> </li> <li class=md-nav__item> <a href=#high-performance class=md-nav__link> <span class=md-ellipsis> ⚡ High Performance </span> </a> </li> <li class=md-nav__item> <a href=#architecture-agnostic class=md-nav__link> <span class=md-ellipsis> 🏗️ Architecture Agnostic </span> </a> </li> <li class=md-nav__item> <a href=#multi-task-support class=md-nav__link> <span class=md-ellipsis> 🎯 Multi-Task Support </span> </a> </li> <li class=md-nav__item> <a href=#production-ready class=md-nav__link> <span class=md-ellipsis> 🛡️ Production Ready </span> </a> </li> </ul> </nav> </li> <li class=md-nav__item> <a href=#quick-example class=md-nav__link> <span class=md-ellipsis> Quick Example </span> </a> </li> <li class=md-nav__item> <a href=#supported-models class=md-nav__link> <span class=md-ellipsis> Supported Models </span> </a> <nav class=md-nav aria-label="Supported Models"> <ul class=md-nav__list> <li class=md-nav__item> <a href=#vision-models class=md-nav__link> <span class=md-ellipsis> Vision Models </span> </a> </li> <li class=md-nav__item> <a href=#nlp-models class=md-nav__link> <span class=md-ellipsis> NLP Models </span> </a> </li> <li class=md-nav__item> <a href=#tasks class=md-nav__link> <span class=md-ellipsis> Tasks </span> </a> </li> </ul> </nav> </li> <li class=md-nav__item> <a href=#key-capabilities class=md-nav__link> <span class=md-ellipsis> Key Capabilities </span> </a> <nav class=md-nav aria-label="Key Capabilities"> <ul class=md-nav__list> <li class=md-nav__item> <a href=#layer-wise-relevance-propagation class=md-nav__link> <span class=md-ellipsis> Layer-wise Relevance Propagation </span> </a> </li> <li class=md-nav__item> <a href=#graph-tracing-visualization class=md-nav__link> <span class=md-ellipsis> Graph Tracing &amp; Visualization </span> </a> </li> <li class=md-nav__item> <a href=#deterministic-execution class=md-nav__link> <span class=md-ellipsis> Deterministic Execution </span> </a> </li> </ul> </nav> </li> <li class=md-nav__item> <a href=#community-support class=md-nav__link> <span class=md-ellipsis> Community &amp; Support </span> </a> </li> <li class=md-nav__item> <a href=#next-steps class=md-nav__link> <span class=md-ellipsis> Next Steps </span> </a> </li> </ul> </nav> </li> <li class=md-nav__item> <a href=home/features/ class=md-nav__link> <span class=md-ellipsis> Key Features </span> </a> </li> <li class=md-nav__item> <a href=home/installation/ class=md-nav__link> <span class=md-ellipsis> Installation </span> </a> </li> <li class=md-nav__item> <a href=home/quickstart/ class=md-nav__link> <span class=md-ellipsis> Quick Start </span> </a> </li> <li class=md-nav__item> <a href=home/whats-new/ class=md-nav__link> <span class=md-ellipsis> What's New </span> </a> </li> </ul> </nav> </li> <li class="md-nav__item md-nav__item--nested"> <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type=checkbox id=__nav_2> <label class=md-nav__link for=__nav_2 id=__nav_2_label tabindex=0> <span class=md-ellipsis> User Guide </span> <span class="md-nav__icon md-icon"></span> </label> <nav class=md-nav data-md-level=1 aria-labelledby=__nav_2_label aria-expanded=false> <label class=md-nav__title for=__nav_2> <span class="md-nav__icon md-icon"></span> User Guide </label> <ul class=md-nav__list data-md-scrollfix> <li class=md-nav__item> <a href=guide/introduction/ class=md-nav__link> <span class=md-ellipsis> Introduction </span> </a> </li> <li class="md-nav__item md-nav__item--nested"> <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type=checkbox id=__nav_2_2> <label class=md-nav__link for=__nav_2_2 id=__nav_2_2_label tabindex=0> <span class=md-ellipsis> PyTorch Backend </span> <span class="md-nav__icon md-icon"></span> </label> <nav class=md-nav data-md-level=2 aria-labelledby=__nav_2_2_label aria-expanded=false> <label class=md-nav__title for=__nav_2_2> <span class="md-nav__icon md-icon"></span> PyTorch Backend </label> <ul class=md-nav__list data-md-scrollfix> <li class=md-nav__item> <a href=guide/pytorch/overview/ class=md-nav__link> <span class=md-ellipsis> Overview </span> </a> </li> <li class=md-nav__item> <a href=guide/pytorch/dlbacktracefx/ class=md-nav__link> <span class=md-ellipsis> DLBacktraceFX </span> </a> </li> <li class=md-nav__item> <a href=guide/pytorch/execution-engines/ class=md-nav__link> <span class=md-ellipsis> Execution Engines </span> </a> </li> <li class=md-nav__item> <a href=guide/pytorch/operations/ class=md-nav__link> <span class=md-ellipsis> Supported Operations </span> </a> </li> <li class=md-nav__item> <a href=guide/pytorch/tracing/ class=md-nav__link> <span class=md-ellipsis> Model Tracing </span> </a> </li> </ul> </nav> </li> <li class="md-nav__item md-nav__item--nested"> <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type=checkbox id=__nav_2_3> <label class=md-nav__link for=__nav_2_3 id=__nav_2_3_label tabindex=0> <span class=md-ellipsis> Relevance Propagation </span> <span class="md-nav__icon md-icon"></span> </label> <nav class=md-nav data-md-level=2 aria-labelledby=__nav_2_3_label aria-expanded=false> <label class=md-nav__title for=__nav_2_3> <span class="md-nav__icon md-icon"></span> Relevance Propagation </label> <ul class=md-nav__list data-md-scrollfix> <li class=md-nav__item> <a href=guide/relevance/overview/ class=md-nav__link> <span class=md-ellipsis> Overview </span> </a> </li> <li class=md-nav__item> <a href=guide/relevance/parameters/ class=md-nav__link> <span class=md-ellipsis> Parameters </span> </a> </li> </ul> </nav> </li> <li class=md-nav__item> <a href=guide/best-practices/ class=md-nav__link> <span class=md-ellipsis> Best Practices </span> </a> </li> </ul> </nav> </li> <li class="md-nav__item md-nav__item--nested"> <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type=checkbox id=__nav_3> <label class=md-nav__link for=__nav_3 id=__nav_3_label tabindex=0> <span class=md-ellipsis> Examples </span> <span class="md-nav__icon md-icon"></span> </label> <nav class=md-nav data-md-level=1 aria-labelledby=__nav_3_label aria-expanded=false> <label class=md-nav__title for=__nav_3> <span class="md-nav__icon md-icon"></span> Examples </label> <ul class=md-nav__list data-md-scrollfix> <li class=md-nav__item> <a href=examples/colab-notebooks/ class=md-nav__link> <span class=md-ellipsis> Colab Notebooks </span> </a> </li> <li class=md-nav__item> <a href=examples/use-cases/ class=md-nav__link> <span class=md-ellipsis> Use Cases </span> </a> </li> </ul> </nav> </li> <li class="md-nav__item md-nav__item--nested"> <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type=checkbox id=__nav_4> <label class=md-nav__link for=__nav_4 id=__nav_4_label tabindex=0> <span class=md-ellipsis> Developer Guide </span> <span class="md-nav__icon md-icon"></span> </label> <nav class=md-nav data-md-level=1 aria-labelledby=__nav_4_label aria-expanded=false> <label class=md-nav__title for=__nav_4> <span class="md-nav__icon md-icon"></span> Developer Guide </label> <ul class=md-nav__list data-md-scrollfix> <li class=md-nav__item> <a href=developer/architecture/ class=md-nav__link> <span class=md-ellipsis> Architecture </span> </a> </li> <li class=md-nav__item> <a href=developer/contributing/ class=md-nav__link> <span class=md-ellipsis> Contributing </span> </a> </li> <li class=md-nav__item> <a href=developer/execution-engine/ class=md-nav__link> <span class=md-ellipsis> Execution Engine </span> </a> </li> <li class=md-nav__item> <a href=developer/cuda-development/ class=md-nav__link> <span class=md-ellipsis> CUDA Development </span> </a> </li> <li class=md-nav__item> <a href=developer/testing/ class=md-nav__link> <span class=md-ellipsis> Testing </span> </a> </li> </ul> </nav> </li> <li class="md-nav__item md-nav__item--nested"> <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type=checkbox id=__nav_5> <label class=md-nav__link for=__nav_5 id=__nav_5_label tabindex=0> <span class=md-ellipsis> Support </span> <span class="md-nav__icon md-icon"></span> </label> <nav class=md-nav data-md-level=1 aria-labelledby=__nav_5_label aria-expanded=false> <label class=md-nav__title for=__nav_5> <span class="md-nav__icon md-icon"></span> Support </label> <ul class=md-nav__list data-md-scrollfix> <li class=md-nav__item> <a href=support/faq/ class=md-nav__link> <span class=md-ellipsis> FAQ </span> </a> </li> <li class=md-nav__item> <a href=support/known-issues/ class=md-nav__link> <span class=md-ellipsis> Known Issues </span> </a> </li> <li class=md-nav__item> <a href=support/changelog/ class=md-nav__link> <span class=md-ellipsis> Changelog </span> </a> </li> <li class=md-nav__item> <a href=support/license/ class=md-nav__link> <span class=md-ellipsis> License </span> </a> </li> </ul> </nav> </li> </ul> </nav> </div> </div> </div> <div class="md-sidebar md-sidebar--secondary" data-md-component=sidebar data-md-type=toc> <div class=md-sidebar__scrollwrap> <div class=md-sidebar__inner> <nav class="md-nav md-nav--secondary" aria-label="Table of contents"> <label class=md-nav__title for=__toc> <span class="md-nav__icon md-icon"></span> Table of contents </label> <ul class=md-nav__list data-md-component=toc data-md-scrollfix> <li class=md-nav__item> <a href=#overview class=md-nav__link> <span class=md-ellipsis> Overview </span> </a> </li> <li class=md-nav__item> <a href=#why-dl-backtrace class=md-nav__link> <span class=md-ellipsis> Why DL-Backtrace? </span> </a> <nav class=md-nav aria-label="Why DL-Backtrace?"> <ul class=md-nav__list> <li class=md-nav__item> <a href=#deep-model-interpretability class=md-nav__link> <span class=md-ellipsis> 🔍 Deep Model Interpretability </span> </a> </li> <li class=md-nav__item> <a href=#high-performance class=md-nav__link> <span class=md-ellipsis> ⚡ High Performance </span> </a> </li> <li class=md-nav__item> <a href=#architecture-agnostic class=md-nav__link> <span class=md-ellipsis> 🏗️ Architecture Agnostic </span> </a> </li> <li class=md-nav__item> <a href=#multi-task-support class=md-nav__link> <span class=md-ellipsis> 🎯 Multi-Task Support </span> </a> </li> <li class=md-nav__item> <a href=#production-ready class=md-nav__link> <span class=md-ellipsis> 🛡️ Production Ready </span> </a> </li> </ul> </nav> </li> <li class=md-nav__item> <a href=#quick-example class=md-nav__link> <span class=md-ellipsis> Quick Example </span> </a> </li> <li class=md-nav__item> <a href=#supported-models class=md-nav__link> <span class=md-ellipsis> Supported Models </span> </a> <nav class=md-nav aria-label="Supported Models"> <ul class=md-nav__list> <li class=md-nav__item> <a href=#vision-models class=md-nav__link> <span class=md-ellipsis> Vision Models </span> </a> </li> <li class=md-nav__item> <a href=#nlp-models class=md-nav__link> <span class=md-ellipsis> NLP Models </span> </a> </li> <li class=md-nav__item> <a href=#tasks class=md-nav__link> <span class=md-ellipsis> Tasks </span> </a> </li> </ul> </nav> </li> <li class=md-nav__item> <a href=#key-capabilities class=md-nav__link> <span class=md-ellipsis> Key Capabilities </span> </a> <nav class=md-nav aria-label="Key Capabilities"> <ul class=md-nav__list> <li class=md-nav__item> <a href=#layer-wise-relevance-propagation class=md-nav__link> <span class=md-ellipsis> Layer-wise Relevance Propagation </span> </a> </li> <li class=md-nav__item> <a href=#graph-tracing-visualization class=md-nav__link> <span class=md-ellipsis> Graph Tracing &amp; Visualization </span> </a> </li> <li class=md-nav__item> <a href=#deterministic-execution class=md-nav__link> <span class=md-ellipsis> Deterministic Execution </span> </a> </li> </ul> </nav> </li> <li class=md-nav__item> <a href=#community-support class=md-nav__link> <span class=md-ellipsis> Community &amp; Support </span> </a> </li> <li class=md-nav__item> <a href=#next-steps class=md-nav__link> <span class=md-ellipsis> Next Steps </span> </a> </li> </ul> </nav> </div> </div> </div> <div class=md-content data-md-component=content> <article class="md-content__inner md-typeset"> <h1 id=welcome-to-dl-backtrace>Welcome to DL-Backtrace<a class=headerlink href=#welcome-to-dl-backtrace title="Permanent link">&para;</a></h1> <figure> <img alt="DL-Backtrace Logo" src=assets/images/arya-fav.png width=300> <figcaption>A powerful explainable AI (XAI) framework for deep learning model interpretability</figcaption> </figure> <p><a href=https://github.com/aryaxai/DL-Backtrace/blob/main/LICENSE><img alt=License src=https://img.shields.io/badge/License-MIT-blue.svg></a> <a href=https://python.org><img alt=Python src=https://img.shields.io/badge/Python-3.8%2B-blue.svg></a> <a href=https://pytorch.org><img alt=PyTorch src=https://img.shields.io/badge/PyTorch-2.6%2B-red.svg></a></p> <p><a href=home/quickstart/ class="md-button md-button--primary">Get Started</a> <a class=md-button href=https://github.com/aryaxai/DL-Backtrace>View on GitHub</a></p> <hr> <h2 id=overview>Overview<a class=headerlink href=#overview title="Permanent link">&para;</a></h2> <p>DL-Backtrace is a powerful explainable AI framework developed by <strong>AryaXAI</strong> for enhancing the interpretability of deep learning models. It provides comprehensive layer-wise relevance propagation and model tracing capabilities across various architectures and tasks, with robust execution engines optimized for both CPU and GPU environments.</p> <p>Whether you're working with vision models, NLP transformers, MoE's or custom architectures, DL-Backtrace provides insights into feature importance, information flow, and bias, enabling better model interpretation and validation without external dependencies.</p> <hr> <h2 id=why-dl-backtrace>Why DL-Backtrace?<a class=headerlink href=#why-dl-backtrace title="Permanent link">&para;</a></h2> <h3 id=deep-model-interpretability>🔍 <strong>Deep Model Interpretability</strong><a class=headerlink href=#deep-model-interpretability title="Permanent link">&para;</a></h3> <p>Gain comprehensive insights into your AI models using advanced relevance propagation algorithms. Understand which features and layers contribute most to your model's predictions.</p> <h3 id=high-performance>⚡ <strong>High Performance</strong><a class=headerlink href=#high-performance title="Permanent link">&para;</a></h3> <p>Optimized execution engine with CUDA acceleration and deterministic tracing. Choose between CPU and GPU execution based on your needs.</p> <h3 id=architecture-agnostic>🏗️ <strong>Architecture Agnostic</strong><a class=headerlink href=#architecture-agnostic title="Permanent link">&para;</a></h3> <p>Support for CNN, RNN, Transformer, and custom architectures. Works seamlessly with popular models like ResNet, BERT, LLaMA, and more.</p> <h3 id=multi-task-support>🎯 <strong>Multi-Task Support</strong><a class=headerlink href=#multi-task-support title="Permanent link">&para;</a></h3> <p>Binary/multi-class classification, segmentation, and text generation - all supported out of the box.</p> <h3 id=production-ready>🛡️ <strong>Production Ready</strong><a class=headerlink href=#production-ready title="Permanent link">&para;</a></h3> <p>Deterministic execution environment with comprehensive error handling. Battle-tested on real-world models and datasets.</p> <hr> <h2 id=quick-example>Quick Example<a class=headerlink href=#quick-example title="Permanent link">&para;</a></h2> <div class="language-python highlight"><pre><span></span><code><span id=__span-0-1><a id=__codelineno-0-1 name=__codelineno-0-1 href=#__codelineno-0-1></a><span class=kn>import</span><span class=w> </span><span class=nn>torch</span>
-</span><span id=__span-0-2><a id=__codelineno-0-2 name=__codelineno-0-2 href=#__codelineno-0-2></a><span class=kn>import</span><span class=w> </span><span class=nn>torch.nn</span><span class=w> </span><span class=k>as</span><span class=w> </span><span class=nn>nn</span>
-</span><span id=__span-0-3><a id=__codelineno-0-3 name=__codelineno-0-3 href=#__codelineno-0-3></a><span class=kn>from</span><span class=w> </span><span class=nn>dl_backtrace.pytorch_backtrace</span><span class=w> </span><span class=kn>import</span> <span class=n>DLBacktraceFX</span>
-</span><span id=__span-0-4><a id=__codelineno-0-4 name=__codelineno-0-4 href=#__codelineno-0-4></a>
-</span><span id=__span-0-5><a id=__codelineno-0-5 name=__codelineno-0-5 href=#__codelineno-0-5></a><span class=c1># Define your model</span>
-</span><span id=__span-0-6><a id=__codelineno-0-6 name=__codelineno-0-6 href=#__codelineno-0-6></a><span class=k>class</span><span class=w> </span><span class=nc>MyModel</span><span class=p>(</span><span class=n>nn</span><span class=o>.</span><span class=n>Module</span><span class=p>):</span>
-</span><span id=__span-0-7><a id=__codelineno-0-7 name=__codelineno-0-7 href=#__codelineno-0-7></a>    <span class=k>def</span><span class=w> </span><span class=fm>__init__</span><span class=p>(</span><span class=bp>self</span><span class=p>):</span>
-</span><span id=__span-0-8><a id=__codelineno-0-8 name=__codelineno-0-8 href=#__codelineno-0-8></a>        <span class=nb>super</span><span class=p>()</span><span class=o>.</span><span class=fm>__init__</span><span class=p>()</span>
-</span><span id=__span-0-9><a id=__codelineno-0-9 name=__codelineno-0-9 href=#__codelineno-0-9></a>        <span class=bp>self</span><span class=o>.</span><span class=n>conv1</span> <span class=o>=</span> <span class=n>nn</span><span class=o>.</span><span class=n>Conv2d</span><span class=p>(</span><span class=mi>3</span><span class=p>,</span> <span class=mi>64</span><span class=p>,</span> <span class=mi>3</span><span class=p>,</span> <span class=n>padding</span><span class=o>=</span><span class=mi>1</span><span class=p>)</span>
-</span><span id=__span-0-10><a id=__codelineno-0-10 name=__codelineno-0-10 href=#__codelineno-0-10></a>        <span class=bp>self</span><span class=o>.</span><span class=n>relu</span> <span class=o>=</span> <span class=n>nn</span><span class=o>.</span><span class=n>ReLU</span><span class=p>()</span>
-</span><span id=__span-0-11><a id=__codelineno-0-11 name=__codelineno-0-11 href=#__codelineno-0-11></a>        <span class=bp>self</span><span class=o>.</span><span class=n>pool</span> <span class=o>=</span> <span class=n>nn</span><span class=o>.</span><span class=n>AdaptiveAvgPool2d</span><span class=p>(</span><span class=mi>1</span><span class=p>)</span>
-</span><span id=__span-0-12><a id=__codelineno-0-12 name=__codelineno-0-12 href=#__codelineno-0-12></a>        <span class=bp>self</span><span class=o>.</span><span class=n>fc</span> <span class=o>=</span> <span class=n>nn</span><span class=o>.</span><span class=n>Linear</span><span class=p>(</span><span class=mi>64</span><span class=p>,</span> <span class=mi>10</span><span class=p>)</span>
-</span><span id=__span-0-13><a id=__codelineno-0-13 name=__codelineno-0-13 href=#__codelineno-0-13></a>
-</span><span id=__span-0-14><a id=__codelineno-0-14 name=__codelineno-0-14 href=#__codelineno-0-14></a>    <span class=k>def</span><span class=w> </span><span class=nf>forward</span><span class=p>(</span><span class=bp>self</span><span class=p>,</span> <span class=n>x</span><span class=p>):</span>
-</span><span id=__span-0-15><a id=__codelineno-0-15 name=__codelineno-0-15 href=#__codelineno-0-15></a>        <span class=n>x</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>relu</span><span class=p>(</span><span class=bp>self</span><span class=o>.</span><span class=n>conv1</span><span class=p>(</span><span class=n>x</span><span class=p>))</span>
-</span><span id=__span-0-16><a id=__codelineno-0-16 name=__codelineno-0-16 href=#__codelineno-0-16></a>        <span class=n>x</span> <span class=o>=</span> <span class=bp>self</span><span class=o>.</span><span class=n>pool</span><span class=p>(</span><span class=n>x</span><span class=p>)</span><span class=o>.</span><span class=n>flatten</span><span class=p>(</span><span class=mi>1</span><span class=p>)</span>
-</span><span id=__span-0-17><a id=__codelineno-0-17 name=__codelineno-0-17 href=#__codelineno-0-17></a>        <span class=k>return</span> <span class=bp>self</span><span class=o>.</span><span class=n>fc</span><span class=p>(</span><span class=n>x</span><span class=p>)</span>
-</span><span id=__span-0-18><a id=__codelineno-0-18 name=__codelineno-0-18 href=#__codelineno-0-18></a>
-</span><span id=__span-0-19><a id=__codelineno-0-19 name=__codelineno-0-19 href=#__codelineno-0-19></a><span class=c1># Initialize model and DL-Backtrace</span>
-</span><span id=__span-0-20><a id=__codelineno-0-20 name=__codelineno-0-20 href=#__codelineno-0-20></a><span class=n>model</span> <span class=o>=</span> <span class=n>MyModel</span><span class=p>()</span>
-</span><span id=__span-0-21><a id=__codelineno-0-21 name=__codelineno-0-21 href=#__codelineno-0-21></a><span class=n>x</span> <span class=o>=</span> <span class=n>torch</span><span class=o>.</span><span class=n>randn</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=mi>3</span><span class=p>,</span> <span class=mi>224</span><span class=p>,</span> <span class=mi>224</span><span class=p>)</span>
-</span><span id=__span-0-22><a id=__codelineno-0-22 name=__codelineno-0-22 href=#__codelineno-0-22></a>
-</span><span id=__span-0-23><a id=__codelineno-0-23 name=__codelineno-0-23 href=#__codelineno-0-23></a><span class=n>dlb</span> <span class=o>=</span> <span class=n>DLBacktraceFX</span><span class=p>(</span>
-</span><span id=__span-0-24><a id=__codelineno-0-24 name=__codelineno-0-24 href=#__codelineno-0-24></a>    <span class=n>model</span><span class=o>=</span><span class=n>model</span><span class=p>,</span>
-</span><span id=__span-0-25><a id=__codelineno-0-25 name=__codelineno-0-25 href=#__codelineno-0-25></a>    <span class=n>input_for_graph</span><span class=o>=</span><span class=p>(</span><span class=n>x</span><span class=p>,),</span>
-</span><span id=__span-0-26><a id=__codelineno-0-26 name=__codelineno-0-26 href=#__codelineno-0-26></a>    <span class=n>device</span><span class=o>=</span><span class=s2>&quot;cuda&quot;</span>
-</span><span id=__span-0-27><a id=__codelineno-0-27 name=__codelineno-0-27 href=#__codelineno-0-27></a><span class=p>)</span>
-</span><span id=__span-0-28><a id=__codelineno-0-28 name=__codelineno-0-28 href=#__codelineno-0-28></a>
-</span><span id=__span-0-29><a id=__codelineno-0-29 name=__codelineno-0-29 href=#__codelineno-0-29></a><span class=c1># Get layer-wise outputs</span>
-</span><span id=__span-0-30><a id=__codelineno-0-30 name=__codelineno-0-30 href=#__codelineno-0-30></a><span class=n>node_io</span> <span class=o>=</span> <span class=n>dlb</span><span class=o>.</span><span class=n>predict</span><span class=p>(</span><span class=n>x</span><span class=p>)</span>
-</span><span id=__span-0-31><a id=__codelineno-0-31 name=__codelineno-0-31 href=#__codelineno-0-31></a>
-</span><span id=__span-0-32><a id=__codelineno-0-32 name=__codelineno-0-32 href=#__codelineno-0-32></a><span class=c1># Calculate relevance propagation</span>
-</span><span id=__span-0-33><a id=__codelineno-0-33 name=__codelineno-0-33 href=#__codelineno-0-33></a><span class=n>relevance</span> <span class=o>=</span> <span class=n>dlb</span><span class=o>.</span><span class=n>evaluation</span><span class=p>(</span>
-</span><span id=__span-0-34><a id=__codelineno-0-34 name=__codelineno-0-34 href=#__codelineno-0-34></a>    <span class=n>mode</span><span class=o>=</span><span class=s2>&quot;default&quot;</span><span class=p>,</span>
-</span><span id=__span-0-35><a id=__codelineno-0-35 name=__codelineno-0-35 href=#__codelineno-0-35></a>    <span class=n>multiplier</span><span class=o>=</span><span class=mf>100.0</span><span class=p>,</span>
-</span><span id=__span-0-36><a id=__codelineno-0-36 name=__codelineno-0-36 href=#__codelineno-0-36></a>    <span class=n>task</span><span class=o>=</span><span class=s2>&quot;multi-class classification&quot;</span>
-</span><span id=__span-0-37><a id=__codelineno-0-37 name=__codelineno-0-37 href=#__codelineno-0-37></a><span class=p>)</span>
-</span><span id=__span-0-38><a id=__codelineno-0-38 name=__codelineno-0-38 href=#__codelineno-0-38></a>
-</span><span id=__span-0-39><a id=__codelineno-0-39 name=__codelineno-0-39 href=#__codelineno-0-39></a><span class=c1># Visualize the graph</span>
-</span><span id=__span-0-40><a id=__codelineno-0-40 name=__codelineno-0-40 href=#__codelineno-0-40></a><span class=n>dlb</span><span class=o>.</span><span class=n>visualize</span><span class=p>()</span>
-</span></code></pre></div> <hr> <h2 id=supported-models>Supported Models<a class=headerlink href=#supported-models title="Permanent link">&para;</a></h2> <p>DL-Backtrace has been extensively tested with:</p> <h3 id=vision-models>Vision Models<a class=headerlink href=#vision-models title="Permanent link">&para;</a></h3> <ul> <li>ResNet, VGG, DenseNet, EfficientNet, MobileNet</li> <li>Vision Transformer (ViT)</li> <li>Custom CNNs</li> </ul> <h3 id=nlp-models>NLP Models<a class=headerlink href=#nlp-models title="Permanent link">&para;</a></h3> <ul> <li>BERT, ALBERT, RoBERTa, DistilBERT</li> <li>ELECTRA, XLNet</li> <li>LLaMA-3.2 (1B, 3B), Qwen3</li> <li>MoE's like JetMoE, OLMoE, GPT-oss, Qwen MoE</li> </ul> <h3 id=tasks>Tasks<a class=headerlink href=#tasks title="Permanent link">&para;</a></h3> <ul> <li>Binary &amp; Multi-class Classification</li> <li>Object Detection</li> <li>Semantic Segmentation</li> <li>Text Generation</li> <li>Sentiment Analysis</li> </ul> <hr> <h2 id=key-capabilities>Key Capabilities<a class=headerlink href=#key-capabilities title="Permanent link">&para;</a></h2> <h3 id=layer-wise-relevance-propagation>Layer-wise Relevance Propagation<a class=headerlink href=#layer-wise-relevance-propagation title="Permanent link">&para;</a></h3> <p>Track how relevance flows backward through your model, from output predictions to input features. Supports multiple evaluation modes including default and contrastive explanations.</p> <h3 id=graph-tracing-visualization>Graph Tracing &amp; Visualization<a class=headerlink href=#graph-tracing-visualization title="Permanent link">&para;</a></h3> <p>Automatically trace your model's computational graph and visualize the architecture with relevance scores. Supports both full graph and top-k relevance visualization.</p> <h3 id=deterministic-execution>Deterministic Execution<a class=headerlink href=#deterministic-execution title="Permanent link">&para;</a></h3> <p>Ensures reproducible results across runs with automatic environment configuration.</p> <hr> <h2 id=community-support>Community &amp; Support<a class=headerlink href=#community-support title="Permanent link">&para;</a></h2> <ul> <li><strong>Documentation</strong>: You're reading it! 📚</li> <li><strong>Examples</strong>: Check out our <a href=examples/colab-notebooks/ >example notebooks</a></li> <li><strong>Issues</strong>: <a href=https://github.com/aryaxai/DL-Backtrace/issues>GitHub Issues</a></li> <li><strong>Email</strong>: <a href=mailto:support@aryaxai.com>support@aryaxai.com</a></li> </ul> <hr> <h2 id=next-steps>Next Steps<a class=headerlink href=#next-steps title="Permanent link">&para;</a></h2> <div class="grid cards"> <ul> <li> <p><span class="twemoji lg middle"><svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M15 4a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8m0 2a6 6 0 0 0-6 6 6 6 0 0 0 6 6 6 6 0 0 0 6-6 6 6 0 0 0-6-6m-1 2h1.5v3.78l2.33 2.33-1.06 1.06L14 12.4zM2 18a1 1 0 0 1-1-1 1 1 0 0 1 1-1h3.83c.31.71.71 1.38 1.17 2zm1-5a1 1 0 0 1-1-1 1 1 0 0 1 1-1h2.05L5 12l.05 1zm1-5a1 1 0 0 1-1-1 1 1 0 0 1 1-1h3c-.46.62-.86 1.29-1.17 2z"/></svg></span> <strong>Quick Start</strong></p> <hr> <p>Get up and running in minutes with our quick start guide</p> <p><a href=home/quickstart/ ><span class=twemoji><svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> Getting started</a></p> </li> <li> <p><span class="twemoji lg middle"><svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M12 21.5c-1.35-.85-3.8-1.5-5.5-1.5-1.65 0-3.35.3-4.75 1.05-.1.05-.15.05-.25.05-.25 0-.5-.25-.5-.5V6c.6-.45 1.25-.75 2-1 1.11-.35 2.33-.5 3.5-.5 1.95 0 4.05.4 5.5 1.5 1.45-1.1 3.55-1.5 5.5-1.5 1.17 0 2.39.15 3.5.5.75.25 1.4.55 2 1v14.6c0 .25-.25.5-.5.5-.1 0-.15 0-.25-.05-1.4-.75-3.1-1.05-4.75-1.05-1.7 0-4.15.65-5.5 1.5M12 8v11.5c1.35-.85 3.8-1.5 5.5-1.5 1.2 0 2.4.15 3.5.5V7c-1.1-.35-2.3-.5-3.5-.5-1.7 0-4.15.65-5.5 1.5m1 3.5c1.11-.68 2.6-1 4.5-1 .91 0 1.76.09 2.5.28V9.23c-.87-.15-1.71-.23-2.5-.23q-2.655 0-4.5.84zm4.5.17c-1.71 0-3.21.26-4.5.79v1.69c1.11-.65 2.6-.99 4.5-.99 1.04 0 1.88.08 2.5.24v-1.5c-.87-.16-1.71-.23-2.5-.23m2.5 2.9c-.87-.16-1.71-.24-2.5-.24-1.83 0-3.33.27-4.5.8v1.69c1.11-.66 2.6-.99 4.5-.99 1.04 0 1.88.08 2.5.24z"/></svg></span> <strong>User Guide</strong></p> <hr> <p>Learn about features, APIs, and best practices</p> <p><a href=guide/introduction/ ><span class=twemoji><svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> Read the guide</a></p> </li> <li> <p><span class="twemoji lg middle"><svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M8 3a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2H3v2h1a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h2v-2H8v-5a2 2 0 0 0-2-2 2 2 0 0 0 2-2V5h2V3m6 0a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h1v2h-1a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-2v-2h2v-5a2 2 0 0 1 2-2 2 2 0 0 1-2-2V5h-2V3z"/></svg></span> <strong>Examples</strong></p> <hr> <p>Interactive notebooks and real-world use cases</p> <p><a href=examples/colab-notebooks/ ><span class=twemoji><svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> Explore examples</a></p> </li> <li> <p><span class="twemoji lg middle"><svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M12 5.5A3.5 3.5 0 0 1 15.5 9a3.5 3.5 0 0 1-3.5 3.5A3.5 3.5 0 0 1 8.5 9 3.5 3.5 0 0 1 12 5.5M5 8c.56 0 1.08.15 1.53.42-.15 1.43.27 2.85 1.13 3.96C7.16 13.34 6.16 14 5 14a3 3 0 0 1-3-3 3 3 0 0 1 3-3m14 0a3 3 0 0 1 3 3 3 3 0 0 1-3 3c-1.16 0-2.16-.66-2.66-1.62a5.54 5.54 0 0 0 1.13-3.96c.45-.27.97-.42 1.53-.42M5.5 18.25c0-2.07 2.91-3.75 6.5-3.75s6.5 1.68 6.5 3.75V20h-13zM0 20v-1.5c0-1.39 1.89-2.56 4.45-2.9-.59.68-.95 1.62-.95 2.65V20zm24 0h-3.5v-1.75c0-1.03-.36-1.97-.95-2.65 2.56.34 4.45 1.51 4.45 2.9z"/></svg></span> <strong>Developer Guide</strong></p> <hr> <p>Contributing and extending DL-Backtrace</p> <p><a href=developer/contributing/ ><span class=twemoji><svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> Developer docs</a></p> </li> </ul> </div> <hr> <p>DL-Backtrace - Making AI Transparent and Explainable 🚀</p> <p>Built with ❤️ by <a href=https://www.aryaxai.com>AryaXAI</a></p> <aside class=md-source-file> <span class=md-source-file__fact> <span class=md-icon title="Last update"> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg> </span> <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 24, 2025 15:53:17 UTC">October 24, 2025</span> </span> <span class=md-source-file__fact> <span class=md-icon title=Created> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg> </span> <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 22, 2025 10:24:53 UTC">October 22, 2025</span> </span> </aside> </article> </div> <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script> <script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script> </div> <button type=button class="md-top md-icon" data-md-component=top hidden> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg> Back to top </button> </main> <footer class=md-footer> <nav class="md-footer__inner md-grid" aria-label=Footer> <a href=home/features/ class="md-footer__link md-footer__link--next" aria-label="Next: Key Features"> <div class=md-footer__title> <span class=md-footer__direction> Next </span> <div class=md-ellipsis> Key Features </div> </div> <div class="md-footer__button md-icon"> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg> </div> </a> </nav> <div class="md-footer-meta md-typeset"> <div class="md-footer-meta__inner md-grid"> <div class=md-copyright> <div class=md-copyright__highlight> Copyright &copy; 2025 AryaXAI </div> Made with <a href=https://squidfunk.github.io/mkdocs-material/ target=_blank rel=noopener> Material for MkDocs </a> </div> <div class=md-social> <a href=https://github.com/aryaxai target=_blank rel=noopener title=github.com class=md-social__link> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 512 512"><!-- Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg> </a> <a href=https://www.aryaxai.com/ target=_blank rel=noopener title=www.aryaxai.com class=md-social__link> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 512 512"><!-- Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M351.9 280H161c2.9 64.5 17.2 123.9 37.5 167.4 11.4 24.5 23.7 41.8 35.1 52.4 11.2 10.5 18.9 12.2 22.9 12.2s11.7-1.7 22.9-12.2c11.4-10.6 23.7-28 35.1-52.4 20.3-43.5 34.6-102.9 37.5-167.4zm-191-48h190.9c-2.8-64.5-17.1-123.9-37.4-167.4-11.4-24.4-23.7-41.8-35.1-52.4C268.1 1.7 260.4 0 256.4 0s-11.7 1.7-22.9 12.2c-11.4 10.6-23.7 28-35.1 52.4-20.3 43.5-34.6 102.9-37.5 167.4m-48 0c3.5-85.6 25.6-165.1 57.9-217.3C78.7 47.3 10.9 131.2 1.5 232zM1.5 280c9.4 100.8 77.2 184.7 169.3 217.3-32.3-52.2-54.4-131.7-57.9-217.3zm398.4 0c-3.5 85.6-25.6 165.1-57.9 217.3 92.1-32.7 159.9-116.5 169.3-217.3zm111.4-48C501.9 131.2 434.1 47.3 342 14.7c32.3 52.2 54.4 131.7 57.9 217.3z"/></svg> </a> <a href=mailto:support@aryaxai.com target=_blank rel=noopener title class=md-social__link> <svg xmlns=http://www.w3.org/2000/svg viewbox="0 0 512 512"><!-- Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M48 64C21.5 64 0 85.5 0 112c0 15.1 7.1 29.3 19.2 38.4l208 156a48 48 0 0 0 57.6 0l208-156c12.1-9.1 19.2-23.3 19.2-38.4 0-26.5-21.5-48-48-48zM0 196v188c0 35.3 28.7 64 64 64h384c35.3 0 64-28.7 64-64V196L313.6 344.8c-34.1 25.6-81.1 25.6-115.2 0z"/></svg> </a> </div> </div> </div> </footer> </div> <div class=md-dialog data-md-component=dialog> <div class="md-dialog__inner md-typeset"></div> </div> <script id=__config type=application/json>{"base": ".", "features": ["navigation.instant", "navigation.tracking", "navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.path", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "search.share", "content.code.copy", "content.code.annotate", "content.tabs.link", "toc.follow"], "search": "assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script> <script src=assets/javascripts/bundle.f55a23d4.min.js></script> <script src=javascripts/mathjax.js></script> <script src=https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js></script> <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script> <script src=https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js></script> <script src=javascripts/katex.js></script> <script src=https://unpkg.com/katex@0/dist/katex.min.js></script> <script src=https://unpkg.com/katex@0/dist/contrib/auto-render.min.js></script> </body> </html>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="A powerful explainable AI (XAI) framework for deep learning model interpretability">
+    <meta name="author" content="Lexsi Labs">
+    <link rel="canonical" href="https://lexsi.ai/">
+    <link rel="shortcut icon" href="img/favicon.ico">
+
+    
+    <title>Overview - DL-Backtrace Documentation</title>
+    
+
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/all.css">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/v4-shims.css">
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/hack-font@3.3.0/build/web/hack.min.css">
+    <link href='//rsms.me/inter/inter.css' rel='stylesheet' type='text/css'>
+    <link href='//fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,700italic,400,300,600,700&subset=latin-ext,latin' rel='stylesheet' type='text/css'>
+    <link href="css/bootstrap-custom.min.css" rel="stylesheet">
+    <link href="css/base.min.css" rel="stylesheet">
+    <link href="css/cinder.min.css" rel="stylesheet">
+
+    
+        
+        <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/styles/github.min.css">
+        
+    
+    <link href="https://unpkg.com/katex@0/dist/katex.min.css" rel="stylesheet">
+
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+            <script src="https://cdn.jsdelivr.net/npm/html5shiv@3.7.3/dist/html5shiv.min.js"></script>
+            <script src="https://cdn.jsdelivr.net/npm/respond.js@1.4.2/dest/respond.min.js"></script>
+        <![endif]-->
+
+    
+
+     
+</head>
+
+<body>
+
+    <div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+
+        <!-- Collapsed navigation -->
+        <div class="navbar-header">
+            <!-- Expander button -->
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            
+
+            <!-- Main title -->
+
+            
+              <a class="navbar-brand" href=".">DL-Backtrace Documentation</a>
+            
+        </div>
+
+        <!-- Expanded navigation -->
+        <div class="navbar-collapse collapse">
+                <!-- Main navigation -->
+                <ul class="nav navbar-nav">
+                
+                
+                    <li class="dropdown active">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Home <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li class="active">
+    <a href=".">Overview</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="home/features/">Key Features</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="home/installation/">Installation</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="home/quickstart/">Quick Start</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="home/whats-new/">What's New</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">User Guide <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="guide/introduction/">Introduction</a>
+</li>
+
+                        
+                            
+  <li class="dropdown-submenu">
+    <a tabindex="-1" href="">PyTorch Backend</a>
+    <ul class="dropdown-menu">
+        
+            
+<li >
+    <a href="guide/pytorch/overview/">Overview</a>
+</li>
+
+        
+            
+<li >
+    <a href="guide/pytorch/dlbacktrace/">DLBacktrace</a>
+</li>
+
+        
+            
+<li >
+    <a href="guide/pytorch/pipeline/">Pipeline</a>
+</li>
+
+        
+            
+<li >
+    <a href="guide/pytorch/auto-sampler/">DLB Auto Sampler</a>
+</li>
+
+        
+            
+<li >
+    <a href="guide/pytorch/temperature-scaling/">Temperature Scaling</a>
+</li>
+
+        
+            
+<li >
+    <a href="guide/pytorch/moe-models/">MoE Models</a>
+</li>
+
+        
+            
+<li >
+    <a href="guide/pytorch/execution-engines/">Execution Engines</a>
+</li>
+
+        
+            
+<li >
+    <a href="guide/pytorch/operations/">Supported Operations</a>
+</li>
+
+        
+            
+<li >
+    <a href="guide/pytorch/tracing/">Model Tracing</a>
+</li>
+
+        
+    </ul>
+  </li>
+
+                        
+                            
+  <li class="dropdown-submenu">
+    <a tabindex="-1" href="">Relevance Propagation</a>
+    <ul class="dropdown-menu">
+        
+            
+<li >
+    <a href="guide/relevance/overview/">Overview</a>
+</li>
+
+        
+            
+<li >
+    <a href="guide/relevance/parameters/">Parameters</a>
+</li>
+
+        
+    </ul>
+  </li>
+
+                        
+                            
+<li >
+    <a href="guide/best-practices/">Best Practices</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Examples <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="examples/colab-notebooks/">Colab Notebooks</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="examples/use-cases/">Use Cases</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Developer Guide <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="developer/architecture/">Architecture</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="developer/contributing/">Contributing</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="developer/execution-engine/">Execution Engine</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="developer/cuda-development/">CUDA Development</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="developer/testing/">Testing</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Support <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="support/faq/">FAQ</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="support/known-issues/">Known Issues</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="support/changelog/">Changelog</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="support/license/">License</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                </ul>
+
+            <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="#" data-toggle="modal" data-target="#mkdocs_search_modal">
+                            <i class="fas fa-search"></i> Search
+                        </a>
+                    </li>
+                    <li class="disabled">
+                        <a rel="prev" >
+                            <i class="fas fa-arrow-left"></i> Previous
+                        </a>
+                    </li>
+                    <li >
+                        <a rel="next" href="home/features/">
+                            Next <i class="fas fa-arrow-right"></i>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://github.com/Lexsi-Labs/DLBacktrace/edit/main/docs/index.md">Edit on Lexsi-Labs/DLBacktrace</a>
+                    </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+    <div class="container">
+        
+        
+        <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
+    <ul class="nav bs-sidenav">
+        <li class="first-level active"><a href="#welcome-to">Welcome to</a></li>
+            <li class="second-level"><a href="#overview">Overview</a></li>
+                
+            <li class="second-level"><a href="#why-dl-backtrace">Why DL-Backtrace?</a></li>
+                
+                <li class="third-level"><a href="#deep-model-interpretability">🔍 Deep Model Interpretability</a></li>
+                <li class="third-level"><a href="#high-performance">⚡ High Performance</a></li>
+                <li class="third-level"><a href="#architecture-agnostic">🏗️ Architecture Agnostic</a></li>
+                <li class="third-level"><a href="#multi-task-support">🎯 Multi-Task Support</a></li>
+                <li class="third-level"><a href="#production-ready">🛡️ Production Ready</a></li>
+            <li class="second-level"><a href="#quick-example">Quick Example</a></li>
+                
+            <li class="second-level"><a href="#supported-models">Supported Models</a></li>
+                
+                <li class="third-level"><a href="#vision-models">Vision Models</a></li>
+                <li class="third-level"><a href="#nlp-models">NLP Models</a></li>
+                <li class="third-level"><a href="#tasks">Tasks</a></li>
+            <li class="second-level"><a href="#key-capabilities">Key Capabilities</a></li>
+                
+                <li class="third-level"><a href="#layer-wise-relevance-propagation">Layer-wise Relevance Propagation</a></li>
+                <li class="third-level"><a href="#graph-tracing-visualization">Graph Tracing &amp; Visualization</a></li>
+                <li class="third-level"><a href="#deterministic-execution">Deterministic Execution</a></li>
+            <li class="second-level"><a href="#community-support">Community &amp; Support</a></li>
+                
+            <li class="second-level"><a href="#next-steps">Next Steps</a></li>
+                
+                <li class="third-level"><a href="#quick-start">🚀 Quick Start</a></li>
+                <li class="third-level"><a href="#user-guide">📚 User Guide</a></li>
+                <li class="third-level"><a href="#examples">💻 Examples</a></li>
+                <li class="third-level"><a href="#developer-guide">🤝 Developer Guide</a></li>
+    </ul>
+</div></div>
+        <div class="col-md-9" role="main">
+
+<h1 id="welcome-to">Welcome to<a class="headerlink" href="#welcome-to" title="Permanent link">&para;</a></h1>
+<p><img alt="DL-Backtrace Logo" src="assets/images/dlb_logo.png" /></p>
+<p><a href="https://github.com/Lexsi-Labs/DLBacktrace/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/badge/License-MIT-blue.svg" /></a>
+<a href="https://python.org"><img alt="Python" src="https://img.shields.io/badge/Python-3.8%2B-blue.svg" /></a>
+<a href="https://pytorch.org"><img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-2.6%2B-red.svg" /></a></p>
+<p><a class="md-button md-button--primary" href="home/quickstart/">Get Started</a></p>
+<p><a class="md-button" href="https://github.com/Lexsi-Labs/DLBacktrace">View on GitHub</a></p>
+<hr />
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>DL-Backtrace is a powerful explainable AI framework developed by <strong>Lexsi Labs</strong> for enhancing the interpretability of deep learning models. It provides comprehensive layer-wise relevance propagation and model tracing capabilities across various architectures and tasks, with robust execution engines optimized for both CPU and GPU environments.</p>
+<p>Whether you're working with vision models, NLP transformers, MoE's or custom architectures, DL-Backtrace provides insights into feature importance, information flow, and bias, enabling better model interpretation and validation without external dependencies.</p>
+<hr />
+<h2 id="why-dl-backtrace">Why DL-Backtrace?<a class="headerlink" href="#why-dl-backtrace" title="Permanent link">&para;</a></h2>
+<h3 id="deep-model-interpretability">🔍 <strong>Deep Model Interpretability</strong><a class="headerlink" href="#deep-model-interpretability" title="Permanent link">&para;</a></h3>
+<p>Gain comprehensive insights into your AI models using advanced relevance propagation algorithms. Understand which features and layers contribute most to your model's predictions.</p>
+<h3 id="high-performance">⚡ <strong>High Performance</strong><a class="headerlink" href="#high-performance" title="Permanent link">&para;</a></h3>
+<p>Optimized execution engine with CUDA acceleration and deterministic tracing. Choose between CPU and GPU execution based on your needs.</p>
+<h3 id="architecture-agnostic">🏗️ <strong>Architecture Agnostic</strong><a class="headerlink" href="#architecture-agnostic" title="Permanent link">&para;</a></h3>
+<p>Support for CNN, RNN, Transformer, and custom architectures. Works seamlessly with popular models like ResNet, BERT, LLaMA, and more.</p>
+<h3 id="multi-task-support">🎯 <strong>Multi-Task Support</strong><a class="headerlink" href="#multi-task-support" title="Permanent link">&para;</a></h3>
+<p>Binary/multi-class classification, segmentation, and text generation - all supported out of the box.</p>
+<h3 id="production-ready">🛡️ <strong>Production Ready</strong><a class="headerlink" href="#production-ready" title="Permanent link">&para;</a></h3>
+<p>Deterministic execution environment with comprehensive error handling. Battle-tested on real-world models and datasets.</p>
+<hr />
+<h2 id="quick-example">Quick Example<a class="headerlink" href="#quick-example" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.pytorch_backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">DLBacktrace</span>
+
+<span class="c1"># Define your model</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MyModel</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">conv1</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">relu</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pool</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">AdaptiveAvgPool2d</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fc</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">relu</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">conv1</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pool</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="n">flatten</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">fc</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+<span class="c1"># Initialize model and DL-Backtrace</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">MyModel</span><span class="p">()</span>
+<span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">224</span><span class="p">,</span> <span class="mi">224</span><span class="p">)</span>
+
+<span class="n">dlb</span> <span class="o">=</span> <span class="n">DLBacktrace</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+    <span class="n">input_for_graph</span><span class="o">=</span><span class="p">(</span><span class="n">x</span><span class="p">,),</span>
+    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
+<span class="p">)</span>
+
+<span class="c1"># Get layer-wise outputs</span>
+<span class="n">node_io</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+<span class="c1"># Calculate relevance propagation</span>
+<span class="n">relevance</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">evaluation</span><span class="p">(</span>
+    <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;default&quot;</span><span class="p">,</span>
+    <span class="n">multiplier</span><span class="o">=</span><span class="mf">100.0</span><span class="p">,</span>
+    <span class="n">task</span><span class="o">=</span><span class="s2">&quot;multi-class classification&quot;</span>
+<span class="p">)</span>
+
+<span class="c1"># Visualize the graph</span>
+<span class="n">dlb</span><span class="o">.</span><span class="n">visualize</span><span class="p">()</span>
+</code></pre></div>
+<hr />
+<h2 id="supported-models">Supported Models<a class="headerlink" href="#supported-models" title="Permanent link">&para;</a></h2>
+<p>DL-Backtrace has been extensively tested with:</p>
+<h3 id="vision-models">Vision Models<a class="headerlink" href="#vision-models" title="Permanent link">&para;</a></h3>
+<ul>
+<li>ResNet, VGG, DenseNet, EfficientNet, MobileNet</li>
+<li>Vision Transformer (ViT)</li>
+<li>Custom CNNs</li>
+</ul>
+<h3 id="nlp-models">NLP Models<a class="headerlink" href="#nlp-models" title="Permanent link">&para;</a></h3>
+<ul>
+<li>BERT, ALBERT, RoBERTa, DistilBERT</li>
+<li>ELECTRA, XLNet</li>
+<li>LLaMA-3.2 (1B, 3B), Qwen3</li>
+<li>MoE's like JetMoE, OLMoE, GPT-oss, Qwen MoE</li>
+</ul>
+<h3 id="tasks">Tasks<a class="headerlink" href="#tasks" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Binary &amp; Multi-class Classification</li>
+<li>Object Detection</li>
+<li>Semantic Segmentation</li>
+<li>Text Generation</li>
+<li>Sentiment Analysis</li>
+</ul>
+<hr />
+<h2 id="key-capabilities">Key Capabilities<a class="headerlink" href="#key-capabilities" title="Permanent link">&para;</a></h2>
+<h3 id="layer-wise-relevance-propagation">Layer-wise Relevance Propagation<a class="headerlink" href="#layer-wise-relevance-propagation" title="Permanent link">&para;</a></h3>
+<p>Track how relevance flows backward through your model, from output predictions to input features. Supports multiple evaluation modes including default and contrastive explanations.</p>
+<h3 id="graph-tracing-visualization">Graph Tracing &amp; Visualization<a class="headerlink" href="#graph-tracing-visualization" title="Permanent link">&para;</a></h3>
+<p>Automatically trace your model's computational graph and visualize the architecture with relevance scores. Supports both full graph and top-k relevance visualization.</p>
+<h3 id="deterministic-execution">Deterministic Execution<a class="headerlink" href="#deterministic-execution" title="Permanent link">&para;</a></h3>
+<p>Ensures reproducible results across runs with automatic environment configuration.</p>
+<hr />
+<h2 id="community-support">Community &amp; Support<a class="headerlink" href="#community-support" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Documentation</strong>: You're reading it! 📚</li>
+<li><strong>Examples</strong>: Check out our <a href="examples/colab-notebooks/">example notebooks</a></li>
+<li><strong>Issues</strong>: <a href="https://github.com/Lexsi-Labs/DLBacktrace/issues">GitHub Issues</a></li>
+<li><strong>Email</strong>: <a href="mailto:support@lexsi.ai">support@lexsi.ai</a></li>
+</ul>
+<hr />
+<h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
+<h3 id="quick-start">🚀 Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h3>
+<p>Get up and running in minutes with our quick start guide.</p>
+<p>→ <a href="home/quickstart/">Getting Started</a></p>
+<h3 id="user-guide">📚 User Guide<a class="headerlink" href="#user-guide" title="Permanent link">&para;</a></h3>
+<p>Learn about features, APIs, and best practices.</p>
+<p>→ <a href="guide/introduction/">Read the Guide</a></p>
+<h3 id="examples">💻 Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h3>
+<p>Interactive notebooks and real-world use cases.</p>
+<p>→ <a href="examples/colab-notebooks/">Explore Examples</a></p>
+<h3 id="developer-guide">🤝 Developer Guide<a class="headerlink" href="#developer-guide" title="Permanent link">&para;</a></h3>
+<p>Contributing and extending DL-Backtrace.</p>
+<p>→ <a href="developer/contributing/">Developer Docs</a></p>
+<hr />
+<p>DL-Backtrace - Making AI Transparent and Explainable 🚀</p>
+<p>Built with ❤️ by <a href="https://lexsi.ai/">Lexsi Labs</a></p></div>
+        
+        
+    </div>
+
+    
+      <footer class="col-md-12 text-center">
+          
+          
+            <hr>
+            <p>
+            <small>Copyright &copy; 2025 Lexsi Labs</small><br>
+            
+            <small>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</small>
+            </p>
+          
+
+          
+          
+      </footer>
+    
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script src="js/bootstrap-3.0.3.min.js"></script>
+
+    
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/highlight.min.js"></script>
+        
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/python.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/yaml.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/bash.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/javascript.min.js"></script>
+        
+    <script>hljs.initHighlightingOnLoad();</script>
+    
+
+    <script>var base_url = "."</script>
+    
+    <script src="js/base.js"></script>
+    <script src="javascripts/mathjax.js"></script>
+    <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="javascripts/katex.js"></script>
+    <script src="https://unpkg.com/katex@0/dist/katex.min.js"></script>
+    <script src="https://unpkg.com/katex@0/dist/contrib/auto-render.min.js"></script>
+    <script src="search/main.js"></script>
+
+    <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    <span aria-hidden="true">&times;</span>
+                    <span class="sr-only">Close</span>
+                </button>
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+            </div>
+            <div class="modal-body">
+                <p>
+                    From here you can search these documents. Enter
+                    your search terms below.
+                </p>
+                <form>
+                    <div class="form-group">
+                        <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+    </body>
+
+</html>
