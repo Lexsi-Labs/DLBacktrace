@@ -1,9 +1,9 @@
 /* Custom styles for DL-Backtrace documentation */
 
-/* Brand the primary navigation bar with Lexsi orange */
+/* Brand the primary navigation bar with a softer Lexsi orange */
 .navbar.navbar-default {
-    background-color: #ff6a00;
-    border-color: #ff6a00;
+    background-color: #ff8c42;
+    border-color: #ff8c42;
 }
 
 .navbar.navbar-default .navbar-brand,
@@ -16,14 +16,14 @@
 .navbar.navbar-default .navbar-nav > li > a:hover,
 .navbar.navbar-default .navbar-nav > li > a:focus {
     color: #ffffff;
-    background-color: #e15e00;
+    background-color: #f27b2c;
 }
 
 .navbar.navbar-default .navbar-nav > .active > a,
 .navbar.navbar-default .navbar-nav > .active > a:hover,
 .navbar.navbar-default .navbar-nav > .active > a:focus {
     color: #ffffff;
-    background-color: #c95000;
+    background-color: #de6e27;
 }
 
 .navbar.navbar-default .navbar-toggle {
@@ -36,7 +36,7 @@
 
 .navbar.navbar-default .navbar-toggle:focus,
 .navbar.navbar-default .navbar-toggle:hover {
-    background-color: #e15e00;
+    background-color: #f27b2c;
 }
 
 /* Align navigation content vertically on wider screens */
@@ -85,36 +85,12 @@
     }
 }
 
-/* Accents */
-a,
-.btn-link {
-    color: #ff6a00;
-}
-
-a:hover,
-a:focus,
-.btn-link:hover,
-.btn-link:focus {
-    color: #c95000;
-}
-
-.btn-primary {
-    background-color: #ff6a00;
-    border-color: #ff6a00;
-}
-
-.btn-primary:hover,
-.btn-primary:focus {
-    background-color: #c95000;
-    border-color: #c95000;
-}
-
 /* Sidebar active indicator */
 .bs-sidenav > .active > a,
 .bs-sidenav > .active > a:hover,
 .bs-sidenav > .active > a:focus {
-    border-left-color: #ff6a00;
-    color: #ff6a00;
+    border-left-color: #ff8c42;
+    color: #ff8c42;
 }
 
 
