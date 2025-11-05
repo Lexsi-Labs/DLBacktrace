@@ -1,0 +1,120 @@
+/* Custom styles for DL-Backtrace documentation */
+
+/* Brand the primary navigation bar with Lexsi orange */
+.navbar.navbar-default {
+    background-color: #ff6a00;
+    border-color: #ff6a00;
+}
+
+.navbar.navbar-default .navbar-brand,
+.navbar.navbar-default .navbar-nav > li > a {
+    color: #ffffff;
+}
+
+.navbar.navbar-default .navbar-brand:hover,
+.navbar.navbar-default .navbar-brand:focus,
+.navbar.navbar-default .navbar-nav > li > a:hover,
+.navbar.navbar-default .navbar-nav > li > a:focus {
+    color: #ffffff;
+    background-color: #e15e00;
+}
+
+.navbar.navbar-default .navbar-nav > .active > a,
+.navbar.navbar-default .navbar-nav > .active > a:hover,
+.navbar.navbar-default .navbar-nav > .active > a:focus {
+    color: #ffffff;
+    background-color: #c95000;
+}
+
+.navbar.navbar-default .navbar-toggle {
+    border-color: rgba(255, 255, 255, 0.75);
+}
+
+.navbar.navbar-default .navbar-toggle .icon-bar {
+    background-color: #ffffff;
+}
+
+.navbar.navbar-default .navbar-toggle:focus,
+.navbar.navbar-default .navbar-toggle:hover {
+    background-color: #e15e00;
+}
+
+/* Align navigation content vertically on wider screens */
+@media (min-width: 768px) {
+    .navbar.navbar-default {
+        min-height: 60px;
+    }
+
+    .navbar.navbar-default .container {
+        display: flex;
+        align-items: center;
+    }
+
+    .navbar.navbar-default .navbar-header {
+        display: flex;
+        align-items: center;
+    }
+
+    .navbar.navbar-default .navbar-collapse {
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+    }
+
+    .navbar.navbar-default .navbar-nav {
+        display: flex;
+        align-items: center;
+        margin: 0;
+    }
+
+    .navbar.navbar-default .navbar-nav > li {
+        display: flex;
+        align-items: center;
+    }
+
+    .navbar.navbar-default .navbar-nav > li > a {
+        display: flex;
+        align-items: center;
+        padding-top: 18px;
+        padding-bottom: 18px;
+    }
+
+    .navbar.navbar-default .navbar-nav.navbar-right {
+        margin-left: auto;
+    }
+}
+
+/* Accents */
+a,
+.btn-link {
+    color: #ff6a00;
+}
+
+a:hover,
+a:focus,
+.btn-link:hover,
+.btn-link:focus {
+    color: #c95000;
+}
+
+.btn-primary {
+    background-color: #ff6a00;
+    border-color: #ff6a00;
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+    background-color: #c95000;
+    border-color: #c95000;
+}
+
+/* Sidebar active indicator */
+.bs-sidenav > .active > a,
+.bs-sidenav > .active > a:hover,
+.bs-sidenav > .active > a:focus {
+    border-left-color: #ff6a00;
+    color: #ff6a00;
+}
+
+
