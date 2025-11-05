@@ -16,7 +16,7 @@ DL-Backtrace is an explainable AI (XAI) framework that helps you understand how 
 
 ### Is it free and open source?
 
-Yes! DL-Backtrace is released under the MIT License and is completely free to use.
+DL-Backtrace is source-available under the Lexsi Labs Source Available License (LSAL) v1.0. It is free for personal, academic, and research purposes, but requires a commercial license for commercial use.
 
 ### Who develops DL-Backtrace?
 
@@ -220,7 +220,7 @@ DL-Backtrace should handle this automatically. If not:
 
 ### Can I use it commercially?
 
-Yes! DL-Backtrace is under the MIT License, which allows commercial use.
+Commercial use of DL-Backtrace requires a separate commercial license from Lexsi Labs. Please contact [support@lexsi.ai](mailto:support@lexsi.ai) for commercial licensing inquiries.
 
 ### Do I need to cite it?
 
@@ -228,7 +228,7 @@ While not required, we appreciate citations in academic work.
 
 ### Can I modify the code?
 
-Yes! You can modify, distribute, and use it as you wish under the MIT License.
+Yes! You can modify and use the code for personal, academic, or research purposes under the LSAL v1.0. Redistribution of modified versions for commercial purposes requires a commercial license.
 
 ### Can I contribute?
 

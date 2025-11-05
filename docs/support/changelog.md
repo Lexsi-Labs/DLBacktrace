@@ -312,7 +312,7 @@ Special thanks to:
 
 ## License
 
-DL-Backtrace is released under the [MIT License](license.md).
+DL-Backtrace is released under the [Lexsi Labs Source Available License (LSAL) v1.0](license.md).
 
 ---
 
