@@ -1,14 +1,21 @@
-/* Custom styles for DL-Backtrace documentation */
+/* DL-Backtrace Documentation Custom Theme */
+/* Balanced Lexsi orange branding with neutral sidebar */
 
-/* Brand the primary navigation bar with a softer Lexsi orange */
+/* -------------------------------- */
+/* Navbar (Header) */
+/* -------------------------------- */
+
 .navbar.navbar-default {
-    background-color: #ff8c42;
-    border-color: #ff8c42;
+    background-color: #ff7a1a;
+    border-color: #ff7a1a;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
 }
 
 .navbar.navbar-default .navbar-brand,
 .navbar.navbar-default .navbar-nav > li > a {
     color: #ffffff;
+    font-weight: 500;
+    transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .navbar.navbar-default .navbar-brand:hover,
@@ -16,30 +23,28 @@
 .navbar.navbar-default .navbar-nav > li > a:hover,
 .navbar.navbar-default .navbar-nav > li > a:focus {
     color: #ffffff;
-    background-color: #f27b2c;
+    background-color: #e86900;
 }
 
 .navbar.navbar-default .navbar-nav > .active > a,
 .navbar.navbar-default .navbar-nav > .active > a:hover,
 .navbar.navbar-default .navbar-nav > .active > a:focus {
     color: #ffffff;
-    background-color: #de6e27;
+    background-color: #cc5800;
 }
 
 .navbar.navbar-default .navbar-toggle {
-    border-color: rgba(255, 255, 255, 0.75);
+    border-color: rgba(255, 255, 255, 0.6);
 }
-
 .navbar.navbar-default .navbar-toggle .icon-bar {
     background-color: #ffffff;
 }
-
 .navbar.navbar-default .navbar-toggle:focus,
 .navbar.navbar-default .navbar-toggle:hover {
-    background-color: #f27b2c;
+    background-color: #e86900;
 }
 
-/* Align navigation content vertically on wider screens */
+/* Align nav content on large screens */
 @media (min-width: 768px) {
     .navbar.navbar-default {
         min-height: 60px;
@@ -76,8 +81,8 @@
     .navbar.navbar-default .navbar-nav > li > a {
         display: flex;
         align-items: center;
-        padding-top: 18px;
-        padding-bottom: 18px;
+        padding: 18px 16px;
+        letter-spacing: 0.2px;
     }
 
     .navbar.navbar-default .navbar-nav.navbar-right {
@@ -85,12 +90,51 @@
     }
 }
 
-/* Sidebar active indicator */
+/* -------------------------------- */
+/* Sidebar (Left Navigation) */
+/* -------------------------------- */
+
+.bs-sidenav {
+    background-color: #ffffff;
+    border-right: 1px solid #eee;
+    padding-top: 10px;
+}
+
+/* Sidebar link base */
+.bs-sidenav > li > a {
+    color: #111; /* neutral dark text */
+    font-weight: 500;
+    border-left: 3px solid transparent;
+    transition: all 0.2s ease;
+}
+
+/* Hover & focus (neutral gray tone) */
+.bs-sidenav > li > a:hover,
+.bs-sidenav > li > a:focus {
+    color: #000;
+    background-color: #f5f5f5;
+    border-left-color: #ccc;
+}
+
+/* Active link (slightly bold, no orange) */
 .bs-sidenav > .active > a,
 .bs-sidenav > .active > a:hover,
 .bs-sidenav > .active > a:focus {
-    border-left-color: #ff8c42;
-    color: #ff8c42;
+    color: #000;
+    background-color: #eaeaea;
+    border-left-color: #555;
+    font-weight: 600;
 }
 
-
+/* Optional: Sub-items look slightly indented */
+.bs-sidenav li ul {
+    margin-left: 10px;
+}
+.bs-sidenav li ul li a {
+    font-weight: 400;
+    color: #333;
+}
+.bs-sidenav li ul li a:hover {
+    color: #000;
+    background-color: #f0f0f0;
+}
