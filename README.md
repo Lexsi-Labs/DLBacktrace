@@ -303,7 +303,7 @@ We welcome contributions from the community! Please follow our contribution guid
 
 ## License
 
-This project is licensed under a custom License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under a custom License - see the [LICENSE](LICENSE.md) file for details.
 
 ## Recent Updates & New Features
 
