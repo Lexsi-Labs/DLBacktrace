@@ -1,8 +1,6 @@
-# Welcome to
-
 ![DL-Backtrace Logo](assets/images/dlb_logo.png)
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Lexsi-Labs/DLBacktrace/blob/main/LICENSE)
+[![License](https://img.shields.io/badge/License-LSAL%20v1.0-blue.svg)](https://github.com/Lexsi-Labs/DLBacktrace/blob/main/LICENSE.md)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://python.org)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.6%2B-red.svg)](https://pytorch.org)
 
