@@ -1,11 +1,10 @@
-site_name: DL-Backtrace Documentation
+site_name: DL-Backtrace
 site_description: A powerful explainable AI (XAI) framework for deep learning model interpretability
 site_author: Lexsi Labs
 site_url: https://lexsi.ai/
 
 repo_name: Lexsi-Labs/DLBacktrace
 repo_url: https://github.com/Lexsi-Labs/DLBacktrace
-edit_uri: edit/main/docs/
 
 copyright: Copyright &copy; 2025 Lexsi Labs
 
