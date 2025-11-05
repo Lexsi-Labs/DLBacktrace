@@ -279,40 +279,7 @@ For more detailed examples and use cases, check out our documentation.
 - [x] **Batch Normalization**
 - [x] **View & Reshape Operations**
 
-**Planned Support:**
-- [ ] EmbeddingBag Layer
-- [ ] 1D Convolution Layer (Conv1d)
-- [ ] Transpose Convolution Layers (ConvTranspose2d, ConvTranspose1d)
-- [ ] Custom Layer Support
-
-
-## Performance & Reliability
-
-### Recent Critical Improvements (2025)
-- **🔧 Enhanced Execution Engine:** Robust handling of complex tensor operations with comprehensive error handling
-- **⚡ Deterministic Environment:** Automatic setup for consistent, reproducible results across runs
-- **🛡️ Error Resilience:** Comprehensive validation and graceful error handling for production use
-- **📊 Better Debugging:** Detailed logging and execution tracking for troubleshooting
-- **🚨 Critical Fixes:** Resolved boolean tensor handling issues that caused crashes in RoBERTa/Llama models
-- **🧠 Smart Attention Detection:** Auto-detects bidirectional vs causal attention for transformer models
-- **💾 Memory Optimization:** Fixed OOM errors in embedding operations and improved memory management
-- **🔄 Dtype Consistency:** Universal framework for handling mixed precision scenarios across CPU/GPU
-
 ## Testing & Validation
-
-### Quick Test
-Test the installation and basic functionality:
-
-```bash
-# Test PyTorch backend
-python benchmarks/trace_RoBERTa.py
-
-# Test with LLaMA model (if you have sufficient memory)
-python benchmarks/trace_llama3_2_1B_selective.py
-
-# Run comprehensive benchmarks
-python benchmarks/benchmark_linear.py
-```
 
 ### Supported Models
 DL-Backtrace has been extensively tested with:
