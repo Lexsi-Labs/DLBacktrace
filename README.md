@@ -1,19 +1,16 @@
-# DLBacktrace
+<p align="center">
+  <img src="assets/images/dlb_logo.png" alt="DLB Logo" width="300px"/>
+</p>
 
-![DL-Backtrace Logo](assets/images/dlb_logo.png)
-
-A powerful explainable AI (XAI) framework for deep learning model interpretability
+## DLBacktrace: Model Agnostic Explainability for any Deep Learning Models
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://python.org)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.6%2B-red.svg)](https://pytorch.org)
+[![Documentation](https://img.shields.io/badge/docs-available-green.svg)](https://dlbacktrace.lexsi.ai/)
 
 ## Overview
 
-DL-Backtrace is a powerful explainable AI framework developed by **Lexsi Labs** for enhancing the interpretability of deep learning models. It provides comprehensive layer-wise relevance propagation and model tracing capabilities across various architectures and tasks, with robust execution optimized for both CPU and GPU environments.
-
-**Website**: [https://lexsi.ai/](https://lexsi.ai/)  
-**Documentation**: [Full Documentation](https://lexsi-labs.github.io/DLBacktrace/)  
-**Repository**: [https://github.com/Lexsi-Labs/DLBacktrace](https://github.com/Lexsi-Labs/DLBacktrace)
+DLBacktrace is a model-agnostic explainability framework developed by *Lexsi Labs*. It provides comprehensive layer-wise importance values (relevance) and model tracing capabilities across a wide range of model architectures — including transformers, LLMs, MoEs, and more — as well as diverse task types such as tabular, vision, and text. The framework is designed for robust and efficient execution on both CPU and GPU environments.
 
 ## Key Features
 
@@ -290,7 +287,7 @@ DL-Backtrace has been extensively tested with:
 
 If you're new to DL-Backtrace:
 
-1. **📖 Read the Documentation**: [https://lexsi-labs.github.io/DLBacktrace/](https://lexsi-labs.github.io/DLBacktrace/)
+1. **📖 Read the Documentation**: [https://dlbacktrace.lexsi.ai/](https://dlbacktrace.lexsi.ai/)
 2. **🚀 Try the Quick Start**: See examples above for PyTorch models
 3. **💻 Explore Notebooks**: Check out our comprehensive example notebooks for various use cases
 4. **🧪 Run Tests**: Validate your installation with the benchmark scripts
@@ -323,10 +320,6 @@ This project is licensed under a custom License - see the [LICENSE](LICENSE.md) 
 - 🧠 Smart attention detection for bidirectional vs causal attention
 - 💾 Memory optimization and improved OOM error handling
 
-For detailed information about critical fixes and improvements, see:
-- [CRITICAL_FIXES_SUMMARY.md](CRITICAL_FIXES_SUMMARY.md) - Overview of recent critical fixes
-- [EXECUTION_ENGINE_CRITICAL_FIXES.md](EXECUTION_ENGINE_CRITICAL_FIXES.md) - Detailed technical documentation
-
 ## Contact
 
 For any inquiries, support, or collaboration opportunities:
@@ -334,8 +327,20 @@ For any inquiries, support, or collaboration opportunities:
 - **Email**: [support@lexsi.ai](mailto:support@lexsi.ai)
 - **Website**: [https://lexsi.ai/](https://lexsi.ai/)
 - **GitHub Issues**: [https://github.com/Lexsi-Labs/DLBacktrace/issues](https://github.com/Lexsi-Labs/DLBacktrace/issues)
-- **Documentation**: [https://lexsi-labs.github.io/DLBacktrace/](https://lexsi-labs.github.io/DLBacktrace/)
+- **Documentation**: [https://dlbacktrace.lexsi.ai/](https://dlbacktrace.lexsi.ai/)
 
+## Citations
+```
+@misc{sankarapu2024dlbacktracemodelagnosticexplainability,
+      title={DLBacktrace: A Model Agnostic Explainability for any Deep Learning Models}, 
+      author={Vinay Kumar Sankarapu and Chintan Chitroda and Yashwardhan Rathore and Neeraj Kumar Singh and Pratinav Seth},
+      year={2024},
+      eprint={2411.12643},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2411.12643}, 
+}
+```
 ---
 
 **DL-Backtrace** - Making AI Transparent and Explainable 🚀  
