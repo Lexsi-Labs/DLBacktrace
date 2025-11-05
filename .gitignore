@@ -24,3 +24,7 @@ _templates
 version.py
 benchmarks/debug_experiments/*
 dl_backtrace_logs/*
+
+site
+
+.github
