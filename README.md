@@ -1,4 +1,4 @@
-# DL-Backtrace
+# DLBacktrace
 
 ![DL-Backtrace Logo](assets/images/dlb_logo.png)
 
