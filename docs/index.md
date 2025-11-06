@@ -111,7 +111,7 @@ DL-Backtrace has been extensively tested with:
 ## Key Capabilities
 
 ### Layer-wise Relevance Propagation
-Track how relevance flows backward through your model, from output predictions to input features. Supports multiple evaluation modes including default and contrastive explanations.
+It distributes relevance scores across layers, providing insights into feature importance, information flow, and bias, enabling better model interpretation and validation without external dependencies.
 
 ### Graph Tracing & Visualization
 Automatically trace your model's computational graph and visualize the architecture with relevance scores. Supports both full graph and top-k relevance visualization.
