@@ -386,8 +386,7 @@
 <p><a class="md-button" href="https://github.com/Lexsi-Labs/DLBacktrace">View on GitHub</a></p>
 <hr />
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p>DL-Backtrace is a powerful explainable AI framework developed by <strong>Lexsi Labs</strong> for enhancing the interpretability of deep learning models. It provides comprehensive layer-wise relevance propagation and model tracing capabilities across various architectures and tasks, with robust execution engines optimized for both CPU and GPU environments.</p>
-<p>Whether you're working with vision models, NLP transformers, MoE's or custom architectures, DL-Backtrace provides insights into feature importance, information flow, and bias, enabling better model interpretation and validation without external dependencies.</p>
+<p>DLBacktrace is a model-agnostic explainability framework developed by Lexsi Labs. It provides comprehensive layer-wise importance values (relevance) and model tracing capabilities across a wide range of model architectures — including transformers, LLMs, MoEs, and more — as well as diverse task types such as tabular, vision, and text. The framework is designed for robust and efficient execution on both CPU and GPU environments.</p>
 <hr />
 <h2 id="why-dl-backtrace">Why DL-Backtrace?<a class="headerlink" href="#why-dl-backtrace" title="Permanent link">&para;</a></h2>
 <h3 id="deep-model-interpretability">🔍 <strong>Deep Model Interpretability</strong><a class="headerlink" href="#deep-model-interpretability" title="Permanent link">&para;</a></h3>
@@ -470,7 +469,7 @@
 <hr />
 <h2 id="key-capabilities">Key Capabilities<a class="headerlink" href="#key-capabilities" title="Permanent link">&para;</a></h2>
 <h3 id="layer-wise-relevance-propagation">Layer-wise Relevance Propagation<a class="headerlink" href="#layer-wise-relevance-propagation" title="Permanent link">&para;</a></h3>
-<p>Track how relevance flows backward through your model, from output predictions to input features. Supports multiple evaluation modes including default and contrastive explanations.</p>
+<p>It distributes relevance scores across layers, providing insights into feature importance, information flow, and bias, enabling better model interpretation and validation without external dependencies.</p>
 <h3 id="graph-tracing-visualization">Graph Tracing &amp; Visualization<a class="headerlink" href="#graph-tracing-visualization" title="Permanent link">&para;</a></h3>
 <p>Automatically trace your model's computational graph and visualize the architecture with relevance scores. Supports both full graph and top-k relevance visualization.</p>
 <h3 id="deterministic-execution">Deterministic Execution<a class="headerlink" href="#deterministic-execution" title="Permanent link">&para;</a></h3>
