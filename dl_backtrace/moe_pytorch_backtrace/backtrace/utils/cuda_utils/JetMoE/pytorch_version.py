@@ -105,7 +105,6 @@ def calculate_wt_moe_experts( # also called as `calculate_relevance_single`
 
     batch_size, seq_len, output_features = wts.shape
     _, _, input_features = inp.shape
-    device = wts.device
     
     # Vectorized contribution matrix computation
     # w: (output_features, input_features)

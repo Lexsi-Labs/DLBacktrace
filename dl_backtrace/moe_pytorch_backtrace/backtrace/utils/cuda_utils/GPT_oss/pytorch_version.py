@@ -42,11 +42,6 @@ def calculate_wt_lm_head(
     _, _, D = inp.shape
     assert W.shape == (V, D), f"Weight shape mismatch: {W.shape} vs expected {(V, D)}"
     
-    # Ensure float32 precision for computation
-    W = W.to(dtype=torch.float32)
-    wts = wts.to(dtype=torch.float32)
-    inp = inp.to(dtype=torch.float32)
-    
     # Flatten batch and time dimensions for vectorized processing
     wts_flat = wts.reshape(B * T, V)  # (B*T, V)
     inp_flat = inp.reshape(B * T, D)  # (B*T, D)

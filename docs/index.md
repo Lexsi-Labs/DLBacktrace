@@ -14,10 +14,7 @@
 
 ## Overview
 
-DL-Backtrace is a powerful explainable AI framework developed by **Lexsi Labs** for enhancing the interpretability of deep learning models. It provides comprehensive layer-wise relevance propagation and model tracing capabilities across various architectures and tasks, with robust execution engines optimized for both CPU and GPU environments.
-
-Whether you're working with vision models, NLP transformers, MoE's or custom architectures, DL-Backtrace provides insights into feature importance, information flow, and bias, enabling better model interpretation and validation without external dependencies.
-
+DLBacktrace is a model-agnostic explainability framework developed by Lexsi Labs. It provides comprehensive layer-wise importance values (relevance) and model tracing capabilities across a wide range of model architectures — including transformers, LLMs, MoEs, and more — as well as diverse task types such as tabular, vision, and text. The framework is designed for robust and efficient execution on both CPU and GPU environments.
 
 ---
 

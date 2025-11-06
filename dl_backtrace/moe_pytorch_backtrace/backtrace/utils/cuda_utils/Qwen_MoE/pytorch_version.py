@@ -651,7 +651,7 @@ def build_rope_cos_sin(
 ) -> Tuple[torch.Tensor, torch.Tensor]:
 
     if device is None:
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        device = torch.device('cuda')
     
     if position_ids is None:
         pos = start + torch.arange(T, dtype=torch.int32, device=device).unsqueeze(0).expand(B, -1)
