@@ -2,11 +2,20 @@
   <img src="assets/images/dlb_logo.png" alt="DLB Logo" width="300px"/>
 </p>
 
-## DLBacktrace: Model Agnostic Explainability for any Deep Learning Models
+<h2 align="center">DLBacktrace: Model-Agnostic Explainability for Any Deep Learning Model</h2>
 
-[![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://python.org)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.6%2B-red.svg)](https://pytorch.org)
-[![Documentation](https://img.shields.io/badge/docs-available-green.svg)](https://dlbacktrace.lexsi.ai/)
+<p align="center">
+  <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.8%2B-blue.svg"></a>
+  <a href="https://pytorch.org"><img src="https://img.shields.io/badge/PyTorch-2.6%2B-red.svg"></a>
+  <a href="https://dlbacktrace.lexsi.ai/"><img src="https://img.shields.io/badge/docs-available-green.svg"></a>
+  <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-Lexsi%20Labs%20Source%20Available-orange"></a>
+</p>
+
+<p align="center">
+  <i>Making AI Transparent and Explainable — Developed by <a href="https://lexsi.ai/">Lexsi Labs</a></i> 🚀
+</p>
+
+---
 
 ## Overview
 
@@ -29,6 +38,36 @@ DLBacktrace is a model-agnostic explainability framework developed by *Lexsi Lab
 - **🧠 Mixture of Experts (MoE) Support:** Built-in support for MoE architectures (JetMoE, OLMoE, Qwen3-MoE, GPT-OSS) with expert-level relevance analysis
 - **🌡️ Temperature Scaling:** Control generation diversity and model confidence with flexible temperature parameters
 - **🔄 Enhanced Execution Engine:** Critical fixes for RoBERTa, LLaMA, and other transformer models
+
+---
+
+## ⚡ Performance Improvements in DLB v2
+
+DLB v2 introduces **major architectural upgrades** to the explainability engine — resulting in *orders of magnitude faster performance* compared to v1.
+
+---
+
+### 📊 Benchmark Summary
+
+| Metric | DLB v1 | DLB v2 | Improvement |
+|:-------|:-------|:-------|:-------------|
+| ⏱️ **Explainability Time** | Up to 29,000 s | 🕒 20 s | 🔥 **1000× faster** |
+| 🚀 **Throughput** | ~0.03 tokens/s | 🧩 75 tokens/s | ⚡ **2000× higher** |
+| 📈 **Scalability** | Degrades sharply | Scales linearly | ✅ **Stable & predictable** |
+
+---
+
+### 📈 Performance Graphs
+
+| Metric | Comparison Plot |
+|:--------|:----------------|
+| 🕒 **Total Time vs Sequence Length** | <img src="assets/images/total_dlb_time_comparison.png" width="500"/> |
+| 🚀 **Token Throughput** | <img src="assets/images/throughput_comparison.png" width="500"/> |
+| ⚙️ **Speedup (v2 / v1)** | <img src="assets/images/speedup_comparison.png" width="500"/> |
+
+---
+
+> 💡 **DLB v2** achieves up to **1000× speedup** using fused GPU kernels.
 
 ## Installation
 
@@ -101,28 +140,6 @@ relevance = dlb.evaluation(
     multiplier=100.0,
     task="binary-classification"
 )
-```
-
-### Using the High-Level Pipeline
-
-```python
-from dl_backtrace.pytorch_backtrace.dlbacktrace import DLBPipeline
-
-# Initialize pipeline for text classification
-pipeline = DLBPipeline(
-    task="text-classification",
-    model_name="distilbert-base-uncased-finetuned-sst-2-english",
-    device="cuda"
-)
-
-# Run prediction with relevance
-result = pipeline(
-    "This is an amazing product!",
-    return_relevance=True
-)
-
-print(f"Prediction: {result['label']}")
-print(f"Confidence: {result['score']:.2%}")
 ```
 
 ## Advanced Features
@@ -343,5 +360,4 @@ For any inquiries, support, or collaboration opportunities:
 ```
 ---
 
-**DL-Backtrace** - Making AI Transparent and Explainable 🚀  
-*Developed by Lexsi Labs*
+<p align="center"> <b>DLBacktrace</b> — Bridging Performance and Explainability 🔍<br> <a href="https://lexsi.ai/">Lexsi Labs</a> | <a href="mailto:support@lexsi.ai">support@lexsi.ai</a> </p> 

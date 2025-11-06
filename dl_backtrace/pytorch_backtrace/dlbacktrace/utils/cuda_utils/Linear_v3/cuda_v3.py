@@ -177,40 +177,38 @@ __global__ void calculate_wt_fc_kernel(
                 }
             }
             
-            // Stabilize sums
-            if (p_sum == 0.0f) p_sum = 1.0f;
-            if (n_sum == 0.0f) n_sum = 1.0f;
+            float p_agg_wt = 0.0f;
+            float n_agg_wt = 0.0f;
             
-            float total_sum = p_sum + n_sum + pbias + nbias;
-            float total_psum = p_sum + pbias;
-            float total_nsum = n_sum + nbias;
+            if (p_sum > 0.0f) {
+                float total_sum = p_sum + n_sum + pbias + nbias;
+                float total_psum = p_sum + pbias;
+                p_agg_wt = (total_psum / total_sum) * (p_sum / total_psum);
+            }
             
-            // Use fast reciprocal approximation
-            float total_sum_inv = __frcp_rn(total_sum);
-            float total_psum_inv = __frcp_rn(total_psum);
-            float total_nsum_inv = __frcp_rn(total_nsum);
+            if (n_sum > 0.0f) {
+                float total_sum = p_sum + n_sum + pbias + nbias;
+                float total_nsum = n_sum + nbias;
+                n_agg_wt = (total_nsum / total_sum) * (n_sum / total_nsum);
+            }
             
-            // Compute aggregated weights
-            float p_agg_wt = (p_sum > 0.0f) ? 
-                (total_psum * total_sum_inv) * (p_sum * total_psum_inv) : 0.0f;
-            
-            float n_agg_wt = (n_sum > 0.0f) ? 
-                (total_nsum * total_sum_inv) * (n_sum * total_nsum_inv) : 0.0f;
+            float p_sum_div = (p_sum == 0.0f) ? 1.0f : p_sum;
+            float n_sum_div = (n_sum == 0.0f) ? 1.0f : n_sum;
             
             // Store in shared memory for all threads
             relevance_val_shared = relevance_y[output_idx];
             p_agg_wt_shared = p_agg_wt * relevance_val_shared;
             n_agg_wt_shared = n_agg_wt * relevance_val_shared;
-            p_sum_final = p_sum;
-            n_sum_final = n_sum;
+            p_sum_final = p_sum_div;
+            n_sum_final = n_sum_div;
         }
         __syncthreads();
         
         // Load shared values
         float p_agg_wt_val = p_agg_wt_shared;
         float n_agg_wt_val = n_agg_wt_shared;
-        float p_sum = p_sum_final;
-        float n_sum = n_sum_final;
+        float p_sum_div = p_sum_final;
+        float n_sum_div = n_sum_final;
         
         // Second pass with coalesced writes
         for (int i = tid; i < input_dim; i += block_size) {
@@ -219,10 +217,10 @@ __global__ void calculate_wt_fc_kernel(
             float contrib = input_val * weight_val;
             float weight = 0.0f;
             
-            if (contrib > 0.0f && p_sum > 0.0f) {
-                weight = (contrib * __frcp_rn(p_sum)) * p_agg_wt_val;
-            } else if (contrib < 0.0f && n_sum > 0.0f) {
-                weight = (-contrib * __frcp_rn(n_sum)) * n_agg_wt_val;
+            if (contrib > 0.0f) {
+                weight = (contrib / p_sum_div) * p_agg_wt_val;
+            } else if (contrib < 0.0f) {
+                weight = (-contrib / n_sum_div) * n_agg_wt_val;
             }
             
             if (weight != 0.0f) {
