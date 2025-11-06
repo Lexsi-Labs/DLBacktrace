@@ -45,6 +45,8 @@ DLBacktrace is a model-agnostic explainability framework developed by *Lexsi Lab
 
 DLB v2 introduces **major architectural upgrades** to the explainability engine — resulting in *orders of magnitude faster performance* compared to v1.
 
+> 📘 **Note:** All benchmarks below were conducted on the **LLaMA 3.2 – 3 B parameter model** using the MMLU dataset on a NVIDIA RTX 4090.
+
 ---
 
 ### 📊 Benchmark Summary
