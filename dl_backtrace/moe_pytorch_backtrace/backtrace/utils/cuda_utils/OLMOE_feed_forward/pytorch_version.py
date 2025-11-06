@@ -304,10 +304,7 @@ def calculate_wt_olmoe_feed_forward_parallel(
             - relevance_expert: Per-expert relevance scores of shape (num_experts,)
     """
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-    wts_torch = torch.tensor(wts, dtype=torch.float32, device=device)
-    inp_torch = torch.tensor(inp, dtype=torch.float32, device=device)
+    device = torch.device('cuda')
 
     # Handle the conversion more carefully
     w_torch = {}
@@ -321,12 +318,12 @@ def calculate_wt_olmoe_feed_forward_parallel(
             w_torch[k] = torch.tensor(v, dtype=torch.float32, device=device)
     
     num_experts = model.config.num_experts
-    intermediate_outputs = olmoe_mlp_forward(inp_torch, w_torch, model)
+    intermediate_outputs = olmoe_mlp_forward(inp, w_torch, model)
 
     # Initialize tensors with proper device and dtype
-    final_relevance_input = torch.zeros_like(inp_torch)
-    relevance_expert = torch.zeros(num_experts, dtype=inp_torch.dtype, device=device)
-    in_relevance = torch.zeros_like(wts_torch)
+    final_relevance_input = torch.zeros_like(inp)
+    relevance_expert = torch.zeros(num_experts, dtype=inp.dtype, device=device)
+    in_relevance = torch.zeros_like(wts)
 
     # Process each expert
     for expert_idx in range(num_experts):
@@ -339,7 +336,7 @@ def calculate_wt_olmoe_feed_forward_parallel(
             continue
 
         # Update in_relevance for assigned tokens
-        in_relevance[top_x] = wts_torch[top_x] / num_experts
+        in_relevance[top_x] = wts[top_x] / num_experts
         relev_half = in_relevance * 0.5
 
         # Process relevance through the network
@@ -347,8 +344,8 @@ def calculate_wt_olmoe_feed_forward_parallel(
         relev_proj = 0.5 * relevance_int_output
 
         # Compute input relevances
-        relevance_input_gate_proj = process_single_relevance_gated_proj(relev_proj, inp_torch)
-        relevance_input_up_proj = process_single_relevance_proj(relev_proj, inp_torch)
+        relevance_input_gate_proj = process_single_relevance_gated_proj(relev_proj, inp)
+        relevance_input_up_proj = process_single_relevance_proj(relev_proj, inp)
         
         relevance_current_state = relevance_input_gate_proj + relevance_input_up_proj
 
@@ -359,13 +356,13 @@ def calculate_wt_olmoe_feed_forward_parallel(
 
     # Process router logits relevance
     relevance_router_logits = process_single_relevance_router_logits(
-        in_relevance * 0.5, inp_torch, w_torch['W_gate']
+        in_relevance * 0.5, inp, w_torch['W_gate']
     )
 
     final_relevance_input += relevance_router_logits
 
     # Final normalization (preserving original logic)
-    final_relevance_input = (wts_torch / final_relevance_input) * final_relevance_input
+    final_relevance_input = (wts / final_relevance_input) * final_relevance_input
 
     return final_relevance_input.cpu().numpy(), relevance_expert.cpu().numpy()
 
