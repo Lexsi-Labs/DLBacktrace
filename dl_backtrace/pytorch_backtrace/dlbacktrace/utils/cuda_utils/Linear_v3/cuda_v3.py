@@ -317,28 +317,49 @@ def get_cuda_arch_flags():
     if not torch.cuda.is_available():
         return []
     
-    major, minor = torch.cuda.get_device_capability()
-    arch_flag = f"--generate-code=arch=compute_{major}{minor},code=sm_{major}{minor}"
-    return [arch_flag]
+    try:
+        major, minor = torch.cuda.get_device_capability()
+        arch_flag = f"--generate-code=arch=compute_{major}{minor},code=sm_{major}{minor}"
+        return [arch_flag]
+    except Exception as e:
+        print(f"⚠️  Failed to get CUDA device capability: {e}")
+        return []
 
-extra_flags = [
-    '-O3', 
-    '--use_fast_math', 
-    # '-Xcompiler', '-fPIC',
-    # '-Xptxas', '-dlcm=cg',
-    # '-Xptxas', '-dscm=wt',
-]
+# Lazy compilation - only compile when CUDA is available
+custom_linear_layer_cuda_ops = None
 
-extra_flags.extend(get_cuda_arch_flags())
-
-custom_linear_layer_cuda_ops = load_inline(
-    name="linear_layer_cuda_v3",
-    cpp_sources=linear_layer_cuda_declaration,
-    cuda_sources=linear_layer_cuda_source,
-    functions=["launch_calculate_wt_fc_kernel"],
-    extra_cuda_cflags=extra_flags,
-    verbose=True
-)
+def _ensure_cuda_ops():
+    """Ensure CUDA ops are compiled. Returns None if compilation fails."""
+    global custom_linear_layer_cuda_ops
+    if custom_linear_layer_cuda_ops is not None:
+        return custom_linear_layer_cuda_ops
+    
+    if not torch.cuda.is_available():
+        print("⚠️  CUDA not available, cannot compile linear_layer_cuda_v3")
+        return None
+    
+    try:
+        extra_flags = [
+            '-O3', 
+            '--use_fast_math', 
+            # '-Xcompiler', '-fPIC',
+            # '-Xptxas', '-dlcm=cg',
+            # '-Xptxas', '-dscm=wt',
+        ]
+        extra_flags.extend(get_cuda_arch_flags())
+        
+        custom_linear_layer_cuda_ops = load_inline(
+            name="linear_layer_cuda_v3",
+            cpp_sources=linear_layer_cuda_declaration,
+            cuda_sources=linear_layer_cuda_source,
+            functions=["launch_calculate_wt_fc_kernel"],
+            extra_cuda_cflags=extra_flags,
+            verbose=False  # Set to True for debugging
+        )
+        return custom_linear_layer_cuda_ops
+    except Exception as e:
+        print(f"⚠️  Failed to compile linear_layer_cuda_v3: {e}")
+        return None
 
 def calculate_wt_fc_cuda(relevance_y, input_array, w, b, act):
     """
@@ -356,6 +377,11 @@ def calculate_wt_fc_cuda(relevance_y, input_array, w, b, act):
     Returns:
         relevance_x: relevance at the input, same shape as input_array
     """
+    # Ensure CUDA ops are compiled
+    ops = _ensure_cuda_ops()
+    if ops is None:
+        raise RuntimeError("CUDA operations not available. Cannot run calculate_wt_fc_cuda.")
+    
     # Validate inputs
     if relevance_y is None or input_array is None or w is None:
         print(f"[CUDA ERROR] One or more inputs is None")
@@ -402,7 +428,7 @@ def calculate_wt_fc_cuda(relevance_y, input_array, w, b, act):
         inp_torch = torch.tensor(inp, dtype=torch.float32, device=cuda_device)
         wts_torch = torch.tensor(wts, dtype=torch.float32, device=cuda_device)
         
-        cuda_function = custom_linear_layer_cuda_ops.launch_calculate_wt_fc_kernel
+        cuda_function = ops.launch_calculate_wt_fc_kernel
         
         # Call CUDA kernel for single batch element with simplified parameters
         try:

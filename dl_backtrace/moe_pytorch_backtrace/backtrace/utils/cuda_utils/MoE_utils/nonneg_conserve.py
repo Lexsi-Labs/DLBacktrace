@@ -125,25 +125,47 @@ void launch_kernel(
 def get_cuda_arch_flags():
     if not torch.cuda.is_available():
         return []
-    major, minor = torch.cuda.get_device_capability()
-    arch_flag = f"--generate-code=arch=compute_{major}{minor},code=sm_{major}{minor}"
-    return [arch_flag]
+    try:
+        major, minor = torch.cuda.get_device_capability()
+        arch_flag = f"--generate-code=arch=compute_{major}{minor},code=sm_{major}{minor}"
+        return [arch_flag]
+    except Exception as e:
+        print(f"⚠️  Failed to get CUDA device capability: {e}")
+        return []
 
-extra_flags = [
-    '-O3',
-    '--use_fast_math',
-    '-Xcompiler', '-fPIC',
-]
-extra_flags.extend(get_cuda_arch_flags())
+# Lazy compilation - only compile when CUDA is available
+cuda_ops = None
 
-cuda_ops = load_inline(
-    name="dlb_conserve_cuda",
-    cpp_sources=cuda_declaration,
-    cuda_sources=cuda_source,
-    functions=["launch_kernel"],
-    extra_cuda_cflags=extra_flags,
-    verbose=True
-)
+def _ensure_cuda_ops():
+    """Ensure CUDA ops are compiled. Returns None if compilation fails."""
+    global cuda_ops
+    if cuda_ops is not None:
+        return cuda_ops
+    
+    if not torch.cuda.is_available():
+        print("⚠️  CUDA not available, cannot compile dlb_conserve_cuda")
+        return None
+    
+    try:
+        extra_flags = [
+            '-O3',
+            '--use_fast_math',
+            '-Xcompiler', '-fPIC',
+        ]
+        extra_flags.extend(get_cuda_arch_flags())
+        
+        cuda_ops = load_inline(
+            name="dlb_conserve_cuda",
+            cpp_sources=cuda_declaration,
+            cuda_sources=cuda_source,
+            functions=["launch_kernel"],
+            extra_cuda_cflags=extra_flags,
+            verbose=False  # Set to True for debugging
+        )
+        return cuda_ops
+    except Exception as e:
+        print(f"⚠️  Failed to compile dlb_conserve_cuda: {e}")
+        return None
 
 def dlb_style_nonneg_conserve_cuda(
     wts: torch.Tensor,
@@ -161,13 +183,17 @@ def dlb_style_nonneg_conserve_cuda(
     Returns:
         Output tensor of shape (B, C, H, W)
     """
+    ops = _ensure_cuda_ops()
+    if ops is None:
+        raise RuntimeError("CUDA operations not available. Cannot run dlb_style_nonneg_conserve_cuda.")
+    
     assert wts.shape == inp.shape
     assert wts.is_cuda and inp.is_cuda
     assert wts.is_contiguous() and inp.is_contiguous()
     assert wts.dtype == torch.float32 and inp.dtype == torch.float32
     
     out = torch.zeros_like(inp)
-    cuda_ops.launch_kernel(wts, inp, out, eps)
+    ops.launch_kernel(wts, inp, out, eps)
     return out
 
 def dlb_style_signed_conserve_cuda(

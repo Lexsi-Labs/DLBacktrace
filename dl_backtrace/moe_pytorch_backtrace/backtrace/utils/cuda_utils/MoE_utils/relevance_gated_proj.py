@@ -196,25 +196,47 @@ void launch_kernel(torch::Tensor output, torch::Tensor wts, torch::Tensor wt_mat
 def get_cuda_arch_flags():
     if not torch.cuda.is_available():
         return []
-    major, minor = torch.cuda.get_device_capability()
-    arch_flag = f"--generate-code=arch=compute_{major}{minor},code=sm_{major}{minor}"
-    return [arch_flag]
+    try:
+        major, minor = torch.cuda.get_device_capability()
+        arch_flag = f"--generate-code=arch=compute_{major}{minor},code=sm_{major}{minor}"
+        return [arch_flag]
+    except Exception as e:
+        print(f"⚠️  Failed to get CUDA device capability: {e}")
+        return []
 
-extra_flags = [
-    '-O3', 
-    '--use_fast_math', 
-    '-Xcompiler', '-fPIC',
-]
-extra_flags.extend(get_cuda_arch_flags())
+# Lazy compilation - only compile when CUDA is available
+cuda_ops = None
 
-cuda_ops = load_inline(
-    name="relevance_gating_kernel",
-    cpp_sources=cuda_declaration,
-    cuda_sources=cuda_source,
-    functions=["launch_kernel"],
-    extra_cuda_cflags=extra_flags,
-    verbose=True
-)
+def _ensure_cuda_ops():
+    """Ensure CUDA ops are compiled. Returns None if compilation fails."""
+    global cuda_ops
+    if cuda_ops is not None:
+        return cuda_ops
+    
+    if not torch.cuda.is_available():
+        print("⚠️  CUDA not available, cannot compile relevance_gating_kernel")
+        return None
+    
+    try:
+        extra_flags = [
+            '-O3', 
+            '--use_fast_math', 
+            '-Xcompiler', '-fPIC',
+        ]
+        extra_flags.extend(get_cuda_arch_flags())
+        
+        cuda_ops = load_inline(
+            name="relevance_gating_kernel",
+            cpp_sources=cuda_declaration,
+            cuda_sources=cuda_source,
+            functions=["launch_kernel"],
+            extra_cuda_cflags=extra_flags,
+            verbose=False  # Set to True for debugging
+        )
+        return cuda_ops
+    except Exception as e:
+        print(f"⚠️  Failed to compile relevance_gating_kernel: {e}")
+        return None
 
 def calculate_relevance_gated_proj_cuda(
     wts: torch.Tensor,
@@ -230,6 +252,10 @@ def calculate_relevance_gated_proj_cuda(
     Returns:
         Weighted gated projection tensor
     """
+    ops = _ensure_cuda_ops()
+    if ops is None:
+        raise RuntimeError("CUDA operations not available. Cannot run calculate_relevance_gated_proj_cuda.")
+    
     assert output.is_cuda, "Input must be on CUDA device"
     assert wts.is_cuda, "Weights must be on CUDA device"
     assert output.dtype == torch.float32, "Only float32 supported"
@@ -240,6 +266,6 @@ def calculate_relevance_gated_proj_cuda(
     wt_mat_total = torch.zeros_like(output)
     
     # Launch CUDA kernel
-    cuda_ops.launch_kernel(output, wts, wt_mat_total)
+    ops.launch_kernel(output, wts, wt_mat_total)
     
     return wt_mat_total

@@ -328,28 +328,49 @@ def get_cuda_arch_flags():
     if not torch.cuda.is_available():
         return []
     
-    major, minor = torch.cuda.get_device_capability()
-    arch_flag = f"--generate-code=arch=compute_{major}{minor},code=sm_{major}{minor}"
-    return [arch_flag]
+    try:
+        major, minor = torch.cuda.get_device_capability()
+        arch_flag = f"--generate-code=arch=compute_{major}{minor},code=sm_{major}{minor}"
+        return [arch_flag]
+    except Exception as e:
+        print(f"⚠️  Failed to get CUDA device capability: {e}")
+        return []
 
-extra_flags = [
-    '-O3', 
-    '--use_fast_math', 
-    # '-Xcompiler', '-fPIC',
-    # '-Xptxas', '-dlcm=cg',
-    # '-Xptxas', '-dscm=wt',
-]
+# Lazy compilation - only compile when CUDA is available
+custom_wt_conv_unit_cuda_ops = None
 
-extra_flags.extend(get_cuda_arch_flags())
-
-custom_wt_conv_unit_cuda_ops = load_inline(
-    name="wt_conv_unit_cuda_v2",
-    cpp_sources=wt_conv_unit_cuda_declaration,
-    cuda_sources=wt_conv_unit_cuda_source,
-    functions=["launch_calculate_wt_conv_unit_kernel"],
-    extra_cuda_cflags=extra_flags,
-    verbose=True
-)
+def _ensure_cuda_ops():
+    """Ensure CUDA ops are compiled. Returns None if compilation fails."""
+    global custom_wt_conv_unit_cuda_ops
+    if custom_wt_conv_unit_cuda_ops is not None:
+        return custom_wt_conv_unit_cuda_ops
+    
+    if not torch.cuda.is_available():
+        print("⚠️  CUDA not available, cannot compile wt_conv_unit_cuda_v2")
+        return None
+    
+    try:
+        extra_flags = [
+            '-O3', 
+            '--use_fast_math', 
+            # '-Xcompiler', '-fPIC',
+            # '-Xptxas', '-dlcm=cg',
+            # '-Xptxas', '-dscm=wt',
+        ]
+        extra_flags.extend(get_cuda_arch_flags())
+        
+        custom_wt_conv_unit_cuda_ops = load_inline(
+            name="wt_conv_unit_cuda_v2",
+            cpp_sources=wt_conv_unit_cuda_declaration,
+            cuda_sources=wt_conv_unit_cuda_source,
+            functions=["launch_calculate_wt_conv_unit_kernel"],
+            extra_cuda_cflags=extra_flags,
+            verbose=False
+        )
+        return custom_wt_conv_unit_cuda_ops
+    except Exception as e:
+        print(f"⚠️  Failed to compile wt_conv_unit_cuda_v2: {e}")
+        return None
 
 def calculate_wt_conv_unit_cuda(patch, wts, w, b, act):
     """
@@ -365,6 +386,9 @@ def calculate_wt_conv_unit_cuda(patch, wts, w, b, act):
     Returns:
         torch::Tensor: Computed weight matrix of shape (i, j, k)
     """
+    ops = _ensure_cuda_ops()
+    if ops is None:
+        raise RuntimeError("CUDA operations not available. Cannot run calculate_wt_conv_unit_cuda.")
 
     b = b if b is not None else torch.empty(0, dtype=torch.float32)
 
@@ -385,6 +409,6 @@ def calculate_wt_conv_unit_cuda(patch, wts, w, b, act):
         elif func_name == "hard_sigmoid": act_func_int = 6
         elif func_name == "tanh": act_func_int = 7
 
-    return custom_wt_conv_unit_cuda_ops.launch_calculate_wt_conv_unit_kernel(
+    return ops.launch_calculate_wt_conv_unit_kernel(
         patch, wts, w, b, act_type, act_lower, act_upper, act_func_int
     )

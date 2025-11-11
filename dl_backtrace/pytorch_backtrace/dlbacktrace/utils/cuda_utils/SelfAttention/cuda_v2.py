@@ -442,26 +442,47 @@ def get_cuda_arch_flags():
     if not torch.cuda.is_available():
         return []
     
-    major, minor = torch.cuda.get_device_capability()
-    arch_flag = f"--generate-code=arch=compute_{major}{minor},code=sm_{major}{minor}"
-    return [arch_flag]
+    try:
+        major, minor = torch.cuda.get_device_capability()
+        arch_flag = f"--generate-code=arch=compute_{major}{minor},code=sm_{major}{minor}"
+        return [arch_flag]
+    except Exception as e:
+        print(f"⚠️  Failed to get CUDA device capability: {e}")
+        return []
 
-extra_flags = [
-    '-O3', 
-    '--use_fast_math', 
-    '-Xcompiler', '-fPIC',
-]
+# Lazy compilation - only compile when CUDA is available
+multi_kernel_attention_cuda_ops = None
 
-extra_flags.extend(get_cuda_arch_flags())
-
-multi_kernel_attention_cuda_ops = load_inline(
-    name="multi_kernel_attention_cuda",
-    cpp_sources=attention_cuda_declaration,
-    cuda_sources=attention_cuda_source,
-    functions=["launch_multi_kernel_attention_relevance"],
-    extra_cuda_cflags=extra_flags,
-    verbose=True
-)
+def _ensure_cuda_ops():
+    """Ensure CUDA ops are compiled. Returns None if compilation fails."""
+    global multi_kernel_attention_cuda_ops
+    if multi_kernel_attention_cuda_ops is not None:
+        return multi_kernel_attention_cuda_ops
+    
+    if not torch.cuda.is_available():
+        print("⚠️  CUDA not available, cannot compile multi_kernel_attention_cuda")
+        return None
+    
+    try:
+        extra_flags = [
+            '-O3', 
+            '--use_fast_math', 
+            '-Xcompiler', '-fPIC',
+        ]
+        extra_flags.extend(get_cuda_arch_flags())
+        
+        multi_kernel_attention_cuda_ops = load_inline(
+            name="multi_kernel_attention_cuda",
+            cpp_sources=attention_cuda_declaration,
+            cuda_sources=attention_cuda_source,
+            functions=["launch_multi_kernel_attention_relevance"],
+            extra_cuda_cflags=extra_flags,
+            verbose=False
+        )
+        return multi_kernel_attention_cuda_ops
+    except Exception as e:
+        print(f"⚠️  Failed to compile multi_kernel_attention_cuda: {e}")
+        return None
 
 def calculate_wt_self_attention_multi_kernel(R_out, Q, K, V, mask, scale):
     """
@@ -499,10 +520,14 @@ def calculate_wt_self_attention_multi_kernel(R_out, Q, K, V, mask, scale):
             - R_V: Value relevance tensor, same shape as V
             - R_mask: Mask relevance tensor, same shape as mask (or zeros)
     """
+    ops = _ensure_cuda_ops()
+    if ops is None:
+        raise RuntimeError("CUDA operations not available. Cannot run calculate_wt_self_attention_multi_kernel.")
+    
     D = Q.size(3)
     device = torch.device("cuda")
     scale = torch.sqrt(torch.tensor(D, dtype=torch.float32, device=device)) if scale is None else scale
 
-    return multi_kernel_attention_cuda_ops.launch_multi_kernel_attention_relevance(
+    return ops.launch_multi_kernel_attention_relevance(
         R_out, Q, K, V, mask, scale
     )    

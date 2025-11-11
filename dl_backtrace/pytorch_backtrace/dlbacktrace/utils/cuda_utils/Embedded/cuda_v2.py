@@ -239,26 +239,47 @@ def get_cuda_arch_flags():
     if not torch.cuda.is_available():
         return []
     
-    major, minor = torch.cuda.get_device_capability()
-    arch_flag = f"--generate-code=arch=compute_{major}{minor},code=sm_{major}{minor}"
-    return [arch_flag]
+    try:
+        major, minor = torch.cuda.get_device_capability()
+        arch_flag = f"--generate-code=arch=compute_{major}{minor},code=sm_{major}{minor}"
+        return [arch_flag]
+    except Exception as e:
+        print(f"⚠️  Failed to get CUDA device capability: {e}")
+        return []
 
-extra_flags = [
-    '-O3', 
-    '--use_fast_math', 
-    '-Xcompiler', '-fPIC',
-]
+# Lazy compilation - only compile when CUDA is available
+embedding_cuda_ops = None
 
-extra_flags.extend(get_cuda_arch_flags())
-
-embedding_cuda_ops = load_inline(
-    name="custom_embedding_layer_cuda_v2",
-    cpp_sources=embedding_cuda_declaration,
-    cuda_sources=embedding_cuda_source,
-    functions=["wt_embedding_cuda_v2"],
-    extra_cuda_cflags=extra_flags,
-    verbose=True
-)
+def _ensure_cuda_ops():
+    """Ensure CUDA ops are compiled. Returns None if compilation fails."""
+    global embedding_cuda_ops
+    if embedding_cuda_ops is not None:
+        return embedding_cuda_ops
+    
+    if not torch.cuda.is_available():
+        print("⚠️  CUDA not available, cannot compile custom_embedding_layer_cuda_v2")
+        return None
+    
+    try:
+        extra_flags = [
+            '-O3', 
+            '--use_fast_math', 
+            '-Xcompiler', '-fPIC',
+        ]
+        extra_flags.extend(get_cuda_arch_flags())
+        
+        embedding_cuda_ops = load_inline(
+            name="custom_embedding_layer_cuda_v2",
+            cpp_sources=embedding_cuda_declaration,
+            cuda_sources=embedding_cuda_source,
+            functions=["wt_embedding_cuda_v2"],
+            extra_cuda_cflags=extra_flags,
+            verbose=False  # Set to True for debugging
+        )
+        return embedding_cuda_ops
+    except Exception as e:
+        print(f"⚠️  Failed to compile custom_embedding_layer_cuda_v2: {e}")
+        return None
 
 def calculate_wt_embedding_cuda(R_out, input_ids, vocab_size, aggregate):
     """
@@ -281,5 +302,8 @@ def calculate_wt_embedding_cuda(R_out, input_ids, vocab_size, aggregate):
                      accumulated relevance vectors per token. If aggregate='mean',
                      returns [vocab_size] tensor with mean relevance per token.
     """
-
-    return embedding_cuda_ops.wt_embedding_cuda_v2(R_out, input_ids, vocab_size, aggregate)
+    ops = _ensure_cuda_ops()
+    if ops is None:
+        raise RuntimeError("CUDA operations not available. Cannot run calculate_wt_embedding_cuda.")
+    
+    return ops.wt_embedding_cuda_v2(R_out, input_ids, vocab_size, aggregate)

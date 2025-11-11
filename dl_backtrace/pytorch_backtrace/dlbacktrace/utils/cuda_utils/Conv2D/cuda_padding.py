@@ -163,26 +163,46 @@ def get_cuda_arch_flags():
     if not torch.cuda.is_available():
         return []
     
-    major, minor = torch.cuda.get_device_capability()
-    arch_flag = f"--generate-code=arch=compute_{major}{minor},code=sm_{major}{minor}"
-    return [arch_flag]
+    try:
+        major, minor = torch.cuda.get_device_capability()
+        arch_flag = f"--generate-code=arch=compute_{major}{minor},code=sm_{major}{minor}"
+        return [arch_flag]
+    except Exception as e:
+        print(f"⚠️  Failed to get CUDA device capability: {e}")
+        return []
 
-extra_flags = [
-    '-O3', 
-    '--use_fast_math',
-]
+# Lazy compilation - only compile when CUDA is available
+custom_padding_cuda_ops = None
 
-extra_flags.extend(get_cuda_arch_flags())
-
-# Load the CUDA extension
-custom_padding_cuda_ops = load_inline(
-    name="padding_cuda",
-    cpp_sources=padding_cuda_declaration,
-    cuda_sources=padding_cuda_source,
-    functions=["launch_calculate_padding_kernel"],
-    extra_cuda_cflags=extra_flags,
-    verbose=False
-)
+def _ensure_cuda_ops():
+    """Ensure CUDA ops are compiled. Returns None if compilation fails."""
+    global custom_padding_cuda_ops
+    if custom_padding_cuda_ops is not None:
+        return custom_padding_cuda_ops
+    
+    if not torch.cuda.is_available():
+        print("⚠️  CUDA not available, cannot compile padding_cuda")
+        return None
+    
+    try:
+        extra_flags = [
+            '-O3', 
+            '--use_fast_math',
+        ]
+        extra_flags.extend(get_cuda_arch_flags())
+        
+        custom_padding_cuda_ops = load_inline(
+            name="padding_cuda",
+            cpp_sources=padding_cuda_declaration,
+            cuda_sources=padding_cuda_source,
+            functions=["launch_calculate_padding_kernel"],
+            extra_cuda_cflags=extra_flags,
+            verbose=False
+        )
+        return custom_padding_cuda_ops
+    except Exception as e:
+        print(f"⚠️  Failed to compile padding_cuda: {e}")
+        return None
 
 def calculate_padding_cuda(
     kernel_size: Tuple[int, int], 
@@ -208,6 +228,10 @@ def calculate_padding_cuda(
               [pad_v_before, pad_v_after], [0, 0]]
     """
     
+    ops = _ensure_cuda_ops()
+    if ops is None:
+        raise RuntimeError("CUDA operations not available. Cannot run calculate_padding_cuda.")
+    
     # Determine padding mode and values
     if isinstance(padding, str):
         padding_mode = padding
@@ -221,7 +245,7 @@ def calculate_padding_cuda(
         custom_pad_h = custom_pad_w = 0
     
     # Call CUDA kernel
-    output, padding_info = custom_padding_cuda_ops.launch_calculate_padding_kernel(
+    output, padding_info = ops.launch_calculate_padding_kernel(
         inp,
         padding_mode,
         int(kernel_size[0]), int(kernel_size[1]),

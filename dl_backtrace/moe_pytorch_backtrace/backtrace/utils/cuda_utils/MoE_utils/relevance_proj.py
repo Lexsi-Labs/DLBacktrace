@@ -182,31 +182,57 @@ void launch_kernel(torch::Tensor wts, torch::Tensor output, torch::Tensor result
 def get_cuda_arch_flags():
     if not torch.cuda.is_available():
         return []
-    major, minor = torch.cuda.get_device_capability()
-    arch_flag = f"--generate-code=arch=compute_{major}{minor},code=sm_{major}{minor}"
-    return [arch_flag]
+    try:
+        major, minor = torch.cuda.get_device_capability()
+        arch_flag = f"--generate-code=arch=compute_{major}{minor},code=sm_{major}{minor}"
+        return [arch_flag]
+    except Exception as e:
+        print(f"⚠️  Failed to get CUDA device capability: {e}")
+        return []
 
-extra_flags = [
-    '-O3', 
-    '--use_fast_math', 
-    '-Xcompiler', '-fPIC',
-]
-extra_flags.extend(get_cuda_arch_flags())
+# Lazy compilation - only compile when CUDA is available
+cuda_ops = None
 
-cuda_ops = load_inline(
-    name="relevance_proj_cuda",
-    cpp_sources=cuda_declaration,
-    cuda_sources=cuda_source,
-    functions=["launch_kernel"],
-    extra_cuda_cflags=extra_flags,
-    verbose=True
-)
+def _ensure_cuda_ops():
+    """Ensure CUDA ops are compiled. Returns None if compilation fails."""
+    global cuda_ops
+    if cuda_ops is not None:
+        return cuda_ops
+    
+    if not torch.cuda.is_available():
+        print("⚠️  CUDA not available, cannot compile relevance_proj_cuda")
+        return None
+    
+    try:
+        extra_flags = [
+            '-O3', 
+            '--use_fast_math', 
+            '-Xcompiler', '-fPIC',
+        ]
+        extra_flags.extend(get_cuda_arch_flags())
+        
+        cuda_ops = load_inline(
+            name="relevance_proj_cuda",
+            cpp_sources=cuda_declaration,
+            cuda_sources=cuda_source,
+            functions=["launch_kernel"],
+            extra_cuda_cflags=extra_flags,
+            verbose=False  # Set to True for debugging
+        )
+        return cuda_ops
+    except Exception as e:
+        print(f"⚠️  Failed to compile relevance_proj_cuda: {e}")
+        return None
 
 def calculate_relevance_proj_cuda(wts: torch.Tensor, output: torch.Tensor) -> torch.Tensor:
     """CUDA-accelerated relevance projection calculation."""
+    ops = _ensure_cuda_ops()
+    if ops is None:
+        raise RuntimeError("CUDA operations not available. Cannot run calculate_relevance_proj_cuda.")
+    
     assert output.is_cuda and wts.is_cuda, "Tensors must be on GPU"
     assert output.dtype == torch.float32 and wts.dtype == torch.float32, "Only float32 supported"
     
     result = torch.zeros_like(output)
-    cuda_ops.launch_kernel(wts, output, result)
+    ops.launch_kernel(wts, output, result)
     return result

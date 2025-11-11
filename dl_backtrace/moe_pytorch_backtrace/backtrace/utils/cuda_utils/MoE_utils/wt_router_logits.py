@@ -138,25 +138,47 @@ void launch_kernel(
 def get_cuda_arch_flags():
     if not torch.cuda.is_available():
         return []
-    major, minor = torch.cuda.get_device_capability()
-    arch_flag = f"--generate-code=arch=compute_{major}{minor},code=sm_{major}{minor}"
-    return [arch_flag]
+    try:
+        major, minor = torch.cuda.get_device_capability()
+        arch_flag = f"--generate-code=arch=compute_{major}{minor},code=sm_{major}{minor}"
+        return [arch_flag]
+    except Exception as e:
+        print(f"⚠️  Failed to get CUDA device capability: {e}")
+        return []
 
-extra_flags = [
-    '-O3', 
-    '--use_fast_math', 
-    '-Xcompiler', '-fPIC',
-]
-extra_flags.extend(get_cuda_arch_flags())
+# Lazy compilation - only compile when CUDA is available
+cuda_ops = None
 
-cuda_ops = load_inline(
-    name="wt_router_logits",
-    cpp_sources=cuda_declaration,
-    cuda_sources=cuda_source,
-    functions=["launch_kernel"],
-    extra_cuda_cflags=extra_flags,
-    verbose=True
-)
+def _ensure_cuda_ops():
+    """Ensure CUDA ops are compiled. Returns None if compilation fails."""
+    global cuda_ops
+    if cuda_ops is not None:
+        return cuda_ops
+    
+    if not torch.cuda.is_available():
+        print("⚠️  CUDA not available, cannot compile wt_router_logits")
+        return None
+    
+    try:
+        extra_flags = [
+            '-O3', 
+            '--use_fast_math', 
+            '-Xcompiler', '-fPIC',
+        ]
+        extra_flags.extend(get_cuda_arch_flags())
+        
+        cuda_ops = load_inline(
+            name="wt_router_logits",
+            cpp_sources=cuda_declaration,
+            cuda_sources=cuda_source,
+            functions=["launch_kernel"],
+            extra_cuda_cflags=extra_flags,
+            verbose=False  # Set to True for debugging
+        )
+        return cuda_ops
+    except Exception as e:
+        print(f"⚠️  Failed to compile wt_router_logits: {e}")
+        return None
 
 def calculate_wt_router_logits_cuda(
     wts: torch.Tensor,
@@ -174,6 +196,10 @@ def calculate_wt_router_logits_cuda(
     Returns:
         output: (n_samples, n_features) weighted router logits
     """
+    ops = _ensure_cuda_ops()
+    if ops is None:
+        raise RuntimeError("CUDA operations not available. Cannot run calculate_wt_router_logits_cuda.")
+    
     # Input validation
     assert wts.is_cuda and inp.is_cuda and W_router.is_cuda, "All tensors must be on CUDA"
     assert wts.dtype == torch.float32, "wts must be float32"
@@ -189,6 +215,6 @@ def calculate_wt_router_logits_cuda(
     output = torch.empty((n_samples, n_features), dtype=torch.float32, device=inp.device)
     
     # Launch kernel
-    cuda_ops.launch_kernel(wts, inp, W_router, output)
+    ops.launch_kernel(wts, inp, W_router, output)
     
     return output
