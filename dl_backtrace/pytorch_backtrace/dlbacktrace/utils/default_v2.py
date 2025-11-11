@@ -1,143 +1,242 @@
 import torch
 import numpy as np
 
-# Linear Layer
-from .cuda_utils.Linear_v2.original_version import calculate_wt_fc as calculate_wt_fc_original_linear
-from .cuda_utils.Linear_v2.pytorch_version import calculate_wt_fc as calculate_wt_fc_pytorch_linear
-from .cuda_utils.Linear_v3.cuda_v3 import calculate_wt_fc_cuda as calculate_wt_fc_cuda_linear
 
-# Conv2D Layer
-from .cuda_utils.Conv2D.original_version import calculate_wt_conv as calculate_wt_conv_original
-from .cuda_utils.Conv2D.refactored_version import calculate_wt_conv as calculate_wt_conv_refactored
-from .cuda_utils.Conv2D.pytorch_version import calculate_wt_conv as calculate_wt_conv_parallel
+_cuda_modules_cache = {}
 
-# MaxPool2D Layer
-from .cuda_utils.MaxPool2D.original_version import calculate_wt_maxpool as calculate_wt_maxpool_original
-from .cuda_utils.MaxPool2D.refactored_version import calculate_wt_maxpool as calculate_wt_maxpool_refactored
-from .cuda_utils.MaxPool2D.pytorch_version import calculate_wt_maxpool as calculate_wt_maxpool_pytorch
+def _lazy_import_cuda_module(module_path, func_name, cuda_only=False):
+    """
+    Lazy import a function from a CUDA module.
+    Only imports and compiles when actually called.
+    
+    Args:
+        module_path: Python import path (e.g., '.cuda_utils.Linear_v2.original_version')
+        func_name: Function name to import
+        cuda_only: If True, only import when CUDA is available
+    
+    Returns:
+        The imported function, or None if CUDA not available and cuda_only=True
+    """
+    cache_key = f"{module_path}.{func_name}"
+    
+    if cache_key in _cuda_modules_cache:
+        return _cuda_modules_cache[cache_key]
+    
+    # Check if CUDA is available for cuda_only modules
+    if cuda_only and not torch.cuda.is_available():
+        print(f"⚠️  CUDA not available, skipping CUDA-only module: {module_path}")
+        _cuda_modules_cache[cache_key] = None
+        return None
+    
+    try:
+        # Dynamically import the module
+        from importlib import import_module
+        module = import_module(module_path, package=__package__)
+        func = getattr(module, func_name)
+        _cuda_modules_cache[cache_key] = func
+        return func
+    except Exception as e:
+        print(f"⚠️  Failed to import {module_path}.{func_name}: {e}")
+        _cuda_modules_cache[cache_key] = None
+        return None
 
-# AdaptiveAvgPool2D Layer
-from .cuda_utils.AdaptiveAvgPool2D.original_version import calculate_wt_gavgpool as calculate_wt_gavgpool_original
-from .cuda_utils.AdaptiveAvgPool2D.refactored_version import calculate_wt_gavgpool as calculate_wt_gavgpool_refactored
-from .cuda_utils.AdaptiveAvgPool2D.pytorch_version import calculate_wt_gavgpool as calculate_wt_gavgpool_pytorch
+# Helper functions to get implementations with lazy loading
+def _get_linear_impl(version):
+    """Get Linear layer implementation with lazy loading."""
+    if version == 'original':
+        return _lazy_import_cuda_module('.cuda_utils.Linear_v2.original_version', 'calculate_wt_fc')
+    elif version == 'pytorch':
+        return _lazy_import_cuda_module('.cuda_utils.Linear_v2.pytorch_version', 'calculate_wt_fc')
+    elif version == 'cuda':
+        return _lazy_import_cuda_module('.cuda_utils.Linear_v3.cuda_v3', 'calculate_wt_fc_cuda', cuda_only=True)
+    return None
 
-# Embedded Layer
-from .cuda_utils.Embedded.original_version import calculate_wt_embedding as calculate_wt_embedding_original
-from .cuda_utils.Embedded.refactored_version import calculate_wt_embedding as calculate_wt_embedding_refactored
-from .cuda_utils.Embedded.pytorch_version import calculate_wt_embedding as calculate_wt_embedding_pytorch
-from .cuda_utils.Embedded.cuda_v2 import calculate_wt_embedding_cuda as calculate_wt_embedding_cuda
+def _get_conv2d_impl(version):
+    """Get Conv2D layer implementation with lazy loading."""
+    if version == 'original':
+        return _lazy_import_cuda_module('.cuda_utils.Conv2D.original_version', 'calculate_wt_conv')
+    elif version == 'refactored':
+        return _lazy_import_cuda_module('.cuda_utils.Conv2D.refactored_version', 'calculate_wt_conv')
+    elif version == 'cuda':
+        return _lazy_import_cuda_module('.cuda_utils.Conv2D.pytorch_version', 'calculate_wt_conv')
+    return None
 
-# SelfAttention Layer
-from .cuda_utils.SelfAttention.original_version import calculate_wt_self_attention as calculate_wt_self_attention_original
-from .cuda_utils.SelfAttention.pytorch_v2 import calculate_wt_self_attention as calculate_wt_self_attention_pytorch
-from .cuda_utils.SelfAttention.cuda_v3 import calculate_wt_self_attention_cuda as calculate_wt_self_attention_cuda
+def _get_embedding_impl(version):
+    """Get Embedding layer implementation with lazy loading."""
+    if version == 'original':
+        return _lazy_import_cuda_module('.cuda_utils.Embedded.original_version', 'calculate_wt_embedding')
+    elif version == 'refactored':
+        return _lazy_import_cuda_module('.cuda_utils.Embedded.refactored_version', 'calculate_wt_embedding')
+    elif version == 'pytorch':
+        return _lazy_import_cuda_module('.cuda_utils.Embedded.pytorch_version', 'calculate_wt_embedding')
+    elif version == 'cuda':
+        return _lazy_import_cuda_module('.cuda_utils.Embedded.cuda_v2', 'calculate_wt_embedding_cuda', cuda_only=True)
+    return None
 
-# Wt_add_equal Layer
-from .cuda_utils.Wt_add_equal.original_version import calculate_wt_add_equal as calculate_wt_add_original
-from .cuda_utils.Wt_add_equal.refactored_version import calculate_wt_add_equal as calculate_wt_add_refactored
+def _get_self_attention_impl(version):
+    """Get SelfAttention layer implementation with lazy loading."""
+    if version == 'original':
+        return _lazy_import_cuda_module('.cuda_utils.SelfAttention.original_version', 'calculate_wt_self_attention')
+    elif version == 'pytorch':
+        return _lazy_import_cuda_module('.cuda_utils.SelfAttention.pytorch_v2', 'calculate_wt_self_attention')
+    elif version == 'cuda':
+        return _lazy_import_cuda_module('.cuda_utils.SelfAttention.cuda_v3', 'calculate_wt_self_attention_cuda', cuda_only=True)
+    return None
 
-# Wt_mul Layer
-from .cuda_utils.Wt_mul.original_version import calculate_wt_mul as calculate_wt_mul_original
-from .cuda_utils.Wt_mul.refactored_version import calculate_wt_mul as calculate_wt_mul_refactored
-from .cuda_utils.Wt_mul.pytorch_version import calculate_wt_mul_gpu as calculate_wt_mul_pytorch
+def _get_wt_add_equal_impl(version):
+    """Get Wt_add_equal implementation with lazy loading."""
+    if version == 'original':
+        return _lazy_import_cuda_module('.cuda_utils.Wt_add_equal.original_version', 'calculate_wt_add_equal')
+    elif version == 'refactored':
+        return _lazy_import_cuda_module('.cuda_utils.Wt_add_equal.refactored_version', 'calculate_wt_add_equal')
+    return None
+
+def _get_wt_mul_impl(version):
+    """Get Wt_mul implementation with lazy loading."""
+    if version == 'original':
+        return _lazy_import_cuda_module('.cuda_utils.Wt_mul.original_version', 'calculate_wt_mul')
+    elif version == 'refactored':
+        return _lazy_import_cuda_module('.cuda_utils.Wt_mul.refactored_version', 'calculate_wt_mul')
+    elif version == 'pytorch':
+        return _lazy_import_cuda_module('.cuda_utils.Wt_mul.pytorch_version', 'calculate_wt_mul_gpu')
+    return None
 
 def _prepare_tensors(device, *arrays):
     return [torch.tensor(arr, dtype=torch.float32, device=device) for arr in arrays]
 
 def launch_linear(version, wts, inp, w, b, act):
+    impl_func = _get_linear_impl(version)
+    
+    if impl_func is None:
+        if version == 'cuda':
+            print(f"⚠️  CUDA linear implementation not available, falling back to original")
+            return launch_linear('original', wts, inp, w, b, act)
+        raise RuntimeError(f"Failed to load {version} linear implementation")
+    
     if version == 'original':
-        func = calculate_wt_fc_original_linear
-        return func(wts, inp, w, b, act)
+        return impl_func(wts, inp, w, b, act)
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     if version == 'pytorch':
         wts_t, inp_t, w_t, b_t = _prepare_tensors(device, wts, inp, w, b)
-        return calculate_wt_fc_pytorch_linear(wts_t, inp_t, w_t, b_t, act)
+        return impl_func(wts_t, inp_t, w_t, b_t, act)
     elif version == 'cuda':
         try:
-            # Try CUDA implementation with error handling
-            result = calculate_wt_fc_cuda_linear(wts, inp, w, b, act)
+            result = impl_func(wts, inp, w, b, act)
             if result is None:
                 print(f"⚠️  CUDA linear implementation returned None, falling back to original")
-                return calculate_wt_fc_original_linear(wts, inp, w, b, act)
+                return launch_linear('original', wts, inp, w, b, act)
             return result
         except Exception as e:
             print(f"⚠️  CUDA linear implementation failed: {e}")
             print(f"   Falling back to original implementation")
-            return calculate_wt_fc_original_linear(wts, inp, w, b, act)
+            return launch_linear('original', wts, inp, w, b, act)
     else:
         raise ValueError(f"Unknown version for Linear layer: {version}")
 
 def launch_conv2d(version, wts, inp, w, b, padding, strides, act):
-    if version in ['original', 'refactored']:
-        func = calculate_wt_conv_original if version == 'original' else calculate_wt_conv_refactored
-        return func(wts, inp, w, b, padding, strides, act)
+    impl_func = _get_conv2d_impl(version)
     
-    elif version == 'cuda':
-        return calculate_wt_conv_parallel(wts, inp, w, b, padding, strides, act)
-
-    else:
-        raise ValueError(f"Unknown version for Conv2D layer: {version}")
+    if impl_func is None:
+        if version == 'cuda':
+            print(f"⚠️  CUDA Conv2D implementation not available, falling back to original")
+            return launch_conv2d('original', wts, inp, w, b, padding, strides, act)
+        raise RuntimeError(f"Failed to load {version} Conv2D implementation")
+    
+    try:
+        return impl_func(wts, inp, w, b, padding, strides, act)
+    except Exception as e:
+        if version != 'original':
+            print(f"⚠️  {version} Conv2D implementation failed: {e}")
+            print(f"   Falling back to original implementation")
+            return launch_conv2d('original', wts, inp, w, b, padding, strides, act)
+        raise
 
 def launch_embedding(version, R_out, inp, vocab_size, aggregate):
+    impl_func = _get_embedding_impl(version)
+    
+    if impl_func is None:
+        if version in ['pytorch', 'cuda']:
+            print(f"⚠️  {version} Embedding implementation not available, falling back to original")
+            return launch_embedding('original', R_out, inp, vocab_size, aggregate)
+        raise RuntimeError(f"Failed to load {version} Embedding implementation")
+    
     if version in ['original', 'refactored']:
-        func = calculate_wt_embedding_original if version == 'original' else calculate_wt_embedding_refactored
-        return func(R_out, inp, vocab_size, aggregate)
+        return impl_func(R_out, inp, vocab_size, aggregate)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    R_out_t = torch.tensor(R_out, dtype=torch.float32, device=device)
-    inp_t = torch.tensor(inp, dtype=torch.long, device=device)
-
-    if version == 'pytorch':
-        return calculate_wt_embedding_pytorch(R_out_t, inp_t, vocab_size, aggregate)[0].cpu().numpy()
-    elif version == 'cuda':
-        return calculate_wt_embedding_cuda(R_out_t, inp_t, vocab_size, aggregate)[0].cpu().numpy()
-    else:
-        raise ValueError(f"Unknown version for Embedding layer: {version}")
+    
+    try:
+        R_out_t = torch.tensor(R_out, dtype=torch.float32, device=device)
+        inp_t = torch.tensor(inp, dtype=torch.long, device=device)
+        result = impl_func(R_out_t, inp_t, vocab_size, aggregate)
+        return result[0].cpu().numpy()
+    except Exception as e:
+        print(f"⚠️  {version} Embedding implementation failed: {e}")
+        print(f"   Falling back to original implementation")
+        return launch_embedding('original', R_out, inp, vocab_size, aggregate)
 
 def launch_self_attention(version, R_out, Q, K, V, masked_fill, scale = None, epsilon=1e-9):
+    impl_func = _get_self_attention_impl(version)
+    
+    if impl_func is None:
+        if version in ['pytorch', 'cuda']:
+            print(f"⚠️  {version} SelfAttention implementation not available, falling back to original")
+            return launch_self_attention('original', R_out, Q, K, V, masked_fill, scale, epsilon)
+        raise RuntimeError(f"Failed to load {version} SelfAttention implementation")
+    
     if version == 'original':
-        return calculate_wt_self_attention_original(R_out, Q, K, V, masked_fill, scale, epsilon)
+        return impl_func(R_out, Q, K, V, masked_fill, scale, epsilon)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    R_out_t, Q_t, K_t, V_t = _prepare_tensors(device, R_out, Q, K, V)
-    masked_fill_t = torch.tensor(masked_fill, dtype=torch.float32, device=device) if masked_fill is not None else None
-    scale_t = torch.tensor(scale, dtype=torch.float32, device=device) if scale is not None else None
     
-    if version == 'pytorch':
-        result_torch = calculate_wt_self_attention_pytorch(R_out_t, Q_t, K_t, V_t, masked_fill_t, scale_t, epsilon)
-        return [arr.cpu().numpy() for arr in result_torch]
-    elif version == 'cuda':
-        result_cuda = calculate_wt_self_attention_cuda(R_out_t, Q_t, K_t, V_t, masked_fill_t, scale_t)
-        return [arr.cpu().numpy() for arr in result_cuda]
-    else:
-        raise ValueError(f"Unknown version for SelfAttention layer: {version}")
+    try:
+        R_out_t, Q_t, K_t, V_t = _prepare_tensors(device, R_out, Q, K, V)
+        masked_fill_t = torch.tensor(masked_fill, dtype=torch.float32, device=device) if masked_fill is not None else None
+        scale_t = torch.tensor(scale, dtype=torch.float32, device=device) if scale is not None else None
+        
+        if version == 'pytorch':
+            result = impl_func(R_out_t, Q_t, K_t, V_t, masked_fill_t, scale_t, epsilon)
+        elif version == 'cuda':
+            result = impl_func(R_out_t, Q_t, K_t, V_t, masked_fill_t, scale_t)
+        
+        return [arr.cpu().numpy() for arr in result]
+    except Exception as e:
+        print(f"⚠️  {version} SelfAttention implementation failed: {e}")
+        print(f"   Falling back to original implementation")
+        return launch_self_attention('original', R_out, Q, K, V, masked_fill, scale, epsilon)
 
 def launch_wt_add_equal(version, R_out, inp):
-    if version in ['original', 'refactored']:
-        func = calculate_wt_add_original if version == 'original' else calculate_wt_add_refactored
-        return func(R_out, inp)
+    impl_func = _get_wt_add_equal_impl(version)
+    
+    if impl_func is None:
+        raise RuntimeError(f"Failed to load {version} Wt_add_equal implementation")
+    
+    return impl_func(R_out, inp)
 
 def launch_wt_mul(version, R_out):
+    impl_func = _get_wt_mul_impl(version)
+    
+    if impl_func is None:
+        if version in ['pytorch', 'cuda']:
+            print(f"⚠️  {version} Wt_mul implementation not available, falling back to original")
+            return launch_wt_mul('original', R_out)
+        raise RuntimeError(f"Failed to load {version} Wt_mul implementation")
+    
     if version in ['original', 'refactored']:
-        func = calculate_wt_mul_original if version == 'original' else calculate_wt_mul_refactored
-        return func(R_out)
+        return impl_func(R_out)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    R_out_t = torch.tensor(R_out, dtype=torch.float32, device=device)
-
-    if version == 'pytorch':
-        result = calculate_wt_mul_pytorch(R_out_t)
+    
+    try:
+        R_out_t = torch.tensor(R_out, dtype=torch.float32, device=device)
+        result = impl_func(R_out_t)
         return tuple(tensor.cpu().numpy() for tensor in result)
-
-    elif version == 'cuda':
-        #return calculate_wt_mul_cuda(R_out)
-        return None
-    else:
-        # Fallback to original for unsupported implementations
-        print(f"⚠️  {version} implementation not available for Wt_mul, using original")
-        return calculate_wt_mul_original(R_out)
+    except Exception as e:
+        print(f"⚠️  {version} Wt_mul implementation failed: {e}")
+        print(f"   Falling back to original implementation")
+        return launch_wt_mul('original', R_out)
 
 def np_swish(x, beta=0.75):
     z = 1 / (1 + np.exp(-(beta * x)))
