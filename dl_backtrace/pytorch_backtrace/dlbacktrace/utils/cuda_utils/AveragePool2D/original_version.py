@@ -1,6 +1,5 @@
 import numpy as np
 
-
 def calculate_padding(kernel_size, inp, padding, strides, const_val=0.0):
     if padding=='valid':
         return (inp, [[0,0],[0,0],[0,0]])
@@ -34,7 +33,7 @@ def calculate_padding(kernel_size, inp, padding, strides, const_val=0.0):
         else:
             return (inp, [[0,0],[0,0],[0,0]])
 
-def calculate_wt_avg_unit(patch, wts, pool_size):
+def calculate_wt_avg_unit(patch, wts):
     p_ind = patch>0
     p_ind = patch*p_ind
     p_sum = np.einsum("ijk->k",p_ind)
@@ -60,8 +59,6 @@ def calculate_wt_avgpool(relevance_y, input_array, pool_size, pad, stride):
         inp = input_array[i]
         inp = inp.T
         wts = wts.T
-        pad1 = pool_size[0]
-        pad2 = pool_size[1]
         strides = (stride,stride)
         padding = (pad,pad)
         input_padded, paddings = calculate_padding(pool_size, inp, padding, strides, -np.inf)
@@ -72,7 +69,7 @@ def calculate_wt_avgpool(relevance_y, input_array, pool_size, pad, stride):
                         np.arange(ind2*strides[1], ind2*(strides[1])+pool_size[1])]
                 # Take slice
                 tmp_patch = input_padded[np.ix_(indexes[0],indexes[1])]
-                updates = calculate_wt_avg_unit(tmp_patch, wts[ind1,ind2,:], pool_size)
+                updates = calculate_wt_avg_unit(tmp_patch, wts[ind1,ind2,:])
                 # Build tensor with "filtered" gradient
                 out_ds[np.ix_(indexes[0],indexes[1])]+=updates
         out_ds = out_ds[paddings[0][0]:(paddings[0][0]+inp.shape[0]),

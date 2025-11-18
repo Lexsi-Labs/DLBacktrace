@@ -22,7 +22,7 @@ def stabilize(matrix: torch.Tensor, epsilon: float = 1e-6) -> torch.Tensor:
                       epsilon * sign_matrix, 
                       matrix)
 
-@torch.compile(mode="reduce-overhead", fullgraph=True)
+@torch.compile
 def calculate_wt_lm_head_vectorized(
     wts: torch.Tensor,
     inp: torch.Tensor,
@@ -359,7 +359,7 @@ def qwen_moe_mlp_forward(
     
     return intermediates
 
-@torch.compile(mode="max-autotune", fullgraph=True)
+@torch.compile
 def calculate_wt_feed_forward(
     wts: torch.Tensor,
     inp: torch.Tensor,
@@ -782,7 +782,7 @@ def collapse_to_kv_heads(
     R_kv = R_grouped.sum(dim=1)
     return R_kv.permute(0, 2, 1, 3).reshape(B, T, num_kv_heads * D)
 
-@torch.compile(mode="max-autotune", fullgraph=True)
+@torch.compile
 def calculate_wt_self_attention(
     wts: torch.Tensor,
     inp: torch.Tensor,

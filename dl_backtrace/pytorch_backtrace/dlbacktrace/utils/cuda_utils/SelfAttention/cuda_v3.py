@@ -330,99 +330,44 @@ void launch_fused_conservation(
 def get_cuda_arch_flags():
     if not torch.cuda.is_available():
         return []
-    try:
-        major, minor = torch.cuda.get_device_capability()
-        arch_flag = f"--generate-code=arch=compute_{major}{minor},code=sm_{major}{minor}"
-        return [arch_flag]
-    except Exception as e:
-        print(f"⚠️  Failed to get CUDA device capability: {e}")
-        return []
+    major, minor = torch.cuda.get_device_capability()
+    arch_flag = f"--generate-code=arch=compute_{major}{minor},code=sm_{major}{minor}"
+    return [arch_flag]
 
-# Lazy compilation - only compile when CUDA is available
-softmax_ops = None
-stabilize_ops = None
-conservation_ops = None
+extra_flags = [
+    '-O3', 
+    '--use_fast_math', 
+    '-Xcompiler', '-fPIC',
+]
+extra_flags.extend(get_cuda_arch_flags())
 
-def _ensure_softmax_ops():
-    """Ensure softmax CUDA ops are compiled. Returns None if compilation fails."""
-    global softmax_ops
-    if softmax_ops is not None:
-        return softmax_ops
-    
-    if not torch.cuda.is_available():
-        print("⚠️  CUDA not available, cannot compile fused_softmax")
-        return None
-    
-    try:
-        extra_flags = ['-O3', '--use_fast_math', '-Xcompiler', '-fPIC']
-        extra_flags.extend(get_cuda_arch_flags())
-        
-        softmax_ops = load_inline(
-            name="fused_softmax",
-            cpp_sources=fused_softmax_declaration,
-            cuda_sources=fused_softmax_source,
-            functions=["launch_fused_softmax"],
-            extra_cuda_cflags=extra_flags,
-            verbose=False
-        )
-        return softmax_ops
-    except Exception as e:
-        print(f"⚠️  Failed to compile fused_softmax: {e}")
-        return None
+# Compile kernels
+softmax_ops = load_inline(
+    name="fused_softmax",
+    cpp_sources=fused_softmax_declaration,
+    cuda_sources=fused_softmax_source,
+    functions=["launch_fused_softmax"],
+    extra_cuda_cflags=extra_flags,
+    verbose=True
+)
 
-def _ensure_stabilize_ops():
-    """Ensure stabilize CUDA ops are compiled. Returns None if compilation fails."""
-    global stabilize_ops
-    if stabilize_ops is not None:
-        return stabilize_ops
-    
-    if not torch.cuda.is_available():
-        print("⚠️  CUDA not available, cannot compile fused_stabilize_normalize")
-        return None
-    
-    try:
-        extra_flags = ['-O3', '--use_fast_math', '-Xcompiler', '-fPIC']
-        extra_flags.extend(get_cuda_arch_flags())
-        
-        stabilize_ops = load_inline(
-            name="fused_stabilize_normalize",
-            cpp_sources=fused_stabilize_normalize_declaration,
-            cuda_sources=fused_stabilize_normalize_source,
-            functions=["launch_fused_stabilize_normalize"],
-            extra_cuda_cflags=extra_flags,
-            verbose=False
-        )
-        return stabilize_ops
-    except Exception as e:
-        print(f"⚠️  Failed to compile fused_stabilize_normalize: {e}")
-        return None
+stabilize_ops = load_inline(
+    name="fused_stabilize_normalize",
+    cpp_sources=fused_stabilize_normalize_declaration,
+    cuda_sources=fused_stabilize_normalize_source,
+    functions=["launch_fused_stabilize_normalize"],
+    extra_cuda_cflags=extra_flags,
+    verbose=True
+)
 
-def _ensure_conservation_ops():
-    """Ensure conservation CUDA ops are compiled. Returns None if compilation fails."""
-    global conservation_ops
-    if conservation_ops is not None:
-        return conservation_ops
-    
-    if not torch.cuda.is_available():
-        print("⚠️  CUDA not available, cannot compile fused_conservation")
-        return None
-    
-    try:
-        extra_flags = ['-O3', '--use_fast_math', '-Xcompiler', '-fPIC']
-        extra_flags.extend(get_cuda_arch_flags())
-        
-        conservation_ops = load_inline(
-            name="fused_conservation",
-            cpp_sources=fused_conservation_declaration,
-            cuda_sources=fused_conservation_source,
-            functions=["launch_fused_conservation"],
-            extra_cuda_cflags=extra_flags,
-            verbose=False
-        )
-        return conservation_ops
-    except Exception as e:
-        print(f"⚠️  Failed to compile fused_conservation: {e}")
-        return None
+conservation_ops = load_inline(
+    name="fused_conservation",
+    cpp_sources=fused_conservation_declaration,
+    cuda_sources=fused_conservation_source,
+    functions=["launch_fused_conservation"],
+    extra_cuda_cflags=extra_flags,
+    verbose=True
+)
 
 def calculate_wt_self_attention_cuda(
     R_out: torch.Tensor,
@@ -433,14 +378,6 @@ def calculate_wt_self_attention_cuda(
     scale: Optional[float] = None,
     epsilon: float = 1e-9
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    
-    # Ensure all CUDA ops are compiled
-    softmax = _ensure_softmax_ops()
-    stabilize = _ensure_stabilize_ops()
-    conservation = _ensure_conservation_ops()
-    
-    if None in [softmax, stabilize, conservation]:
-        raise RuntimeError("CUDA operations not available. Cannot run calculate_wt_self_attention_cuda.")
     
     B, H, T_q, D = Q.shape
     T_k = K.shape[2]
@@ -454,7 +391,7 @@ def calculate_wt_self_attention_cuda(
 
     # Step 2: Fused softmax for unmasked
     A = torch.empty_like(logits_unmasked)
-    softmax.launch_fused_softmax(logits_unmasked, A, epsilon)
+    softmax_ops.launch_fused_softmax(logits_unmasked, A, epsilon)
     torch.cuda.synchronize()  
 
     # Step 3: Apply mask
@@ -474,7 +411,7 @@ def calculate_wt_self_attention_cuda(
 
     # Step 6: Fused stabilize + normalize for relevance propagation
     relevance_norm_attn_out = torch.empty_like(R_out)
-    stabilize.launch_fused_stabilize_normalize(
+    stabilize_ops.launch_fused_stabilize_normalize(
         R_out, attention_output, relevance_norm_attn_out, epsilon
     )
     torch.cuda.synchronize()
@@ -485,12 +422,12 @@ def calculate_wt_self_attention_cuda(
 
     # Fused conservation for R_V
     R_V = torch.empty_like(V)
-    conservation.launch_fused_conservation(R_V_raw, V, R_V, epsilon)
+    conservation_ops.launch_fused_conservation(R_V_raw, V, R_V, epsilon)
     torch.cuda.synchronize()
 
     # Fused stabilize + normalize for QK
     relevance_norm_QK_out = torch.empty_like(R_QK)
-    stabilize.launch_fused_stabilize_normalize(
+    stabilize_ops.launch_fused_stabilize_normalize(
         R_QK, QK_output, relevance_norm_QK_out, epsilon
     )
     torch.cuda.synchronize()
@@ -502,8 +439,8 @@ def calculate_wt_self_attention_cuda(
     # Fused conservation for R_Q and R_K
     R_Q = torch.empty_like(Q)
     R_K = torch.empty_like(K)
-    conservation.launch_fused_conservation(R_Q_raw, Q, R_Q, epsilon)
-    conservation.launch_fused_conservation(R_K_raw, K, R_K, epsilon)
+    conservation_ops.launch_fused_conservation(R_Q_raw, Q, R_Q, epsilon)
+    conservation_ops.launch_fused_conservation(R_K_raw, K, R_K, epsilon)
     torch.cuda.synchronize()
 
     # Mask relevance

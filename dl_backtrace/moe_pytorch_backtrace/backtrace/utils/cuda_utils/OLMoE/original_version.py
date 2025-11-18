@@ -210,7 +210,7 @@ def calculate_wt_olmoe_feed_forward_parallel(wts, inp, w, model):
 
     final_relevance_input += relevance_router_logits
 
-    def process_single_relevance_QK(i, wts, QK_output):
+def process_single_relevance_QK(i, wts, QK_output):
     wt_mat_QK = np.zeros(QK_output.shape)
     for j in range(wts.shape[1]):
         l1_ind1 = QK_output
