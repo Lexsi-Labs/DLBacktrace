@@ -37,6 +37,12 @@ def calculate_wt_lm_head(
     eps: float = 1e-12
 ) -> torch.Tensor:
 
+    # Convert to float32 for computation if needed (handles BFloat16)
+    compute_dtype = torch.float32
+    wts = wts.to(compute_dtype)
+    inp = inp.to(compute_dtype)
+    w = {k: v.to(compute_dtype) if isinstance(v, torch.Tensor) else v for k, v in w.items()}
+    
     W = w['W_lm_head']  # (V, D)
     B, T, V = wts.shape
     _, _, D = inp.shape
@@ -225,6 +231,11 @@ def gpt_oss_moe_mlp_forward(
     top_k = config.num_experts_per_tok
     hidden_dim = config.hidden_size
     
+    # Convert to float32 for computation if needed (handles BFloat16)
+    compute_dtype = torch.float32
+    hidden_states = hidden_states.to(compute_dtype)
+    w = {k: v.to(compute_dtype) if isinstance(v, torch.Tensor) else v for k, v in w.items()}
+    
     hidden_states_flat = hidden_states.reshape(-1, hidden_dim)
     
     # Router
@@ -292,6 +303,13 @@ def calculate_wt_gpt_oss_feed_forward_parallel(
     B, T, H = inp.shape
     tokens = B * T
     device = inp.device
+    
+    # Convert to float32 for computation if needed (handles BFloat16)
+    original_dtype = wts.dtype
+    compute_dtype = torch.float32
+    wts = wts.to(compute_dtype)
+    inp = inp.to(compute_dtype)
+    w = {k: v.to(compute_dtype) if isinstance(v, torch.Tensor) else v for k, v in w.items()}
     
     # Forward pass
     inter = gpt_oss_moe_mlp_forward(inp, w, config)
@@ -367,7 +385,9 @@ def calculate_wt_gpt_oss_feed_forward_parallel(
         relevance_expert[e] += R_curr.sum()
     
     final_relevance_input = final_relevance_input.reshape(B, T, H)
-    return final_relevance_input, relevance_expert
+    
+    # Keep output in float32 for compatibility with numpy conversion
+    return final_relevance_input.to(torch.float32), relevance_expert.to(torch.float32)
 
 def calculate_relevance_single(
     wts: torch.Tensor, 
@@ -550,7 +570,12 @@ def gpt_oss_gqa_forward(
 
     B, T, hidden = hidden_states.shape
     device = hidden_states.device
-    dtype = hidden_states.dtype
+    
+    # Convert to float32 for computation if needed (handles BFloat16)
+    compute_dtype = torch.float32
+    hidden_states = hidden_states.to(compute_dtype)
+    w = {k: v.to(compute_dtype) if isinstance(v, torch.Tensor) else v for k, v in w.items()}
+    dtype = compute_dtype
     
     # Extract config parameters
     H = int(getattr(config, "num_attention_heads"))
@@ -704,7 +729,6 @@ def calculate_wt_self_attention_parallel_torch(
     inp: torch.Tensor,
     w: Dict[str, torch.Tensor],
     config,
-    eps: float = 1e-9,
     attn_type: str = "full",
     sliding_window: Optional[int] = None,
     with_sink_return: bool = False
@@ -712,6 +736,12 @@ def calculate_wt_self_attention_parallel_torch(
 
     B, T, H = inp.shape
     device = inp.device
+    
+    # Convert to float32 for computation if needed (handles BFloat16)
+    compute_dtype = torch.float32
+    wts = wts.to(compute_dtype)
+    inp = inp.to(compute_dtype)
+    w = {k: v.to(compute_dtype) if isinstance(v, torch.Tensor) else v for k, v in w.items()}
     
     # Build attention mask (small, O(T^2))
     if attn_type == "sliding" and sliding_window is not None:
@@ -728,15 +758,15 @@ def calculate_wt_self_attention_parallel_torch(
     wt_mat_attn = calculate_relevance_single(wts, inter['out'], w['W_d'])
     wt_mat_out_heads = wt_mat_attn.reshape(inter['out_heads'].shape)
     
-    # 2. Convert to float64 for numerical precision
-    A = inter['A'].to(torch.float64)                    # (B,H,T,S)
-    out_heads = inter['out_heads'].to(torch.float64)    # (B,H,T,D)
-    W = wt_mat_out_heads.to(torch.float64)              # (B,H,T,D)
+    # 2. Convert to float32 for numerical precision
+    A = inter['A'].to(torch.float32)                    # (B,H,T,S)
+    out_heads = inter['out_heads'].to(torch.float32)    # (B,H,T,D)
+    W = wt_mat_out_heads.to(torch.float32)              # (B,H,T,D)
     
     # 3. Sink bookkeeping
     has_sink = 'alpha' in inter
     if has_sink:
-        alpha = inter['alpha'].to(torch.float64)        # (B,H,T)
+        alpha = inter['alpha'].to(torch.float32)        # (B,H,T)
         alpha_bhtd = alpha.unsqueeze(-1)                # (B,H,T,1)
         R_sink = (1.0 - alpha_bhtd) * W                 # (B,H,T,D)
         wt_eff = alpha_bhtd * W                         # (B,H,T,D)
@@ -744,13 +774,16 @@ def calculate_wt_self_attention_parallel_torch(
         R_sink = 0.0
         wt_eff = W
     
+
+    eps: float = 1e-9
+    
     # 4. Relevance calculation of R_QK and R_V
     relevance_norm_out_heads = wt_eff / stabilize(out_heads * 2, eps)
     
-    # Convert inter tensors to float64
-    v_64 = inter['v'].to(torch.float64)
-    q_64 = inter['q'].to(torch.float64)
-    k_64 = inter['k'].to(torch.float64)
+    # Convert inter tensors to float32
+    v_64 = inter['v'].to(torch.float32)
+    q_64 = inter['q'].to(torch.float32)
+    k_64 = inter['k'].to(torch.float32)
     
     # R_QK: (B,H,T,S) - using torch.matmul for clarity
     R_QK = torch.matmul(relevance_norm_out_heads, v_64.transpose(-2, -1)) * A
@@ -773,7 +806,7 @@ def calculate_wt_self_attention_parallel_torch(
         err = m_sink.unsqueeze(-1) - add.sum(dim=-1, keepdim=True)
         
         # Spread correction uniformly across nonzero S entries
-        nz = (S > 0).to(torch.float64)
+        nz = (S > 0).to(torch.float32)
         nz_cnt = nz.sum(dim=-1, keepdim=True)
         corr = torch.where(nz_cnt > 0, err / torch.clamp(nz_cnt, min=1.0), 0.0) * nz
         
@@ -787,7 +820,7 @@ def calculate_wt_self_attention_parallel_torch(
     R_V = dlb_style_signed_conserve(R_V, v_64)
     
     # 7. Relevance calculation of R_Q and R_K
-    QK_output_64 = inter['QK_output'].to(torch.float64)
+    QK_output_64 = inter['QK_output'].to(torch.float32)
     relevance_norm_QK_out = R_QK / stabilize(QK_output_64 * 2, eps)
     
     R_Q = torch.matmul(relevance_norm_QK_out, k_64) * q_64
@@ -814,4 +847,5 @@ def calculate_wt_self_attention_parallel_torch(
     
     input_relevance = input_relevance_from_Q + input_relevance_from_K + input_relevance_from_V
     
-    return input_relevance
+    # Keep output in float32 for compatibility with numpy conversion
+    return input_relevance.to(torch.float32)

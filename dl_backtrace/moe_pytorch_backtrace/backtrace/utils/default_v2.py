@@ -2,116 +2,40 @@ import torch
 import numpy as np
 
 
-# ------------- Lazy import system for CUDA modules ----------------
-# This prevents CUDA compilation when only using CPU
+# ------------- Add `import` and `launching function` for all 4 MoEs ----------------
+# MoE Utils Layers
+from .cuda_utils.MoE_utils.nonneg_conserve import dlb_style_signed_conserve_cuda as dlb_style_signed_conserve_cuda
+from .cuda_utils.MoE_utils.relevance_gated_proj import calculate_relevance_gated_proj_cuda as calculate_relevance_gated_proj_cuda
+from .cuda_utils.MoE_utils.relevance_proj import calculate_relevance_proj_cuda as calculate_relevance_proj_cuda
+from .cuda_utils.MoE_utils.relevance_single import calculate_relevance_cuda as calculate_relevance_cuda
+from .cuda_utils.MoE_utils.wt_router_logits import calculate_wt_router_logits_cuda as calculate_wt_router_logits_cuda
 
-_cuda_modules_cache = {}
+# JetMoE Layer
+from .cuda_utils.JetMoE.original_version import calculate_wt_jetmoe_feed_forward as calculate_wt_jetmoe_feed_forward_original, calculate_wt_jetmoe_self_attention_parallel as calculate_wt_jetmoe_self_attention_parallel_original
+from .cuda_utils.JetMoE.refactored_version import calculate_wt_jetmoe_feed_forward as calculate_wt_jetmoe_feed_forward_refactored, calculate_wt_jetmoe_self_attention_parallel as calculate_wt_jetmoe_self_attention_parallel_refactored
+from .cuda_utils.JetMoE.pytorch_version import calculate_wt_jetmoe_feed_forward as calculate_wt_jetmoe_feed_forward_pytorch, calculate_wt_jetmoe_self_attention_parallel as calculate_wt_jetmoe_self_attention_parallel_pytorch
 
-def _lazy_import_cuda_module(module_path, func_name, cuda_only=False):
-    """
-    Lazy import a function from a CUDA module.
-    Only imports and compiles when actually called.
-    
-    Args:
-        module_path: Python import path (e.g., '.cuda_utils.GPT_oss.pytorch_version')
-        func_name: Function name to import
-        cuda_only: If True, only import when CUDA is available
-    
-    Returns:
-        The imported function, or None if CUDA not available and cuda_only=True
-    """
-    cache_key = f"{module_path}.{func_name}"
-    
-    if cache_key in _cuda_modules_cache:
-        return _cuda_modules_cache[cache_key]
-    
-    # Check if CUDA is available for cuda_only modules
-    if cuda_only and not torch.cuda.is_available():
-        print(f"⚠️  CUDA not available, skipping CUDA-only module: {module_path}")
-        _cuda_modules_cache[cache_key] = None
-        return None
-    
-    try:
-        # Dynamically import the module
-        from importlib import import_module
-        module = import_module(module_path, package=__package__)
-        func = getattr(module, func_name)
-        _cuda_modules_cache[cache_key] = func
-        return func
-    except Exception as e:
-        print(f"⚠️  Failed to import {module_path}.{func_name}: {e}")
-        _cuda_modules_cache[cache_key] = None
-        return None
+# OLMoE Layer
+from .cuda_utils.OLMoE.original_version import calculate_wt_olmoe_feed_forward_parallel as calculate_wt_olmoe_feed_forward_original
+from .cuda_utils.OLMoE.refactored_version import calculate_wt_olmoe_feed_forward_parallel as calculate_wt_olmoe_feed_forward_refactored
+from .cuda_utils.OLMoE.pytorch_version import calculate_wt_olmoe_feed_forward_parallel as calculate_wt_olmoe_feed_forward_pytorch 
 
-# Helper functions to get implementations with lazy loading
-def _get_gpt_oss_impl(version, impl_type):
-    """Get GPT-OSS implementation with lazy loading."""
-    if version == 'original':
-        if impl_type == 'lm_head':
-            return _lazy_import_cuda_module('.cuda_utils.GPT_oss.original_version', 'calculate_wt_lm_head')
-        elif impl_type == 'feed_forward':
-            return _lazy_import_cuda_module('.cuda_utils.GPT_oss.original_version', 'calculate_wt_gpt_oss_feed_forward_parallel')
-        elif impl_type == 'self_attention':
-            return _lazy_import_cuda_module('.cuda_utils.GPT_oss.original_version', 'calculate_wt_self_attention_parallel')
-    elif version == 'cuda':
-        if impl_type == 'lm_head':
-            return _lazy_import_cuda_module('.cuda_utils.GPT_oss.pytorch_version', 'calculate_wt_lm_head')
-        elif impl_type == 'feed_forward':
-            return _lazy_import_cuda_module('.cuda_utils.GPT_oss.pytorch_version', 'calculate_wt_gpt_oss_feed_forward_parallel')
-        elif impl_type == 'self_attention':
-            return _lazy_import_cuda_module('.cuda_utils.GPT_oss.pytorch_version', 'calculate_wt_self_attention_parallel_torch')
-    return None
+# Qwen3-MoE Layer
+from .cuda_utils.Qwen_MoE.original_version import calculate_wt_feed_forward as calculate_wt_feed_forward_original, calculate_wt_self_attention_parallel as calculate_wt_self_attention_parallel_original 
+from .cuda_utils.Qwen_MoE.refactored_version import calculate_wt_feed_forward as calculate_wt_feed_forward_refactored, calculate_wt_self_attention as calculate_wt_jetmoe_self_attention_parallel_refactored
+from .cuda_utils.Qwen_MoE.pytorch_version import calculate_wt_feed_forward as calculate_wt_feed_forward_pytorch, calculate_wt_self_attention as calculate_wt_self_attention_pytorch 
 
-def _get_qwen_moe_impl(version, impl_type):
-    """Get Qwen3-MoE implementation with lazy loading."""
-    if version == 'original':
-        if impl_type == 'feed_forward':
-            return _lazy_import_cuda_module('.cuda_utils.Qwen_MoE.original_version', 'calculate_wt_feed_forward')
-        elif impl_type == 'self_attention':
-            return _lazy_import_cuda_module('.cuda_utils.Qwen_MoE.original_version', 'calculate_wt_self_attention_parallel')
-    elif version == 'cuda':
-        if impl_type == 'feed_forward':
-            return _lazy_import_cuda_module('.cuda_utils.Qwen_MoE.pytorch_version', 'calculate_wt_feed_forward')
-        elif impl_type == 'self_attention':
-            return _lazy_import_cuda_module('.cuda_utils.Qwen_MoE.pytorch_version', 'calculate_wt_self_attention')
-    return None
-
-def _get_olmoe_impl(version):
-    """Get OLMoE implementation with lazy loading."""
-    if version == 'original':
-        return _lazy_import_cuda_module('.cuda_utils.OLMoE.original_version', 'calculate_wt_olmoe_feed_forward_parallel')
-    elif version == 'cuda':
-        return _lazy_import_cuda_module('.cuda_utils.OLMoE.pytorch_version', 'calculate_wt_olmoe_feed_forward_parallel')
-    return None
-
-def _get_jetmoe_impl(version, impl_type):
-    """Get JetMoE implementation with lazy loading."""
-    if version == 'original':
-        if impl_type == 'feed_forward':
-            return _lazy_import_cuda_module('.cuda_utils.JetMoE.original_version', 'calculate_wt_jetmoe_feed_forward')
-        elif impl_type == 'self_attention':
-            return _lazy_import_cuda_module('.cuda_utils.JetMoE.original_version', 'calculate_wt_jetmoe_self_attention_parallel')
-    elif version == 'cuda':
-        if impl_type == 'feed_forward':
-            return _lazy_import_cuda_module('.cuda_utils.JetMoE.pytorch_version', 'calculate_wt_jetmoe_feed_forward')
-        elif impl_type == 'self_attention':
-            return _lazy_import_cuda_module('.cuda_utils.JetMoE.pytorch_version', 'calculate_wt_jetmoe_self_attention_parallel')
-    return None
+# GPT-OSS Layer
+from .cuda_utils.GPT_oss.original_version import calculate_wt_lm_head as calculate_wt_lm_head_original, calculate_wt_gpt_oss_feed_forward_parallel as calculate_wt_gpt_oss_feed_forward_parallel_original, calculate_wt_self_attention_parallel as calculate_wt_self_attention_parallel_original
+from .cuda_utils.GPT_oss.refactored_version import calculate_wt_lm_head as calculate_wt_lm_head_refactored, calculate_wt_gpt_oss_feed_forward_parallel as calculate_wt_gpt_oss_feed_forward_parallel_refactored, calculate_wt_self_attention_parallel as calculate_wt_self_attention_parallel_refactored
+from .cuda_utils.GPT_oss.pytorch_version import calculate_wt_lm_head as calculate_wt_lm_head_pytorch, calculate_wt_gpt_oss_feed_forward_parallel as calculate_wt_gpt_oss_feed_forward_parallel_pytorch, calculate_wt_self_attention_parallel_torch as calculate_wt_self_attention_parallel_pytorch
 
 def launch_lm_head(version, wts, inp, w, b, act):
     if version == 'original':
         # CPU mode: use original implementation
-        impl_func = _get_gpt_oss_impl('original', 'lm_head')
-        if impl_func is None:
-            raise RuntimeError("Failed to load original LM head implementation")
-        return impl_func(wts, inp, w, b, act)
+        return calculate_wt_lm_head_original(wts, inp, w, b, act)
     elif version == 'cuda':
         # CUDA mode: use PyTorch implementation
-        impl_func = _get_gpt_oss_impl('cuda', 'lm_head')
-        if impl_func is None:
-            print(f"⚠️  CUDA LM head implementation not available, falling back to original")
-            return launch_lm_head('original', wts, inp, w, b, act)
-        
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         try:
             # Convert numpy arrays to tensors
@@ -120,247 +44,238 @@ def launch_lm_head(version, wts, inp, w, b, act):
             w_t = torch.tensor(w, dtype=torch.float32, device=device) if isinstance(w, np.ndarray) else w
             b_t = torch.tensor(b, dtype=torch.float32, device=device) if isinstance(b, np.ndarray) else b
             # w is a dict, no conversion needed
-            result = impl_func(wts_t, inp_t, w_t, b_t, act)
+            result = calculate_wt_lm_head_pytorch(wts_t, inp_t, w_t, b_t, act)
             if result is None:
                 print(f"⚠️  CUDA LM head implementation returned None, falling back to original")
-                return launch_lm_head('original', wts, inp, w, b, act)
+                # Convert back to numpy for original implementation
+                wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
+                inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
+                return calculate_wt_lm_head_original(wts_np, inp_np, w, b, act)
             # Convert result back to numpy if it's a tensor
             return result.cpu().numpy() if isinstance(result, torch.Tensor) else result
         except Exception as e:
             print(f"⚠️  CUDA LM head implementation failed: {e}")
             print(f"   Falling back to original implementation")
-            return launch_lm_head('original', wts, inp, w, b, act)
+            # Ensure inputs are numpy arrays for fallback
+            wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
+            inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
+            return calculate_wt_lm_head_original(wts_np, inp_np, w, b, act)
     else:
         raise ValueError(f"Unknown version for LM head: {version}")
 
 def launch_gpt_oss_self_attention(version, wts, inp, w, config, attn_type="full", sliding_window=None):
     if version == 'original':
         # CPU mode: use original implementation
-        impl_func = _get_gpt_oss_impl('original', 'self_attention')
-        if impl_func is None:
-            raise RuntimeError("Failed to load original GPT-OSS self attention implementation")
-        return impl_func(wts, inp, w, config, attn_type, sliding_window)
+        return calculate_wt_self_attention_parallel_original(wts, inp, w, config, attn_type, sliding_window)
     elif version == 'cuda':
         # CUDA mode: use PyTorch implementation
-        impl_func = _get_gpt_oss_impl('cuda', 'self_attention')
-        if impl_func is None:
-            print(f"⚠️  CUDA GPT-OSS self attention implementation not available, falling back to original")
-            return launch_gpt_oss_self_attention('original', wts, inp, w, config, attn_type, sliding_window)
-        
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         try:
             # Convert numpy arrays to tensors
             wts_t = torch.tensor(wts, dtype=torch.float32, device=device) if isinstance(wts, np.ndarray) else wts
             inp_t = torch.tensor(inp, dtype=torch.float32, device=device) if isinstance(inp, np.ndarray) else inp
             w_t = torch.tensor(w, dtype=torch.float32, device=device) if isinstance(w, np.ndarray) else w
-            result = impl_func(wts_t, inp_t, w_t, config, attn_type, sliding_window)
+            result = calculate_wt_self_attention_parallel_pytorch(wts_t, inp_t, w_t, config, attn_type, sliding_window)
             if result is None:
                 print(f"⚠️  CUDA GPT-OSS self attention implementation returned None, falling back to original")
-                return launch_gpt_oss_self_attention('original', wts, inp, w, config, attn_type, sliding_window)
+                wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
+                inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
+                w_np = w if isinstance(w, np.ndarray) else w.cpu().numpy()
+                return calculate_wt_self_attention_parallel_original(wts_np, inp_np, w_np, config, attn_type, sliding_window)
             # Convert result back to numpy if it's a tensor
             return result.cpu().numpy() if isinstance(result, torch.Tensor) else result
         except Exception as e:
             print(f"⚠️  CUDA GPT-OSS self attention implementation failed: {e}")
             print(f"   Falling back to original implementation")
-            return launch_gpt_oss_self_attention('original', wts, inp, w, config, attn_type, sliding_window)
+            wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
+            inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
+            return calculate_wt_self_attention_parallel_original(wts_np, inp_np, w, config, attn_type, sliding_window)
     else:
         raise ValueError(f"Unknown version for GPT-OSS self attention: {version}")
 
 def launch_gpt_oss_feed_forward(version, wts, inp, w, config):
     if version == 'original':
         # CPU mode: use original implementation
-        impl_func = _get_gpt_oss_impl('original', 'feed_forward')
-        if impl_func is None:
-            raise RuntimeError("Failed to load original GPT-OSS feed forward implementation")
-        return impl_func(wts, inp, w, config)
+        return calculate_wt_gpt_oss_feed_forward_parallel_original(wts, inp, w, config)
     elif version == 'cuda':
         # CUDA mode: use PyTorch implementation
-        impl_func = _get_gpt_oss_impl('cuda', 'feed_forward')
-        if impl_func is None:
-            print(f"⚠️  CUDA GPT-OSS feed forward implementation not available, falling back to original")
-            return launch_gpt_oss_feed_forward('original', wts, inp, w, config)
-        
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         try:
             # Convert numpy arrays to tensors
             wts_t = torch.tensor(wts, dtype=torch.float32, device=device) if isinstance(wts, np.ndarray) else wts
             inp_t = torch.tensor(inp, dtype=torch.float32, device=device) if isinstance(inp, np.ndarray) else inp   
             w_t = torch.tensor(w, dtype=torch.float32, device=device) if isinstance(w, np.ndarray) else w
-            result = impl_func(wts_t, inp_t, w_t, config)
+            result = calculate_wt_gpt_oss_feed_forward_parallel_pytorch(wts_t, inp_t, w_t, config)
             if result is None:
                 print(f"⚠️  CUDA GPT-OSS feed forward implementation returned None, falling back to original")
-                return launch_gpt_oss_feed_forward('original', wts, inp, w, config)
+                wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
+                inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
+                w_np = w if isinstance(w, np.ndarray) else w.cpu().numpy()
+                return calculate_wt_gpt_oss_feed_forward_parallel_original(wts_np, inp_np, w_np, config)
             # Convert result back to numpy if it's a tensor
             return result.cpu().numpy() if isinstance(result, torch.Tensor) else result
         except Exception as e:
             print(f"⚠️  CUDA GPT-OSS feed forward implementation failed: {e}")
             print(f"   Falling back to original implementation")
-            return launch_gpt_oss_feed_forward('original', wts, inp, w, config)
+            wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
+            inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
+            w_np = w if isinstance(w, np.ndarray) else w.cpu().numpy()
+            return calculate_wt_gpt_oss_feed_forward_parallel_original(wts_np, inp_np, w_np, config)
     else:
         raise ValueError(f"Unknown version for GPT-OSS feed forward: {version}")
 
 def launch_qwen3_moe_self_attention(version, wts, inp, w, config):
     if version == 'original':
         # CPU mode: use original implementation
-        impl_func = _get_qwen_moe_impl('original', 'self_attention')
-        if impl_func is None:
-            raise RuntimeError("Failed to load original Qwen3-MoE self attention implementation")
-        return impl_func(wts, inp, w, config)
+        return calculate_wt_self_attention_parallel_original(wts, inp, w, config)
     elif version == 'cuda':
         # CUDA mode: use PyTorch implementation
-        impl_func = _get_qwen_moe_impl('cuda', 'self_attention')
-        if impl_func is None:
-            print(f"⚠️  CUDA Qwen3-MoE self attention implementation not available, falling back to original")
-            return launch_qwen3_moe_self_attention('original', wts, inp, w, config)
-        
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         try:
             # Convert numpy arrays to tensors
             wts_t = torch.tensor(wts, dtype=torch.float32, device=device) if isinstance(wts, np.ndarray) else wts
             inp_t = torch.tensor(inp, dtype=torch.float32, device=device) if isinstance(inp, np.ndarray) else inp
             w_t = torch.tensor(w, dtype=torch.float32, device=device) if isinstance(w, np.ndarray) else w
-            result = impl_func(wts_t, inp_t, w_t, config)
+            result = calculate_wt_self_attention_pytorch(wts_t, inp_t, w_t, config)
             if result is None:
                 print(f"⚠️  CUDA Qwen3-MoE self attention implementation returned None, falling back to original")
-                return launch_qwen3_moe_self_attention('original', wts, inp, w, config)
+                wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
+                inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
+                w_np = w if isinstance(w, np.ndarray) else w.cpu().numpy()
+                return calculate_wt_self_attention_parallel_original(wts_np, inp_np, w_np, config)
             # Convert result back to numpy if it's a tensor
             return result.cpu().numpy() if isinstance(result, torch.Tensor) else result
         except Exception as e:
             print(f"⚠️  CUDA Qwen3-MoE self attention implementation failed: {e}")
             print(f"   Falling back to original implementation")
-            return launch_qwen3_moe_self_attention('original', wts, inp, w, config)
+            wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
+            inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
+            w_np = w if isinstance(w, np.ndarray) else w.cpu().numpy()
+            return calculate_wt_self_attention_parallel_original(wts_np, inp_np, w_np, config)
     else:
         raise ValueError(f"Unknown version for Qwen3-MoE self attention: {version}")
 
 def launch_qwen3_moe_feed_forward(version, wts, inp, w, config):
     if version == 'original':
         # CPU mode: use original implementation
-        impl_func = _get_qwen_moe_impl('original', 'feed_forward')
-        if impl_func is None:
-            raise RuntimeError("Failed to load original Qwen3-MoE feed forward implementation")
-        return impl_func(wts, inp, w, config)
+        return calculate_wt_feed_forward_original(wts, inp, w, config)
     elif version == 'cuda':
         # CUDA mode: use PyTorch implementation
-        impl_func = _get_qwen_moe_impl('cuda', 'feed_forward')
-        if impl_func is None:
-            print(f"⚠️  CUDA Qwen3-MoE feed forward implementation not available, falling back to original")
-            return launch_qwen3_moe_feed_forward('original', wts, inp, w, config)
-        
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         try:
             # Convert numpy arrays to tensors
             wts_t = torch.tensor(wts, dtype=torch.float32, device=device) if isinstance(wts, np.ndarray) else wts
             inp_t = torch.tensor(inp, dtype=torch.float32, device=device) if isinstance(inp, np.ndarray) else inp
             w_t = torch.tensor(w, dtype=torch.float32, device=device) if isinstance(w, np.ndarray) else w
-            result = impl_func(wts_t, inp_t, w_t, config)
+            result = calculate_wt_feed_forward_pytorch(wts_t, inp_t, w_t, config)
             if result is None:
                 print(f"⚠️  CUDA Qwen3-MoE feed forward implementation returned None, falling back to original")
-                return launch_qwen3_moe_feed_forward('original', wts, inp, w, config)
+                wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
+                inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
+                w_np = w if isinstance(w, np.ndarray) else w.cpu().numpy()
+                return calculate_wt_feed_forward_original(wts_np, inp_np, w_np, config)
             # Convert result back to numpy if it's a tensor
             return result.cpu().numpy() if isinstance(result, torch.Tensor) else result
         except Exception as e:
             print(f"⚠️  CUDA Qwen3-MoE feed forward implementation failed: {e}")
             print(f"   Falling back to original implementation")
-            return launch_qwen3_moe_feed_forward('original', wts, inp, w, config)
+            wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
+            inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
+            w_np = w if isinstance(w, np.ndarray) else w.cpu().numpy()
+            return calculate_wt_feed_forward_original(wts_np, inp_np, w_np, config)
     else:
         raise ValueError(f"Unknown version for Qwen3-MoE feed forward: {version}")
 
 def launch_olmoe_feed_forward(version, wts, inp, w, model):
     if version == 'original':
         # CPU mode: use original implementation
-        impl_func = _get_olmoe_impl('original')
-        if impl_func is None:
-            raise RuntimeError("Failed to load original OLMoE feed forward implementation")
-        return impl_func(wts, inp, w, model)
+        return calculate_wt_olmoe_feed_forward_original(wts, inp, w, model)
     elif version == 'cuda':
         # CUDA mode: use PyTorch implementation
-        impl_func = _get_olmoe_impl('cuda')
-        if impl_func is None:
-            print(f"⚠️  CUDA OLMoE feed forward implementation not available, falling back to original")
-            return launch_olmoe_feed_forward('original', wts, inp, w, model)
-        
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         try:
             # Convert numpy arrays to tensors
             wts_t = torch.tensor(wts, dtype=torch.float32, device=device) if isinstance(wts, np.ndarray) else wts
             inp_t = torch.tensor(inp, dtype=torch.float32, device=device) if isinstance(inp, np.ndarray) else inp
             w_t = torch.tensor(w, dtype=torch.float32, device=device) if isinstance(w, np.ndarray) else w
-            result = impl_func(wts_t, inp_t, w_t, model)
+            result = calculate_wt_olmoe_feed_forward_pytorch(wts_t, inp_t, w_t, model)
             if result is None:
                 print(f"⚠️  CUDA OLMoE feed forward implementation returned None, falling back to original")
-                return launch_olmoe_feed_forward('original', wts, inp, w, model)
+                wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
+                inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
+                w_np = w if isinstance(w, np.ndarray) else w.cpu().numpy()
+                return calculate_wt_olmoe_feed_forward_original(wts_np, inp_np, w_np, model)
             # Convert result back to numpy if it's a tensor
             return result.cpu().numpy() if isinstance(result, torch.Tensor) else result
         except Exception as e:
             print(f"⚠️  CUDA OLMoE feed forward implementation failed: {e}")
             print(f"   Falling back to original implementation")
-            return launch_olmoe_feed_forward('original', wts, inp, w, model)
+            wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
+            inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
+            w_np = w if isinstance(w, np.ndarray) else w.cpu().numpy()
+            return calculate_wt_olmoe_feed_forward_original(wts_np, inp_np, w_np, model)
     else:
         raise ValueError(f"Unknown version for OLMoE feed forward: {version}")
 
 def launch_jetmoe_self_attention(version, wts, inp, w, model):
     if version == 'original':
         # CPU mode: use original implementation
-        impl_func = _get_jetmoe_impl('original', 'self_attention')
-        if impl_func is None:
-            raise RuntimeError("Failed to load original JetMoE self attention implementation")
-        return impl_func(wts, inp, w, model)
+        return calculate_wt_jetmoe_self_attention_parallel_original(wts, inp, w, model)
     elif version == 'cuda':
         # CUDA mode: use PyTorch implementation
-        impl_func = _get_jetmoe_impl('cuda', 'self_attention')
-        if impl_func is None:
-            print(f"⚠️  CUDA JetMoE self attention implementation not available, falling back to original")
-            return launch_jetmoe_self_attention('original', wts, inp, w, model)
-        
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         try:
             # Convert numpy arrays to tensors
             wts_t = torch.tensor(wts, dtype=torch.float32, device=device) if isinstance(wts, np.ndarray) else wts
             inp_t = torch.tensor(inp, dtype=torch.float32, device=device) if isinstance(inp, np.ndarray) else inp
             w_t = torch.tensor(w, dtype=torch.float32, device=device) if isinstance(w, np.ndarray) else w
-            result = impl_func(wts_t, inp_t, w_t, model)
+            result = calculate_wt_jetmoe_self_attention_parallel_pytorch(wts_t, inp_t, w_t, model)
             if result is None:
                 print(f"⚠️  CUDA JetMoE self attention implementation returned None, falling back to original")
-                return launch_jetmoe_self_attention('original', wts, inp, w, model)
+                wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
+                inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
+                w_np = w if isinstance(w, np.ndarray) else w.cpu().numpy()
+                return calculate_wt_jetmoe_self_attention_parallel_original(wts_np, inp_np, w_np, model)
             # Convert result back to numpy if it's a tensor
             return result.cpu().numpy() if isinstance(result, torch.Tensor) else result
         except Exception as e:
             print(f"⚠️  CUDA JetMoE self attention implementation failed: {e}")
             print(f"   Falling back to original implementation")
-            return launch_jetmoe_self_attention('original', wts, inp, w, model)
+            wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
+            inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
+            w_np = w if isinstance(w, np.ndarray) else w.cpu().numpy()
+            return calculate_wt_jetmoe_self_attention_parallel_original(wts_np, inp_np, w_np, model)
     else:
         raise ValueError(f"Unknown version for JetMoE self attention: {version}")
 
 def launch_jetmoe_feed_forward(version, wts, inp, w, model):
     if version == 'original':
         # CPU mode: use original implementation
-        impl_func = _get_jetmoe_impl('original', 'feed_forward')
-        if impl_func is None:
-            raise RuntimeError("Failed to load original JetMoE feed forward implementation")
-        return impl_func(wts, inp, w, model)
+        return calculate_wt_jetmoe_feed_forward_original(wts, inp, w, model)
     elif version == 'cuda':
         # CUDA mode: use PyTorch implementation
-        impl_func = _get_jetmoe_impl('cuda', 'feed_forward')
-        if impl_func is None:
-            print(f"⚠️  CUDA JetMoE feed forward implementation not available, falling back to original")
-            return launch_jetmoe_feed_forward('original', wts, inp, w, model)
-        
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         try:
             # Convert numpy arrays to tensors
             wts_t = torch.tensor(wts, dtype=torch.float32, device=device) if isinstance(wts, np.ndarray) else wts
             inp_t = torch.tensor(inp, dtype=torch.float32, device=device) if isinstance(inp, np.ndarray) else inp
             w_t = torch.tensor(w, dtype=torch.float32, device=device) if isinstance(w, np.ndarray) else w
-            result = impl_func(wts_t, inp_t, w_t, model)
+            result = calculate_wt_jetmoe_feed_forward_pytorch(wts_t, inp_t, w_t, model)
             if result is None:
                 print(f"⚠️  CUDA JetMoE feed forward implementation returned None, falling back to original")
-                return launch_jetmoe_feed_forward('original', wts, inp, w, model)
+                wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
+                inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
+                w_np = w if isinstance(w, np.ndarray) else w.cpu().numpy()
+                return calculate_wt_jetmoe_feed_forward_original(wts_np, inp_np, w_np, model)
             # Convert result back to numpy if it's a tensor
             return result.cpu().numpy() if isinstance(result, torch.Tensor) else result
         except Exception as e:
             print(f"⚠️  CUDA JetMoE feed forward implementation failed: {e}")
             print(f"   Falling back to original implementation")
-            return launch_jetmoe_feed_forward('original', wts, inp, w, model)
+            wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
+            inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
+            w_np = w if isinstance(w, np.ndarray) else w.cpu().numpy()
+            return calculate_wt_jetmoe_feed_forward_original(wts_np, inp_np, w_np, model)
     else:
         raise ValueError(f"Unknown version for JetMoE feed forward: {version}")
 

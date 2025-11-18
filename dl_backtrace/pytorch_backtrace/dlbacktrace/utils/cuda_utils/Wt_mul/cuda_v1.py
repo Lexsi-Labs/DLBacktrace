@@ -122,49 +122,28 @@ def get_cuda_arch_flags():
     if not torch.cuda.is_available():
         return []
     
-    try:
-        major, minor = torch.cuda.get_device_capability()
-        arch_flag = f"--generate-code=arch=compute_{major}{minor},code=sm_{major}{minor}"
-        return [arch_flag]
-    except Exception as e:
-        print(f"⚠️  Failed to get CUDA device capability: {e}")
-        return []
+    major, minor = torch.cuda.get_device_capability()
+    arch_flag = f"--generate-code=arch=compute_{major}{minor},code=sm_{major}{minor}"
+    return [arch_flag]
 
-# Lazy compilation - only compile when CUDA is available
-custom_mul_cuda_ops = None
+extra_flags = [
+    '-O3', 
+    '--use_fast_math', 
+    # '-Xcompiler', '-fPIC',
+    # '-Xptxas', '-dlcm=cg',
+    # '-Xptxas', '-dscm=wt',
+]
 
-def _ensure_cuda_ops():
-    """Ensure CUDA ops are compiled. Returns None if compilation fails."""
-    global custom_mul_cuda_ops
-    if custom_mul_cuda_ops is not None:
-        return custom_mul_cuda_ops
-    
-    if not torch.cuda.is_available():
-        print("⚠️  CUDA not available, cannot compile mul_cuda_v1")
-        return None
-    
-    try:
-        extra_flags = [
-            '-O3', 
-            '--use_fast_math', 
-            # '-Xcompiler', '-fPIC',
-            # '-Xptxas', '-dlcm=cg',
-            # '-Xptxas', '-dscm=wt',
-        ]
-        extra_flags.extend(get_cuda_arch_flags())
-        
-        custom_mul_cuda_ops = load_inline(
-            name="mul_cuda_v1",
-            cpp_sources=mul_cuda_declaration,
-            cuda_sources=mul_cuda_source,
-            functions=["launch_calculate_wt_mul_kernel"],
-            extra_cuda_cflags=extra_flags,
-            verbose=False
-        )
-        return custom_mul_cuda_ops
-    except Exception as e:
-        print(f"⚠️  Failed to compile mul_cuda_v1: {e}")
-        return None
+extra_flags.extend(get_cuda_arch_flags())
+
+custom_mul_cuda_ops = load_inline(
+    name="mul_cuda_v1",
+    cpp_sources=mul_cuda_declaration,
+    cuda_sources=mul_cuda_source,
+    functions=["launch_calculate_wt_mul_kernel"],
+    extra_cuda_cflags=extra_flags,
+    verbose=True
+)
 
 def calculate_wt_mul(R):
     """
@@ -176,10 +155,6 @@ def calculate_wt_mul(R):
     Returns:
         Tuple[torch.Tensor, torch.Tensor]: R_x and R_y, both equal to R * 0.5
     """
-    ops = _ensure_cuda_ops()
-    if ops is None:
-        raise RuntimeError("CUDA operations not available. Cannot run calculate_wt_mul.")
-    
     # Ensure input is a CUDA tensor with float32 dtype
     if not isinstance(R, torch.Tensor):
         R = torch.tensor(R, dtype=torch.float32, device='cuda')
@@ -189,7 +164,7 @@ def calculate_wt_mul(R):
         R = R.to(torch.float32)
     
     # Launch kernel and get stacked result
-    result = ops.launch_calculate_wt_mul_kernel(R)
+    result = custom_mul_cuda_ops.launch_calculate_wt_mul_kernel(R)
     
     # Split the stacked result back into two tensors
     R_x = result[0].cpu().numpy()
