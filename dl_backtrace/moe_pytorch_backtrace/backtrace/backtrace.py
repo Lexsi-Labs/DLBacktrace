@@ -6,19 +6,27 @@ from tqdm import tqdm
 from dl_backtrace.moe_pytorch_backtrace.backtrace.utils import contrast as UC
 from dl_backtrace.moe_pytorch_backtrace.backtrace.utils import prop as UP
 from dl_backtrace.moe_pytorch_backtrace.backtrace.config import activation_master
-from dl_backtrace.moe_pytorch_backtrace.backtrace.core import jetmoe as jetmoe, olmoe as olmoe, qwen3_moe as qwen3_moe, gpt_oss as gpt_oss, helper as helper
+from dl_backtrace.moe_pytorch_backtrace.backtrace.core import (
+    jetmoe as jetmoe,
+    olmoe as olmoe,
+    qwen3_moe as qwen3_moe,
+    gpt_oss as gpt_oss,
+    helper as helper,
+)
 from dl_backtrace.moe_pytorch_backtrace.backtrace.utils import default_v2 as UD2
 
 
 def t2np32(t):
-        # Cast any torch tensor to float32 on CPU before numpy() to avoid bf16 errors
-        if isinstance(t, torch.Tensor):
-            return t.detach().to(torch.float32).cpu().numpy()
-        return t
+    # Cast any torch tensor to float32 on CPU before numpy() to avoid bf16 errors
+    if isinstance(t, torch.Tensor):
+        return t.detach().to(torch.float32).cpu().numpy()
+    return t
+
 
 def _layer_idx(name: str):
-    m = re.search(r'_(\d+)$', name)
+    m = re.search(r"_(\d+)$", name)
     return int(m.group(1)) if m else None
+
 
 def build_attention_plan(layer_stack, config):
     plan = {}
@@ -35,29 +43,17 @@ def build_attention_plan(layer_stack, config):
         }
     return plan
 
+
 def get_model_config(model):
     """
     Extracts the configuration object from a model, handling wrapped models.
-
-    Args:
-        model: A model instance or a wrapper around a model.
-
-    Returns:
-        The model's configuration object.
-
-    Raises:
-        AttributeError: If no configuration could be found.
     """
-    # Check if the object has an underlying model
-    if hasattr(model, 'model'):
-        # It's a wrapper around another model
+    if hasattr(model, "model"):
         inner_model = model.model
-        if hasattr(inner_model, 'config'):
+        if hasattr(inner_model, "config"):
             return inner_model.config
-    elif hasattr(model, 'config'):
-        # It's the base model itself
+    elif hasattr(model, "config"):
         return model.config
-
     raise AttributeError("The provided object does not have a 'config' attribute.")
 
 
@@ -79,671 +75,358 @@ def get_tensor_or_raise(all_in, all_out, key, where="all_out"):
         raise TypeError(f"Node '{key}' is not a tensor (got {type(x)}) from {where}.")
     return x
 
+
 def tensor_to_numpy(x):
     """Convert Tensor, scalar, list/tuple, or ndarray to a NumPy array with memory-efficient float32."""
     if isinstance(x, np.ndarray):
-        # Downcast float64 to float32 to save memory
         return x.astype(np.float32) if x.dtype == np.float64 else x
-
     if isinstance(x, torch.Tensor):
-        # IMPORTANT: cast to float32 *before* .numpy() to avoid bfloat16 error
         return x.detach().to(torch.float32).cpu().numpy()
-
     if isinstance(x, (int, float)):
         return np.array(x, dtype=np.float32)
-
     if isinstance(x, (list, tuple)):
         arrs = []
         for xi in x:
             converted = tensor_to_numpy(xi) if not isinstance(xi, np.ndarray) else xi
-            if hasattr(converted, 'dtype') and converted.dtype == np.float64:
+            if hasattr(converted, "dtype") and converted.dtype == np.float64:
                 converted = converted.astype(np.float32)
             arrs.append(converted)
         try:
             return np.stack(arrs)
         except Exception:
             return np.array(arrs, dtype=object)
-
     raise TypeError(f"Cannot convert type {type(x)} to numpy")
 
 
 class Backtrace(object):
     """
-    This is the constructor method for the Backtrace class. It initializes an instance of the class.
-    It takes two optional parameters: model (a neural network model) and activation_dict (a dictionary that maps layer names to activation functions).
+    Build graph + extract weights in __init__. Compute outputs only when asked.
+    Device is set at construction and used everywhere (no device arg in eval()).
     """
 
-    def __init__(self, model=None, activation_dict={}, model_type=None, input_text=None, tokenizer=None, max_length=None, device="cpu"):
-        # if model_type == 'encoder':
-        #     self.model = model
-        #     self.model_type = model_type
-        #     # create a tree-like structure for encoder model
-        #     self.model_resource = EN.build_encoder_tree(model)
-        #     # create a layer stack for encoder model
-        #     self.create_layer_stack()
-        #     # extract the encoder model weights
-        #     self.model_weights = EN.extract_encoder_weights(model)
-        #     # # calculate the output of each submodule of the encoder model
-        #     # self.all_out_model = EN.create_encoder_output(model)
-        #     self.activation_dict = None
-            
-        # elif model_type == 'encoder_decoder':
-        #     self.model = model
-        #     self.model_type = model_type
-        #     # create a tree-like structure and layer_stack for encoder-decoder model
-        #     self.model_resource, self.layer_stack = ED.build_enc_dec_tree(model)
-        #     # extract the encoder-decoder model weights
-        #     self.model_weights = ED.extract_encoder_decoder_weights(model)  
-        #     # # calculate the output of each submodule of the encoder-decoder model
-        #     # self.all_out_model = ED.calculate_encoder_decoder_output(model)
-        #     self.activation_dict = None
-            
-        # elif model_type == 'llama':
-        #     self.model = model
-        #     self.model_type = model_type
-        #     # create a tree-like structure and layer stack for llama model
-        #     self.model_resource, self.layer_stack = LL.build_llama_tree(model)
-        #     # extract the llama model weights
-        #     self.model_weights = LL.extract_llama_weights(model)
-        #     # # calculate the output of each submodule of the llama model
-        #     # self.all_out_model = LL.create_llama_output(input_text, model, tokenizer, max_length, device)
-        #     self.activation_dict = None
+    def __init__(self, model=None, activation_dict={}, model_type=None, device="cpu"):
+        if model_type not in {"gpt_oss", "qwen3_moe", "jetmoe", "olmoe"}:
+            raise ValueError(f"Unsupported model_type: {model_type}")
 
-        if model_type == 'gpt_oss':
-            self.model = model
-            self.model_type = model_type
-            # create a tree-like structure and layer stack for gpt_oss model
+        # ---- device handling ----
+        if device not in ["cpu", "cuda"]:
+            raise ValueError(f"Invalid device: {device}. Must be 'cpu' or 'cuda'.")
+        if device == "cuda" and not torch.cuda.is_available():
+            print("⚠️  CUDA requested but not available. Falling back to CPU.")
+            device = "cpu"
+        self.device = device
+        self.impl = "cuda" if device == "cuda" else "original"
+
+        self.model = model.to(device) if model is not None else None
+        self.model_type = model_type
+        self.activation_dict = None
+        self.all_layer_expert_relevance = {}  # expert relevance filled during proportional_eval
+        self.all_out_model = None             # filled by compute_outputs()
+        self.all_wt = {}                      # token relevance (like PyTorch Backtrace)
+
+        # ---- Step 1: build tree / layer_stack
+        if model_type == "gpt_oss":
             self.model_resource, self.layer_stack = gpt_oss.build_gpt_oss_tree(model)
-            # extract the gpt_oss model weights
-            self.model_weights = gpt_oss.extract_gpt_oss_weights(model)
-            # # calculate the output of each submodule of the gpt_oss model
-            self.all_out_model = gpt_oss.create_gpt_oss_output(input_text, model, tokenizer, max_length, device)
-            self.activation_dict = None
-            
-            self.all_layer_expert_relevance = {}    # Storing the relevance of experts
-
-        elif model_type == 'qwen3_moe':
-            self.model = model
-            self.model_type = model_type
-            # create a tree-like structure and layer stack for qwen3_moe model
+        elif model_type == "qwen3_moe":
             self.model_resource, self.layer_stack = qwen3_moe.build_qwen3_moe_tree(model)
-            # extract the qwen3_moe model weights
-            self.model_weights = qwen3_moe.extract_qwen3_moe_weights(model)
-            # calculate the output of each submodule of the qwen3_moe model
-            self.all_out_model = qwen3_moe.create_qwen3_moe_output(input_text, model, tokenizer, max_length, device)
-            self.activation_dict = None
-                
-            self.all_layer_expert_relevance = {}    # Storing the relevance of experts
-            
-        elif model_type == 'jetmoe':
-            self.model = model
-            self.model_type = model_type
-            # create a tree-like structure and layer stack for jetmoe model
+        elif model_type == "jetmoe":
             self.model_resource, self.layer_stack = jetmoe.build_jetmoe_tree(model)
-            # extract the jetmoe model weights
-            self.model_weights = jetmoe.extract_jetmoe_weights(model)
-            # calculate the output of each submodule of the jetmoe model
-            self.all_out_model = jetmoe.create_jetmoe_output(input_text, model, tokenizer, max_length, device)
-            self.activation_dict = None
-            
-            self.all_layer_expert_relevance = {}    # Storing the relevance of experts
-            
-        elif model_type == 'olmoe':
-            self.model = model
-            self.model_type = model_type 
-            # create a tree-like structure and layer stack for jetmoe model
+        elif model_type == "olmoe":
             self.model_resource, self.layer_stack = olmoe.build_olmoe_tree(model)
-            # extract the jetmoe model weights
+
+        # ---- Step 2: extract weights
+        if model_type == "gpt_oss":
+            self.model_weights = gpt_oss.extract_gpt_oss_weights(model)
+        elif model_type == "qwen3_moe":
+            self.model_weights = qwen3_moe.extract_qwen3_moe_weights(model)
+        elif model_type == "jetmoe":
+            self.model_weights = jetmoe.extract_jetmoe_weights(model)
+        elif model_type == "olmoe":
             self.model_weights = olmoe.extract_olmoe_weights(model)
-            # calculate the output of each submodule of the jetmoe model
-            self.all_out_model = olmoe.create_olmoe_output(input_text, model, tokenizer, max_length, device)
-            self.activation_dict = None
-            
-            self.all_layer_expert_relevance = {}    # Storing the relevance of experts
-    
+
+        # Registry for output creators (used by compute_outputs)
+        self._create_output_fn = {
+            "gpt_oss": gpt_oss.create_gpt_oss_output,
+            "qwen3_moe": qwen3_moe.create_qwen3_moe_output,
+            "jetmoe": jetmoe.create_jetmoe_output,
+            "olmoe": olmoe.create_olmoe_output,
+        }[model_type]
+
+    # ---- Step 3 moved out of __init__
+    def compute_outputs(self, *, input_text, tokenizer, max_length=None):
+        """
+        Compute and cache per-submodule outputs for the current model_type.
+        Uses the instance device set at initialization.
+        """
+        self.all_out_model = self._create_output_fn(
+            input_text, self.model, tokenizer, max_length, self.device
+        )
+        return self.all_out_model
+
+    def _require_outputs(self):
+        if self.all_out_model is None:
+            raise RuntimeError(
+                "Outputs have not been computed. Call `compute_outputs(...)` first "
+                "or pass `all_in/all_out` explicitly to evaluation methods."
+            )
+
     def _parse_device_to_implementation(self, device):
         """
         Parse device configuration to determine implementation version.
-        
-        Args:
-            device (str): Either "cpu" or "cuda"
-            
-        Returns:
-            str: Implementation version ("original" for CPU, "cuda" for CUDA)
         """
-        if device not in ["cpu", "cuda"]:
-            raise ValueError(f"device must be 'cpu' or 'cuda', got: {device}")
-        
         if device == "cpu":
-            # CPU mode: use original implementations
             return "original"
-        else:  # device == "cuda"
-            # Check CUDA availability
-            if not torch.cuda.is_available():
-                print("⚠️  CUDA device requested but CUDA not available. Falling back to CPU mode.")
-                return "original"
-            # CUDA mode: use CUDA implementations
+        if device == "cuda" and torch.cuda.is_available():
             return "cuda"
-            
-    #     else:
-    #         self.model_type = model_type
-    #         # create a tree-like structure that represents the layers of the neural network model
-    #         self.create_tree(model)
-    #         # create a new model (an instance of tf.keras.Model) that produces the output of each layer in the neural network.
-    #         self.create_model_output(model)
-    #         # create a new model (an instance of tf.keras.Model) that produces the output of each layer in the neural network.
-    #         self.create_every_model_output(model)
-    #         # create a layer stack that defines the order in which layers should be processed during backpropagation.
-    #         self.create_layer_stack()
-    #         # checks if the model is sequential or not. If it's sequential, it adds the input layer to the layer stack.
-    #         # identity
-
-    #         inp_name = 'identity'
-    #         self.layer_stack.append(inp_name)
-    #         self.model_resource[1][inp_name] = {}
-    #         self.model_resource[1][inp_name]["name"] = inp_name
-    #         self.model_resource[1][inp_name]["type"] = "input"
-    #         self.model_resource[1][inp_name]["parent"] = []
-    #         self.model_resource[1][inp_name]["child"] = None
-    #         self.model_resource[3].append(inp_name)
-    #         self.sequential = True
-    #         try:
-    #             # calls the build_activation_dict method to build a dictionary that maps layer names to activation functions.
-    #             # If that fails, it creates a temporary dictionary with default activation functions.
-    #             if len(activation_dict) == 0:
-    #                 self.build_activation_dict(model)
-    #             else:
-    #                 self.activation_dict = activation_dict
-
-    #         except Exception as e:
-    #             print(e)
-    #             temp_dict = {}
-    #             for l in model.layers:
-    #                 temp_dict[l.name] = activation_master["None"]
-    #             self.activation_dict = temp_dict 
-
-    # def build_activation_dict(self, model):
-    #     model_resource = self.model_resource
-    #     layer_list = list(model_resource[0].keys())
-    #     activation_dict = {}
-    #     activation_functions = ['relu', 'sigmoid', 'tanh', 'softmax']  # You can add more activation functions
-    #     for l in layer_list:
-    #         activation_found = False
-    #         try:  # could be activation for that layer
-    #             for activation in activation_functions:
-    #                 if activation in l.split('/')[1]:
-    #                     activation_dict[l.split('/')[0]] = activation
-    #                     activation_found = True
-    #         except:
-    #             activation_dict[l] = 'None'
-    #     # activation_master :
-    #     for key, value in activation_dict.items():
-    #         activation_dict[key] = activation_master.get(value)
-    #     self.activation_dict = activation_dict
-
-    # def create_tree(self, model):
-    #     # create new layers same as tf version
-    #     layers = list(model.named_children())
-    #     activation_functions = ['relu', 'sigmoid', 'tanh', 'softmax']
-    #     layer_sequence = []
-    #     for i in range(len(layers) - 1):
-    #         current_layer, current_layer_obj = layers[i]
-    #         next_layer, next_layer_obj = layers[i + 1]
-    #         current_layer_name = current_layer
-    #         next_layer_name = next_layer
-
-    #         next_layer_type = next_layer_name.lower()
-    #         if any(af in next_layer_type for af in activation_functions):
-    #             layer_sequence.append((f"{current_layer_name}/{next_layer_name}", current_layer_obj))
-    #             i += 1
-    #         else:
-    #             if any(af in current_layer_name for af in activation_functions) is False:
-    #                 layer_sequence.append((current_layer_name, current_layer_obj))
-    #     # creating model_resource variable
-    #     layer_sequence
-    #     ltree = {}
-    #     layer_tree = {}
-    #     inputs = []
-    #     outputs = []
-    #     intermediates = []
-    #     prev_layer_id = None
-    #     num_layers = len(layer_sequence)
-    #     for i, (layer_name, layer) in enumerate(layer_sequence):
-    #         layer_id = layer_name
-    #         ltree[layer_id] = {}
-    #         layer_tree[layer_id] = layer
-    #         layer_type = layer.__class__.__name__
-    #         ltree[layer_id]["name"] = layer_id.split("/")[0]
-    #         ltree[layer_id]["class"] = layer_type
-    #         if i < num_layers - 1:
-    #             ltree[layer_id]["type"] = "intermediate"
-    #             intermediates.append(layer_id)
-    #         else:
-    #             ltree[layer_id]["type"] = "output"
-    #             outputs.append(layer_id)
-    #         if prev_layer_id is not None:
-    #             ltree[layer_id]["child"] = [prev_layer_id]
-    #             ltree[prev_layer_id]["parent"] = [layer_id]
-    #         prev_layer_id = layer_id
-    #     # Set child of the last layer as an empty list
-    #     if prev_layer_id is not None:
-    #         ltree[prev_layer_id]["parent"] = []
-    #     layer_tree.pop('identity')
-    #     ltree.pop('identity')
-    #     self.model_resource = (layer_tree, ltree, outputs, inputs)
-
-    # def create_layer_stack(self):
-    #     model_resource = self.model_resource
-    #     start_layer = model_resource[2][0]
-    #     layer_stack = [start_layer]
-    #     temp_stack = [start_layer]
-    #     while len(layer_stack) < len(model_resource[0]):
-    #         start_layer = temp_stack.pop(0)
-    #         if model_resource[1][start_layer]["child"]:
-    #             child_nodes = model_resource[1][start_layer]["child"]
-    #             for ch in child_nodes:
-    #                 node_check = True
-    #                 for pa in model_resource[1][ch]["parent"]:
-    #                     if pa not in layer_stack:
-    #                         node_check = False
-    #                         break
-    #                 if node_check:
-    #                     if ch not in layer_stack:
-    #                         layer_stack.append(ch)
-    #                 temp_stack.append(ch)
-    #     self.layer_stack = layer_stack
-
-    # def create_every_model_output(self, model):
-    #     class ModelWithEveryOutputs(nn.Module):
-    #         def __init__(self, base_model):
-    #             super(ModelWithEveryOutputs, self).__init__()
-    #             self.base_model = base_model
-    #         def forward(self, x):
-    #             outputs = []
-    #             for layer_name, layer in self.base_model._modules.items():
-    #                 if isinstance(x, tuple):
-    #                     if isinstance(layer, nn.LSTM):
-    #                         # Assuming you want to take the last LSTM output
-    #                         x, _ = layer(x[0])  # Pass the first element of the tuple (assumes one LSTM layer)
-    #                     else:
-    #                         x = layer(x[0])  # Pass the first element of the tuple
-    #                 else:
-    #                     x = layer(x)
-    #                 outputs.append((layer_name, x))
-    #             return outputs
-    #     self.every_out_model = ModelWithEveryOutputs(model)
-
-    # def create_model_output(self, model):
-    #     class ModelWithOutputs(nn.Module):
-    #         def __init__(self, base_model):
-    #             super(ModelWithOutputs, self).__init__()
-    #             self.base_model = base_model
-
-    #         def forward(self, x):
-    #             outputs = []
-    #             for layer_name, layer in self.base_model._modules.items():
-    #                 if isinstance(layer, nn.LSTM):
-    #                     lstm_output, _ = layer(x)
-    #                     if lstm_output.dim() == 3:
-    #                         x = lstm_output[:, -1, :]  # Take the output of the last time step
-    #                     else:
-    #                         x = lstm_output
-    #                 else:
-    #                     x = layer(x)
-    #                 outputs.append((layer_name, x))
-    #             return outputs
-
-    #     # all_out_model = ModelWithOutputs(model)
-    #     self.all_out_model = ModelWithOutputs(model)
-    #     model.eval()
-    #     model_resource = self.model_resource
-    #     self.layers = [[], []]
-    #     for l in model_resource[0]:
-    #         self.layers[0].append(l)
-    #         self.layers[1].append(model_resource[0][l])
-
-    # def predict_every(self, inputs):
-    #     every_out = self.every_out_model(inputs)
-    #     activation_functions = ['relu', 'sigmoid', 'tanh', 'softmax']
-    #     every_temp_out = {}
-    #     for i in range(len(every_out)):
-    #         current_layer, current_layer_obj = every_out[i]
-    #         try:
-    #             next_layer, next_layer_obj = every_out[i + 1]
-    #             current_layer_name = current_layer
-    #             next_layer_name = next_layer
-    #             next_layer_type = next_layer_name.lower()
-    #             if any(af in next_layer_type for af in activation_functions):
-    #                 if isinstance(next_layer_obj, tuple):
-    #                     # Assuming you want the first tensor from the tuple
-    #                     next_layer_tensor = next_layer_obj[0]
-    #                 else:
-    #                     next_layer_tensor = next_layer_obj
-    #                 every_temp_out[
-    #                     f"{current_layer_name}/{next_layer_name}"] = next_layer_tensor.detach().numpy().astype(
-    #                     np.float32)
-    #                 i += 1
-    #             else:
-    #                 if any(af in current_layer_name for af in activation_functions) is False:
-    #                     if isinstance(current_layer_obj, tuple):
-    #                         # Assuming you want the first tensor from the tuple
-    #                         current_layer_tensor = current_layer_obj[0]
-    #                     else:
-    #                         current_layer_tensor = current_layer_obj
-    #                     every_temp_out[current_layer_name] = current_layer_tensor.detach().numpy().astype(np.float32)
-    #         except:
-    #             if any(af in next_layer_type for af in activation_functions):
-    #                 pass
-    #             else:
-    #                 if any(af in current_layer for af in activation_functions) is False:
-    #                     if isinstance(current_layer_obj, tuple):
-    #                         # Assuming you want the first tensor from the tuple
-    #                         current_layer_tensor = current_layer_obj[0]
-    #                     else:
-    #                         current_layer_tensor = current_layer_obj
-    #                     every_temp_out[current_layer] = current_layer_tensor.detach().cpu().numpy().astype(np.float32)
-    #     return every_temp_out
-
-    # def predict(self, inputs):
-    #     all_out = self.all_out_model(inputs)
-    #     activation_functions = ['relu', 'sigmoid', 'tanh', 'softmax']
-    #     temp_out = {}
-    #     for i in range(len(all_out)):
-    #         current_layer, current_layer_obj = all_out[i]
-    #         try:
-    #             next_layer, next_layer_obj = all_out[i + 1]
-    #             current_layer_name = current_layer
-    #             next_layer_name = next_layer
-    #             next_layer_type = next_layer_name.lower()
-    #             if any(af in next_layer_type for af in activation_functions):
-    #                 if isinstance(next_layer_obj, tuple):
-    #                     # Assuming you want the first tensor from the tuple
-    #                     next_layer_tensor = next_layer_obj[0]
-    #                 else:
-    #                     next_layer_tensor = next_layer_obj
-    #                 temp_out[
-    #                     f"{current_layer_name}/{next_layer_name}"] = next_layer_tensor.detach().cpu().numpy().astype(
-    #                     np.float32)
-    #                 i += 1
-    #             else:
-    #                 if any(af in current_layer_name for af in activation_functions) is False:
-    #                     if isinstance(current_layer_obj, tuple):
-    #                         # Assuming you want the first tensor from the tuple
-    #                         current_layer_tensor = current_layer_obj[0]
-    #                     else:
-    #                         current_layer_tensor = current_layer_obj
-    #                     temp_out[current_layer_name] = current_layer_tensor.detach().numpy().astype(np.float32)
-    #         except:
-    #             if any(af in next_layer_type for af in activation_functions):
-    #                 pass
-    #             else:
-    #                 if any(af in current_layer for af in activation_functions) is False:
-    #                     if isinstance(current_layer_obj, tuple):
-    #                         # Assuming you want the first tensor from the tuple
-    #                         current_layer_tensor = current_layer_obj[0]
-    #                     else:
-    #                         current_layer_tensor = current_layer_obj
-    #                     temp_out[current_layer] = current_layer_tensor.detach().cpu().numpy().astype(np.float32)
-    #     return temp_out
+        if device == "cuda" and not torch.cuda.is_available():
+            print("⚠️  CUDA device requested but CUDA not available. Falling back to CPU mode.")
+            return "original"
+        raise ValueError(f"device must be 'cpu' or 'cuda', got: {device}")
 
     def eval(
-            self,
-            all_in,
-            all_out,
-            mode="default",
-            start_wt=[],
-            multiplier=100.0,
-            scaler=0,
-            max_unit=0,
-            predicted_token=None,
-            thresholding=0.5,
-            task="binary-classification",
-            device="cpu",
+        self,
+        all_in,
+        all_out,
+        mode="default",
+        start_wt=[],
+        multiplier=100.0,
+        scaler=0,
+        max_unit=0,
+        predicted_token=None,
+        thresholding=0.5,
+        task="binary-classification",
     ):
         """
         Evaluate layer-wise relevance based on different modes.
-        
-        Args:
-            device (str): Compute device for layer implementations. Options:
-                - "cpu": Use optimized refactored/original implementations
-                - "cuda": Use CUDA-accelerated implementations where available
+        Device is taken from self.device.
         """
-        # This method is used for evaluating layer-wise relevance based on different modes.
         if mode == "default":
-            output = self.proportional_eval(
+            return self.proportional_eval(
                 all_in=all_in,
                 all_out=all_out,
                 start_wt=start_wt,
                 multiplier=multiplier,
-                scaler=0,
-                max_unit=0,
+                scaler=scaler,
+                max_unit=max_unit,
                 predicted_token=predicted_token,
-                thresholding=0.5,
-                task="binary-classification",
-                device=device,
+                thresholding=thresholding,
+                task=task,
             )
-            return output
-        # elif mode == "contrast":
-        #     temp_output = self.contrast_eval(
-        #         all_out=all_out, 
-        #         multiplier=multiplier,
-        #         scaler=0,
-        #         thresholding=0.5,
-        #         task="binary-classification",
-        #     )
-        #     output = {}
-        #     for k in temp_output[0].keys():
-        #         output[k] = {}
-        #         output[k]["Positive"] = temp_output[0][k]
-        #         output[k]["Negative"] = temp_output[1][k]
-        #     return output
 
     def proportional_eval(
-            self, all_in, all_out, start_wt=[], multiplier=100.0, 
-            scaler=0, max_unit=0, predicted_token=None,
-            thresholding=0.5, task="binary-classification", device="cpu"
+        self,
+        all_in,
+        all_out,
+        start_wt=[],
+        multiplier=100.0,
+        scaler=0,
+        max_unit=0,
+        predicted_token=None,
+        thresholding=0.5,
+        task="binary-classification",
     ):
         # Parse device configuration to determine implementation
+        device = self.device
         impl = self._parse_device_to_implementation(device)
+        print(f"device: {device}, implementation: {impl}")
         
+        # ---- helpers for device-aware I/O ----
+        def arr_from_key(key_or_val):
+            """
+            Accepts:
+            • str key  -> looks up in (all_in/all_out)
+            • tensor/ndarray/value -> uses directly
+            Returns:
+            • impl=='cuda'     -> torch.Tensor on self.device
+            • impl=='original' -> CPU float32 numpy array
+            """
+            # Resolve value
+            if isinstance(key_or_val, str):
+                x = get_tensor_or_raise(all_in, all_out, key_or_val)
+            else:
+                x = key_or_val  # already an activation/value
+
+            # Unwrap hooks that return tuples/lists
+            if isinstance(x, (tuple, list)):
+                x = x[0]
+
+            # Normalize by implementation
+            if impl == "cuda":
+                if torch.is_tensor(x):
+                    return x.to(self.device)
+                return torch.tensor(t2np32(x), dtype=torch.float32, device=self.device)
+            else:  # original/CPU
+                if torch.is_tensor(x):
+                    return t2np32(x)
+                if isinstance(x, np.ndarray):
+                    return x.astype(np.float32, copy=False)
+                return np.asarray(x, dtype=np.float32)
+
+        def arr_list_from_keys(keys):
+            return [arr_from_key(k) for k in keys]
+
+        def to_np64(x):
+            """
+            Ensure value is a NumPy float64 array for accumulation into all_wt[].
+            Accepts torch, numpy, lists/tuples of arrays.
+            """
+            if torch.is_tensor(x):
+                return x.detach().to(torch.float64).cpu().numpy()
+            if isinstance(x, np.ndarray):
+                return x.astype(np.float64, copy=False)
+            if isinstance(x, (list, tuple)):
+                return [to_np64(xx) for xx in x]
+            return np.array(x, dtype=np.float64)
+
         model_resource = self.model_resource
-        activation_dict = self.activation_dict
         layer_stack = self.layer_stack
         all_wts = self.model_weights
-        inputcheck = False
         all_wt = {}
-
-        out_layer = model_resource['outputs'][0]
-        raw_out = get_tensor_or_raise(all_in, all_out, out_layer, where="out_layer")
-        out_np = tensor_to_numpy(raw_out)
-
-        if len(start_wt) == 0:
-            start_wt = UD2.calculate_start_wt(out_np, scaler=scaler, task='generation')
         
-        all_wt[out_layer] = start_wt * multiplier     
-                
+        # Reset expert relevance for this step
+        self.all_layer_expert_relevance = {}
+
+        # ---- seed relevance from model output ----
+        out_layer = model_resource["outputs"][0]
+        out_arr = arr_from_key(out_layer)  # torch or numpy, depending on impl
+        if len(start_wt) == 0:
+            # UD2.calculate_start_wt expects numpy
+            sw_src = out_arr if isinstance(out_arr, np.ndarray) else t2np32(out_arr)
+            start_wt = UD2.calculate_start_wt(sw_src, scaler=scaler, task="generation")
+        all_wt[out_layer] = start_wt * multiplier
+
+        # ---- propagate relevance ----
         for start_layer in tqdm(layer_stack):
-            if model_resource['graph'][start_layer]["child"]:
-                child_nodes = model_resource['graph'][start_layer]["child"]
+            if model_resource["graph"][start_layer]["child"]:
+                child_nodes = model_resource["graph"][start_layer]["child"]
                 for ch in child_nodes:
                     if ch not in all_wt:
-                        x = get_tensor_or_raise(all_in, all_out, ch, where=f"child of {start_layer}")
-                        all_wt[ch] = np.zeros(x.shape, dtype=np.float64)
+                        x = get_tensor_or_raise(all_in, all_out, ch)
+                        all_wt[ch] = np.zeros_like(t2np32(x), dtype=np.float64)
 
-                if model_resource['graph'][start_layer]["class"] == "LM_Head":
+                node_class = model_resource["graph"][start_layer]["class"]
+
+                if node_class == "LM_Head":
                     weights = all_wts[start_layer]
                     lm_head_weights = helper.rename_decoder_lm_head(weights)
+                    x = arr_from_key(child_nodes[0])
                     temp_wt = UD2.launch_lm_head(
-                        impl,
-                        all_wt[start_layer],
-                        all_out[child_nodes[0]][0].detach().numpy(),
-                        lm_head_weights,
-                        b=None,
-                        act=None
+                        impl, all_wt[start_layer], x, lm_head_weights
                     )
-                    all_wt[child_nodes[0]] += temp_wt
+                    all_wt[child_nodes[0]] += to_np64(temp_wt)
 
-                elif model_resource['graph'][start_layer]["class"] == 'Layer_Norm':
-                    temp_wt = all_wt[start_layer]
-                    all_wt[child_nodes[0]] += temp_wt
+                elif node_class == "Layer_Norm":
+                    all_wt[child_nodes[0]] += all_wt[start_layer]
 
-                elif model_resource['graph'][start_layer]["class"] == 'Residual':
-                    temp_wt = UP.calculate_wt_residual(
-                        all_wt[start_layer],
-                        [all_out[ch].detach().numpy() for ch in child_nodes],
-                    )
-
+                elif node_class == "Residual":
+                    xs = arr_list_from_keys(child_nodes)
+                    if impl == "cuda" and hasattr(UP, "calculate_wt_residual_cuda"):
+                        temp_wt = UP.calculate_wt_residual_cuda(all_wt[start_layer], xs)
+                    else:
+                        xs_np = [t2np32(xx) if torch.is_tensor(xx) else xx for xx in xs]
+                        temp_wt = UP.calculate_wt_residual(all_wt[start_layer], xs_np)
                     for ind, ch in enumerate(child_nodes):
-                        all_wt[ch] += temp_wt[ind]
+                        all_wt[ch] += to_np64(temp_wt[ind])
 
-                # elif model_resource['graph'][start_layer]["class"] == "Embedding":
-                #     temp_wt = all_wt[start_layer]
-                #     temp_wt = np.mean(temp_wt,axis=1)
-                #     all_wt[child_nodes[0]] = all_wt[child_nodes[0]] + temp_wt
-                
                 # -------------------- For JetMoE ---------------------
-                elif model_resource['graph'][start_layer]["class"] == 'JetMoE_Feed_Forward':
+                elif node_class == "JetMoE_Feed_Forward":
                     weights = all_wts[start_layer]
-                    feed_forward_weights = helper.rename_jetmoe_feed_forward_keys(weights)
-                    
-                    temp_wt, ff_expert = UD2.launch_jetmoe_feed_forward(  #) UP.calculate_wt_jetmoe_feed_forward(
-                        impl,
-                        all_wt[start_layer],
-                        all_out[child_nodes[0]][0].detach().numpy(),
-                        feed_forward_weights,
-                        self.model
+                    ff_w = helper.rename_jetmoe_feed_forward_keys(weights)
+                    x = arr_from_key(child_nodes[0])
+                    temp_wt, ff_expert = UD2.launch_jetmoe_feed_forward(
+                        impl, all_wt[start_layer], x, ff_w, self.model
                     )
-                    
-                    all_wt[child_nodes[0]] += temp_wt
-                    layer = f"{start_layer}_ff_expert"
-                    self.all_layer_expert_relevance[layer] = ff_expert
-                
-                elif model_resource['graph'][start_layer]["class"] == 'JetMoE_Self_Attention':
+                    all_wt[child_nodes[0]] += to_np64(temp_wt)
+                    self.all_layer_expert_relevance[f"{start_layer}_ff_expert"] = ff_expert
+
+                elif node_class == "JetMoE_Self_Attention":
                     weights = all_wts[start_layer]
-                    self_attention_weights = helper.rename_jetmoe_self_attention_keys(weights)
-                    
-                    temp_wt, attention_expert =UD2.launch_jetmoe_self_attention(   # UP.calculate_wt_jetmoe_self_attention_parallel(
-                        impl,
-                        all_wt[start_layer],
-                        all_out[child_nodes[0]][0],
-                        self_attention_weights, 
-                        self.model
+                    sa_w = helper.rename_jetmoe_self_attention_keys(weights)
+                    x = arr_from_key(child_nodes[0])
+                    temp_wt, attn_expert = UD2.launch_jetmoe_self_attention(
+                        impl, all_wt[start_layer], x, sa_w, self.model
                     )
-                    
-                    all_wt[child_nodes[0]] += temp_wt
-                    layer = f"{start_layer}_attention_expert"
-                    self.all_layer_expert_relevance[layer] = attention_expert
+                    all_wt[child_nodes[0]] += to_np64(temp_wt)
+                    self.all_layer_expert_relevance[f"{start_layer}_attention_expert"] = attn_expert
 
                 # -------------------- For OLMoE ---------------------
-                elif model_resource['graph'][start_layer]["class"] == 'OLMoE_Feed_Forward':
+                elif node_class == "OLMoE_Feed_Forward":
                     weights = all_wts[start_layer]
-                    feed_forward_weights = helper.rename_olmoe_feed_forward_keys(weights)
-                    
-                    temp_wt, ff_expert = UD2.launch_olmoe_feed_forward(    # UP.calculate_wt_olmoe_feed_forward_parallel(
-                        impl,
-                        all_wt[start_layer],
-                        all_out[child_nodes[0]][0].detach().numpy(),
-                        feed_forward_weights,
-                        self.model 
+                    ff_w = helper.rename_olmoe_feed_forward_keys(weights)
+                    x = arr_from_key(all_in[child_nodes[0]])
+                    temp_wt, ff_expert = UD2.launch_olmoe_feed_forward(
+                        impl, all_wt[start_layer], x, ff_w, self.model
                     )
-                    
-                    all_wt[child_nodes[0]] += temp_wt
-                    layer = f"{start_layer}_ff_expert"
-                    self.all_layer_expert_relevance[layer] = ff_expert
-                
-                elif model_resource['graph'][start_layer]["class"] == "Self_Attention":
+                    all_wt[child_nodes[0]] += to_np64(temp_wt)
+                    self.all_layer_expert_relevance[f"{start_layer}_ff_expert"] = ff_expert
+
+                elif node_class == "Self_Attention":
                     weights = all_wts[start_layer]
-                    self_attention_weights = helper.rename_self_attention_keys(weights)
+                    sa_w = helper.rename_self_attention_keys(weights)
                     config = get_model_config(self.model)
-                    temp_wt = UP.calculate_wt_self_attention_parallel(
-                        all_wt[start_layer],
-                        all_out[child_nodes[0]][0].detach().numpy(),
-                        self_attention_weights,
-                        config
+                    x = arr_from_key(all_in[child_nodes[0]])
+                    temp_wt = UD2.launch_olmoe_self_attention(
+                        impl, all_wt[start_layer], x, sa_w, self.model
                     )
-                    all_wt[child_nodes[0]] += temp_wt
+                    all_wt[child_nodes[0]] += to_np64(temp_wt)
 
                 # -------------------- For Qwen3-MoE ---------------------
-                elif model_resource["graph"][start_layer]["class"] == 'Qwen_Feed_Forward':
+                elif node_class == "Qwen_Feed_Forward":
                     weights = all_wts[start_layer]
-                    feed_forward_weights = helper.rename_qwenmoe_feed_forward_keys(weights)
+                    ff_w = helper.rename_qwenmoe_feed_forward_keys(weights)
                     config = get_model_config(self.model)
-
+                    x = arr_from_key(child_nodes[0])
                     temp_wt, ff_expert = UD2.launch_qwen3_moe_feed_forward(
-                        impl,
-                        all_wt[start_layer],
-                        all_in[child_nodes[0]].detach().numpy(),  # all_out[child_nodes[0]].detach().numpy(),
-                        feed_forward_weights,
-                        config
+                        impl, all_wt[start_layer], x, ff_w, config
                     )
+                    all_wt[child_nodes[0]] += to_np64(temp_wt)
+                    self.all_layer_expert_relevance[f"{start_layer}_ff_expert"] = ff_expert
 
-                    all_wt[child_nodes[0]] += temp_wt
-
-                    layer = f"{start_layer}_ff_expert"
-                    self.all_layer_expert_relevance[layer] = ff_expert
-
-                elif model_resource["graph"][start_layer]["class"] == 'Grouped_Query_Attention':
+                elif node_class == "Grouped_Query_Attention":
                     weights = all_wts[start_layer]
-                    # print(f"weights: {weights.keys()}")
-                    self_attention_weights = helper.rename_self_attention_keys(weights)
+                    sa_w = helper.rename_self_attention_keys(weights)
                     config = get_model_config(self.model)
-
-                    temp_wt = UD2.launch_qwen3_moe_self_attention(    # calculate_wt_self_attention_parallel(
-                        impl,
-                        all_wt[start_layer],
-                        all_in[child_nodes[0]].detach().numpy(),  # all_out[child_nodes[0]].detach().numpy(),
-                        self_attention_weights,
-                        config
+                    x = arr_from_key(child_nodes[0])
+                    temp_wt = UD2.launch_qwen3_moe_self_attention(
+                        impl, all_wt[start_layer], x, sa_w, config
                     )
-
-                    all_wt[child_nodes[0]] += temp_wt
+                    all_wt[child_nodes[0]] += to_np64(temp_wt)
 
                 # -------------------- For GPT-OSS MoE ---------------------
-                elif model_resource["graph"][start_layer]["class"] == 'GPT_OSS_Feed_Forward':
+                elif node_class == "GPT_OSS_Feed_Forward":
                     weights = all_wts[start_layer]
-                    feed_forward_weights = helper.rename_gptoss_feed_forward_keys(weights) #rename_feed_forward_keys(weights)
+                    ff_w = helper.rename_gptoss_feed_forward_keys(weights)
                     config = get_model_config(self.model)
-
-                    temp_wt, ff_expert = UD2.launch_gpt_oss_feed_forward(   # calculate_wt_gpt_oss_feed_forward_parallel(
-                        impl,
-                        all_wt[start_layer],
-                        t2np32(all_in[child_nodes[0]]),  # all_out[child_nodes[0]].detach().numpy(),
-                        feed_forward_weights,
-                        config
+                    x = arr_from_key(child_nodes[0])
+                    temp_wt, ff_expert = UD2.launch_gpt_oss_feed_forward(
+                        impl, all_wt[start_layer], x, ff_w, config
                     )
+                    all_wt[child_nodes[0]] += to_np64(temp_wt)
+                    self.all_layer_expert_relevance[f"{start_layer}_ff_expert"] = ff_expert
 
-                    all_wt[child_nodes[0]] += temp_wt
-
-                    layer = f"{start_layer}_ff_expert"
-                    self.all_layer_expert_relevance[layer] = ff_expert
-
-                elif model_resource["graph"][start_layer]["class"] in 'GPT_OSS_Self_Attention':
+                elif node_class == "GPT_OSS_Self_Attention":
                     weights = all_wts[start_layer]
-                    # print(f"weights: {weights.keys()}")
-                    self_attention_weights = helper.rename_self_attention_keys(weights)
+                    sa_w = helper.rename_self_attention_keys(weights)
                     config = get_model_config(self.model)
-
                     ATTN_PLAN = build_attention_plan(layer_stack, config)
                     attn_info = ATTN_PLAN.get(start_layer, {"attn_type": "full", "window": None})
-
-                    temp_wt = UD2.launch_gpt_oss_self_attention(    # calculate_wt_self_attention_parallel(
+                    x = arr_from_key(child_nodes[0])
+                    temp_wt = UD2.launch_gpt_oss_self_attention(
                         impl,
                         all_wt[start_layer],
-                        t2np32(all_in[child_nodes[0]]),  # all_out[child_nodes[0]].detach().numpy(),
-                        self_attention_weights,
+                        x,
+                        sa_w,
                         config,
                         attn_type=attn_info["attn_type"],
                         sliding_window=attn_info["window"],
                     )
+                    all_wt[child_nodes[0]] += to_np64(temp_wt)
 
-                    all_wt[child_nodes[0]] += temp_wt
-                    print(f"temp_wt: {np.sum(temp_wt):.2f}")
-                
-                # Default calling 
+                # Default passthrough
                 else:
-                    temp_wt = all_wt[start_layer]
-                    all_wt[child_nodes[0]] += temp_wt
+                    all_wt[child_nodes[0]] += all_wt[start_layer]
 
+        # ---- post-scale/normalize (works on numpy) ----
         if max_unit > 0 and scaler == 0:
             temp_dict = {}
             for k in all_wt.keys():
@@ -755,4 +438,280 @@ class Backtrace(object):
                 temp_dict[k] = UC.weight_scaler(all_wt[k], scaler=scaler)
             all_wt = temp_dict
 
+        # Store in instance variable (like PyTorch Backtrace)
+        self.all_wt = all_wt
+
         return all_wt
+
+    def run_task(
+        self,
+        task="generation",
+        inputs=None,
+        tokenizer=None,
+        mode="default",
+        multiplier=100.0,
+        scaler=1.0,
+        thresholding=0.5,
+        temperature=1.0,
+        return_scores=False,
+        return_relevance=False,
+        return_layerwise_output=False,
+        debug=False,
+        **generation_kwargs
+    ):
+        """
+        Unified method for running MoE DL-Backtrace on generation tasks.
+        
+        Args:
+            task (str): Task type - only "generation" is supported for MoE models
+            
+            inputs: Input data for the model
+                - dict with 'input_ids' and 'attention_mask' or tuple of tensors
+            
+            tokenizer: Required for generation tasks (HuggingFace tokenizer)
+            
+            mode (str): Relevance propagation mode (default: "default")
+            multiplier (float): Starting relevance value (default: 100.0)
+            scaler (float): Relevance scaling factor (default: 1.0)
+            thresholding (float): Relevance threshold (default: 0.5)
+            temperature (float): Temperature for generation (default: 1.0)
+            return_scores (bool): Return scores trace (default: False)
+            return_relevance (bool): Return relevance trace (default: False)
+            return_layerwise_output (bool): Return layer-wise output trace (default: False)
+            debug (bool): Enable debug logging (default: False)
+            
+            **generation_kwargs: Additional kwargs for generation task
+                - max_new_tokens, top_k, top_p, num_beams, etc.
+        
+        Returns:
+            dict: Results containing:
+                - 'task': Task type ("generation")
+                - 'generated_ids': Generated token IDs
+                - 'scores_trace': (if return_scores=True) Scores trace
+                - 'relevance_trace': (if return_relevance=True) List of dicts with 'all_wt' and 'expert_relevance'
+                - 'layerwise_output_trace': (if return_layerwise_output=True) Layer-wise output trace
+        
+        Note:
+            relevance_trace structure:
+            [
+                {
+                    'all_wt': dict,              # Token relevance for all nodes
+                    'expert_relevance': dict     # Expert-specific relevance
+                },
+                ...  # One dict per generation step
+            ]
+        
+        Examples:
+            # Text generation with traces
+            results = bt.run_task(
+                task="generation",
+                inputs={'input_ids': input_ids, 'attention_mask': attention_mask},
+                tokenizer=tokenizer,
+                max_new_tokens=50,
+                temperature=0.7,
+                return_relevance=True,
+                return_scores=True
+            )
+            
+            # Access token relevance and expert relevance separately
+            for step_idx, step_data in enumerate(results['relevance_trace']):
+                all_wt = step_data['all_wt']
+                expert_rel = step_data['expert_relevance']
+                
+                print(f"Step {step_idx}:")
+                print(f"  Token relevance keys: {list(all_wt.keys())[:3]}")
+                print(f"  Expert relevance keys: {list(expert_rel.keys())}")
+        """
+        
+        # Validate task type
+        if task != "generation":
+            raise ValueError(f"MoE models only support 'generation' task, got: {task}")
+        
+        # Validate tokenizer
+        if tokenizer is None:
+            raise ValueError("tokenizer is required for generation task")
+        
+        # Extract input_ids and attention_mask
+        if isinstance(inputs, dict):
+            input_ids = inputs.get("input_ids")
+            attention_mask = inputs.get("attention_mask")
+        elif isinstance(inputs, (tuple, list)):
+            input_ids = inputs[0]
+            attention_mask = inputs[1] if len(inputs) > 1 else None
+        else:
+            raise ValueError("For generation, inputs must be dict or tuple of (input_ids, attention_mask)")
+        
+        if debug:
+            print(f"🚀 Running generation task with sample_auto...")
+        
+        # Call sample_auto with generation kwargs and trace flags
+        generated_output = self.sample_auto(
+            tokenizer=tokenizer,
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            return_scores=return_scores,
+            return_relevance=return_relevance,
+            return_layerwise_output=return_layerwise_output,
+            debug=debug,
+            **generation_kwargs
+        )
+        
+        # Parse output (can be tensor or tuple)
+        result = {
+            'task': task,
+        }
+        
+        if isinstance(generated_output, tuple):
+            # (generated_ids, info_dict)
+            result['generated_ids'] = generated_output[0]
+            info_dict = generated_output[1]
+            if 'scores_trace' in info_dict:
+                result['scores_trace'] = info_dict['scores_trace']
+            if 'relevance_trace' in info_dict:
+                result['relevance_trace'] = info_dict['relevance_trace']
+            if 'layerwise_output_trace' in info_dict:
+                result['layerwise_output_trace'] = info_dict['layerwise_output_trace']
+        else:
+            # Just generated_ids
+            result['generated_ids'] = generated_output
+        
+        return result
+
+    def sample_auto(self, tokenizer, input_ids, attention_mask=None, **kwargs):
+        """
+        Wrapper for MoE-based generation (greedy / sampling / beam).
+        Accepts kwargs: temperature, top_k, top_p, max_new_tokens, min_new_tokens, max_time,
+                        early_stopping, repetition_penalty, no_repeat_ngram_size,
+                        bad_words_ids, bos_token_id, eos_token_id, pad_token_id,
+                        num_beams, num_return_sequences, length_penalty, return_scores, 
+                        return_relevance, return_layerwise_output, debug
+
+        Returns:
+            - Always a single sequence with shape [1, T_total]
+            (If return_scores=True or return_relevance=True, returns (sequence, info_dict))
+        """
+
+        # --- helpers ---
+        def _pick_device():
+            mdl = getattr(self, "model", None)
+            dev = getattr(mdl, "device", None)
+            if isinstance(dev, torch.device):
+                return dev
+            return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        def _to_long_tensor(x, device):
+            if isinstance(x, torch.Tensor):
+                t = x
+            elif isinstance(x, (list, tuple)):
+                t = torch.tensor(x)
+            else:
+                try:
+                    import numpy as np  # noqa: F401
+                    if isinstance(x, np.ndarray):
+                        t = torch.from_numpy(x)
+                    else:
+                        raise TypeError
+                except Exception:
+                    raise TypeError(
+                        f"input must be Tensor/list/tuple/ndarray; got {type(x).__name__}"
+                    )
+            if t.dim() == 1:
+                t = t.unsqueeze(0)  # ensure [B=1, T]
+            return t.to(device=device, dtype=torch.long, non_blocking=True)
+
+        def _ensure_mask(mask, ids, pad_id, device):
+            if mask is None:
+                if pad_id is not None:
+                    m = (ids != int(pad_id)).long()
+                else:
+                    m = torch.ones_like(ids, dtype=torch.long, device=device)
+            else:
+                m = _to_long_tensor(mask, device)
+                if m.shape != ids.shape:
+                    raise ValueError(
+                        f"attention_mask shape {tuple(m.shape)} does not match input_ids shape {tuple(ids.shape)}"
+                    )
+            return m
+
+        # --- device & core tensors ---
+        device = _pick_device()
+        input_ids = _to_long_tensor(input_ids, device)
+
+        # Enforce B=1 (MoE export/engine assumes batch-static B=1)
+        if input_ids.size(0) != 1:
+            raise AssertionError("MoE AutoSampler currently assumes batch size = 1. Provide a single prompt.")
+
+        # --- auto-fill token IDs from tokenizer if absent ---
+        for kid in ("bos_token_id", "eos_token_id", "pad_token_id"):
+            if kwargs.get(kid) is None and hasattr(tokenizer, kid):
+                v = getattr(tokenizer, kid)
+                if v is not None:
+                    kwargs[kid] = v
+
+        pad_id = kwargs.get("pad_token_id", None)
+        attention_mask = _ensure_mask(attention_mask, input_ids, pad_id, device)
+
+        # --- sanitize knobs / lengths ---
+        temperature = kwargs.get("temperature", None)
+        if temperature is not None and float(temperature) <= 0.0:
+            raise ValueError("temperature must be > 0 when provided")
+
+        top_k = kwargs.get("top_k", None)
+        if top_k is not None and int(top_k) < 0:
+            raise ValueError("top_k must be >= 0")
+
+        top_p = kwargs.get("top_p", None)
+        if top_p is not None and not (0.0 < float(top_p) <= 1.0):
+            raise ValueError("top_p must be in (0, 1]")
+
+        max_new_tokens = kwargs.get("max_new_tokens", 50)
+        if int(max_new_tokens) <= 0:
+            raise ValueError("max_new_tokens must be a positive integer")
+        kwargs["max_new_tokens"] = int(max_new_tokens)
+
+        mnt = kwargs.get("min_new_tokens", None)
+        if mnt is not None:
+            mnt = int(mnt)
+            if mnt < 0:
+                raise ValueError("min_new_tokens must be >= 0")
+            if mnt > max_new_tokens:
+                mnt = max_new_tokens
+            kwargs["min_new_tokens"] = mnt
+
+        # --- sanitize beams ---
+        num_beams = int(kwargs.get("num_beams", 1))
+        if num_beams < 1:
+            raise ValueError("num_beams must be >= 1")
+        kwargs["num_beams"] = num_beams
+
+        # even though the generator returns top-1 for beams, keep HF internals happy:
+        nret = int(kwargs.get("num_return_sequences", 1))
+        if nret < 1:
+            nret = 1
+        if nret > num_beams:
+            nret = num_beams
+        kwargs["num_return_sequences"] = nret
+
+        # --- normalize bad_words_ids to List[List[int]] ---
+        bwi = kwargs.get("bad_words_ids", None)
+        if bwi is not None:
+            norm = []
+            if isinstance(bwi, (list, tuple)):
+                for seq in bwi:
+                    if isinstance(seq, (list, tuple)):
+                        norm.append([int(t) for t in seq])
+                    else:
+                        norm.append([int(seq)])
+            else:
+                norm.append([int(bwi)])
+            kwargs["bad_words_ids"] = norm
+
+        # --- create engine & dispatch ---
+        from dl_backtrace.moe_pytorch_backtrace.backtrace.core.moe_auto_sampler import MoEAutoSampler
+        eng = MoEAutoSampler(self, tokenizer)  # `self` is the MoE Backtrace engine
+
+        return eng.generate(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            **kwargs
+        )

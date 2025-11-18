@@ -1,9 +1,15 @@
 import numpy as np
 import torch
 from collections import defaultdict
+from .model_utils import unwrap_model
 
 
 def build_gpt_oss_tree(model, root='gpt_oss'):
+    """Build tree for GPT-OSS model (supports wrapped models)."""
+    
+    # Unwrap the model to find the core transformer
+    core, lm_head = unwrap_model(model)
+    
     # Initialize the tree structure
     ltree = {}
     layer_tree = {}
@@ -55,7 +61,7 @@ def build_gpt_oss_tree(model, root='gpt_oss'):
 
     # Add `gpt_oss` layers dynamically
     current_child = 'decoder_embeddings'
-    for i, layer in enumerate(model.model.layers):
+    for i, layer in enumerate(core.layers):
         decoder_layer_norm_0 = add_component(ltree, f'decoder_layer_norm_{i}_0', 'Layer_Norm', child=current_child)
         decoder_self_attention = add_component(ltree, f'decoder_self_attention_{i}', 'GPT_OSS_Self_Attention', child=f'decoder_layer_norm_{i}_0')
         decoder_residual_self_attention = add_component(ltree, f'decoder_residual_self_attention_{i}', 'Residual', child=[current_child, f'decoder_self_attention_{i}'])
@@ -66,12 +72,12 @@ def build_gpt_oss_tree(model, root='gpt_oss'):
 
         current_child = f'decoder_residual_feed_forward_{i}'
 
-    if hasattr(model.model, 'norm'):
+    if hasattr(core, 'norm'):
         decoder_final_layer_norm = add_component(ltree, 'decoder_layer_norm', 'Layer_Norm', child=current_child)
         current_child = 'decoder_layer_norm'
 
     # Decoder LM-Head
-    if hasattr(model, 'lm_head'):
+    if lm_head is not None:
         decoder_lm_head = add_component(ltree, 'decoder_lm_head', 'LM_Head', child=current_child)
         current_child = 'decoder_lm_head'
 
@@ -99,6 +105,14 @@ def build_gpt_oss_tree(model, root='gpt_oss'):
 
 
 def extract_gpt_oss_weights(model):
+    """Extract weights from GPT-OSS model (supports wrapped models)."""
+    
+    # Unwrap the model
+    core, lm_head = unwrap_model(model)
+    
+    # Get config from the core model
+    config = core.config if hasattr(core, 'config') else model.config
+    
     def _to_numpy(t):
         if isinstance(t, torch.Tensor):
             # cast bfloat16/other dtypes to float32 before numpy()
@@ -113,7 +127,7 @@ def extract_gpt_oss_weights(model):
     }
 
     # Pre-create per-layer buckets
-    for i in range(model.config.num_hidden_layers):
+    for i in range(config.num_hidden_layers):
         weights_dict[f'decoder_layer_norm_{i}_0'] = {}
         weights_dict[f'decoder_self_attention_{i}'] = {}
         weights_dict[f'decoder_layer_norm_{i}_1'] = {}
@@ -145,9 +159,7 @@ def extract_gpt_oss_weights(model):
         elif 'norm.weight' in name:
             weights_dict['decoder_layer_norm'][name] = param_np
 
-    # lm_head (don’t bypass _to_numpy)
-    lm_head = getattr(model, 'lm_head', None) or getattr(model, 'output', None) \
-              or getattr(model, 'get_output_embeddings', lambda: None)()
+    # lm_head (use unwrapped lm_head from function start)
     if lm_head is not None and hasattr(lm_head, 'weight'):
         weights_dict['decoder_lm_head']['lm_head.weight'] = _to_numpy(lm_head.weight)
 
@@ -155,7 +167,10 @@ def extract_gpt_oss_weights(model):
 
 
 def create_gpt_oss_output(input_text, model, tokenizer, max_length, device):
-    core = getattr(model, "model", model)
+    """Create outputs for GPT-OSS model (supports wrapped models)."""
+    
+    # Unwrap the model
+    core, lm_head = unwrap_model(model)
 
     # ---- hard-reset any existing hooks so stale ones don't fire ----
     def _clear_all_hooks(mod):
@@ -165,8 +180,8 @@ def create_gpt_oss_output(input_text, model, tokenizer, max_length, device):
             if hasattr(m, "_forward_hooks_with_kwargs"): m._forward_hooks_with_kwargs.clear()
             if hasattr(m, "_forward_pre_hooks_with_kwargs"): m._forward_pre_hooks_with_kwargs.clear()
     _clear_all_hooks(core)
-    if hasattr(model, "lm_head"):
-        _clear_all_hooks(model.lm_head)
+    if lm_head is not None:
+        _clear_all_hooks(lm_head)
 
     token_idx = 0
     # Use plain dicts inside; no silent {} creation
@@ -331,9 +346,9 @@ def create_gpt_oss_output(input_text, model, tokenizer, max_length, device):
 
     decoder_hooks.append(core.norm.register_forward_pre_hook(pre_final_ln, with_kwargs=True))
     decoder_hooks.append(core.norm.register_forward_hook(post_final_ln, with_kwargs=True))
-    if hasattr(model, "lm_head"):
-        decoder_hooks.append(model.lm_head.register_forward_pre_hook(pre_lm, with_kwargs=True))
-        decoder_hooks.append(model.lm_head.register_forward_hook(post_lm, with_kwargs=True))
+    if lm_head is not None:
+        decoder_hooks.append(lm_head.register_forward_pre_hook(pre_lm, with_kwargs=True))
+        decoder_hooks.append(lm_head.register_forward_hook(post_lm, with_kwargs=True))
 
     # ---- generation (ensure hooks are removed even on error) ----
     def tick():

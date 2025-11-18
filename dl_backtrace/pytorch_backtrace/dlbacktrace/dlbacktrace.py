@@ -11,6 +11,10 @@ from .core.config import activation_master
 from .core.dlb_auto_sampler import DLBAutoSampler
 from .core.relevance_propagation import RelevancePropagator
 from .core.visualization import visualize_graph, visualize_relevance, visualize_relevance_auto 
+from .core.token_relevance_visuals import (
+    plot_tokenwise_relevance_map_swapped,
+    plot_input_heatmap_for_token,
+)
 
 import numpy as np 
 import torch
@@ -489,6 +493,280 @@ class DLBacktrace:
         )
         return self.all_wt
 
+    def run_task(
+        self,
+        task="auto",
+        inputs=None,
+        tokenizer=None,
+        mode="default",
+        multiplier=100.0,
+        scaler=1.0,
+        thresholding=0.5,
+        temperature=1.0,
+        return_scores=False,
+        return_relevance=False,
+        return_layerwise_output=False,
+        debug=False,
+        **generation_kwargs
+    ):
+        """
+        Unified method for running DL-Backtrace on different tasks.
+        
+        Args:
+            task (str): Task type - "auto", "image-classification", "text-classification", or "generation"
+                - "auto": Automatically detect task based on inputs
+                - "image-classification": For image classification models (e.g., MobileNet, ResNet)
+                - "text-classification": For text classification models (e.g., BERT sentiment)
+                - "generation": For text generation models (e.g., GPT, LLaMA)
+            
+            inputs: Input data for the model
+                - For image-classification: torch.Tensor of shape (B, C, H, W)
+                - For text-classification: dict with 'input_ids' and 'attention_mask' or tuple of tensors
+                - For generation: dict with 'input_ids' and 'attention_mask' or tuple of tensors
+            
+            tokenizer: Required for generation tasks (HuggingFace tokenizer)
+            
+            mode (str): Relevance propagation mode (default: "default")
+            multiplier (float): Starting relevance value (default: 100.0)
+            scaler (float): Relevance scaling factor (default: 1.0)
+            thresholding (float): Relevance threshold (default: 0.5)
+            temperature (float): Temperature for predict() call (default: 1.0)
+            return_scores (bool): Return scores trace (default: False)
+            return_relevance (bool): Return relevance trace (default: False)
+            return_layerwise_output (bool): Return layer-wise output trace (default: False)
+            debug (bool): Enable debug logging (default: False)
+            
+            **generation_kwargs: Additional kwargs for generation task (passed to sample_auto)
+                - max_new_tokens, top_k, top_p, num_beams, etc.
+        
+        Returns:
+            dict: Results containing:
+                - 'task': Detected or specified task type
+                - 'node_io': Layer-wise outputs from predict()
+                - 'relevance': Relevance scores from evaluation()
+                - 'predictions': Model predictions (logits for classification)
+                - 'generated_ids': (generation only) Generated token IDs
+                - 'scores_trace': (if return_scores=True) Scores trace
+                - 'relevance_trace': (if return_relevance=True) Relevance trace
+                - 'layerwise_output_trace': (if return_layerwise_output=True) Layer-wise output trace
+        
+        Examples:
+            # Image classification
+            results = dlb.run_task(
+                task="image-classification",
+                inputs=image_tensor
+            )
+            
+            # Text classification with traces
+            results = dlb.run_task(
+                task="text-classification",
+                inputs={'input_ids': input_ids, 'attention_mask': attention_mask},
+                return_relevance=True,
+                return_layerwise_output=True
+            )
+            
+            # Text generation with traces
+            results = dlb.run_task(
+                task="generation",
+                inputs={'input_ids': input_ids, 'attention_mask': attention_mask},
+                tokenizer=tokenizer,
+                max_new_tokens=50,
+                temperature=0.7,
+                return_relevance=True,
+                return_scores=True
+            )
+        """
+        
+        # Auto-detect task if needed
+        if task == "auto":
+            task = self._detect_task(inputs, tokenizer)
+            if debug:
+                print(f"🔍 Auto-detected task: {task}")
+        
+        # Validate task type
+        valid_tasks = ["image-classification", "text-classification", "generation"]
+        if task not in valid_tasks:
+            raise ValueError(f"task must be one of {valid_tasks}, got: {task}")
+        
+        # Prepare inputs based on task
+        if task == "generation":
+            # Generation task - delegate to sample_auto
+            if tokenizer is None:
+                raise ValueError("tokenizer is required for generation task")
+            
+            # Extract input_ids and attention_mask
+            if isinstance(inputs, dict):
+                input_ids = inputs.get("input_ids")
+                attention_mask = inputs.get("attention_mask")
+            elif isinstance(inputs, (tuple, list)):
+                input_ids = inputs[0]
+                attention_mask = inputs[1] if len(inputs) > 1 else None
+            else:
+                raise ValueError("For generation, inputs must be dict or tuple of (input_ids, attention_mask)")
+            
+            if debug:
+                print(f"🚀 Running generation task with sample_auto...")
+            
+            # Call sample_auto with generation kwargs and trace flags
+            generated_output = self.sample_auto(
+                tokenizer=tokenizer,
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                return_scores=return_scores,
+                return_relevance=return_relevance,
+                return_layerwise_output=return_layerwise_output,
+                debug=debug,
+                **generation_kwargs
+            )
+            
+            # Parse output (can be tensor or tuple)
+            result = {
+                'task': task,
+                'node_io': self.node_io if hasattr(self, 'node_io') else None,
+                'relevance': self.all_wt if hasattr(self, 'all_wt') else None,
+            }
+            
+            if isinstance(generated_output, tuple):
+                # (generated_ids, info_dict)
+                result['generated_ids'] = generated_output[0]
+                info_dict = generated_output[1]
+                if 'scores_trace' in info_dict:
+                    result['scores_trace'] = info_dict['scores_trace']
+                if 'relevance_trace' in info_dict:
+                    result['relevance_trace'] = info_dict['relevance_trace']
+                if 'layerwise_output_trace' in info_dict:
+                    result['layerwise_output_trace'] = info_dict['layerwise_output_trace']
+            else:
+                # Just generated_ids
+                result['generated_ids'] = generated_output
+            
+            return result
+        
+        else:
+            # Classification tasks (image or text)
+            if debug:
+                print(f"🚀 Running {task} task...")
+            
+            # Prepare model inputs
+            if task == "image-classification":
+                # Image input: single tensor
+                if isinstance(inputs, torch.Tensor):
+                    model_inputs = (inputs,)
+                elif isinstance(inputs, (tuple, list)):
+                    model_inputs = inputs
+                else:
+                    raise ValueError("For image-classification, inputs must be a torch.Tensor or tuple")
+                
+                predict_inputs = model_inputs
+                eval_task = "multi-class classification"
+            
+            elif task == "text-classification":
+                # Text input: input_ids and attention_mask
+                if isinstance(inputs, dict):
+                    input_ids = inputs.get("input_ids")
+                    attention_mask = inputs.get("attention_mask")
+                    model_inputs = (input_ids, attention_mask)
+                elif isinstance(inputs, (tuple, list)):
+                    model_inputs = inputs
+                else:
+                    raise ValueError("For text-classification, inputs must be dict or tuple of (input_ids, attention_mask)")
+                
+                predict_inputs = model_inputs
+                eval_task = "multi-class classification"
+            
+            # Step 1: Forward pass
+            if debug:
+                print(f"   📊 Running forward pass (predict)...")
+            
+            node_io = self.predict(*predict_inputs, temperature=temperature, debug=debug)
+            
+            # Extract predictions
+            if "output" in node_io and "output_values" in node_io["output"]:
+                predictions = node_io["output"]["output_values"]
+            else:
+                # Fallback: get last node's output
+                last_node = list(node_io.keys())[-1]
+                predictions = node_io[last_node].get("output_values")
+            
+            if debug:
+                if isinstance(predictions, torch.Tensor):
+                    print(f"   ✅ Predictions shape: {predictions.shape}")
+                elif isinstance(predictions, np.ndarray):
+                    print(f"   ✅ Predictions shape: {predictions.shape}")
+            
+            # Step 2: Relevance propagation
+            if debug:
+                print(f"   🔬 Running relevance propagation (evaluation)...")
+            
+            relevance = self.evaluation(
+                mode=mode,
+                start_wt=[],
+                multiplier=multiplier,
+                scaler=scaler,
+                thresholding=thresholding,
+                task=eval_task,
+                target_token_ids=None,
+                debug=debug
+            )
+            
+            if debug:
+                print(f"   ✅ Relevance computed for {len(relevance)} nodes")
+            
+            # Build result dict
+            result = {
+                'task': task,
+                'node_io': node_io,
+                'relevance': relevance,
+                'predictions': predictions,
+            }
+            
+            # Add traces if requested (for classification tasks, these are single-step)
+            if return_scores:
+                # For classification, scores are the logits/predictions
+                result['scores_trace'] = [predictions]
+            
+            if return_relevance:
+                # For classification, relevance trace is the computed relevance
+                result['relevance_trace'] = [relevance]
+            
+            if return_layerwise_output:
+                # For classification, layerwise output is the node_io
+                result['layerwise_output_trace'] = [node_io]
+            
+            return result
+    
+    def _detect_task(self, inputs, tokenizer):
+        """
+        Auto-detect task type based on inputs and model characteristics.
+        
+        Returns:
+            str: Detected task type
+        """
+        # If tokenizer provided and inputs have input_ids, likely text-based
+        if tokenizer is not None:
+            if isinstance(inputs, dict) and "input_ids" in inputs:
+                # Check if model is generative (has generate method)
+                if hasattr(self.model, "generate"):
+                    return "generation"
+                else:
+                    return "text-classification"
+            elif isinstance(inputs, (tuple, list)) and len(inputs) >= 2:
+                # Assume (input_ids, attention_mask)
+                if hasattr(self.model, "generate"):
+                    return "generation"
+                else:
+                    return "text-classification"
+        
+        # If single tensor input, likely image classification
+        if isinstance(inputs, torch.Tensor):
+            if inputs.dim() == 4:  # (B, C, H, W)
+                return "image-classification"
+            elif inputs.dim() == 2:  # Could be input_ids (B, seq_len)
+                return "text-classification"
+        
+        # Default fallback
+        return "image-classification"
+
     def sample_auto(self, tokenizer, input_ids, attention_mask=None, **kwargs):
         """
         Wrapper for DLB-based generation (greedy / sampling / beam).
@@ -655,6 +933,58 @@ class DLBacktrace:
             fast_output_path="backtrace_collapsed_fast",  # path for large graphs
             show=True,                        # ⬅️ show in Colab
             inline_format="svg",              # or "png" if SVG too heavy
+        )
+
+    def visualize_tokenwise_relevance_map(
+        self,
+        timewise_relevance_out,     # list[dict], one dict per generated timestep
+        input_ids,
+        tokenizer,
+        *,
+        generated_ids=None,
+        input_key="input_ids",
+        figsize=(12, 6),
+        **kwargs,
+    ):
+        """
+        Thin wrapper that forwards to core.token_relevance_visuals.plot_tokenwise_relevance_map_swapped.
+        x-axis: generated tokens (time), y-axis: input tokens. Normalized to [0,1].
+        """
+        return plot_tokenwise_relevance_map_swapped(
+            timewise_relevance_out,
+            input_ids,
+            tokenizer,
+            generated_ids=generated_ids,
+            input_key=input_key,
+            figsize=figsize,
+            **kwargs,
+        )
+
+    def visualize_input_heatmap_for_token(
+        self,
+        timewise_relevance_out,
+        n,                      # index of generated token (0-based)
+        input_ids,
+        tokenizer,
+        *,
+        generated_ids=None,
+        input_key="input_ids",
+        figsize=(10, 3),
+        **kwargs,
+    ):
+        """
+        Thin wrapper that forwards to core.token_relevance_visuals.plot_input_heatmap_for_token.
+        Shows normalized relevance of input tokens for the n-th generated token.
+        """
+        return plot_input_heatmap_for_token(
+            timewise_relevance_out,
+            n,
+            input_ids,
+            tokenizer,
+            generated_ids=generated_ids,
+            input_key=input_key,
+            figsize=figsize,
+            **kwargs,
         )
     
     def debug_execution_differences(self, *test_inputs):

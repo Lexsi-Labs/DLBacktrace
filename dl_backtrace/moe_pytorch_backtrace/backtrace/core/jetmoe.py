@@ -1,8 +1,16 @@
+import numpy as np
 import torch
 from collections import defaultdict
+from typing import Dict, List, Tuple, Any, Optional
+from .model_utils import unwrap_model
 
 
 def build_jetmoe_tree(model, root='jet_moe'):
+    """Build tree for JetMoE model (supports wrapped models)."""
+    
+    # Unwrap the model to find the core transformer
+    core, lm_head = unwrap_model(model)
+    
     # Initialize the tree structure
     ltree = {}
     layer_tree = {}
@@ -54,23 +62,23 @@ def build_jetmoe_tree(model, root='jet_moe'):
 
     # Add jet_moe layers dynamically
     current_child = 'decoder_embeddings'
-    for i, layer in enumerate(model.model.layers):
+    for i, layer in enumerate(core.layers):
         decoder_layer_norm_0 = add_component(ltree, f'decoder_layer_norm_{i}_0', 'Layer_Norm', child=current_child)
-        decoder_self_attention = add_component(ltree, f'decoder_self_attention_{i}', 'MoE_Self_Attention', child=f'decoder_layer_norm_{i}_0')
+        decoder_self_attention = add_component(ltree, f'decoder_self_attention_{i}', 'JetMoE_Self_Attention', child=f'decoder_layer_norm_{i}_0')
         decoder_residual_self_attention = add_component(ltree, f'decoder_residual_self_attention_{i}', 'Residual', child=[current_child, f'decoder_self_attention_{i}'])
 
         decoder_layer_norm_1 = add_component(ltree, f'decoder_layer_norm_{i}_1', 'Layer_Norm', child=f'decoder_self_attention_{i}')
-        decoder_feed_forward = add_component(ltree, f'decoder_feed_forward_{i}', 'MoE_Feed_Forward', child=f'decoder_layer_norm_{i}_1')
+        decoder_feed_forward = add_component(ltree, f'decoder_feed_forward_{i}', 'JetMoE_Feed_Forward', child=f'decoder_layer_norm_{i}_1')
         decoder_residual_feed_forward = add_component(ltree, f'decoder_residual_feed_forward_{i}', 'Residual', child=[f'decoder_residual_self_attention_{i}', f'decoder_feed_forward_{i}'])
 
         current_child = f'decoder_residual_feed_forward_{i}'
 
-    if hasattr(model.model, 'norm'):
+    if hasattr(core, 'norm'):
         decoder_final_layer_norm = add_component(ltree, 'decoder_layer_norm', 'Layer_Norm', child=current_child)
         current_child = 'decoder_layer_norm'
 
     # Decoder LM-Head
-    if hasattr(model, 'lm_head'):
+    if lm_head is not None:
         decoder_lm_head = add_component(ltree, 'decoder_lm_head', 'LM_Head', child=current_child)
         current_child = 'decoder_lm_head'
 
@@ -98,6 +106,14 @@ def build_jetmoe_tree(model, root='jet_moe'):
 
 
 def extract_jetmoe_weights(model):
+    """Extract weights from JetMoE model (supports wrapped models)."""
+    
+    # Unwrap the model
+    core, lm_head = unwrap_model(model)
+    
+    # Get config from the core model
+    config = core.config if hasattr(core, 'config') else model.config
+    
     # Initialize a dictionary to hold the weights
     weights_dict = {
         'decoder_embeddings': {},
@@ -105,19 +121,20 @@ def extract_jetmoe_weights(model):
         'decoder_lm_head': {}
     }
 
-    # Loop through the layers to initialize the weight dictionaries for each
-    for i in range(model.config.num_hidden_layers):
+    # Init per-layer dicts
+    for i in range(config.num_hidden_layers):
         weights_dict[f'decoder_layer_norm_{i}_0'] = {}
         weights_dict[f'decoder_self_attention_{i}'] = {}
         weights_dict[f'decoder_layer_norm_{i}_1'] = {}
         weights_dict[f'decoder_feed_forward_{i}'] = {}
 
-    # Extract the model's parameters and organize them into the dictionary
+    # helper: safe tensor → numpy
+    def to_np(x):
+        return x.detach().cpu().numpy() if torch.is_tensor(x) else x
+
+    # Extract parameters
     for name, param in model.named_parameters():
-        if isinstance(param, torch.Tensor):
-            param_np = param.data.numpy()
-        else:
-            param_np = param
+        param_np = to_np(param)
 
         if 'embed_tokens' in name:
             weights_dict['decoder_embeddings'][name] = param_np
@@ -136,137 +153,307 @@ def extract_jetmoe_weights(model):
         elif 'norm.weight' in name:
             weights_dict['decoder_layer_norm']['norm.weight'] = param_np
 
-    if hasattr(model, 'lm_head'):
-        lm_head_weights = model.lm_head.weight.data.numpy()
-        weights_dict['decoder_lm_head']['lm_head.weight'] = lm_head_weights
+    if lm_head is not None and hasattr(lm_head, 'weight'):
+        weights_dict['decoder_lm_head']['lm_head.weight'] = to_np(lm_head.weight.data)
 
     return weights_dict
 
 
-def create_jetmoe_output(input_text, model, tokenizer, max_length, device):
-    # Initialize variables
+# ----------------------- Public API: patch installer ----------------------- #
+def install_jetmoe_rope_patch(force: bool = False) -> None:
+    """
+    Idempotently installs a RoPE monkey-patch for JetMoE on transformers==4.52.x.
+
+    Rotates only the first `rotary_dim` dims when head_dim > rotary_dim,
+    preventing shape mismatches in attention.
+
+    Args:
+        force: re-apply the patch even if it appears installed already.
+    """
+    from transformers.models.jetmoe import modeling_jetmoe as jtm
+
+    # If already patched, skip unless forced
+    if getattr(jtm, "_rope_partial_patch_installed", False) and not force:
+        return
+
+    def _rotate_half(x: torch.Tensor) -> torch.Tensor:
+        x1, x2 = x[..., : x.size(-1) // 2], x[..., x.size(-1) // 2 :]
+        return torch.cat((-x2, x1), dim=-1)
+
+    def apply_rotary_pos_emb_partial(
+        q: torch.Tensor,
+        k: torch.Tensor,
+        cos: torch.Tensor,
+        sin: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        rotary_dim = cos.size(-1)
+
+        # Full-rotation case
+        if q.size(-1) == rotary_dim:
+            q_rot = (q * cos) + (_rotate_half(q) * sin)
+            k_rot = (k * cos) + (_rotate_half(k) * sin)
+            return q_rot, k_rot
+
+        # Partial-rotation case
+        q_head, q_tail = q[..., :rotary_dim], q[..., rotary_dim:]
+        k_head, k_tail = k[..., :rotary_dim], k[..., rotary_dim:]
+        q_head = (q_head * cos) + (_rotate_half(q_head) * sin)
+        k_head = (k_head * cos) + (_rotate_half(k_head) * sin)
+        return torch.cat([q_head, q_tail], dim=-1), torch.cat([k_head, k_tail], dim=-1)
+
+    # Monkey-patch
+    jtm.apply_rotary_pos_emb = apply_rotary_pos_emb_partial
+    jtm._rope_partial_patch_installed = True
+
+
+def create_jetmoe_output(
+    input_text: str,
+    model: Any,
+    tokenizer: Any,
+    max_length: Optional[int],
+    device: str,
+) -> Tuple[Dict[str, Dict[str, torch.Tensor]], Dict[str, Dict[str, torch.Tensor]], List[List[int]]]:
+    """
+    Run greedy decoding on JetMoE while capturing BOTH inputs and outputs
+    for key submodules at each decoding step (supports wrapped models).
+
+    Returns:
+        decoder_outputs: {token_idx(str): {name: tensor}}
+        decoder_inputs:  {token_idx(str): {name: tensor}}
+        generated_tokens: List[List[int]]  (per-batch token ids)
+    """
+    # Unwrap the model
+    core, lm_head = unwrap_model(model)
+
+    # ---- hard-reset any existing hooks so stale ones don't fire ----
+    def _clear_all_hooks(mod):
+        for m in mod.modules():
+            if hasattr(m, "_forward_hooks"): m._forward_hooks.clear()
+            if hasattr(m, "_forward_pre_hooks"): m._forward_pre_hooks.clear()
+            if hasattr(m, "_forward_hooks_with_kwargs"): m._forward_hooks_with_kwargs.clear()
+            if hasattr(m, "_forward_pre_hooks_with_kwargs"): m._forward_pre_hooks_with_kwargs.clear()
+
+    _clear_all_hooks(core)
+    if lm_head is not None:
+        _clear_all_hooks(lm_head)
+
     token_idx = 0
-    decoder_outputs = defaultdict(lambda: defaultdict(dict))
-    decoder_inputs = defaultdict(lambda: defaultdict(dict))
+    decoder_outputs: Dict[str, Dict[str, torch.Tensor]] = defaultdict(dict)
+    decoder_inputs:  Dict[str, Dict[str, torch.Tensor]] = defaultdict(dict)
     decoder_hooks = []
 
-    # Function to generate timestamp (token index)
-    def get_timestamp():
+    def ts() -> str:
         return str(token_idx)
 
-    # Hook functions to capture input embedding
-    def hook_fn_decoder_embedding(module, input, output):
-        global token_idx
-        timestamp = get_timestamp()
-        decoder_outputs[timestamp]['decoder_embeddings'] = output.detach().clone()
+    # ---- helpers ----
+    def first_tensor(args, kwargs, prefer_key=None):
+        if prefer_key is not None and isinstance(kwargs, dict):
+            v = kwargs.get(prefer_key, None)
+            if torch.is_tensor(v): return v
+        if isinstance(args, (tuple, list)) and len(args) and torch.is_tensor(args[0]):
+            return args[0]
+        if isinstance(kwargs, dict):
+            for v in kwargs.values():
+                if torch.is_tensor(v): return v
+                if isinstance(v, (tuple, list)):
+                    for it in v:
+                        if torch.is_tensor(it): return it
+        return None
 
-    # Simplified hook function that stores only necessary outputs
-    def hook_fn_decoder_normalized_hidden_states(module, input, output, layer_index):
-        global token_idx
-        timestamp = get_timestamp()
-        decoder_outputs[timestamp][f'decoder_layer_norm_{layer_index}_0'] = output.detach().clone()
+    def clone(x):
+        return x.detach().clone() if torch.is_tensor(x) else x
 
-    def hook_fn_decoder_self_attention_outputs(module, input, output, layer_index):
-        global token_idx
-        timestamp = get_timestamp()
-        decoder_outputs[timestamp][f'decoder_self_attention_{layer_index}'] = output[0].detach().clone()
+    def get_tensor(d, key):
+        if d is None or key is None: return None
+        x = d.get(key, None)
+        if isinstance(x, (tuple, list)): x = x[0]
+        if torch.is_tensor(x) or isinstance(x, np.ndarray): return x
+        return None
 
-    # Feed-Forward Hook Functions
-    def hook_fn_decoder_normalized_forwarded_states(module, input, output, layer_index):
-        global token_idx
-        timestamp = get_timestamp()
-        decoder_outputs[timestamp][f'decoder_layer_norm_{layer_index}_1'] = output.detach().clone()
+    def to_torch_like(x, ref):
+        if torch.is_tensor(x): return x
+        if isinstance(x, np.ndarray):
+            return torch.as_tensor(x, dtype=ref.dtype, device=ref.device)
+        return None
 
-    def hook_fn_decoder_forwarded_states(module, input, output, layer_index):
-        global token_idx
-        timestamp = get_timestamp()
-        decoder_outputs[timestamp][f'decoder_feed_forward_{layer_index}'] = output[0].detach().clone()
+    # ---- hooks (JetMoE names: embed_tokens, layers[i].self_attention, etc.) ----
+    def pre_emb(m, a, kw):
+        x = first_tensor(a, kw, prefer_key="input_ids")
+        if x is not None: decoder_inputs[ts()]["decoder_embeddings"] = clone(x)
 
+    def post_emb(m, a, kw, out):
+        decoder_outputs[ts()]["decoder_embeddings"] = clone(out)
 
-    # Custom hooks to calculate residuals
-    def hook_fn_decoder_residual_self_attention(layer_index):
-        def hook(module, input, output):
-            global token_idx
-            timestamp = get_timestamp()
-            input_to_layer_norm = decoder_outputs[timestamp][f'decoder_layer_norm_{layer_index}_0']
+    def pre_ln0(i):
+        key = f"decoder_layer_norm_{i}_0"
+        def _h(m, a, kw):
+            x = first_tensor(a, kw, prefer_key="hidden_states")
+            if x is not None: decoder_inputs[ts()][key] = clone(x)
+        return _h
 
-            if isinstance(output, tuple):
-                output = output[0]
+    def post_ln0(i):
+        key = f"decoder_layer_norm_{i}_0"
+        def _h(m, a, kw, out):
+            decoder_outputs[ts()][key] = clone(out)
+        return _h
 
-            decoder_outputs[timestamp][f'decoder_residual_self_attention_{layer_index}'] = (input_to_layer_norm + output).detach().clone()
-        return hook
+    def pre_attn(i):
+        key = f"decoder_self_attention_{i}"
+        def _h(m, a, kw):
+            x = first_tensor(a, kw, prefer_key="hidden_states")
+            if x is not None: decoder_inputs[ts()][key] = clone(x)
+        return _h
 
-    def hook_fn_decoder_residual_feed_forward(layer_index):
-        def hook(module, input, output):
-            global token_idx
-            timestamp = get_timestamp()
-            input_to_ff_layer_norm = decoder_outputs[timestamp][f'decoder_layer_norm_{layer_index}_1']
+    def post_attn(i):
+        key = f"decoder_self_attention_{i}"
+        def _h(m, a, kw, out):
+            out0 = out[0] if isinstance(out, (tuple, list)) else out
+            decoder_outputs[ts()][key] = clone(out0)
+        return _h
 
-            if isinstance(output, tuple):
-                output = output[0]
+    def pre_ln1(i):
+        key = f"decoder_layer_norm_{i}_1"
+        def _h(m, a, kw):
+            x = first_tensor(a, kw, prefer_key="hidden_states")
+            if x is not None: decoder_inputs[ts()][key] = clone(x)
+        return _h
 
-            decoder_outputs[timestamp][f'decoder_residual_feed_forward_{layer_index}'] = (input_to_ff_layer_norm + output).detach().clone()
-        return hook
+    def post_ln1(i):
+        key = f"decoder_layer_norm_{i}_1"
+        def _h(m, a, kw, out):
+            decoder_outputs[ts()][key] = clone(out)
+        return _h
 
-    # Hook for Final Layer normalization and dropout for Decoder
-    def hook_fn_normalized_decoder_output(module, input, output):
-        global token_idx
-        timestamp = get_timestamp()
-        decoder_outputs[timestamp]['decoder_layer_norm'] = output.detach().clone()
+    def pre_mlp(i):
+        key = f"decoder_feed_forward_{i}"
+        def _h(m, a, kw):
+            x = first_tensor(a, kw, prefer_key="hidden_states")
+            if x is not None: decoder_inputs[ts()][key] = clone(x)
+        return _h
 
-    # Hook for the Decoder LM-Head
-    def hook_fn_lm_head(module, input, output):
-        global token_idx
-        timestamp = get_timestamp()
-        decoder_outputs[timestamp]['decoder_lm_head'] = output.detach().clone()
+    def post_mlp(i):
+        key = f"decoder_feed_forward_{i}"
+        def _h(m, a, kw, out):
+            out0 = out[0] if isinstance(out, (tuple, list)) else out
+            decoder_outputs[ts()][key] = clone(out0)
+        return _h
 
-    # Register hook for embedding
-    decoder_hooks.append(model.model.embed_tokens.register_forward_hook(hook_fn_decoder_embedding))
+    # Residual captures
+    def post_residual_attn(i):
+        key     = f"decoder_residual_self_attention_{i}"
+        ln0_key = f"decoder_layer_norm_{i}_0"
+        att_key = f"decoder_self_attention_{i}"
+        def _h(m, a, kw, out):
+            t = ts()
+            branch = out[0] if isinstance(out, (tuple, list)) else out
+            skip = get_tensor(decoder_outputs[t], ln0_key)
+            if skip is None:
+                skip = get_tensor(decoder_inputs[t], att_key)
+            if skip is None:
+                skip = torch.zeros_like(branch)
+            skip = to_torch_like(skip, branch)
+            decoder_outputs[t][key] = clone(skip + branch)
+        return _h
 
-    # Register hooks to the decoder submodules
-    for i, layer in enumerate(model.model.layers):
-        decoder_hooks.append(layer.input_layernorm.register_forward_hook(lambda module, input, output, i=i: hook_fn_decoder_normalized_hidden_states(module, input, output, layer_index=i)))
-        decoder_hooks.append(layer.self_attention.register_forward_hook(lambda module, input, output, i=i: hook_fn_decoder_self_attention_outputs(module, input, output, layer_index=i)))
-        decoder_hooks.append(layer.self_attention.register_forward_hook(hook_fn_decoder_residual_self_attention(i)))
+    def post_residual_mlp(i):
+        key     = f"decoder_residual_feed_forward_{i}"
+        ln1_key = f"decoder_layer_norm_{i}_1"
+        mlp_key = f"decoder_feed_forward_{i}"
+        def _h(m, a, kw, out):
+            t = ts()
+            branch = out[0] if isinstance(out, (tuple, list)) else out
+            skip = get_tensor(decoder_outputs[t], ln1_key)
+            if skip is None:
+                skip = get_tensor(decoder_inputs[t], mlp_key)
+            if skip is None:
+                skip = torch.zeros_like(branch)
+            skip = to_torch_like(skip, branch)
+            decoder_outputs[t][key] = clone(skip + branch)
+        return _h
 
-        # Feed-Forward Block Hooks
-        decoder_hooks.append(layer.post_attention_layernorm.register_forward_hook(lambda module, input, output, i=i: hook_fn_decoder_normalized_forwarded_states(module, input, output, layer_index=i)))
-        decoder_hooks.append(layer.mlp.register_forward_hook(lambda module, input, output, i=i: hook_fn_decoder_forwarded_states(module, input, output, layer_index=i)))
-        decoder_hooks.append(layer.mlp.register_forward_hook(hook_fn_decoder_residual_feed_forward(i)))
+    def pre_final_ln(m, a, kw):
+        x = first_tensor(a, kw, prefer_key="hidden_states")
+        if x is not None: decoder_inputs[ts()]["decoder_layer_norm"] = clone(x)
 
-    decoder_hooks.append(model.model.norm.register_forward_hook(hook_fn_normalized_decoder_output))
-    decoder_hooks.append(model.lm_head.register_forward_hook(hook_fn_lm_head))
+    def post_final_ln(m, a, kw, out):
+        decoder_outputs[ts()]["decoder_layer_norm"] = clone(out)
 
-    # Function to increment token_idx
-    def increment_token_idx():
-        global token_idx
+    def pre_lm(m, a, kw):
+        x = first_tensor(a, kw, prefer_key="hidden_states")
+        if x is None and isinstance(a, (tuple, list)) and len(a) and torch.is_tensor(a[0]):
+            x = a[0]
+        if x is not None: decoder_inputs[ts()]["decoder_lm_head"] = clone(x)
+
+    def post_lm(m, a, kw, out):
+        decoder_outputs[ts()]["decoder_lm_head"] = clone(out)
+
+    # ---- register hooks ----
+    decoder_hooks.append(core.embed_tokens.register_forward_pre_hook(pre_emb, with_kwargs=True))
+    decoder_hooks.append(core.embed_tokens.register_forward_hook(post_emb, with_kwargs=True))
+
+    for i, layer in enumerate(core.layers):
+        decoder_hooks.append(layer.input_layernorm.register_forward_pre_hook(pre_ln0(i), with_kwargs=True))
+        decoder_hooks.append(layer.input_layernorm.register_forward_hook(post_ln0(i), with_kwargs=True))
+
+        # JetMoE uses 'self_attention'
+        decoder_hooks.append(layer.self_attention.register_forward_pre_hook(pre_attn(i), with_kwargs=True))
+        decoder_hooks.append(layer.self_attention.register_forward_hook(post_attn(i), with_kwargs=True))
+        decoder_hooks.append(layer.self_attention.register_forward_hook(post_residual_attn(i), with_kwargs=True))
+
+        decoder_hooks.append(layer.post_attention_layernorm.register_forward_pre_hook(pre_ln1(i), with_kwargs=True))
+        decoder_hooks.append(layer.post_attention_layernorm.register_forward_hook(post_ln1(i), with_kwargs=True))
+
+        decoder_hooks.append(layer.mlp.register_forward_pre_hook(pre_mlp(i), with_kwargs=True))
+        decoder_hooks.append(layer.mlp.register_forward_hook(post_mlp(i), with_kwargs=True))
+        decoder_hooks.append(layer.mlp.register_forward_hook(post_residual_mlp(i), with_kwargs=True))
+
+    decoder_hooks.append(core.norm.register_forward_pre_hook(pre_final_ln, with_kwargs=True))
+    decoder_hooks.append(core.norm.register_forward_hook(post_final_ln, with_kwargs=True))
+    if lm_head is not None:
+        decoder_hooks.append(lm_head.register_forward_pre_hook(pre_lm, with_kwargs=True))
+        decoder_hooks.append(lm_head.register_forward_hook(post_lm, with_kwargs=True))
+
+    # ---- generation (greedy) ----
+    def tick():
+        nonlocal token_idx
         token_idx += 1
 
-    encoding = tokenizer(input_text, return_tensors="pt")
-    input_ids = encoding["input_ids"]
-    model = model.to(device)
-    input_ids = input_ids.to(device)
+    enc = tokenizer(input_text, return_tensors="pt")
+    input_ids = enc["input_ids"].to(device)
+    model = model.to(device).eval()
 
-    # Reset token_idx before generating
-    token_idx = 0
     if max_length is None:
-        max_length = model.config.max_position_embeddings
-    
-    generated_tokens = []
-    
-    for _ in range(max_length):
-        outputs = model(input_ids=input_ids)
-        next_token_logits = outputs.logits[:, -1, :]
-        next_token_id = next_token_logits.argmax(dim=-1, keepdim=True)
-        generated_tokens.append(next_token_id.item())
-        input_ids = torch.cat([input_ids, next_token_id], dim=-1)
-        increment_token_idx()
+        max_length = getattr(model.config, "max_position_embeddings", 2048)
 
-        if next_token_id.item() == model.config.eos_token_id:
-            break
-    
-    # Deregister hooks
-    for handle in decoder_hooks:
-        handle.remove()
-        
-    return decoder_outputs, generated_tokens
+    B = input_ids.shape[0]
+    generated_tokens: List[List[int]] = [[] for _ in range(B)]
+    done = torch.zeros(B, dtype=torch.bool, device=device)
+    eos_id = getattr(model.config, "eos_token_id", None)
+
+    try:
+        with torch.no_grad():
+            for _ in range(max_length):
+                outputs = model(input_ids=input_ids)
+                next_token_logits = outputs.logits[:, -1, :]
+                next_token_id = next_token_logits.argmax(dim=-1, keepdim=True)
+
+                for b in range(B):
+                    if not done[b]:
+                        tok = next_token_id[b].item()
+                        generated_tokens[b].append(tok)
+                        if (eos_id is not None) and (tok == eos_id):
+                            done[b] = True
+
+                input_ids = torch.cat([input_ids, next_token_id], dim=-1)
+                tick()
+
+                if bool(done.all()):
+                    break
+    finally:
+        for h in decoder_hooks:
+            try:
+                h.remove()
+            except Exception:
+                pass
+
+    return decoder_outputs, decoder_inputs, generated_tokens

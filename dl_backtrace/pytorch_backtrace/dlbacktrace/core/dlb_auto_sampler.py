@@ -383,8 +383,8 @@ class DLBAutoSampler:
         # Non-beam path (B=1)
         # ======================
         if num_beams < 2:
-            generated = self._as_long(input_ids.clone())
-            attn = self._as_long(attention_mask.clone())
+            generated = self._as_long(input_ids.clone()).to(device)
+            attn = self._as_long(attention_mask.clone()).to(device)
             scores_trace = [] if return_scores else None
             relevance_trace = [] if return_relevance else None
             io_data_trace = [] if return_layerwise_output else None
@@ -394,10 +394,14 @@ class DLBAutoSampler:
                 # Ask DLB for logits (B=1)
                 io_data = self.dlb.predict(generated, attn, debug=False, temperature=1.0)
                 logits = self._extract_last_logits(io_data)        # [1, T_cur, V]
+                if logits.device != device:
+                    logits = logits.to(device)
                 next_logits = self._as_float(logits[:, -1, :])     # Float for processors
 
                 # processors
                 scores = logits_processor(self._as_long(generated), next_logits)
+                if scores.device != device:
+                    scores = scores.to(device)
 
                 # enforce min_new_tokens by masking EOS until allowed
                 if min_new_tokens is not None and (generated.shape[1] - start_len) < min_new_tokens and eos_list:
@@ -410,6 +414,9 @@ class DLBAutoSampler:
                     next_tokens = torch.multinomial(probs, num_samples=1)  # LongTensor
                 else:
                     next_tokens = scores.argmax(dim=-1, keepdim=True)      # LongTensor
+
+                # 🔑 force to same device as `generated`
+                next_tokens = self._as_long(next_tokens).to(device)
 
                 if return_scores:
                     scores_trace.append(scores.detach().to("cpu"))
@@ -433,7 +440,7 @@ class DLBAutoSampler:
                     # rel_scalar = self._summarize_relevance(rel_dict)
                     relevance_trace.append(rel_dict)
 
-                generated = torch.cat([generated, self._as_long(next_tokens)], dim=1)
+                generated = torch.cat([generated, next_tokens], dim=1) 
                 attn = torch.cat(
                     [attn, torch.ones((1, 1), dtype=attn.dtype, device=attn.device)],
                     dim=1,
@@ -483,7 +490,7 @@ class DLBAutoSampler:
         beam_scorer = BeamSearchScorer(
             batch_size=1,
             num_beams=beams,
-            device=device,
+            device=device,                    # stays on same device
             length_penalty=length_penalty,
             do_early_stopping=do_early_stopping,  # bool
             num_beam_hyps_to_keep=1,              # keep only the best hypothesis
@@ -491,13 +498,13 @@ class DLBAutoSampler:
         )
 
         # Expand seeds for bookkeeping (DLB called per-beam)
-        generated = self._as_long(input_ids.expand(beams, -1).contiguous())  # [beams, T]
-        attn = self._as_long(attention_mask.expand(beams, -1).contiguous())
+        generated = self._as_long(input_ids.expand(beams, -1).contiguous()).to(device)   # <— ensure device
+        attn = self._as_long(attention_mask.expand(beams, -1).contiguous()).to(device)   # <— ensure device
 
         # Local beam scores
         beam_scores = torch.zeros((1, beams), dtype=torch.float32, device=device)
         beam_scores[:, 1:] = -1e9
-        beam_scores = beam_scores.view(-1)  # [beams]
+        beam_scores = beam_scores.view(-1).to(device)   # [beams] on device
 
         cur_len = start_len
         vocab_size = None
@@ -534,45 +541,53 @@ class DLBAutoSampler:
                 if return_layerwise_output:
                     io_data_step.append(io_b)
 
-                logits_b = self._extract_last_logits(io_b)         # [1, T_cur, V]
-                nl_b = self._as_float(logits_b[:, -1, :])          # [1, V]
+                logits_b = self._extract_last_logits(io_b)          # [1, T_cur, V]
+                if logits_b.device != device:                        # <— normalize device
+                    logits_b = logits_b.to(device)
+                nl_b = self._as_float(logits_b[:, -1, :])           # [1, V] float on device
                 next_logits_list.append(nl_b)
                 if vocab_size is None:
                     vocab_size = nl_b.size(-1)
 
             if return_layerwise_output:
-                io_data_trace_beam.append(io_data_step)  # <— per-step, per-beam list
+                io_data_trace_beam.append(io_data_step)              # per-step, per-beam
 
-            next_logits = torch.cat(next_logits_list, dim=0)       # [beams, V]
+            next_logits = torch.cat(next_logits_list, dim=0)         # [beams, V] on device
 
             # processors (no warpers in deterministic beam)
             scores = logits_processor(self._as_long(generated), next_logits)
+            if scores.device != device:
+                scores = scores.to(device)
 
             # mask EOS until min_new_tokens is satisfied
             if min_new_tokens is not None and (cur_len - start_len) < min_new_tokens and eos_list:
                 scores[:, eos_list] = -1e9
 
             # convert to log-prob and add previous beam scores
-            next_token_scores = F.log_softmax(scores, dim=-1)      # [beams, V]
-            next_token_scores = next_token_scores + beam_scores[:, None]
+            next_token_scores = F.log_softmax(scores, dim=-1)        # [beams, V]
+            next_token_scores = next_token_scores + beam_scores[:, None]  # stays on device
 
             # Select top 2*beams across all (beam, vocab) pairs
-            flat = next_token_scores.view(1, beams * vocab_size)   # [1, beams*V]
+            flat = next_token_scores.view(1, beams * vocab_size)     # [1, beams*V]
             topk = min(2 * beams, beams * vocab_size)
             next_scores, next_tokens = torch.topk(flat, k=topk, dim=1)
-            next_indices = next_tokens // vocab_size
-            next_tokens = next_tokens % vocab_size
+            # all on device already, but be explicit for safety:
+            next_scores = next_scores.to(device)
+            next_tokens = next_tokens.to(device)
+
+            next_indices = (next_tokens // vocab_size).to(device)
+            next_tokens  = (next_tokens %  vocab_size).to(device)
 
             # keep the *last* top-k tensors for finalize() (shape [1, topk])
-            last_topk_tokens = self._as_long(next_tokens)
-            last_topk_indices = self._as_long(next_indices)
+            last_topk_tokens = self._as_long(next_tokens).to(device)
+            last_topk_indices = self._as_long(next_indices).to(device)
 
             # Let HF scorer decide which beams continue / finish
             beam_outputs = beam_scorer.process(
                 input_ids=self._as_long(generated),
-                next_scores=self._as_float(next_scores),
-                next_tokens=self._as_long(next_tokens),
-                next_indices=self._as_long(next_indices),
+                next_scores=self._as_float(next_scores).to(device),
+                next_tokens=self._as_long(next_tokens).to(device),
+                next_indices=self._as_long(next_indices).to(device),
                 pad_token_id=PAD,
                 eos_token_id=eos_list if eos_list else None,
                 beam_indices=None,
@@ -582,20 +597,21 @@ class DLBAutoSampler:
                 scores_trace_beam.append(next_scores.detach().to("cpu"))
 
             # Rebuild the new beam batch using public keys
-            next_beam_scores = beam_outputs["next_beam_scores"]      # [beams]
-            next_beam_tokens = beam_outputs["next_beam_tokens"]      # [beams]
-            next_beam_indices = beam_outputs["next_beam_indices"]    # [beams]
+            next_beam_scores = beam_outputs["next_beam_scores"].to(device)   # [beams]
+            next_beam_tokens = beam_outputs["next_beam_tokens"].to(device)   # [beams]
+            next_beam_indices = beam_outputs["next_beam_indices"].to(device) # [beams]
 
             generated = torch.cat(
-                [generated[self._as_long(next_beam_indices), :], self._as_long(next_beam_tokens).unsqueeze(-1)],
+                [generated[self._as_long(next_beam_indices), :],
+                self._as_long(next_beam_tokens).unsqueeze(-1).to(device)],
                 dim=1,
             )
             attn = torch.cat(
                 [attn[self._as_long(next_beam_indices), :],
-                 torch.ones((beams, 1), dtype=attn.dtype, device=attn.device)],
+                torch.ones((beams, 1), dtype=attn.dtype, device=attn.device)],
                 dim=1,
             )
-            beam_scores = self._as_float(next_beam_scores)
+            beam_scores = self._as_float(next_beam_scores).to(device)
             cur_len += 1
 
             if return_relevance:
@@ -609,7 +625,7 @@ class DLBAutoSampler:
                         temperature=1.0,
                     )
 
-                    chosen_tok_b = next_beam_tokens[b:b+1]  # tensor([token_id])
+                    chosen_tok_b = next_beam_tokens[b:b+1]  # tensor([token_id]) on device
                     rel_dict_b = self._compute_relevance(
                         target_token_ids=chosen_tok_b,
                         mode="default",
@@ -619,7 +635,6 @@ class DLBAutoSampler:
                         task="generation",
                         debug=False,
                     )
-                    # rel_scalar_b = self._summarize_relevance(rel_dict_b)
                     step_rel_scores.append(rel_dict_b)
 
                 relevance_trace_beam.append(step_rel_scores)
@@ -638,29 +653,26 @@ class DLBAutoSampler:
         if debug:
             print(f"[beam] stopped_by={stopped_by}")
 
-        # Safety: if loop never ran (shouldn't happen with positive max_new_tokens), guard shapes
+        # Safety: if loop never ran, guard shapes
         if last_topk_tokens is None or last_topk_indices is None:
-            # create minimal placeholders to satisfy older finalize signatures
             last_topk_tokens = torch.zeros((1, 1), dtype=torch.long, device=device)
             last_topk_indices = torch.zeros((1, 1), dtype=torch.long, device=device)
 
         # Finalize across HF versions:
         try:
-            # Newer signature requiring final_beam_* tensors
             final = beam_scorer.finalize(
                 input_ids=self._as_long(generated),
-                final_beam_scores=self._as_float(beam_scores),
-                final_beam_tokens=last_topk_tokens,
-                final_beam_indices=last_topk_indices,
+                final_beam_scores=self._as_float(beam_scores).to(device),
+                final_beam_tokens=last_topk_tokens.to(device),
+                final_beam_indices=last_topk_indices.to(device),
                 pad_token_id=PAD,
                 eos_token_id=eos_list if eos_list else None,
                 max_length=max_len_for_beam,
             )
         except TypeError:
-            # Older signature without final_beam_* tensors
             final = beam_scorer.finalize(
                 input_ids=self._as_long(generated),
-                final_beam_scores=self._as_float(beam_scores),
+                final_beam_scores=self._as_float(beam_scores).to(device),
                 pad_token_id=PAD,
                 eos_token_id=eos_list if eos_list else None,
                 max_length=max_len_for_beam,
@@ -673,24 +685,21 @@ class DLBAutoSampler:
         if not want_extras:
             return out_top1
 
-
         info_beam = {}
         if return_scores:
             info_beam["scores_trace"] = scores_trace_beam
         if return_relevance:
-            # relevance_trace_beam is:
-            #   [
-            #     [rel_beam0_at_step0, rel_beam1_at_step0, ...],
-            #     [rel_beam0_at_step1, rel_beam1_at_step1, ...],
-            #      ...
-            #   ]
-            info_beam["relevance_trace"] = relevance_trace_beam
+            # collapse to top-1 beam (final winner)
+            flat_relevance = [
+                step_rels[0] if isinstance(step_rels, (list, tuple)) and len(step_rels) > 0 else {}
+                for step_rels in relevance_trace_beam
+            ]
+            info_beam["relevance_trace"] = flat_relevance
         if return_layerwise_output:
-            # io_data_trace_beam is:
-            # [
-            #     [io_b_step0_beam0, io_b_step0_beam1, ...],
-            #     [io_b_step1_beam0, io_b_step1_beam1, ...],
-            #     ...
-            # ] 
-            info_beam["layerwise_output_trace"] = io_data_trace_beam 
+            # collapse to top-1 beam (final winner)
+            flat_io_trace = [
+                step_ios[0] if isinstance(step_ios, (list, tuple)) and len(step_ios) > 0 else {}
+                for step_ios in io_data_trace_beam
+            ]
+            info_beam["layerwise_output_trace"] = flat_io_trace
         return out_top1, info_beam

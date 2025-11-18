@@ -1,9 +1,15 @@
 import numpy as np
 import torch
 from collections import defaultdict
+from .model_utils import unwrap_model
 
 
-def build_qwen_tree(model, root='qwen_moe'):
+def build_qwen3_moe_tree(model, root='qwen_moe'):
+    """Build tree for Qwen3 MoE model (supports wrapped models)."""
+    
+    # Unwrap the model to find the core transformer
+    core, lm_head = unwrap_model(model)
+    
     # Initialize the tree structure
     ltree = {}
     layer_tree = {}
@@ -55,7 +61,7 @@ def build_qwen_tree(model, root='qwen_moe'):
 
     # Add `qwen_moe` layers dynamically
     current_child = 'decoder_embeddings'
-    for i, layer in enumerate(model.model.layers):
+    for i, layer in enumerate(core.layers):
         decoder_layer_norm_0 = add_component(ltree, f'decoder_layer_norm_{i}_0', 'Layer_Norm', child=current_child)
         decoder_self_attention = add_component(ltree, f'decoder_self_attention_{i}', 'Grouped_Query_Attention', child=f'decoder_layer_norm_{i}_0')
         decoder_residual_self_attention = add_component(ltree, f'decoder_residual_self_attention_{i}', 'Residual', child=[current_child, f'decoder_self_attention_{i}'])
@@ -66,12 +72,12 @@ def build_qwen_tree(model, root='qwen_moe'):
 
         current_child = f'decoder_residual_feed_forward_{i}'
 
-    if hasattr(model.model, 'norm'):
+    if hasattr(core, 'norm'):
         decoder_final_layer_norm = add_component(ltree, 'decoder_layer_norm', 'Layer_Norm', child=current_child)
         current_child = 'decoder_layer_norm'
 
     # Decoder LM-Head
-    if hasattr(model, 'lm_head'):
+    if lm_head is not None:
         decoder_lm_head = add_component(ltree, 'decoder_lm_head', 'LM_Head', child=current_child)
         current_child = 'decoder_lm_head'
 
@@ -98,7 +104,15 @@ def build_qwen_tree(model, root='qwen_moe'):
     return model_resource, layer_stack
 
 
-def extract_qwen_weights(model):
+def extract_qwen3_moe_weights(model):
+    """Extract weights from Qwen3 MoE model (supports wrapped models)."""
+    
+    # Unwrap the model
+    core, lm_head = unwrap_model(model)
+    
+    # Get config from the core model
+    config = core.config if hasattr(core, 'config') else model.config
+    
     # Initialize a dictionary to hold the weights
     weights_dict = {
         'decoder_embeddings': {},
@@ -107,25 +121,25 @@ def extract_qwen_weights(model):
     }
 
     # Loop through the layers to initialize the weight dictionaries for each
-    for i in range(model.config.num_hidden_layers):
+    for i in range(config.num_hidden_layers):
         weights_dict[f'decoder_layer_norm_{i}_0'] = {}
         weights_dict[f'decoder_self_attention_{i}'] = {}
         weights_dict[f'decoder_layer_norm_{i}_1'] = {}
         weights_dict[f'decoder_feed_forward_{i}'] = {}
 
-    for layer in range(model.config.num_hidden_layers):
-        for expert_id in range(model.config.num_experts):
+    for layer in range(config.num_hidden_layers):
+        for expert_id in range(config.num_experts):
             weights_dict[f'decoder_feed_forward_{layer}'][f'{expert_id}'] = {}
-            # weights_dict[f'decoder_feed_forward_{layer}'][f'gate_proj_{expert_id}'] = {}
-            # weights_dict[f'decoder_feed_forward_{layer}'][f'up_proj_{expert_id}'] = {}
-            # weights_dict[f'decoder_feed_forward_{layer}'][f'down_proj_{expert_id}'] = {}
-
+            
+    # Helper to safely convert params to numpy
+    def to_np(p):
+        if isinstance(p, torch.Tensor):
+            return p.detach().cpu().numpy()
+        return p
+    
     # Extract the model's parameters and organize them into the dictionary
     for name, param in model.named_parameters():
-        if isinstance(param, torch.Tensor):
-            param_np = param.data.numpy()
-        else:
-            param_np = param
+        param_np = to_np(param)
 
         if 'embed_tokens' in name:
             weights_dict['decoder_embeddings'][name] = param_np
@@ -162,15 +176,17 @@ def extract_qwen_weights(model):
         elif 'norm.weight' in name:
             weights_dict['decoder_layer_norm'][name] = param_np
 
-    if hasattr(model, 'lm_head'):
-        lm_head_weights = model.lm_head.weight.data.numpy()
-        weights_dict['decoder_lm_head']['lm_head.weight'] = lm_head_weights
+    if lm_head is not None and hasattr(lm_head, 'weight'):
+        weights_dict['decoder_lm_head']['lm_head.weight'] = to_np(lm_head.weight.data) 
 
     return weights_dict
 
 
-def create_qwen_output(input_text, model, tokenizer, max_length, device):
-    core = getattr(model, "model", model)
+def create_qwen3_moe_output(input_text, model, tokenizer, max_length, device):
+    """Create outputs for Qwen3 MoE model (supports wrapped models)."""
+    
+    # Unwrap the model
+    core, lm_head = unwrap_model(model)
 
     # ---- hard-reset any existing hooks so stale ones don't fire ----
     def _clear_all_hooks(mod):
@@ -180,8 +196,8 @@ def create_qwen_output(input_text, model, tokenizer, max_length, device):
             if hasattr(m, "_forward_hooks_with_kwargs"): m._forward_hooks_with_kwargs.clear()
             if hasattr(m, "_forward_pre_hooks_with_kwargs"): m._forward_pre_hooks_with_kwargs.clear()
     _clear_all_hooks(core)
-    if hasattr(model, "lm_head"):
-        _clear_all_hooks(model.lm_head)
+    if lm_head is not None:
+        _clear_all_hooks(lm_head)
 
     token_idx = 0
     # Use plain dicts inside; no silent {} creation
@@ -346,9 +362,9 @@ def create_qwen_output(input_text, model, tokenizer, max_length, device):
 
     decoder_hooks.append(core.norm.register_forward_pre_hook(pre_final_ln, with_kwargs=True))
     decoder_hooks.append(core.norm.register_forward_hook(post_final_ln, with_kwargs=True))
-    if hasattr(model, "lm_head"):
-        decoder_hooks.append(model.lm_head.register_forward_pre_hook(pre_lm, with_kwargs=True))
-        decoder_hooks.append(model.lm_head.register_forward_hook(post_lm, with_kwargs=True))
+    if lm_head is not None:
+        decoder_hooks.append(lm_head.register_forward_pre_hook(pre_lm, with_kwargs=True))
+        decoder_hooks.append(lm_head.register_forward_hook(post_lm, with_kwargs=True))
 
     # ---- generation (ensure hooks are removed even on error) ----
     def tick():
