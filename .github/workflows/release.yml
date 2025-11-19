@@ -15,4 +15,4 @@ jobs:
       - name: Create new release
         run: .github/scripts/release.py
         env:
-          GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
