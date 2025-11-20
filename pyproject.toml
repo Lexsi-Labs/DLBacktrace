@@ -2,6 +2,33 @@
 requires = ["setuptools>=60", "setuptools_scm>=8"]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "dl-backtrace"
+description = "Deep learning backtracing and explainability toolkit"
+readme = "README.md"
+
+# IMPORTANT: torch/torchvision must NOT use CUDA-specific tags on PyPI.
+dependencies = [
+    "torch==2.6.0",
+    "torchvision==0.21.0",
+    "transformers==4.52.3",
+    "huggingface-hub",
+    "lz4",
+    "matplotlib",
+    "seaborn",
+    "threadpoolctl",
+    "ninja",
+    "ipykernel",
+    "ipywidgets",
+    "joblib",
+    "zstandard",
+    "graphviz",
+    "tqdm",
+    "scikit-image",
+    "lime",
+    "tensorflow"
+]
+
 [tool.setuptools_scm]
 version_scheme = "guess-next-dev"
 local_scheme = "no-local-version"
