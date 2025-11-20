@@ -27,6 +27,16 @@ dependencies = [
     "tensorflow"
 ]
 
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cu126" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
 [tool.setuptools_scm]
 version_scheme = "guess-next-dev"
 local_scheme = "no-local-version"
