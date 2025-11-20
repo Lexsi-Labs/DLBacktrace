@@ -8,7 +8,7 @@ description = "Deep learning backtracing and explainability toolkit"
 readme = "README.md"
 
 dependencies = [
-    "torch==2.6.0",
+    "torch==2.6.0 @ https://download.pytorch.org/whl/cu126",
     "transformers==4.52.3",
     "huggingface-hub",
     "lz4",
@@ -26,16 +26,6 @@ dependencies = [
     "lime",
     "tensorflow"
 ]
-
-[tool.uv.sources]
-torch = [
-  { index = "pytorch-cu126" },
-]
-
-[[tool.uv.index]]
-name = "pytorch-cu126"
-url = "https://download.pytorch.org/whl/cu126"
-explicit = true
 
 [tool.setuptools_scm]
 version_scheme = "guess-next-dev"
