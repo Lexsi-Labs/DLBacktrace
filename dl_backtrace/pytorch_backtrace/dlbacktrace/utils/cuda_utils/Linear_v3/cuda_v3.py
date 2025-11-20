@@ -309,18 +309,6 @@ torch::Tensor launch_calculate_wt_fc_kernel(
 );
 """
 
-def get_cuda_arch_flags():
-    """
-    Generate NVCC architecture flags for the current CUDA device.
-    Returns an empty list if CUDA is not available.
-    """
-    if not torch.cuda.is_available():
-        return []
-    
-    major, minor = torch.cuda.get_device_capability()
-    arch_flag = f"--generate-code=arch=compute_{major}{minor},code=sm_{major}{minor}"
-    return [arch_flag]
-
 extra_flags = [
     '-O3', 
     '--use_fast_math', 
@@ -328,8 +316,6 @@ extra_flags = [
     # '-Xptxas', '-dlcm=cg',
     # '-Xptxas', '-dscm=wt',
 ]
-
-extra_flags.extend(get_cuda_arch_flags())
 
 custom_linear_layer_cuda_ops = load_inline(
     name="linear_layer_cuda_v3",
