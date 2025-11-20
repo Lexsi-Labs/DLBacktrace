@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import subprocess
 
-default_version = "0.0.1"
+default_version = "0.1.0"
 
 def get_last_version() -> str:
     """Return the version number of the last release."""
@@ -41,7 +41,7 @@ def create_new_patch_release():
         new_version_number = bump_patch_number(last_version_number)
 
     subprocess.run(
-        ["gh", "release", "create", "--generate-notes", "0.0.20"],
+        ["gh", "release", "create", "--generate-notes","0.1.0"],
         check=True,
     )
 
