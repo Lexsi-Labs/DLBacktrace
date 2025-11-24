@@ -3,8 +3,6 @@ import re
 import torch
 import torch.nn as nn
 from tqdm import tqdm
-from dl_backtrace.moe_pytorch_backtrace.backtrace.utils import contrast as UC
-from dl_backtrace.moe_pytorch_backtrace.backtrace.utils import prop as UP
 from dl_backtrace.moe_pytorch_backtrace.backtrace.config import activation_master
 from dl_backtrace.moe_pytorch_backtrace.backtrace.core import (
     jetmoe as jetmoe,
@@ -320,11 +318,11 @@ class Backtrace(object):
 
                 elif node_class == "Residual":
                     xs = arr_list_from_keys(child_nodes)
-                    if impl == "cuda" and hasattr(UP, "calculate_wt_residual_cuda"):
-                        temp_wt = UP.calculate_wt_residual_cuda(all_wt[start_layer], xs)
+                    if impl == "cuda" and hasattr(UD2, "calculate_wt_residual_cuda"):
+                        temp_wt = UD2.calculate_wt_residual_cuda(all_wt[start_layer], xs)
                     else:
                         xs_np = [t2np32(xx) if torch.is_tensor(xx) else xx for xx in xs]
-                        temp_wt = UP.calculate_wt_residual(all_wt[start_layer], xs_np)
+                        temp_wt = UD2.calculate_wt_residual(all_wt[start_layer], xs_np)
                     for ind, ch in enumerate(child_nodes):
                         all_wt[ch] += to_np64(temp_wt[ind])
 
@@ -430,12 +428,12 @@ class Backtrace(object):
         if max_unit > 0 and scaler == 0:
             temp_dict = {}
             for k in all_wt.keys():
-                temp_dict[k] = UC.weight_normalize(all_wt[k], max_val=max_unit)
+                temp_dict[k] = UD2.weight_normalize(all_wt[k], max_val=max_unit)
             all_wt = temp_dict
         elif scaler > 0:
             temp_dict = {}
             for k in all_wt.keys():
-                temp_dict[k] = UC.weight_scaler(all_wt[k], scaler=scaler)
+                temp_dict[k] = UD2.weight_scaler(all_wt[k], scaler=scaler)
             all_wt = temp_dict
 
         # Store in instance variable (like PyTorch Backtrace)
