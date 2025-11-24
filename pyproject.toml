@@ -8,7 +8,7 @@ description = "Deep learning backtracing and explainability toolkit"
 readme = "README.md"
 
 dependencies = [
-    "torch==2.6.0 @ https://download.pytorch.org/whl/cu126",
+    "torch==2.6.0",
     "transformers==4.52.3",
     "huggingface-hub",
     "lz4",
