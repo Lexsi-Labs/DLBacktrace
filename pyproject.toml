@@ -1,12 +1,22 @@
 [build-system]
-requires = ["setuptools>=60", "setuptools_scm>=8"]
+requires = ["setuptools>=69", "setuptools_scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "dl-backtrace"
 description = "Deep learning backtracing and explainability toolkit"
 readme = "README.md"
-
+requires-python = ">=3.8"
+license = { file = "LICENSE.md" }
+authors = [{ name = "Arya.ai" }]
+keywords = ["lexsi", "arya", "ml", "observability", "backtrace"]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dynamic = ["version"]
 dependencies = [
     "torch==2.6.0",
     "transformers==4.52.3",
@@ -24,10 +34,22 @@ dependencies = [
     "tqdm",
     "scikit-image",
     "lime",
-    "tensorflow"
+    "tensorflow",
 ]
+
+[project.urls]
+Homepage = "https://xai.arya.ai/docs/introduction"
+Source = "https://github.com/arya-ai/DLBacktrace"
+Documentation = "https://xai.arya.ai/docs/introduction"
+
+[tool.setuptools]
+packages = { find = { where = ["."] } }
+
+[tool.setuptools.package-data]
+"*" = ["*.md", "*.txt"]
 
 [tool.setuptools_scm]
 version_scheme = "guess-next-dev"
 local_scheme = "no-local-version"
 write_to = "dl_backtrace/version.py"
+fallback_version = "0.1.1"
