@@ -1,6 +1,6 @@
 # Model Tracing
 
-Learn how DL-Backtrace traces PyTorch models to create computational graphs.
+Learn how DLBacktrace traces PyTorch models to create computational graphs.
 
 ---
 
@@ -27,7 +27,7 @@ Node: output (output)
 
 ### Step 1: torch.export_for_training
 
-DL-Backtrace uses PyTorch's `torch.export_for_training` to trace models:
+DLBacktrace uses PyTorch's `torch.export_for_training` to trace models:
 
 ```python
 from dl_backtrace.pytorch_backtrace import DLBacktrace
@@ -53,7 +53,7 @@ The traced graph contains:
 
 ### Step 3: Graph Building
 
-DL-Backtrace processes the traced graph:
+DLBacktrace processes the traced graph:
 
 ```python
 # Internal process
@@ -218,7 +218,7 @@ dlb = DLBacktrace(
 
 ### Symbolic Dimensions
 
-DL-Backtrace handles dynamic shapes using symbolic dimensions:
+DLBacktrace handles dynamic shapes using symbolic dimensions:
 
 ```python
 # Variable sequence length

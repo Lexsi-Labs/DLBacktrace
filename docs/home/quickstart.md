@@ -1,12 +1,12 @@
 # Quick Start
 
-Get started with DL-Backtrace in minutes! This guide will walk you through your first explainability analysis.
+Get started with DLBacktrace in minutes! This guide will walk you through your first explainability analysis.
 
 ---
 
 ## Prerequisites
 
-Make sure you have DL-Backtrace installed. If not, see the [Installation Guide](installation.md).
+Make sure you have DLBacktrace installed. If not, see the [Installation Guide](installation.md).
 
 ---
 
@@ -46,20 +46,20 @@ model = SimpleCNN(num_classes=10)
 model.eval()  # Set to evaluation mode
 ```
 
-### Step 2: Initialize DL-Backtrace
+### Step 2: Initialize DLBacktrace
 
 ```python
 # Create dummy input for graph tracing
 dummy_input = torch.randn(1, 3, 32, 32)
 
-# Initialize DL-Backtrace
+# Initialize DLBacktrace
 dlb = DLBacktrace(
     model=model,
     input_for_graph=(dummy_input,),
     device="cuda"
 )
 
-print("✅ DL-Backtrace initialized successfully!")
+print("✅ DLBacktrace initialized successfully!")
 ```
 
 ### Step 3: Run Forward Pass
@@ -171,7 +171,7 @@ from dl_backtrace.pytorch_backtrace import DLBacktrace
 model = models.resnet18(pretrained=True)
 model.eval()
 
-# Initialize DL-Backtrace
+# Initialize DLBacktrace
 dummy_input = torch.randn(1, 3, 224, 224)
 dlb = DLBacktrace(
     model=model,
@@ -220,10 +220,10 @@ model = AutoModel.from_pretrained(model_name)
 model.eval()
 
 # Prepare input
-text = "DL-Backtrace makes AI explainable!"
+text = "DLBacktrace makes AI explainable!"
 inputs = tokenizer(text, return_tensors="pt", padding=True)
 
-# Initialize DL-Backtrace
+# Initialize DLBacktrace
 dlb = DLBacktrace(
     model=model,
     input_for_graph=(inputs['input_ids'], inputs['attention_mask']),
@@ -243,76 +243,236 @@ print("✅ BERT analysis complete!")
 
 ---
 
-## Simplified Pipeline Approach
+## Simplified `run_task()` API
 
-For even faster setup, use the high-level **Pipeline** interface:
+For even faster setup, use the streamlined **`run_task()`** method that combines prediction and relevance evaluation in a single call:
 
-### Text Classification with Pipeline
-
-```python
-from dl_backtrace.pytorch_backtrace.dlbacktrace.pipeline import DLBacktracePipeline
-
-# Create pipeline with one line
-pipeline = DLBacktracePipeline.create_simple(
-    model_name="bert-base",
-    device="cpu"
-)
-
-# Run analysis with one line
-results = pipeline.run_simple_analysis(
-    "This product exceeded my expectations!",
-    label="positive"
-)
-
-print(f"Prediction: {results['predictions'][0]}")
-print(f"Relevance computed: {results['relevance_computed']}")
-```
-
-### Image Classification with Pipeline
+### Text Classification with `run_task()`
 
 ```python
-from PIL import Image
+import torch
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from dl_backtrace.pytorch_backtrace import DLBacktrace
 
-# Create pipeline
-pipeline = DLBacktracePipeline.create_simple(
-    model_name="resnet",
+# Load model and tokenizer
+model = AutoModelForSequenceClassification.from_pretrained(
+    "textattack/bert-base-uncased-SST-2"
+).eval()
+tokenizer = AutoTokenizer.from_pretrained("textattack/bert-base-uncased-SST-2")
+
+# Tokenize input
+sentences = ["This movie is fantastic!"]
+tokens = tokenizer(sentences, padding=True, truncation=True, return_tensors="pt")
+input_ids = tokens["input_ids"]
+attention_mask = tokens["attention_mask"]
+
+# Initialize DLBacktrace
+dlb = DLBacktrace(
+    model,
+    (input_ids, attention_mask),
     device="cuda"
 )
 
-# Load image and classify
-image = Image.open("cat.jpg")
-results = pipeline.run_simple_analysis(image, label="cat")
+# Run text classification - ONE CALL!
+results = dlb.run_task(
+    task="text-classification",  # or "auto" for automatic detection
+    inputs={'input_ids': input_ids, 'attention_mask': attention_mask},
+    debug=True
+)
 
-print(f"Prediction: {results['predictions'][0]}")
+# Access results
+print(f"Task: {results['task']}")
+print(f"Predictions: {results['predictions']}")
+print(f"Relevance keys: {list(results['relevance'].keys())}")
+
+# Get token-level relevance
+relevance_input_ids = results['relevance']["input_ids"]
 ```
 
-### Text Generation with Pipeline
+### Image Classification with `run_task()`
 
 ```python
-# Create pipeline for generation
-pipeline = DLBacktracePipeline.create_simple(
-    model_name="llama3.2-1b",
+import torch
+from torchvision.models import mobilenet_v2, MobileNet_V2_Weights
+from dl_backtrace.pytorch_backtrace import DLBacktrace
+
+# Load pre-trained model
+model = mobilenet_v2(weights=MobileNet_V2_Weights.IMAGENET1K_V1)
+model.eval()
+
+# Prepare input image (3, 224, 224)
+test_image = torch.randn(1, 3, 224, 224)
+
+# Initialize DLBacktrace
+dlb = DLBacktrace(
+    model,
+    input_for_graph=test_image,
     device="cuda"
 )
 
-# Generate text with relevance analysis
-results = pipeline.run_text_generation(
-    prompts=["The future of AI is"],
-    max_new_tokens=50,
-    temperature=0.8,
-    return_relevance=True
+# Run image classification - ONE CALL!
+results = dlb.run_task(
+    task="image-classification",  # or "auto"
+    inputs=test_image,
+    debug=True
 )
 
-print(f"Generated: {results['generated_texts'][0]}")
+# Access results
+print(f"Predicted class: {results['predictions'].argmax()}")
+print(f"Number of nodes: {len(results['relevance'])}")
+
+# Visualize
+dlb.visualize_dlbacktrace(output_path="mobilenet")
 ```
 
-**Pipeline Benefits:**
-- 🔧 Automatic model loading
-- ⚙️ Sensible defaults
-- 📊 Built-in result management
-- 🎯 Task-specific methods
+### Text Generation with `run_task()`
 
-[Learn more about Pipeline →](../guide/pytorch/pipeline.md)
+For standard language models (non-MoE) like Qwen, LLaMA, GPT-2:
+
+```python
+import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM
+from dl_backtrace.pytorch_backtrace import DLBacktrace
+
+# Load language model
+model_id = "Qwen/Qwen3-0.6B"
+model = AutoModelForCausalLM.from_pretrained(
+    model_id,
+    torch_dtype=torch.float32
+).eval()
+tokenizer = AutoTokenizer.from_pretrained(model_id)
+tokenizer.pad_token = tokenizer.eos_token
+
+# Tokenize input
+prompt = "What is the capital of France?"
+tokens = tokenizer(prompt, return_tensors="pt", padding=True, truncation=True)
+input_ids = tokens["input_ids"]
+attention_mask = tokens["attention_mask"]
+
+# Initialize DLBacktrace
+dlb = DLBacktrace(
+    model,
+    (input_ids, attention_mask),
+    device="cuda"
+)
+
+# Run generation - ONE CALL!
+results = dlb.run_task(
+    task="generation",
+    inputs={'input_ids': input_ids, 'attention_mask': attention_mask},
+    tokenizer=tokenizer,
+    max_new_tokens=5,
+    temperature=0.7,        # Optional: sampling
+    top_p=0.9,              # Optional: nucleus sampling
+    return_relevance=True,  # Track token relevance per step
+    return_scores=True,     # Return generation scores
+    debug=True
+)
+
+# Access results
+generated_text = tokenizer.batch_decode(results['generated_ids'], skip_special_tokens=True)
+print(f"Generated: {generated_text[0]}")
+print(f"Relevance trace steps: {len(results['relevance_trace'])}")
+
+# Visualize token-wise relevance
+dlb.visualize_tokenwise_relevance_map(
+    results['relevance_trace'],
+    input_ids,
+    tokenizer,
+    generated_ids=results['generated_ids']
+)
+```
+
+**Generation Modes Supported:**
+- 🎯 Greedy decoding (default)
+- 🎲 Sampling with temperature
+- 🔝 Top-k and top-p (nucleus) sampling
+- 🌟 Beam search with `num_beams` parameter
+
+### Text Generation with MoE Models
+
+For Mixture of Experts (MoE) models like Qwen3-MoE, GPT-OSS, JetMoE, and OLMoE:
+
+```python
+import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM
+from dl_backtrace.moe_pytorch_backtrace import Backtrace
+
+# Load MoE model
+model_id = "Qwen/Qwen3-30B-A3B"  # or "openai/gpt-oss-20b"
+model = AutoModelForCausalLM.from_pretrained(
+    model_id,
+    torch_dtype=torch.bfloat16
+).eval()
+tokenizer = AutoTokenizer.from_pretrained(model_id)
+tokenizer.pad_token = tokenizer.eos_token
+
+# Initialize MoE Backtrace
+bt = Backtrace(
+    model=model,
+    model_type='qwen3_moe',  # or 'gpt_oss', 'jetmoe', 'olmoe'
+    device="cuda"
+)
+
+# Tokenize input
+prompt = "What is the capital of France?"
+tokens = tokenizer(prompt, return_tensors="pt")
+input_ids = tokens["input_ids"].to("cuda")
+attention_mask = tokens["attention_mask"].to("cuda")
+
+# Run generation with relevance tracing - ONE CALL!
+results = bt.run_task(
+    task="generation",
+    inputs={'input_ids': input_ids, 'attention_mask': attention_mask},
+    tokenizer=tokenizer,
+    max_new_tokens=10,
+    temperature=0.7,        # Optional: sampling
+    top_p=0.9,              # Optional: nucleus sampling
+    return_relevance=True,  # Track token & expert relevance
+    return_scores=True,     # Return generation scores
+    debug=True
+)
+
+# Access results
+generated_text = tokenizer.decode(results['generated_ids'][0], skip_special_tokens=True)
+print(f"Generated: {generated_text}")
+print(f"Relevance trace steps: {len(results['relevance_trace'])}")
+
+# Access expert routing information
+expert_relevance = bt.all_layer_expert_relevance
+print(f"Expert layers tracked: {len(expert_relevance)}")
+```
+
+**MoE Generation Features:**
+- 🎯 Automatic expert routing analysis
+- 📊 Per-token relevance tracking across generation
+- 🔍 Expert-level contribution scores
+- 🚀 Supports greedy, sampling, and beam search
+
+### Supported Tasks
+
+The `run_task()` method supports:
+
+- `"text-classification"` - Sentiment analysis, text categorization
+- `"image-classification"` - Image recognition, object classification
+- `"generation"` - Text generation (both standard LMs and MoE models)
+- `"auto"` - Automatic task detection based on model output
+
+**Generation Task Features:**
+- Works with both `DLBacktrace` (standard models) and `Backtrace` (MoE models)
+- Automatic relevance tracing per generation step
+- Support for greedy, sampling (temperature, top-k, top-p), and beam search
+- Per-token relevance visualization
+- Expert routing analysis (MoE models only)
+
+### `run_task()` Benefits
+
+- ✨ **Single call**: Combines `predict()` + `evaluation()` into one
+- 🎯 **Task-aware**: Automatically configures evaluation parameters
+- 📦 **Structured output**: Consistent return format across tasks
+- 🔍 **Easy access**: Direct access to predictions and relevance
+- 🚀 **Cleaner code**: Less boilerplate, more readable
+
 
 ---
 
@@ -373,10 +533,26 @@ The visualization methods save files to your current directory:
 
 ### Task Types
 
-- `"binary-classification"`
-- `"multi-class classification"`
+- `"text-classification"` / `"binary-classification"` / `"multi-class classification"`
+- `"image-classification"`
+- `"generation"`
 - `"bbox-regression"`
 - `"binary-segmentation"`
+- `"auto"` - Automatic detection
+
+### Generation Parameters (for `task="generation"`)
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `tokenizer` | HuggingFace tokenizer | Required |
+| `max_new_tokens` | Maximum tokens to generate | `20` |
+| `temperature` | Sampling temperature (None = greedy) | `None` |
+| `top_k` | Top-k sampling | `None` |
+| `top_p` | Nucleus sampling threshold | `None` |
+| `num_beams` | Number of beams for beam search | `1` |
+| `return_relevance` | Return per-step relevance trace | `False` |
+| `return_scores` | Return per-step generation scores | `False` |
+| `return_layerwise_output` | Return per-step layer outputs | `False` |
 
 ---
 
@@ -403,9 +579,9 @@ output = sampler.generate(
 
 [Learn more →](../guide/pytorch/temperature-scaling.md)
 
-### MoE Models
+### MoEs Models
 
-Analyze Mixture of Experts models with expert-level tracking:
+Analyze Mixture-of-Experts models with expert-level tracking:
 
 ```python
 from dl_backtrace.moe_pytorch_backtrace.backtrace import Backtrace
@@ -461,10 +637,10 @@ output_beam = sampler.generate(
 Now that you've run your first example, dive deeper:
 
 ### Learn the Concepts
-- [Introduction to DL-Backtrace](../guide/introduction.md)
+- [Introduction to DLBacktrace](../guide/introduction.md)
 - [Pipeline Interface](../guide/pytorch/pipeline.md) - High-level workflows
 - [Understanding Relevance Propagation](../guide/relevance/overview.md)
-- [Execution Engines Explained](../guide/pytorch/execution-engines.md)
+- [Execution Engine Explained](../guide/pytorch/execution-engines.md)
 
 ### Explore Examples
 - [Google Colab Notebooks](../examples/colab-notebooks.md)
@@ -484,7 +660,7 @@ Now that you've run your first example, dive deeper:
     Begin with small models to understand the workflow before moving to large transformers.
 
 !!! tip "Use GPU When Available"
-    DL-Backtrace benefits significantly from GPU acceleration for large models.
+    DLBacktrace benefits significantly from GPU acceleration for large models.
 
 !!! tip "Check Model Compatibility"
     Some custom operations might not be supported yet. Check the [supported operations list](../guide/pytorch/operations.md).

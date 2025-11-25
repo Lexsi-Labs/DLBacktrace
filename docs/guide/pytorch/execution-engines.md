@@ -1,6 +1,6 @@
 # Execution Engines
 
-DL-Backtrace provides optimized execution engines for running traced models.
+DLBacktrace provides optimized execution engines for running traced models.
 
 ---
 
@@ -23,7 +23,7 @@ The **ExecutionEngineNoCache** is the recommended engine for most use cases.
 dlb = DLBacktrace(
     model=model,
     input_for_graph=(dummy_input,),
-    layer_implementation="pytorch"
+    device='cuda',
 )
 
 # Forward pass uses ExecutionEngineNoCache
@@ -181,7 +181,7 @@ See [Supported Operations](operations.md) for the complete list.
 
 ### Environment Setup
 
-DL-Backtrace automatically configures deterministic execution:
+DLBacktrace automatically configures deterministic execution:
 
 ```python
 # Set in reproducibility.py

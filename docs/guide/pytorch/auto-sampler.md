@@ -1,6 +1,6 @@
 # DLB Auto Sampler
 
-The **DLB Auto Sampler** is a powerful text generation module that integrates DL-Backtrace's explainability capabilities directly into the generation process, enabling token-by-token relevance tracking while maintaining compatibility with HuggingFace's generation API.
+The **DLB Auto Sampler** is a powerful text generation module that integrates DLBacktrace's explainability capabilities directly into the generation process, enabling token-by-token relevance tracking while maintaining compatibility with HuggingFace's generation API.
 
 ---
 
@@ -8,7 +8,7 @@ The **DLB Auto Sampler** is a powerful text generation module that integrates DL
 
 DLB Auto Sampler provides:
 
-- **🎯 DLB-Native Generation**: All logits come from DL-Backtrace's execution engine
+- **🎯 DLB-Native Generation**: All logits come from DLBacktrace's execution engine
 - **⚡ Multiple Sampling Strategies**: Greedy, temperature, top-k, top-p, and beam search
 - **🔍 Token-Level Relevance**: Track relevance for each generated token
 - **🤝 HuggingFace Compatible**: Drop-in replacement for standard generation
@@ -32,7 +32,7 @@ model = AutoModelForCausalLM.from_pretrained("gpt2")
 tokenizer = AutoTokenizer.from_pretrained("gpt2")
 tokenizer.pad_token = tokenizer.eos_token
 
-# Initialize DL-Backtrace
+# Initialize DLBacktrace
 sample_input = torch.randint(0, 1000, (1, 10))
 dlb = DLBacktrace(
     model=model,
@@ -295,7 +295,7 @@ for i, output in enumerate(outputs):
 
 ---
 
-## Integration with DL-Backtrace
+## Integration with DLBacktrace
 
 ### Token-Level Relevance Tracking
 
@@ -427,7 +427,7 @@ output = sampler.generate(
 
 | Feature | HuggingFace | DLB Auto Sampler |
 |---------|-------------|------------------|
-| Logits Source | Model directly | DL-Backtrace engine |
+| Logits Source | Model directly | DLBacktrace engine |
 | Relevance Tracking | ❌ No | ✅ Yes |
 | Batch Generation | ✅ Full support | ⚠️ Single sequence |
 | Model Caching | ✅ Yes | ❌ No (by design) |

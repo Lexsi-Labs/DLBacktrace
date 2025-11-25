@@ -1,6 +1,6 @@
 # License
 
-DL-Backtrace is released under the **Lexsi Labs Source Available License (LSAL) v1.0**.
+DLBacktrace is released under the **Lexsi Labs Source Available License (LSAL) v1.0**.
 
 ---
 
@@ -92,7 +92,7 @@ For **commercial use, partnership, or redistribution rights**, contact:
 
 ### ✅ You Can (Non-Commercial Use)
 
-- **Use** DL-Backtrace for personal, academic, or research purposes
+- **Use** DLBacktrace for personal, academic, or research purposes
 - **Modify** the source code for your own non-commercial projects
 - **Distribute** your modified versions for non-commercial purposes (with license included)
 - **Study** and learn from the code
@@ -117,9 +117,9 @@ For **commercial use, partnership, or redistribution rights**, contact:
 **Commercial use requires a separate license from Lexsi Labs.**
 
 Commercial use includes:
-- Using DL-Backtrace in commercial products
-- Selling products that include DL-Backtrace
-- Offering DL-Backtrace as a service (SaaS)
+- Using DLBacktrace in commercial products
+- Selling products that include DLBacktrace
+- Offering DLBacktrace as a service (SaaS)
 - Using it for paid consulting or commercial services
 - Embedding it in proprietary software
 
@@ -129,7 +129,7 @@ To obtain a commercial license, please contact **[support@lexsi.ai](mailto:suppo
 
 ## Third-Party Licenses
 
-DL-Backtrace depends on several open-source packages:
+DLBacktrace depends on several open-source packages:
 
 ### PyTorch
 - **License**: BSD 3-Clause License
@@ -159,12 +159,12 @@ While not required by the LSAL, we appreciate:
 
 ### In Academic Work
 
-If you use DL-Backtrace in academic research, please cite:
+If you use DLBacktrace in academic research, please cite:
 
 ```bibtex
 @software{dlbacktrace2025,
   author = {Lexsi Labs},
-  title = {DL-Backtrace: Explainable AI Framework for Deep Learning},
+  title = {DLBacktrace: Explainable AI Framework for Deep Learning},
   year = {2025},
   url = {https://github.com/Lexsi-Labs/DLBacktrace}
 }
@@ -172,10 +172,10 @@ If you use DL-Backtrace in academic research, please cite:
 
 ### In Non-Commercial Projects
 
-If you use DL-Backtrace in your non-commercial project, consider mentioning it in your documentation or credits:
+If you use DLBacktrace in your non-commercial project, consider mentioning it in your documentation or credits:
 
 ```
-This project uses DL-Backtrace (https://github.com/Lexsi-Labs/DLBacktrace)
+This project uses DLBacktrace (https://github.com/Lexsi-Labs/DLBacktrace)
 for model interpretability.
 ```
 
@@ -183,7 +183,7 @@ for model interpretability.
 
 ## Contributing
 
-By contributing to DL-Backtrace, you agree that your contributions will be licensed under the LSAL v1.0, and you grant Lexsi Labs the right to use your contributions under any terms, including commercial licensing.
+By contributing to DLBacktrace, you agree that your contributions will be licensed under the LSAL v1.0, and you grant Lexsi Labs the right to use your contributions under any terms, including commercial licensing.
 
 See [Contributing Guide](../developer/contributing.md) for details.
 

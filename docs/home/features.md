@@ -1,6 +1,6 @@
 # Key Features
 
-DL-Backtrace provides a comprehensive set of features for explainable AI and model interpretability. Here's a detailed look at what makes it powerful.
+DLBacktrace provides a comprehensive set of features for explainable AI and model interpretability. Here's a detailed look at what makes it powerful.
 
 ---
 
@@ -22,30 +22,45 @@ Identify which input features contribute most to predictions:
 
 ## 🚀 High-Level Pipeline Interface
 
-### DL-Backtrace Pipeline
+### Unified `run_task()` Method
 
-Simplified, batteries-included interface for running explainability analysis:
+Simplified, unified interface for running explainability analysis with a single method call:
 
-- **🔧 Automatic Model Loading**: Seamless HuggingFace & TorchVision integration
-- **🎯 Multi-Modal Support**: Text classification, image classification, text generation
-- **⚙️ Flexible Configuration**: Comprehensive parameter control
+- **🎯 Unified API**: Single method for all task types (classification, generation)
+- **🔧 Auto Task Detection**: Automatically detect task from inputs
 - **📊 Built-in Relevance**: Automatic layer-wise propagation
-- **💾 Result Management**: Auto-save results and visualizations
+- **�  Generation Support**: Greedy, sampling, and beam search with tracing
+- **⚙️ Flexible Configuration**: Comprehensive parameter control
+- **💾 Structured Results**: Easy access to predictions, relevance, and traces
 
 ```python
-from dl_backtrace.pytorch_backtrace.dlbacktrace.pipeline import DLBacktracePipeline
+from dl_backtrace.pytorch_backtrace import DLBacktrace
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
-# Create a simple pipeline
-pipeline = DLBacktracePipeline.create_simple(
-    model_name="bert-base",
-    device="cpu"
+# Load model
+model = AutoModelForSequenceClassification.from_pretrained("bert-base-uncased")
+tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+
+# Prepare input
+text = "This product is amazing!"
+tokens = tokenizer(text, return_tensors="pt")
+
+# Initialize DLBacktrace
+dlb = DLBacktrace(
+    model=model,
+    input_for_graph=(tokens["input_ids"], tokens["attention_mask"]),
+    device="cuda"
 )
 
-# Run analysis
-results = pipeline.run_simple_analysis(
-    "This product is amazing!",
-    label="positive"
+# Run analysis with one call
+results = dlb.run_task(
+    task="text-classification",  # or "auto" for automatic detection
+    inputs={'input_ids': tokens["input_ids"], 'attention_mask': tokens["attention_mask"]}
 )
+
+# Access results
+print(f"Prediction: {results['predictions'].argmax()}")
+print(f"Token relevance: {results['relevance']['input_ids'].shape}")
 ```
 
 [Learn more about Pipeline →](../guide/pytorch/pipeline.md)
@@ -56,24 +71,49 @@ results = pipeline.run_simple_analysis(
 
 ### DLB Auto Sampler
 
-Native text generation with explainability built-in:
+Native text generation with explainability built-in via `run_task()`:
 
 - **🎯 Multiple Sampling Strategies**: Greedy, temperature, top-k, top-p, beam search
 - **🔍 Token-Level Relevance**: Track relevance for each generated token
-- **🤝 HuggingFace Compatible**: Drop-in replacement for standard generation
+- **🤝 HuggingFace Compatible**: Familiar generation parameters
 - **🎛️ Flexible Control**: Full parameter customization
+- **📊 Generation Tracing**: Optional scores, relevance, and layer output traces
 
 ```python
-from dl_backtrace.pytorch_backtrace.dlbacktrace.core.dlb_auto_sampler import DLBAutoSampler
+from dl_backtrace.pytorch_backtrace import DLBacktrace
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
-sampler = DLBAutoSampler(dlb=dlb, tokenizer=tokenizer)
+# Load model
+model = AutoModelForCausalLM.from_pretrained("gpt2")
+tokenizer = AutoTokenizer.from_pretrained("gpt2")
 
-output = sampler.generate(
-    input_ids=input_ids,
+# Prepare input
+prompt = "The future of AI is"
+tokens = tokenizer(prompt, return_tensors="pt")
+
+# Initialize DLBacktrace
+dlb = DLBacktrace(
+    model=model,
+    input_for_graph=(tokens["input_ids"],),
+    device="cuda"
+)
+
+# Generate with relevance tracing
+results = dlb.run_task(
+    task="generation",
+    inputs={'input_ids': tokens["input_ids"]},
+    tokenizer=tokenizer,
     max_new_tokens=50,
     temperature=0.8,
-    top_p=0.9
+    top_p=0.9,
+    return_relevance=True,
+    return_scores=True
 )
+
+# Decode and analyze
+generated_text = tokenizer.decode(results['generated_ids'][0], skip_special_tokens=True)
+print(f"Generated: {generated_text}")
+print(f"Relevance trace: {len(results['relevance_trace'])} steps")
 ```
 
 [Learn more about Auto Sampler →](../guide/pytorch/auto-sampler.md)
@@ -114,7 +154,7 @@ node_io = dlb.predict(
     - Vision Transformers (ViT)
     - Custom transformer architectures
 
-=== "Mixture of Experts"
+=== "Mixture-of-Experts"
     - **JetMoE**: Efficient MoE with sparse activation
     - **OLMoE**: Open Language MoE
     - **Qwen MoE**: Advanced routing with grouped query attention
@@ -126,7 +166,7 @@ node_io = dlb.predict(
     - Analyze expert contributions
     - CUDA-accelerated MoE layers
     
-    [Learn more about MoE Support →](../guide/pytorch/moe-models.md)
+    [Learn more about MoEs Support →](../guide/pytorch/moe-models.md)
 
 === "Recurrent Networks"
     - LSTM networks
@@ -360,7 +400,7 @@ dlb.visualize_dlbacktrace(top_k=15)
 
 ## Next Steps
 
-- [Installation Guide](installation.md) - Get DL-Backtrace installed
+- [Installation Guide](installation.md) - Get DLBacktrace installed
 - [Quick Start](quickstart.md) - Build your first explainable model
 - [User Guide](../guide/introduction.md) - Learn the details
 - [Examples](../examples/colab-notebooks.md) - Interactive notebooks and use cases

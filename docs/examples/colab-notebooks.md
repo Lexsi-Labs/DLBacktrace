@@ -1,6 +1,6 @@
 # Google Colab Notebooks
 
-Interactive Google Colab notebooks to learn DL-Backtrace hands-on.
+Interactive Google Colab notebooks to learn DLBacktrace hands-on.
 
 ---
 
@@ -11,7 +11,7 @@ Interactive Google Colab notebooks to learn DL-Backtrace hands-on.
 #### ResNet Image Classification
 Explain ResNet predictions on ImageNet.
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1mpo--AD8vNqm6Y05rb46Yzjx6VhLwXZh?usp=sharing)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1O8Is0X-IrKxXzgJeR1Xxy21OOR-UGfm7?usp=sharing)
 
 **What you'll learn:**
 - Loading pre-trained ResNet
@@ -22,9 +22,9 @@ Explain ResNet predictions on ImageNet.
 ---
 
 #### VGG Image Classification
-Apply DL-Backtrace to VGG networks.
+Apply DLBacktrace to VGG networks.
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1iJJZ0ApWHltTjnbGRKhJDrHlKTlm1koD?usp=sharing)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1LxSazvy1Y2i0Ho1Qw7K905aNmvh66GzR?usp=sharing)
 
 **What you'll learn:**
 - VGG architecture tracing
@@ -36,7 +36,7 @@ Apply DL-Backtrace to VGG networks.
 #### Vision Transformer (ViT)
 Explain ViT model decisions.
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1BhzIw7Pf9-g1tqndaijwZ5FLaDUpjBaR?usp=sharing)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1B1xN5w51-tRnHyycbHV6lxi0tKxONnoS?usp=sharing)
 
 **What you'll learn:**
 - Transformer architecture tracing
@@ -48,7 +48,7 @@ Explain ViT model decisions.
 #### DenseNet Classification
 Analyze DenseNet predictions.
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1CE2XBBGd5VSQuipJTyyRcb7mu5RSG6K5?usp=sharing)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1TspNRXd-qf81iZepUpU_TrUokZynynbu?usp=sharing)
 
 **What you'll learn:**
 - Dense connection tracing
@@ -60,7 +60,7 @@ Analyze DenseNet predictions.
 #### EfficientNet Classification
 Explain EfficientNet decisions.
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1O-MyvIKWoADG2RrF43p2k8mUYpF9N_8m?usp=sharing)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1Xv9ghxp0OXcfYOseoq37KiJbz-UkLvWq?usp=sharing)
 
 **What you'll learn:**
 - Mobile-friendly model explanation
@@ -72,7 +72,7 @@ Explain EfficientNet decisions.
 #### MobileNet Classification
 Lightweight model explanations.
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1BzsID9U3HndLrh67nPWRw_bm7UWLwLOH?usp=sharing)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/12D6NgYTf4Gud3BXLRfnUK1m5-RLZY6dv?usp=sharing)
 
 **What you'll learn:**
 - Depthwise separable convolutions
@@ -86,7 +86,7 @@ Lightweight model explanations.
 #### BERT Sentiment Analysis
 Explain BERT classifications.
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1ANZPjaAxl2oF2WHj23f87AR9-ZDIMBm9?usp=sharing)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1eBAQ8TToJUs6EN4-md08cjfZUmAArX0s?usp=sharing)
 
 **What you'll learn:**
 - BERT model tracing
@@ -95,72 +95,12 @@ Explain BERT classifications.
 
 ---
 
-#### ALBERT Sentiment Classification
-Lightweight BERT variant.
-
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1RuAW0FgtWqKkdVbc97VXf9z4oDXmA1ms?usp=sharing)
-
-**What you'll learn:**
-- Parameter sharing analysis
-- ALBERT vs BERT comparisons
-- Memory-efficient explanations
-
----
-
-#### RoBERTa Classification
-Robust BERT training.
-
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1Nw6lTSQKJvGU9JBZeXnA7EXboU7mE282?usp=sharing)
-
-**What you'll learn:**
-- RoBERTa architecture
-- Bidirectional attention
-- Token importance analysis
-
----
-
-#### DistilBERT Sentiment
-Distilled BERT model.
-
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/13_hqUC2vaJWfF-UheggHJU5RmWS5A2u3?usp=sharing)
-
-**What you'll learn:**
-- Knowledge distillation effects
-- Speed vs accuracy trade-offs
-- Compact model explanations
-
----
-
-#### ELECTRA Classification
-Efficient transformer training.
-
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1sht3uLej8g-4hMtaHm7VwwUuGAmAqpH_?usp=sharing)
-
-**What you'll learn:**
-- ELECTRA discriminative training
-- Replaced token detection
-- Efficient transformer explanations
-
----
-
-#### XLNet Classification
-Permutation language modeling.
-
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1ZmVusCPgeXLGnbt7NzM-3SJuiGRgTzBa?usp=sharing)
-
-**What you'll learn:**
-- XLNet architecture
-- Permutation-based attention
-- Two-stream self-attention
-
----
-
 ### Generative Models
 
 #### LLaMA-3.2-1B Text Generation
 Explain LLaMA predictions.
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1i_CKoCfKdY4fcWyFdzuc_0e868jux12h?usp=sharing)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1eZUK-PwI6iZeKnfcQHxIXO7xo8wYDEek?usp=sharing)
 
 **What you'll learn:**
 - Large language model tracing
@@ -169,15 +109,69 @@ Explain LLaMA predictions.
 
 ---
 
-#### LLaMA-3.2-3B Text Generation
-Larger LLaMA variant.
+#### Qwen-3-0.6B Text Generation
+Explain Qwen predictions.
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1ki8kcc4ez8-kdvdlhtoq7Sed9v5hiaNs?usp=sharing)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1nJsxk7HPhiZ1DUIXn0eOnu0yjye-WOQT?usp=sharing)
 
 **What you'll learn:**
 - Scaling law effects
 - Multi-head attention analysis
 - Generation quality vs explanation
+
+---
+
+### Mixture-of-Experts (MoEs) Models
+
+#### JetMoE 
+Explain JetMoE expert routing decisions.
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1MKxR60Mf1F_TNMuE31T3GRWHFPTm5IhP?usp=sharing)
+
+**What you'll learn:**
+- MoE model tracing
+- Expert routing mechanisms
+- Sparse activation patterns
+- Load balancing in expert selection
+
+---
+
+#### OLMoE 
+Explain OLMoE predictions and expert selection.
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1e13QAFw4A8jKhZVb1jh-C_16A2u1vZIH?usp=sharing)
+
+**What you'll learn:**
+- MoE model tracing
+- Open language model architecture
+- Expert specialization analysis
+- Scaling efficiency in MoE systems
+
+---
+
+#### Qwen3-MoE 
+Explain Qwen3-MoE multi-lingual predictions.
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1ja26JGNt22rOMT0HCyjOMASXxfnMpkm8?usp=sharing)
+
+**What you'll learn:**
+- MoE model tracing
+- Multi-lingual expert routing
+- Cross-lingual knowledge transfer
+- Advanced MoE architectures
+
+---
+
+#### GPT-Oss 
+Explain GPT-Oss open-source MoE predictions.
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1zZXTOV4NOrauNDXjjYB8rausbBGoLYtX?usp=sharing)
+
+**What you'll learn:**
+- MoE model tracing
+- Open-source GPT architecture
+- Expert gating mechanisms
+- Performance optimization in MoE
 
 ---
 

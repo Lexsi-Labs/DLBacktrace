@@ -1,6 +1,6 @@
 # Execution Engine Development
 
-Understanding and extending the non-cached execution engine for DL-Backtrace.
+Understanding and extending the non-cached execution engine for DLBacktrace.
 
 ---
 
@@ -10,7 +10,7 @@ The execution engine (`execution_engine_noncache.py`) is the **core runtime syst
 
 **Key Features:**
 - Deterministic execution with consistency enforcement
-- Support for complex models (transformers, CNNs, hybrid architectures)
+- Support for complex models (Transformers, CNNs, hybrid architectures)
 - Device-aware computation (CPU/GPU)
 - Precision-preserving operations (fp16, fp32, int64)
 - Comprehensive error handling and debugging
@@ -22,7 +22,7 @@ The execution engine (`execution_engine_noncache.py`) is the **core runtime syst
 
 ### 1. Centralized Logging System
 
-**Class: `LoggingManager`** (Lines 10-101)
+**Class: `LoggingManager`** 
 
 Singleton pattern for consistent logging across execution:
 
@@ -45,7 +45,7 @@ logger.error("Operation failed: invalid shape")
 
 ### 2. Consistency Enforcement Functions
 
-**Critical Functions** (Lines 145-554):
+**Critical Functions**:
 
 **`enforce_precision_consistency`** - Ensures real tensors (not FakeTensors):
 ```python
@@ -73,7 +73,7 @@ weight, indices = ensure_embedding_consistency(weight, indices, node_name)
 
 ### 3. Deterministic Environment Setup
 
-**Function: `setup_consistent_environment`** (Lines 292-384)
+**Function: `setup_consistent_environment`**
 
 Sets up deterministic execution:
 - Disables gradients
@@ -96,7 +96,7 @@ setup_consistent_environment(model)
 
 ### Main Dispatcher: `execute_aten_operation`
 
-**Function** (Lines 690-3541) - **2,851 lines of operation handlers**
+**Function** - **2,851 lines of operation handlers**
 
 Dispatches to specialized handlers for 100+ operations:
 
@@ -123,7 +123,7 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams,
 
 ### Supported Operation Categories
 
-**1. Linear Algebra** (Lines 762-794, 2029-2060):
+**1. Linear Algebra**:
 - `linear` - Fully connected layers with dtype consistency
 - `matmul` - Matrix multiplication with broadcasting
 - `bmm` - Batch matrix multiplication
@@ -133,35 +133,35 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams,
 - `addmv` - Matrix-vector multiply-add
 - `einsum` - Einstein summation
 
-**2. Convolution** (Lines 795-837):
+**2. Convolution**:
 - `conv1d` - 1D convolution for sequences
 - `conv2d` - 2D convolution for images
 - Device and dtype consistency enforced
 
-**3. Pooling** (Lines 839-871):
+**3. Pooling**:
 - `max_pool2d` - Maximum pooling
 - `adaptive_avg_pool2d` - Adaptive average pooling
 - `avg_pool2d` - Average pooling
 
-**4. Normalization** (Lines 1037-1156, 3424-3456):
+**4. Normalization**:
 - `layer_norm` - Layer normalization with validation
 - `batch_norm` - Batch normalization
 - `native_layer_norm` - Optimized layer norm
 
-**5. Attention** (Lines 1158-1259):
+**5. Attention**:
 - `scaled_dot_product_attention` - Transformer attention
   - Automatic causal/bidirectional detection
   - Mask handling and reshaping
   - Model type inference (BERT vs GPT)
 
-**6. Activations** (Lines 881-924, 2405-2411):
+**6. Activations**:
 - `relu`, `relu_` - ReLU activation
 - `gelu` - Gaussian Error Linear Unit
 - `tanh` - Hyperbolic tangent
 - `silu` - Sigmoid Linear Unit
 - `sigmoid` - Sigmoid function
 
-**7. Shape Operations** (Lines 925-997, 1327-1454, 2294-2403):
+**7. Shape Operations**:
 - `view` - Reshape with -1 inference
 - `reshape` - Reshape tensor
 - `transpose` - Swap dimensions
@@ -174,25 +174,25 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams,
 - `slice` - Slice tensor
 - All support negative indexing
 
-**8. Element-wise** (Lines 1749-2003):
+**8. Element-wise**:
 - `add`, `sub`, `mul`, `div` - Arithmetic
 - `pow` - Power
 - `neg` - Negation
 - `rsqrt` - Reciprocal square root
 - Broadcasting with shape alignment
 
-**9. Comparison** (Lines 1894-2003, 2645-2708):
+**9. Comparison**:
 - `gt`, `ge`, `lt`, `le`, `eq`, `ne` - Comparisons
 - Scalar and tensor variants
 - Automatic broadcasting
 
-**10. Tensor Creation** (Lines 2063-2142, 2413-2414):
+**10. Tensor Creation**:
 - `full` - Create filled tensor
 - `zeros` - Create zero tensor
 - `arange` - Create range
 - Symbolic size resolution
 
-**11. Indexing & Gathering** (Lines 3178-3288, 3398-3422):
+**11. Indexing & Gathering**:
 - `cat` - Concatenate tensors
 - `split` - Split tensor
 - `chunk` - Split into equal chunks
@@ -201,18 +201,18 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams,
 - `index` - Advanced indexing
 - `index_select` - Select indices
 
-**12. Masking** (Lines 1285-1325, 2460-2511):
+**12. Masking**:
 - `masked_fill` - Fill masked positions
 - `where` - Conditional selection
 - Preserves -inf values correctly
 
 **13. Other Operations**:
-- `embedding` - Lookup embeddings (Lines 1713-1747)
-- `softmax` - Softmax activation (Lines 1695-1704)
-- `dropout` - Dropout (always disabled in eval) (Lines 873-879)
-- `clone` - Clone tensor (Lines 2826-2844)
-- `contiguous` - Make contiguous (Lines 2513-2519)
-- `to`, `_to_copy` - Type/device conversion (Lines 1603-1647, 2521-2535)
+- `embedding` - Lookup embeddings
+- `softmax` - Softmax activation
+- `dropout` - Dropout (always disabled in eval)
+- `clone` - Clone tensor
+- `contiguous` - Make contiguous
+- `to`, `_to_copy` - Type/device conversion
 
 ---
 
@@ -220,7 +220,7 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams,
 
 ### Main Function: `run_execution_nocache`
 
-**Function** (Lines 3542-3935) - **393 lines**
+**Function** - **393 lines**
 
 Executes the entire graph in topological order:
 
@@ -282,25 +282,25 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights,
 
 **Key Steps:**
 
-1. **Environment Setup** (Lines 3547-3602):
+1. **Environment Setup**:
    - Deterministic configuration
    - Model consistency checks
    - Weight synchronization
    - Device and dtype detection
 
-2. **Input Processing** (Lines 3607-3647):
+2. **Input Processing**:
    - Input validation
    - Type-specific casting (input_ids → long)
    - Contiguity enforcement
    - Initial tensor_map population
 
-3. **Node Iteration** (Lines 3649-3839):
+3. **Node Iteration**:
    - Topological processing
    - Parent dependency checking
    - Type-specific execution
    - Output validation
 
-4. **Error Handling** (Lines 3836-3838):
+4. **Error Handling**:
    - Graceful degradation
    - Detailed error logging
    - Fallback strategies
@@ -310,8 +310,6 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights,
 ## Node Types and Handling
 
 ### 1. Placeholder Nodes
-
-**Lines 3689-3715**
 
 Handle model inputs and parameters:
 
@@ -330,8 +328,6 @@ if layer_type == "Placeholder":
 ```
 
 ### 2. Model_Layer Nodes
-
-**Lines 3717-3753**
 
 Execute PyTorch submodules:
 
@@ -352,8 +348,6 @@ elif layer_type == "Model_Layer":
 ```
 
 ### 3. ATen Operation Nodes
-
-**Lines 3761-3828**
 
 Execute PyTorch operations:
 
@@ -391,7 +385,7 @@ Check FX graph tracing output or error messages:
 
 **2. Add Handler in `execute_aten_operation`**
 
-Add new `elif` block around line 3518:
+Add new `elif` block:
 
 ```python
 elif func_name == "my_new_op":
@@ -582,7 +576,7 @@ Error: Cannot perform operation on None
 
 ## Execution Engine Class
 
-**Class: `ExecutionEngineNoCache`** (Lines 3937-3982)
+**Class: `ExecutionEngineNoCache`**
 
 Wrapper class for the execution engine:
 

@@ -1,8 +1,8 @@
 ##
 
-![DL-Backtrace Logo](assets/images/dlb_logo.png)
+![DLBacktrace Logo](assets/images/dlb_logo.png)
 
-[![License](https://img.shields.io/badge/License-LSAL%20v1.0-yellow.svg)](https://github.com/Lexsi-Labs/DLBacktrace/blob/main/LICENSE.md)
+[![License](https://img.shields.io/badge/License-LSAL%20v1.0-yellow.svg)](https://github.com/Lexsi-Labs/DLBacktrace/blob/dlb_v2/LICENSE.md)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://python.org)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.6%2B-red.svg)](https://pytorch.org)
 
@@ -14,11 +14,11 @@
 
 ## Overview
 
-DLBacktrace is a model-agnostic explainability framework developed by Lexsi Labs. It provides comprehensive layer-wise importance values (relevance) and model tracing capabilities across a wide range of model architectures — including transformers, LLMs, MoEs, and more — as well as diverse task types such as tabular, vision, and text. The framework is designed for robust and efficient execution on both CPU and GPU environments.
+DLBacktrace is a model-agnostic explainability framework developed by *Lexsi Labs*. It provides comprehensive layer-wise importance values (relevance) and model tracing capabilities across a wide range of model architectures — including Transformers, Large Language Models (LLMs), Mixture-of-Experts (MoEs), and more — as well as diverse task types such as Tabular, Vision, and Text. The framework is designed for robust and efficient execution on both CPU and GPU environments.
 
 ---
 
-## Why DL-Backtrace?
+## Why DLBacktrace?
 
 ### 🔍 **Deep Model Interpretability**
 Gain comprehensive insights into your AI models using advanced relevance propagation algorithms. Understand which features and layers contribute most to your model's predictions.
@@ -30,7 +30,7 @@ Optimized execution engine with CUDA acceleration and deterministic tracing. Cho
 Support for CNN, RNN, Transformer, and custom architectures. Works seamlessly with popular models like ResNet, BERT, LLaMA, and more.
 
 ### 🎯 **Multi-Task Support**
-Binary/multi-class classification, segmentation, and text generation - all supported out of the box.
+Binary/Multi-class classification, segmentation, and text generation - all supported out of the box.
 
 ### 🛡️ **Production Ready**
 Deterministic execution environment with comprehensive error handling. Battle-tested on real-world models and datasets.
@@ -58,7 +58,7 @@ class MyModel(nn.Module):
         x = self.pool(x).flatten(1)
         return self.fc(x)
 
-# Initialize model and DL-Backtrace
+# Initialize model and DLBacktrace
 model = MyModel()
 x = torch.randn(1, 3, 224, 224)
 
@@ -86,7 +86,7 @@ dlb.visualize()
 
 ## Supported Models
 
-DL-Backtrace has been extensively tested with:
+DLBacktrace has been extensively tested with:
 
 ### Vision Models
 - ResNet, VGG, DenseNet, EfficientNet, MobileNet
@@ -97,7 +97,7 @@ DL-Backtrace has been extensively tested with:
 - BERT, ALBERT, RoBERTa, DistilBERT
 - ELECTRA, XLNet
 - LLaMA-3.2 (1B, 3B), Qwen3
-- MoE's like JetMoE, OLMoE, GPT-oss, Qwen MoE
+- MoE's like JetMoE, OLMoE, GPT-Oss, Qwen3 MoE
 
 ### Tasks
 - Binary & Multi-class Classification
@@ -148,14 +148,14 @@ Interactive notebooks and real-world use cases.
 → [Explore Examples](examples/colab-notebooks.md)
 
 ### 🤝 Developer Guide
-Contributing and extending DL-Backtrace.
+Contributing and extending DLBacktrace.
 
 → [Developer Docs](developer/contributing.md)
 
 ---
 
 
-DL-Backtrace - Making AI Transparent and Explainable 🚀
+DLBacktrace - Making AI Transparent and Explainable 🚀
 
 Built with ❤️ by [Lexsi Labs](https://lexsi.ai/)
 
