@@ -47,7 +47,7 @@ jobs:
           echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_OUTPUT
           echo "RELEASE_NOTES=${RELEASE_NOTES}" >> $GITHUB_OUTPUT
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 
       - name: Build package
         run: python -m build
