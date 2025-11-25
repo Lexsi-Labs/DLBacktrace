@@ -1,16 +1,16 @@
-# Introduction to DL-Backtrace
+# Introduction to DLBacktrace
 
-Welcome to the DL-Backtrace user guide! This guide will help you understand and effectively use DL-Backtrace for explainable AI and model interpretability.
+Welcome to the DLBacktrace user guide! This guide will help you understand and effectively use DLBacktrace for explainable AI and model interpretability.
 
 ---
 
-## What is DL-Backtrace?
+## What is DLBacktrace?
 
-DL-Backtrace is an **explainable AI (XAI) framework** that helps you understand how deep learning models make decisions. It provides layer-wise relevance propagation and comprehensive model tracing to reveal which parts of your input contribute most to the model's predictions.
+DLBacktrace is an **explainable AI (XAI) framework** that helps you understand how deep learning models make decisions. It provides layer-wise relevance propagation and comprehensive model tracing to reveal which parts of your input contribute most to the model's predictions.
 
 ### Core Concept: Layer-wise Relevance Propagation
 
-At its heart, DL-Backtrace uses **relevance propagation** - a technique that traces the "importance" of each input feature backward through the network:
+At its heart, DLBacktrace uses **relevance propagation** - a technique that traces the "importance" of each input feature backward through the network:
 
 ```
 Input → Layer 1 → Layer 2 → ... → Output
@@ -22,7 +22,7 @@ Starting with the output (100% relevance), we trace backward to see how this rel
 
 ---
 
-## Why Use DL-Backtrace?
+## Why Use DLBacktrace?
 
 ### 1. **Model Understanding**
 Gain deep insights into your model's decision-making process:
@@ -54,11 +54,11 @@ Advance model architectures:
 
 ---
 
-## How DL-Backtrace Works
+## How DLBacktrace Works
 
 ### Step 1: Graph Tracing
 
-DL-Backtrace first traces your model's computational graph:
+DLBacktrace first traces your model's computational graph:
 
 ```python
 from dl_backtrace.pytorch_backtrace import DLBacktrace
@@ -128,7 +128,7 @@ dlb.visualize_dlbacktrace(top_k=15)  # Top contributors
 
 ### Execution Engines
 
-DL-Backtrace provides optimized execution engines:
+DLBacktrace provides optimized execution engines:
 
 **ExecutionEngineNoCache**
 - In-memory execution
@@ -178,7 +178,7 @@ dlb = DLBacktrace(
 
 ## Typical Workflow
 
-Here's a typical DL-Backtrace workflow:
+Here's a typical DLBacktrace workflow:
 
 ### 1. Prepare Your Model
 
@@ -191,7 +191,7 @@ model = models.resnet18(pretrained=True)
 model.eval()
 ```
 
-### 2. Initialize DL-Backtrace
+### 2. Initialize DLBacktrace
 
 ```python
 from dl_backtrace.pytorch_backtrace import DLBacktrace
@@ -274,43 +274,60 @@ dlb.visualize_dlbacktrace(top_k=15)  # Top 15 nodes
 
 ## Advanced Capabilities
 
-DL-Backtrace includes powerful features for advanced use cases:
+DLBacktrace includes powerful features for advanced use cases:
 
 ### High-Level Pipeline Interface
 
-Simplify your workflow with the Pipeline interface:
+Simplify your workflow with the unified `run_task()` method:
 
 ```python
-from dl_backtrace.pytorch_backtrace.dlbacktrace.pipeline import DLBacktracePipeline
+from dl_backtrace.pytorch_backtrace import DLBacktrace
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
-# One-line setup
-pipeline = DLBacktracePipeline.create_simple(
-    model_name="bert-base",
+# Load model
+model = AutoModelForSequenceClassification.from_pretrained("bert-base-uncased")
+tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+
+# Prepare input
+text = "This product is amazing!"
+tokens = tokenizer(text, return_tensors="pt")
+
+# Initialize DLBacktrace
+dlb = DLBacktrace(
+    model=model,
+    input_for_graph=(tokens["input_ids"], tokens["attention_mask"]),
     device="cuda"
 )
 
-# One-line analysis
-results = pipeline.run_simple_analysis(text, label)
+# Run analysis with one call
+results = dlb.run_task(
+    task="text-classification",  # or "auto" for automatic detection
+    inputs={'input_ids': tokens["input_ids"], 'attention_mask': tokens["attention_mask"]}
+)
+
+# Access results
+print(f"Prediction: {results['predictions'].argmax()}")
+print(f"Token relevance: {results['relevance']['input_ids'].shape}")
 ```
 
 **[Learn more about Pipeline →](pytorch/pipeline.md)**
 
-### MoE Model Support
+### MoEs Model Support
 
-Analyze Mixture of Experts models with expert-level tracking:
+Analyze Mixture-of-Experts models with expert-level tracking:
 
 - **JetMoE**, **OLMoE**, **Qwen MoE**, **GPT-OSS**
 - Track which experts contribute most
 - Understand expert routing patterns
 - CUDA-accelerated MoE layer implementations
 
-**[Learn more about MoE Models →](pytorch/moe-models.md)**
+**[Learn more about MoEs Models →](pytorch/moe-models.md)**
 
 ### DLB Auto Sampler
 
 Advanced text generation with explainability:
 
-- Multiple sampling strategies (greedy, temperature, top-k, top-p, beam search)
+- Multiple decoding strategies (greedy, temperature, top-k, top-p, beam search) 
 - Token-level relevance tracking
 - HuggingFace-compatible generation API
 - Full control over generation parameters
@@ -387,7 +404,7 @@ If you run into issues:
 
 ## Contributing
 
-DL-Backtrace is open source! Contributions are welcome:
+DLBacktrace is open source! Contributions are welcome:
 
 - Report bugs
 - Suggest features

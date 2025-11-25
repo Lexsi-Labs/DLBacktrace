@@ -1,4 +1,4 @@
-# Contributing to DL-Backtrace
+# Contributing to DLBacktrace
 
 We welcome contributions from the community! This guide will help you get started.
 
@@ -32,8 +32,8 @@ Share your use cases and examples.
 
 ```bash
 # Fork on GitHub, then clone
-git clone https://github.com/YOUR_USERNAME/DL-Backtrace.git
-cd DL-Backtrace
+git clone https://github.com/Lexsi-Labs/DLBacktrace.git
+cd DLBacktrace
 ```
 
 ### 2. Set Up Development Environment
@@ -182,7 +182,7 @@ Documentation is in `docs/` using MkDocs:
 pip install mkdocs mkdocs-material
 
 # Serve locally
-cd DL-Backtrace
+cd DLBacktrace
 mkdocs serve
 
 # View at http://localhost:8000
@@ -410,7 +410,7 @@ Contributors are recognized in:
 - Release notes
 - Changelog
 
-Thank you for contributing to DL-Backtrace! 🎉
+Thank you for contributing to DLBacktrace! 🎉
 
 ---
 
@@ -418,8 +418,8 @@ Thank you for contributing to DL-Backtrace! 🎉
 
 ```bash
 # Setup
-git clone https://github.com/YOUR_USERNAME/DL-Backtrace.git
-cd DL-Backtrace
+git clone https://github.com/YOUR_USERNAME/DLBacktrace.git
+cd DLBacktrace
 pip install -e .
 
 # Create branch

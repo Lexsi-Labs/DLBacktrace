@@ -1,6 +1,6 @@
 # Best Practices
 
-Guidelines for effective use of DL-Backtrace.
+Guidelines for effective use of DLBacktrace.
 
 ---
 

@@ -1,6 +1,6 @@
 # Known Issues
 
-Current limitations and known issues in DL-Backtrace.
+Current limitations and known issues in DLBacktrace.
 
 ---
 

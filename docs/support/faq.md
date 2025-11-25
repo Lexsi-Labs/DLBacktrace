@@ -1,14 +1,14 @@
 # Frequently Asked Questions
 
-Common questions and answers about DL-Backtrace.
+Common questions and answers about DLBacktrace.
 
 ---
 
 ## General Questions
 
-### What is DL-Backtrace?
+### What is DLBacktrace?
 
-DL-Backtrace is an explainable AI (XAI) framework that helps you understand how deep learning models make decisions through layer-wise relevance propagation.
+DLBacktrace is an explainable AI (XAI) framework that helps you understand how deep learning models make decisions through layer-wise relevance propagation.
 
 ### Which frameworks does it support?
 
@@ -16,21 +16,21 @@ DL-Backtrace is an explainable AI (XAI) framework that helps you understand how 
 
 ### Is it free and open source?
 
-DL-Backtrace is source-available under the Lexsi Labs Source Available License (LSAL) v1.0. It is free for personal, academic, and research purposes, but requires a commercial license for commercial use.
+DLBacktrace is source-available under the Lexsi Labs Source Available License (LSAL) v1.0. It is free for personal, academic, and research purposes, but requires a commercial license for commercial use.
 
-### Who develops DL-Backtrace?
+### Who develops DLBacktrace?
 
-DL-Backtrace is developed by [Lexsi Labs](https://lexsi.ai), with contributions from the community.
+DLBacktrace is developed by [Lexsi Labs](https://lexsi.ai), with contributions from the community.
 
 ---
 
 ## Installation Questions
 
-### How do I install DL-Backtrace?
+### How do I install DLBacktrace?
 
 ```bash
 git clone https://github.com/Lexsi-Labs/DLBacktrace.git
-cd DL-Backtrace
+cd DLBacktrace
 pip install -r requirements.txt
 pip install -e .
 ```
@@ -39,7 +39,7 @@ See the [Installation Guide](../home/installation.md) for details.
 
 ### Do I need a GPU?
 
-No, DL-Backtrace works on both CPU and GPU. However, GPU significantly speeds up execution for large models.
+No, DLBacktrace works on both CPU and GPU. However, GPU significantly speeds up execution for large models.
 
 ### What Python version is required?
 
@@ -47,7 +47,11 @@ Python 3.8 or higher is required.
 
 ### Can I install it via pip?
 
-Currently, installation from source is recommended. PyPI distribution is planned for future releases.
+Yes — the PyPI package is now available. You can install it directly using:
+
+```bash
+pip install dl-backtrace==0.1.0
+```
 
 ---
 
@@ -84,7 +88,7 @@ See [Relevance Propagation](../guide/relevance/overview.md).
 
 ### Can I use it with pre-trained models?
 
-Yes! DL-Backtrace works with any PyTorch model, including pre-trained ones from Hugging Face, torchvision, etc.
+Yes! DLBacktrace works with any PyTorch model, including pre-trained ones from Hugging Face, torchvision, etc.
 
 ---
 
@@ -130,7 +134,7 @@ Tracing adds overhead, but you only trace once. Subsequent evaluations reuse the
 
 **NLP:**
 - BERT, RoBERTa, ALBERT, DistilBERT
-- LLaMA-3.2
+- LLaMA-3.2, Qwen3 
 - GPT-style models
 - Custom transformers
 
@@ -139,7 +143,7 @@ Tracing adds overhead, but you only trace once. Subsequent evaluations reuse the
 
 ### Are all PyTorch operations supported?
 
-DL-Backtrace supports 100+ common operations. See the [operations list](../guide/pytorch/operations.md).
+DLBacktrace supports 100+ common operations. See the [operations list](../guide/pytorch/operations.md).
 
 ### Can I use custom layers?
 
@@ -166,7 +170,7 @@ Relevance is better for understanding model decisions.
 
 ### Can I use it for model debugging?
 
-Yes! DL-Backtrace helps identify:
+Yes! DLBacktrace helps identify:
 - Biases in model decisions
 - Spurious correlations
 - Feature importance
@@ -174,7 +178,7 @@ Yes! DL-Backtrace helps identify:
 
 ### Is execution deterministic?
 
-Yes, DL-Backtrace automatically sets up a deterministic environment for reproducible results.
+Yes, DLBacktrace automatically sets up a deterministic environment for reproducible results.
 
 ---
 
@@ -209,7 +213,7 @@ Try:
 
 ### I get dtype mismatch errors
 
-DL-Backtrace should handle this automatically. If not:
+DLBacktrace should handle this automatically. If not:
 1. Ensure model and input have same dtype
 2. Convert explicitly: `model.float()`, `input.float()`
 3. Report the issue
@@ -220,7 +224,7 @@ DL-Backtrace should handle this automatically. If not:
 
 ### Can I use it commercially?
 
-Commercial use of DL-Backtrace requires a separate commercial license from Lexsi Labs. Please contact [support@lexsi.ai](mailto:support@lexsi.ai) for commercial licensing inquiries.
+Commercial use of DLBacktrace requires a separate commercial license from Lexsi Labs. Please contact [support@lexsi.ai](mailto:support@lexsi.ai) for commercial licensing inquiries.
 
 ### Do I need to cite it?
 
@@ -244,7 +248,7 @@ Yes! See the [Developer Guide](../developer/contributing.md) for details on addi
 
 ### Can I use it in production?
 
-Yes! DL-Backtrace is production-ready with:
+Yes! DLBacktrace is production-ready with:
 - Deterministic execution
 - Error handling
 - Performance optimization

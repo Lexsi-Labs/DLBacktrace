@@ -1,12 +1,12 @@
 # CUDA Development
 
-Guide for developing CUDA kernels for DL-Backtrace.
+Guide for developing CUDA kernels for DLBacktrace.
 
 ---
 
 ## Overview
 
-DL-Backtrace uses **inline CUDA compilation** via PyTorch's `load_inline()` for custom kernels that significantly accelerate relevance calculations. This approach embeds CUDA code as Python strings and compiles at runtime, eliminating separate build steps.
+DLBacktrace uses **inline CUDA compilation** via PyTorch's `load_inline()` for custom kernels that significantly accelerate relevance calculations. This approach embeds CUDA code as Python strings and compiles at runtime, eliminating separate build steps.
 
 ---
 

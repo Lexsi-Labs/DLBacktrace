@@ -1,6 +1,6 @@
 # Testing Guide
 
-Guidelines for testing DL-Backtrace.
+Guidelines for testing DLBacktrace.
 
 ---
 

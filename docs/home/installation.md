@@ -1,6 +1,6 @@
 # Installation
 
-This guide covers how to install DL-Backtrace and its dependencies.
+This guide covers how to install DLBacktrace and its dependencies.
 
 ---
 
@@ -35,7 +35,7 @@ This is the recommended method for getting the latest features and updates.
 ```bash
 # Clone the repository
 git clone https://github.com/Lexsi-Labs/DLBacktrace.git
-cd DL-Backtrace
+cd DLBacktrace
 
 # Install dependencies
 pip install -r requirements.txt
@@ -127,8 +127,8 @@ from dl_backtrace.pytorch_backtrace import DLBacktrace
 print(f"PyTorch version: {torch.__version__}")
 print(f"CUDA available: {torch.cuda.is_available()}")
 
-# Check if DL-Backtrace is installed
-print("DL-Backtrace imported successfully!")
+# Check if DLBacktrace is installed
+print("DLBacktrace imported successfully!")
 
 # Simple test
 class SimpleModel(torch.nn.Module):
@@ -148,7 +148,7 @@ dlb = DLBacktrace(
     layer_implementation="pytorch"
 )
 
-print("DL-Backtrace initialized successfully!")
+print("DLBacktrace initialized successfully!")
 ```
 
 ### Run Benchmark Tests
@@ -172,7 +172,7 @@ python benchmarks/benchmark_linear.py
 ??? question "ImportError: No module named 'dl_backtrace'"
     Make sure you've installed the package:
     ```bash
-    cd DL-Backtrace
+    cd DLBacktrace
     pip install -e .
     ```
 
@@ -209,7 +209,7 @@ If you encounter issues:
 
 ## What's Next?
 
-Now that you have DL-Backtrace installed:
+Now that you have DLBacktrace installed:
 
 - [Quick Start Guide](quickstart.md) - Build your first explainable model
 - [User Guide](../guide/introduction.md) - Learn the concepts
@@ -218,12 +218,12 @@ Now that you have DL-Backtrace installed:
 
 ---
 
-## Updating DL-Backtrace
+## Updating DLBacktrace
 
 To update to the latest version:
 
 ```bash
-cd DL-Backtrace
+cd DLBacktrace
 git pull origin main
 pip install -e . --upgrade
 ```
