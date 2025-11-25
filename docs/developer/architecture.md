@@ -1,6 +1,6 @@
 # Architecture
 
-Understanding DL-Backtrace's architecture.
+Understanding DLBacktrace's architecture.
 
 ---
 
@@ -41,14 +41,13 @@ Understanding DL-Backtrace's architecture.
 ## Core Components
 
 ### 1. Graph Builder
-Uses PyTorch Train Export to construct the computational graphs with fundamental torch aten node operations = layers + inline operation alongside weights and hyperparameter extraction for comprehensive node-wise model output tracing.
+Uses PyTorch Train Export to construct the computational graphs with fundamental torch aten node operations = layers + inline operation alongside weights and hyperparameters extraction for comprehensive nodewise model output tracing.
 
 ### 2. Execution Engine
-High-performance forward pass execution using the computation graph to compute the output of each node while ensuring consistent precision and correct hyper-params and weight being used with settings to ensure deterministic results. With warning logs for extremely high values.
+High performance forward pass execution using the computation graph to compute the output of each node while ensuring consistent precision and correct hyperparams and weights being used with settings to ensure deterministic results. With warning logs for extremely high values.
 
 ### 3. Relevance Propagation
-Layer-specific algorithms (Linear, Convolutional, Attention) that distribute relevance based on each layer's mathematical properties and activation patterns
-It distributes relevance scores across layers, providing insights into feature importance, information flow, and bias, enabling better model interpretation and validation without external dependencies.
+Layer-specific algorithms (Linear, Convolutional, Attention) that distribute relevance based on each layer's mathematical properties and activation patterns. It distributes relevance scores across layers, providing insights into feature importance, information flow, and bias, enabling better model interpretation and validation without external dependencies.
 
 ---
 

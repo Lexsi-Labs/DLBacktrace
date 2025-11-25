@@ -1,6 +1,6 @@
 # What's New
 
-Stay up to date with the latest features, improvements, and fixes in DL-Backtrace.
+Stay up to date with the latest features, improvements, and fixes in DLBacktrace.
 
 ---
 
@@ -58,15 +58,15 @@ from transformers import AutoModelForCausalLM
 from dl_backtrace.pytorch_backtrace import DLBacktrace
 
 model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B")
-# Works seamlessly with DL-Backtrace!
+# Works seamlessly with DLBacktrace!
 ```
 
 ### Improved Transformer Support
 Enhanced support for transformer architectures:
 
 - **BERT family**: BERT, RoBERTa, DistilBERT, ALBERT
-- **Auto-regressive models**: GPT, LLaMA, OPT
-- **Vision Transformers**: ViT, DeiT
+- **Auto-regressive models**: GPT, LLaMA, Qwen 
+- **Vision Transformers**: ViT
 - **Custom transformers**: Better handling of custom attention mechanisms
 
 ---
@@ -246,7 +246,7 @@ We'd love to hear from you!
 
 <div align="center">
 
-**Thank you for using DL-Backtrace!** 🚀
+**Thank you for using DLBacktrace!** 🚀
 
 [Get Started](quickstart.md) | [Read the Docs](../guide/introduction.md) | [View Examples](../examples/pytorch-examples.md)
 

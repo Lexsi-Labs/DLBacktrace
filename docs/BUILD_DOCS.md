@@ -1,6 +1,6 @@
 # Building Documentation
 
-Guide for building and deploying DL-Backtrace documentation.
+Guide for building and deploying DLBacktrace documentation.
 
 ---
 
@@ -19,7 +19,7 @@ pip install -r docs-requirements.txt
 ### Serve Locally
 
 ```bash
-cd DL-Backtrace
+cd DLBacktrace
 mkdocs serve
 ```
 
@@ -40,7 +40,7 @@ This creates a `site/` directory with the static HTML.
 ## Project Structure
 
 ```
-DL-Backtrace/
+DLBacktrace/
 ├── mkdocs.yml              # Configuration
 ├── docs/                   # Documentation source
 │   ├── index.md           # Home page

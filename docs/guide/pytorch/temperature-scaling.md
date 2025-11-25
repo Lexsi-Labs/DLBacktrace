@@ -1,6 +1,6 @@
 # Temperature Scaling
 
-**Temperature scaling** is a powerful technique for controlling the confidence and diversity of model predictions by modulating the softmax distribution of logits. DL-Backtrace provides seamless temperature scaling integration for both inference and generation tasks.
+**Temperature scaling** is a powerful technique for controlling the confidence and diversity of model predictions by modulating the softmax distribution of logits. DLBacktrace provides seamless temperature scaling integration for both inference and generation tasks.
 
 ---
 
@@ -58,7 +58,7 @@ Where:
 
 ---
 
-## Usage in DL-Backtrace
+## Usage in DLBacktrace
 
 ### Basic Temperature Scaling
 
@@ -68,7 +68,7 @@ Where:
 from dl_backtrace.pytorch_backtrace.dlbacktrace import DLBacktrace
 import torch
 
-# Initialize DL-Backtrace
+# Initialize DLBacktrace
 model = ...  # Your classification model
 sample_input = torch.randn(1, 3, 224, 224)
 
@@ -100,7 +100,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 model = AutoModelForCausalLM.from_pretrained("gpt2")
 tokenizer = AutoTokenizer.from_pretrained("gpt2")
 
-# Initialize DL-Backtrace
+# Initialize DLBacktrace
 sample_input = torch.randint(0, 1000, (1, 10))
 dlb = DLBacktrace(
     model=model,
@@ -560,6 +560,6 @@ print(f"Overhead: {(time_temp - time_no_temp) * 1000:.2f}ms")
 
 - Learn about [DLB Auto Sampler](auto-sampler.md) for advanced generation
 - Explore [Pipeline](pipeline.md) for high-level workflows
-- Check [MoE Models](moe-models.md) for expert-based generation
+- Check [MoEs Models](moe-models.md) for expert-based generation
 - See [Examples](../../examples/colab-notebooks.md) for complete use cases
 

@@ -1,6 +1,6 @@
 # Supported Operations
 
-DL-Backtrace supports 100+ PyTorch ATen operations. This page lists all supported operations.
+DLBacktrace supports 100+ PyTorch ATen operations. This page lists all supported operations.
 
 ---
 

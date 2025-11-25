@@ -1,6 +1,6 @@
 # PyTorch Backend Overview
 
-DL-Backtrace provides comprehensive support for PyTorch models through the **DLBacktrace** API.
+DLBacktrace provides comprehensive support for PyTorch models through the **DLBacktrace** API.
 
 ---
 
@@ -39,7 +39,7 @@ graph LR
 ### NLP Models
 
 - **BERT Family**: BERT, RoBERTa, DistilBERT, ALBERT
-- **LLaMA**: LLaMA-3.2 (1B, 3B, 8B)
+- **LLaMA**: LLaMA-3.2-(1B, 3B), LLaMA-3.1-8B
 - **Qwen**: Qwen3(from 0.6 B to 14B)
 - **Custom Transformers**: Any transformer-based architecture
 
