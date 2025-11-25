@@ -19,14 +19,14 @@
 
 ## Overview
 
-DLBacktrace is a model-agnostic explainability framework developed by *Lexsi Labs*. It provides comprehensive layer-wise importance values (relevance) and model tracing capabilities across a wide range of model architectures — including transformers, LLMs, MoEs, and more — as well as diverse task types such as tabular, vision, and text. The framework is designed for robust and efficient execution on both CPU and GPU environments.
+DLBacktrace is a model-agnostic explainability framework developed by *Lexsi Labs*. It provides comprehensive layerwise importance values (relevance scores) and model tracing capabilities across a wide range of model architectures — including Transformers, Large Language Models (LLMs), Mixture-of-Experts (MoEs), and more — as well as diverse task types such as Tabular, Vision, and Text. The framework is designed for robust and efficient execution on both CPU and GPU environments.
 
 ## Key Features
 
 ### Core Capabilities
 - **🔍 Deep Model Interpretability:** Gain comprehensive insights into your AI models using advanced relevance propagation algorithms
-- **🎯 Multi-Task Support:** Binary/multi-class classification, object detection, segmentation, and text generation
-- **🏗️ Architecture Agnostic:** Support for CNN, RNN, Transformer, and custom architectures including Mixture of Experts (MoE)
+- **🎯 Multi-Task Support:** Binary/Multi-class classification, object detection, segmentation, and text generation
+- **🏗️ Architecture Agnostic:** Support for Convolutional Neural Networks (CNNs), Recurrent Neural Networks (RNNs), Transformer, and custom architectures including Mixture-of-Experts (MoEs)
 - **⚡ High Performance:** Optimized execution engine with CUDA acceleration and deterministic tracing
 - **🔧 Robust Operations:** Full support for negative indexing and complex tensor operations
 - **📊 Comprehensive Tracing:** Layer-wise activation and relevance analysis with detailed execution tracking
@@ -34,10 +34,10 @@ DLBacktrace is a model-agnostic explainability framework developed by *Lexsi Lab
 
 ### Advanced Features
 - **🚀 High-Level Pipeline Interface:** Simplified API for text/image classification and generation with automatic model loading and configuration
-- **🎲 DLB Auto Sampler:** Advanced text generation with multiple sampling strategies (greedy, temperature, top-k, top-p, beam search) and token-level relevance tracking
-- **🧠 Mixture of Experts (MoE) Support:** Built-in support for MoE architectures (JetMoE, OLMoE, Qwen3-MoE, GPT-OSS) with expert-level relevance analysis
+- **🎲 DLB Auto Sampler:** Advanced text generation with multiple decoding strategies — including greedy decoding, beam search (deterministic), and stochastic sampling methods such as temperature, top-k, and top-p — along with token-level relevance tracking
+- **🧠 Mixture-of-Experts (MoEs) Support:** Built-in support for MoEs architectures (JetMoE, OLMoE, Qwen3-MoE, GPT-Oss) with expert-level relevance analysis
 - **🌡️ Temperature Scaling:** Control generation diversity and model confidence with flexible temperature parameters
-- **🔄 Enhanced Execution Engine:** Critical fixes for RoBERTa, LLaMA, and other transformer models
+- **🔄 Enhanced Execution Engine:** Critical fixes for RoBERTa, LLaMA, and other transformer models 
 
 ---
 
@@ -45,7 +45,7 @@ DLBacktrace is a model-agnostic explainability framework developed by *Lexsi Lab
 
 DLB v2 introduces **major architectural upgrades** to the explainability engine — resulting in *orders of magnitude faster performance* compared to v1.
 
-> 📘 **Note:** All benchmarks below were conducted on the **LLaMA 3.2 – 3 B parameter model** using the MMLU dataset on a NVIDIA RTX 4090.
+> 📘 **Note:** All benchmarks below were conducted on the **LLaMA-3.2–3B model** using the MMLU dataset on an NVIDIA RTX 4090.
 
 ---
 
@@ -122,15 +122,16 @@ class MyModel(nn.Module):
     def forward(self, x):
         return self.linear(x)
 
-# Initialize model and DL-Backtrace
+# Initialize model and DLBacktrace
 model = MyModel()
 x = torch.randn(1, 10)  # Example input
 
-# Create DL-Backtrace instance
+# Create DLBacktrace instance
 dlb = DLBacktrace(
     model=model,
     input_for_graph=(x,),
-    layer_implementation="pytorch"
+    device='cuda',    # 'cpu',
+    verbose=False
 )
 
 # Get layer-wise outputs
@@ -150,15 +151,40 @@ relevance = dlb.evaluation(
 Simplified API for common ML tasks with automatic model loading and configuration:
 
 ```python
-from dl_backtrace.pytorch_backtrace.dlbacktrace import DLBPipeline
+from dl_backtrace.pytorch_backtrace import DLBacktrace
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+import torch
 
-# Text classification with relevance
-pipeline = DLBPipeline(task="text-classification", model_name="bert-base-uncased")
-result = pipeline("Sample text", return_relevance=True)
+# Load model and tokenizer
+model = AutoModelForSequenceClassification.from_pretrained("textattack/bert-base-uncased-SST-2")
+tokenizer = AutoTokenizer.from_pretrained("textattack/bert-base-uncased-SST-2")
 
-# Text generation with Auto Sampler
-gen_pipeline = DLBPipeline(task="text-generation", model_name="gpt2")
-output = gen_pipeline("Once upon a time", max_length=50, sampling_strategy="top_p")
+# Prepare input
+text = "This movie is fantastic!"
+tokens = tokenizer(text, return_tensors="pt")
+input_ids = tokens["input_ids"]
+attention_mask = tokens["attention_mask"]
+
+# Initialize DLBacktrace
+dlb = DLBacktrace(
+    model,
+    (input_ids, attention_mask),
+    device='cuda',  # or 'cpu'
+    verbose=False
+)
+
+# Run text classification with run_task() - ONE CALL!
+results = dlb.run_task(
+    task="text-classification",  # or "auto" for automatic detection
+    inputs={'input_ids': input_ids, 'attention_mask': attention_mask},
+    debug=False
+)
+
+# Access predictions and relevance
+predictions = results['predictions']
+relevance = results['relevance']
+print(f"Predicted class: {predictions.argmax(axis=-1)}")
+print(f"Token relevance shape: {relevance['input_ids'].shape}")
 ```
 
 ### 🎲 DLB Auto Sampler
@@ -183,22 +209,48 @@ output = sampler.generate("Prompt", strategy="beam_search", num_beams=5)
 print(output['relevance_scores'])
 ```
 
-### 🧠 Mixture of Experts (MoE) Support
+### 🧠 Mixture-of-Experts (MoEs) Support
 Built-in support for MoE architectures with expert-level relevance analysis:
 
 ```python
-from dl_backtrace.moe_pytorch_backtrace.backtrace import Backtrace
+from dl_backtrace.moe_pytorch_backtrace import Backtrace
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
-# Supported MoE models: JetMoE, OLMoE, Qwen3-MoE, GPT-OSS
-backtrace = Backtrace(
-    model=moe_model,
-    model_type="jetmoe",  # or "olmoe", "qwen", "gpt_oss"
-    input_text="Sample input",
-    tokenizer=tokenizer
+# Load MoE model (GPT-OSS, JetMoE, OLMoE, Qwen3-MoE)
+model = AutoModelForCausalLM.from_pretrained("openai/gpt-oss-20b")
+tokenizer = AutoTokenizer.from_pretrained("openai/gpt-oss-20b")
+
+# Initialize MoE Backtrace
+bt = Backtrace(
+    model=model,
+    model_type='gpt_oss',  # or 'jetmoe', 'olmoe', 'qwen'
+    device='cpu'  # or 'cuda'
 )
 
+# Prepare input
+prompt = "What is the capital of France?"
+tokens = tokenizer(prompt, return_tensors="pt")
+input_ids = tokens["input_ids"]
+attention_mask = tokens["attention_mask"]
+
+# Run generation with run_task() - ONE CALL!
+results = bt.run_task(
+    task="generation",
+    inputs={'input_ids': input_ids, 'attention_mask': attention_mask},
+    tokenizer=tokenizer,
+    max_new_tokens=10,
+    return_relevance=True,
+    return_scores=True,
+    debug=False
+)
+
+# Access generated text and relevance
+generated_text = tokenizer.decode(results['generated_ids'][0], skip_special_tokens=True)
+print(f"Generated: {generated_text}")
+
 # Get expert-level relevance
-expert_relevance = backtrace.all_layer_expert_relevance()
+expert_relevance = bt.all_layer_expert_relevance
+print(f"Expert routing across {len(expert_relevance)} layers")
 ```
 
 ### 🌡️ Temperature Scaling
@@ -218,7 +270,7 @@ output = dlb.generate_with_temperature(
 ```
 
 ### ⚡ Execution Engines
-DL-Backtrace provides optimized execution engines:
+DLBacktrace provides optimized execution engines:
 
 #### ExecutionEngineNoCache 
 - **Memory-efficient**: Runs entirely in RAM for faster execution
@@ -226,7 +278,7 @@ DL-Backtrace provides optimized execution engines:
 - **Recent Improvements**: Critical fixes for transformer models (RoBERTa, LLaMA, BERT)
 
 ### 🛡️ Deterministic Execution Environment
-DL-Backtrace automatically sets up a deterministic environment for consistent results:
+DLBacktrace automatically sets up a deterministic environment for consistent results:
 - ✅ CUDA memory management and synchronization
 - ✅ Deterministic algorithms and cuDNN settings
 - ✅ Random seed control and environment variables
@@ -296,15 +348,15 @@ For more detailed examples and use cases, check out our documentation.
 ## Testing & Validation
 
 ### Supported Models
-DL-Backtrace has been extensively tested with:
+DLBacktrace has been extensively tested with:
 - **Vision Models**: ResNet, VGG, DenseNet, EfficientNet, MobileNet, ViT
-- **NLP Models**: BERT, ALBERT, RoBERTa, DistilBERT, ELECTRA, XLNet, LLaMA-3.2
+- **NLP Models**: BERT, ALBERT, RoBERTa, DistilBERT, ELECTRA, XLNet, LLaMA-3.2, Qwen
 - **MoE Models**: JetMoE, OLMoE (Open Language Model with Experts), Qwen3-MoE, GPT-OSS
 - **Tasks**: Classification, Object Detection, Segmentation, Text Generation, Expert-Level Analysis
 
 ## Getting Started
 
-If you're new to DL-Backtrace:
+If you're new to DLBacktrace:
 
 1. **📖 Read the Documentation**: [https://dlbacktrace.lexsi.ai/](https://dlbacktrace.lexsi.ai/)
 2. **🚀 Try the Quick Start**: See examples above for PyTorch models
