@@ -1,6 +1,6 @@
 # Use Cases
 
-Real-world applications of DL-Backtrace.
+Real-world applications of DLBacktrace.
 
 ---
 

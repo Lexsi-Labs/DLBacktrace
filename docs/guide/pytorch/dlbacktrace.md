@@ -1,6 +1,6 @@
 # DLBacktrace Guide
 
-`DLBacktrace` is the main class for analyzing PyTorch models with DL-Backtrace.
+`DLBacktrace` is the main class for analyzing PyTorch models with DLBacktrace.
 
 ---
 
@@ -79,10 +79,6 @@ relevance = dlb.evaluation(
 **Task Types:**
 - `"binary-classification"`
 - `"multi-class classification"`
-
-**Model Types:**
-- `"Encoder"`: Standard encoder models
-- `"Encoder_Decoder"`: Seq2seq models
 
 **Returns:**
 - `dict`: Mapping of node names to relevance scores

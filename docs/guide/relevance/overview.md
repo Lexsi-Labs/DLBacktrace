@@ -1,13 +1,13 @@
 # Relevance Propagation Overview
 
-Relevance propagation is the core technique DL-Backtrace uses to explain model predictions.
+Relevance propagation is the core technique DLBacktrace uses to explain model predictions.
 
 ---
 
 ## What is Relevance Propagation?
 
 **Relevance propagation** traces the "importance" or "contribution" of each input feature to the model's output by propagating relevance scores backward through the network.
-We use Layer-specific algorithms (Linear, Convolutional, Attention) that distribute relevance based on each layer's mathematical properties and activation patterns
+We use Layer-specific algorithms (Linear, Convolutional, Attention) that distribute relevance based on each layer's mathematical properties and activation patterns.
 It distributes relevance scores across layers, providing insights into feature importance, information flow, and bias, enabling better model interpretation and validation without external dependencies.
 
 ### Key Concept
@@ -20,7 +20,7 @@ We repeat this question layer by layer until we reach the input, resulting in a 
 
 ---
 
-## How It Works in DL-Backtrace
+## How It Works in DLBacktrace
 
 ### Step 1: Forward Pass
 
@@ -85,31 +85,31 @@ W = [[0.5, 0.3, 0.2],
 b = [0.1, 0.2]
 
 # Intermediate
-z = W @ x + b = [2.4, 2.4]
+z = W @ x + b = [1.8, 2.6]
 
 # ReLU
-a = relu(z) = [2.4, 2.4]
+a = relu(z) = [1.8, 2.6]
 
 # Output relevance (start here)
-R_output = [100, 0]  # Class 0 predicted
+R_output = [0, 100]  # Class 1 predicted
 ```
 
 ### Backward Pass
 
 ```python
-# Propagate through ReLU (pass-through for positive values)
-R_z = [100, 0]
+# Propagate through ReLU (pass-through for positive values) 
+R_z = [0, 100]
 
 # Propagate through Linear
 # R_input[i] = sum_j (W[j,i] * x[i] / (W @ x)[j]) * R_z[j]
-R_x[0] = (0.5 * 1.0 / 2.4) * 100 = 20.8
-R_x[1] = (0.3 * 2.0 / 2.4) * 100 = 25.0
-R_x[2] = (0.2 * 3.0 / 2.4) * 100 = 25.0
+R_x0 = (0.5 * 1.0 / 1.8) * 0  +  (0.1 * 1.0 / 2.6) * 100  = 3.85
+R_x1 = (0.3 * 2.0 / 1.8) * 0  +  (0.4 * 2.0 / 2.6) * 100  = 30.77
+R_x2 = (0.2 * 3.0 / 1.8) * 0  +  (0.5 * 3.0 / 2.6) * 100  = 57.69
 
 # Input relevances
-# x[0]=1.0 → 20.8% relevance
-# x[1]=2.0 → 25.0% relevance
-# x[2]=3.0 → 25.0% relevance
+# x[0]=1.0 → 3.85% relevance
+# x[1]=2.0 → 30.77% relevance
+# x[2]=3.0 → 57.69% relevance
 ```
 
 ---
@@ -208,7 +208,7 @@ for name, rel in relevance.items():
 
 <!-- ## Evaluation Modes
 
-DL-Backtrace supports different evaluation modes:
+DLBacktrace supports different evaluation modes:
 
 ### Default Mode
 
