@@ -1,5 +1,5 @@
 include requirements.txt
-include LISCENSE.md
+include LICENSE.md
 recursive-include dl_backtrace *.pickle
 recursive-exclude * __pycache__
 recursive-exclude * *.py[co]
