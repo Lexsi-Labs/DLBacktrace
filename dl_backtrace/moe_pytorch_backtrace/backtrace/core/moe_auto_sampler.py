@@ -550,7 +550,7 @@ class MoEAutoSampler:
             )
 
             # Decode the initial prompt to text
-            prompt_text = self.tokenizer.decode(input_ids[0], skip_special_tokens=False)
+            prompt_text = self.tokenizer.decode(input_ids[0], skip_special_tokens=True)
             
             # Initialize traces
             scores_trace_beam = [] if return_scores else None
