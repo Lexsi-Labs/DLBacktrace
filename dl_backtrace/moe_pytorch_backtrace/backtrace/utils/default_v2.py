@@ -996,6 +996,11 @@ def calculate_wt_residual(wts, inp=None):
     wt_mat = [i.reshape(wts.shape) for i in list(wt_mat)]
     return wt_mat
 
+def weight_scaler(arg, scaler=100.0):
+    s1 = np.sum(arg)
+    scale_factor = s1 / scaler
+    return arg / scale_factor
+
 def weight_normalize(arg, max_val=1.0):
     arg_max = np.max(arg)
     arg_min = np.abs(np.min(arg))
