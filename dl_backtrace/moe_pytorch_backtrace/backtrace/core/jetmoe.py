@@ -418,11 +418,8 @@ def create_jetmoe_output(
         nonlocal token_idx
         token_idx += 1
 
-    print("[create_jetmoe_output] input_text:", repr(input_text))
     enc = tokenizer(input_text, return_tensors="pt")
     input_ids = enc["input_ids"].to(device)
-    print("[create_jetmoe_output] tokenized shape:", input_ids.shape)
-    print("[create_jetmoe_output] tokens:", tokenizer.convert_ids_to_tokens(input_ids[0].tolist()))
     model = model.to(device).eval()
 
     if max_length is None:
