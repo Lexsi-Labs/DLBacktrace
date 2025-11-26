@@ -1,13 +1,17 @@
 import torch
 import torch.nn.functional as F
 import numpy as np
+import concurrent.futures
+
 
 def np_swish(x, beta=0.75):
     z = 1 / (1 + np.exp(-np.clip(beta * x, -500, 500)))
     return x * z 
 
+def stabilize(matrix, epsilon=1e-6):
+    return matrix + epsilon * np.sign(matrix)
+
 def process_single_relevance_router_logits(wts, input, W_router):
-    print("Running original version of process_single_relevance_router_logits")
     wt_mat_total = np.zeros(input.shape)
     
     for i in range(wts.shape[0]):
@@ -47,7 +51,6 @@ def process_single_relevance_router_logits(wts, input, W_router):
     return wt_mat_total
 
 def process_single_relevance_gated_proj(wts, input):
-    print("Running original version of process_single_relevance_gated_proj")
     wt_mat_total = np.zeros(input.shape)
     
     for i in range(wts.shape[0]):
@@ -89,7 +92,6 @@ def process_single_relevance_gated_proj(wts, input):
     return wt_mat_total
 
 def process_single_relevance_proj(wts, output):
-    print("Running original version of process_single_relevance_proj")
     wt_mat_total = np.zeros(output.shape)
     
     for i in range(wts.shape[0]):
@@ -118,7 +120,6 @@ def process_single_relevance_proj(wts, output):
     return wt_mat_total
 
 def olmoe_mlp_forward(inp, w, model):
-    print("Running original version of olmoe_mlp_forward")
     intermediate_outputs = {}
 
     _, hidden_dim = inp.shape
@@ -164,7 +165,6 @@ def olmoe_mlp_forward(inp, w, model):
     return intermediate_outputs
 
 def calculate_wt_olmoe_feed_forward_parallel(wts, inp, w, model):
-    print("Running original version of calculate_wt_olmoe_feed_forward_parallel")
     num_experts = model.config.num_experts
     intermediate_outputs = olmoe_mlp_forward(inp, w, model)
 
@@ -209,6 +209,11 @@ def calculate_wt_olmoe_feed_forward_parallel(wts, inp, w, model):
     relevance_router_logits = process_single_relevance_router_logits(relev_half, inp, w['W_gate'])
 
     final_relevance_input += relevance_router_logits
+    final_relevance_input = (wts / final_relevance_input) * final_relevance_input
+    
+    # ✅ Return relevance map and per-expert relevance
+    return final_relevance_input, relevance_expert
+
 
 def process_single_relevance_QK(i, wts, QK_output):
     wt_mat_QK = np.zeros(QK_output.shape)
@@ -314,7 +319,7 @@ def calculate_wt_attention_output_projection_parallel(wts, proj_output):
 
     return wt_mat_proj_output_total
 
-def calculate_wt_self_attention_parallel(wts, inp, w):
+def calculate_wt_self_attention_parallel(wts, inp, w, model):
     '''
     Input:
         wts:  relevance score of the layer
@@ -326,20 +331,11 @@ def calculate_wt_self_attention_parallel(wts, inp, w):
         Step-2: outputs = F.softmax(inputs, dim=dim, dtype=dtype)
         Step-3: outputs = input_a * input_b
     '''
-    # print(f"inp: {inp.shape}, wts: {wts.shape}")   # (1, 512)
-    # print(f"w['W_q']: {w['W_q'].shape}, w['W_k']: {w['W_k'].shape}, w['W_v']: {w['W_v'].shape}")
-
     query_output = np.einsum('ij,kj->ik', inp, w['W_q'])
     key_output = np.einsum('ij,kj->ik', inp, w['W_k'])
     value_output = np.einsum('ij,kj->ik', inp, w['W_v'])
-    # print(f"query_output: {query_output.shape}, key_output: {key_output.shape}, value_output: {value_output.shape}")
 
     # --------------- Reshape for Multi-Head Attention ----------------------
-    # config = model.config
-    # num_heads = config.num_attention_heads
-    # hidden_size = config.hidden_size
-    # num_key_value_heads = config.num_key_value_heads
-    # head_dim = hidden_size // num_heads  # dimension of each attention head
     config = model.config
     num_heads = config.num_attention_heads
     hidden_size = config.hidden_size
@@ -350,29 +346,17 @@ def calculate_wt_self_attention_parallel(wts, inp, w):
         num_key_value_heads = config.num_heads
     head_dim = hidden_size // num_heads  # dimension of each attention head
 
-
-    # query_states = query_output.view(query_output.shape[0], num_heads, head_dim).transpose(0, 1)     # (num_heads, num_tokens, head_dim)
-    # key_states = key_output.view(key_output.shape[0], num_key_value_heads, head_dim).transpose(0, 1)    # (num_key_value_heads, num_tokens, head_dim)
-    # value_states = value_output.view(value_output.shape[0], num_key_value_heads, head_dim).transpose(0, 1)    # (num_key_value_heads, num_tokens, head_dim)
-    # print(f"query_states: {query_states.shape}, key_states: {key_states.shape}, value_states: {value_states.shape}")
-
     query_states = np.einsum('thd->htd', query_output.reshape(query_output.shape[0], num_heads, head_dim))  # (num_heads, num_tokens, head_dim)
     key_states = np.einsum('thd->htd', key_output.reshape(key_output.shape[0], num_key_value_heads, head_dim))  # (num_key_value_heads, num_tokens, head_dim)
     value_states = np.einsum('thd->htd', value_output.reshape(value_output.shape[0], num_key_value_heads, head_dim))  # (num_key_value_heads, num_tokens, head_dim)
-    # print(f"query_states: {query_states.shape}, key_states: {key_states.shape}, value_states: {value_states.shape}")
 
     # calculate how many times we need to repeat the key/value heads
     n_rep = num_heads // num_key_value_heads
     key_states = np.repeat(key_states, n_rep, axis=0)
     value_states = np.repeat(value_states, n_rep, axis=0)
 
-    # print(f"Key States Shape (after repeating): {key_states.shape}")
-    # print(f"Value States Shape (after repeating): {value_states.shape}")
-
     QK_output = np.einsum('hqd,hkd->hqk', query_states, key_states)    # (num_heads, num_tokens, num_tokens)
-    # print(f"QK_output: {QK_output.shape}")
     attn_weights = QK_output / np.sqrt(head_dim)
-    # print(f"attn_weights: {attn_weights.shape}")
 
     # Apply softmax along the last dimension (softmax over key dimension)
     attn_weights = np.exp(attn_weights - np.max(attn_weights, axis=-1, keepdims=True))  # Numerically stable softmax
@@ -383,59 +367,35 @@ def calculate_wt_self_attention_parallel(wts, inp, w):
 
     # Reshape attention output back to original shape (num_tokens, hidden_size)
     attn_output = np.einsum('hqd->qhd', attn_output)
-    # print(f"attn_output: {attn_output.shape}")
     attn_output = attn_output.reshape(attn_output.shape[0], num_heads * head_dim)
-    # print(f"attention_output: {attn_output.shape}")
 
     # Perform final linear projection (num_tokens, hidden_size)
     final_output = np.einsum('qd,dh->qh', attn_output, w['W_d'])
-    # print("Final Output Shape:", final_output.shape)
 
     # ------------- Relevance calculation for Final Linear Projection -------------
-    # wt_mat_attn_proj = calculate_wt_attention_output_projection(wts, final_output)
     wt_mat_attn_proj = calculate_wt_attention_output_projection_parallel(wts, final_output)
-    # print(f"wt_mat_attn_proj: {np.sum(wt_mat_attn_proj):.2f}, shape: {wt_mat_attn_proj.shape}")
 
     # --------------- Relevance Calculation for Step-3 -----------------------
     relevance_V = wt_mat_attn_proj / 2
     relevance_QK = wt_mat_attn_proj / 2
-    # print(f"relevance_V: {np.sum(relevance_V):.2f}, relevance_QK: {np.sum(relevance_QK):.2f}")
-    # print(f"relevance_V: {relevance_V.shape}, relevance_QK: {relevance_QK.shape}")
-    # relevance_V: (8, 4096), relevance_QK: (8, 4096)
 
     # --------------- Relevance Calculation for V --------------------------------
     wt_mat_V = calculate_wt_attention_output_projection_parallel(relevance_V, value_states)
-    # print(f"wt_mat_V: {wt_mat_V.shape}, {np.sum(wt_mat_V):.2f}")
 
     # --------------- Transformed Relevance QK ----------------------------------
-    # print(f"query_output: {query_output.shape}, key_output: {key_output.shape}")
-    # query_output: (8, 4096), key_output: (8, 1024)
-    # QK_output = np.einsum('ij,ik->ij', query_output, key_output)
-    # QK_output = np.einsum('ij,kj->ik', query_output, key_output)
-    # wt_mat_QK = calculate_relevance_QK(relevance_QK, QK_output)
     wt_mat_QK = calculate_relevance_QK_parallel(relevance_QK, QK_output)
-    # print(f"wt_mat_QK: {np.sum(wt_mat_QK):.2f},  relevance_QK: {np.sum(relevance_QK):.2f}")
 
     # --------------- Relevance Calculation for K and Q --------------------------------
     stabilized_QK_output = stabilize(QK_output * 2)
     norm_wt_mat_QK = wt_mat_QK / stabilized_QK_output
-    # print(f"wt_mat_QK: {wt_mat_QK.shape}, query_output: {query_output.shape}, key_output: {key_output.shape}, norm_wt_mat_QK: {norm_wt_mat_QK.shape}")
-
-    # wt_mat_Q = np.einsum('ij,jk->ik', norm_wt_mat_QK, key_output) * query_output
-    # wt_mat_K = np.einsum('ij,ik->kj', query_output, norm_wt_mat_QK) * key_output
 
     wt_mat_Q = np.einsum('htd,hdb->htb', norm_wt_mat_QK, key_states) * query_states
     wt_mat_K = np.einsum('htd,htb->hbd', query_states, norm_wt_mat_QK) * key_states
-    # print(f"wt_mat_Q: {wt_mat_Q.shape}, {np.sum(wt_mat_Q):.2f}")
-    # print(f"wt_mat_K: {wt_mat_K.shape}, {np.sum(wt_mat_K):.2f}")
 
     wt_mat = wt_mat_V + wt_mat_K + wt_mat_Q
 
     # Reshape wt_mat
     wt_mat = np.einsum('htd->thd', wt_mat)
-    wt_mat = wt_mat.reshape(wt_mat.shape[0], wt_mat.shape[1] * wt_mat.shape[2])  # reshaped_array = array.reshape(8, 32 * 128)
+    wt_mat = wt_mat.reshape(wt_mat.shape[0], wt_mat.shape[1] * wt_mat.shape[2])
 
     return wt_mat
-    final_relevance_input = (wts / final_relevance_input) * final_relevance_input
-
-    return final_relevance_input, relevance_expert
