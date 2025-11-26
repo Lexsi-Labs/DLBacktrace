@@ -58,7 +58,9 @@ def calculate_wt_router_logits(
     act_range_lower = -1.0
     act_range_upper = 2.0
     
-    contribution_matrix = inp.unsqueeze(2) * W_router.unsqueeze(0)
+    # W_router: (num_experts, hidden_size), inp: (seq_len, hidden_size)
+    # contribution_matrix: (seq_len, num_experts, hidden_size)
+    contribution_matrix = W_router.unsqueeze(0) * inp.unsqueeze(1)
     
     # Create masks for positive and negative contributions
     p_mask = contribution_matrix > 0
@@ -103,6 +105,15 @@ def calculate_wt_moe_experts( # also called as `calculate_relevance_single`
     w: torch.Tensor
 ) -> torch.Tensor:
 
+    # Handle both 2D (seq_len, features) and 3D (batch_size, seq_len, features) tensors
+    if wts.dim() == 2:
+        # Add batch dimension
+        wts = wts.unsqueeze(0)
+        inp = inp.unsqueeze(0)
+        squeeze_output = True
+    else:
+        squeeze_output = False
+    
     batch_size, seq_len, output_features = wts.shape
     _, _, input_features = inp.shape
     
@@ -156,6 +167,10 @@ def calculate_wt_moe_experts( # also called as `calculate_relevance_single`
     
     # Sum positive and negative contributions and aggregate over output_features dimension
     relevance_input = (p_relevance + n_relevance).sum(dim=2)  # (batch_size, seq_len, input_features)
+    
+    # Remove batch dimension if we added it
+    if squeeze_output:
+        relevance_input = relevance_input.squeeze(0)
     
     return relevance_input
 
@@ -600,7 +615,8 @@ def calculate_moe_moa_output(
     
     num_heads = model.config.num_attention_heads
     top_k = model.config.num_experts_per_tok
-    num_key_value_heads = getattr(model.config, 'num_key_value_heads', model.config.num_heads)
+    # JetMoeConfig uses num_key_value_heads, fallback to num_attention_heads if not present
+    num_key_value_heads = getattr(model.config, 'num_key_value_heads', model.config.num_attention_heads)
     head_dim = model.config.kv_channels
     
     # Reshape for attention computation
