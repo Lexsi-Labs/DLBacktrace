@@ -552,6 +552,12 @@ class MoEAutoSampler:
             # Decode the initial prompt to text
             prompt_text = self.tokenizer.decode(input_ids[0], skip_special_tokens=True)
             
+            print(f"\n[Beam Search Initialization]")
+            print(f"  input_ids shape: {input_ids.shape}")
+            print(f"  input_ids: {input_ids[0].tolist()}")
+            print(f"  prompt_text: {repr(prompt_text)}")
+            print(f"  num_beams: {beams}")
+            
             # Initialize traces
             scores_trace_beam = [] if return_scores else None
             relevance_trace_beam = [] if return_relevance else None
@@ -588,12 +594,17 @@ class MoEAutoSampler:
 
                 for b in range(beams):
                     # Build current text for this beam
-                    current_text = prompt_text + self.tokenizer.decode(
+                    generated_text = self.tokenizer.decode(
                         beam_generated_tokens[b], skip_special_tokens=False
                     )
+                    current_text = prompt_text + generated_text
                     
-                    if debug and step_idx == 0:
-                        print(f"Beam {b}: Computing outputs for text length {len(current_text)}")
+                    print(f"\n[Beam {b}, Step {step_idx}]")
+                    print(f"  prompt_text: {repr(prompt_text)}")
+                    print(f"  beam_generated_tokens: {beam_generated_tokens[b]}")
+                    print(f"  generated_text: {repr(generated_text)}")
+                    print(f"  current_text: {repr(current_text)}")
+                    print(f"  current_text length: {len(current_text)}")
                     
                     # Run MoE Backtrace compute_outputs for single step
                     all_out_b, all_in_b, _ = self.moe_bt.compute_outputs(
@@ -601,6 +612,12 @@ class MoEAutoSampler:
                         tokenizer=self.tokenizer,
                         max_length=1  # Generate one token at a time
                     )
+                    
+                    # Show what compute_outputs tokenized
+                    re_tokenized = self.tokenizer(current_text, return_tensors="pt")
+                    print(f"  re-tokenized input_ids shape: {re_tokenized['input_ids'].shape}")
+                    print(f"  re-tokenized input_ids: {re_tokenized['input_ids'][0].tolist()}")
+                    print(f"  all_out_b keys: {list(all_out_b.keys())}")
                     
                     if return_layerwise_output:
                         io_data_step.append({'all_in': all_in_b, 'all_out': all_out_b})
