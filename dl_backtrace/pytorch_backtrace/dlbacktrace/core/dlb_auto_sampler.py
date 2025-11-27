@@ -601,6 +601,11 @@ class DLBAutoSampler:
             next_beam_tokens = beam_outputs["next_beam_tokens"].to(device)   # [beams]
             next_beam_indices = beam_outputs["next_beam_indices"].to(device) # [beams]
 
+            # Save old beam state for relevance computation (before adding new tokens)
+            if return_relevance:
+                old_generated = generated[self._as_long(next_beam_indices), :].clone()
+                old_attn = attn[self._as_long(next_beam_indices), :].clone()
+
             generated = torch.cat(
                 [generated[self._as_long(next_beam_indices), :],
                 self._as_long(next_beam_tokens).unsqueeze(-1).to(device)],
@@ -617,10 +622,10 @@ class DLBAutoSampler:
             if return_relevance:
                 step_rel_scores = []
                 for b in range(beams):
-                    # refresh node_io for beam b *after* extension
+                    # Use the OLD beam state (before new token) for relevance computation
                     self.dlb.predict(
-                        generated[b:b+1],
-                        attn[b:b+1],
+                        old_generated[b:b+1],
+                        old_attn[b:b+1],
                         debug=False,
                         temperature=1.0,
                     )
