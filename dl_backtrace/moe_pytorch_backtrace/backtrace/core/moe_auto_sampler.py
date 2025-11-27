@@ -810,4 +810,4 @@ class MoEAutoSampler:
                     for step_ios in io_data_trace_beam
                 ]
                 info_beam["layerwise_output_trace"] = flat_io_trace
-            return out_top1, info_beam
+            return out_top1, info_beam 
