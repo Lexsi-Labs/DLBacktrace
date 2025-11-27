@@ -711,6 +711,9 @@ class MoEAutoSampler:
                 next_beam_tokens = beam_outputs["next_beam_tokens"].to(device)  # [beams]
                 next_beam_indices = beam_outputs["next_beam_indices"].to(device)  # [beams]
 
+                # Save old beam state for relevance computation (before adding new tokens)
+                old_beam_generated_tokens = [tokens.copy() for tokens in beam_generated_tokens] if return_relevance else None
+                
                 # Update beam_generated_tokens based on beam reordering
                 new_beam_generated_tokens = []
                 for b in range(beams):
@@ -726,9 +729,13 @@ class MoEAutoSampler:
                 if return_relevance:
                     step_rel_scores = []
                     for b in range(beams):
-                        # Build current text for this beam
+                        # Use the OLD beam state (before new token) for relevance computation
+                        src_beam_idx = int(next_beam_indices[b].item())
+                        old_tokens = old_beam_generated_tokens[src_beam_idx]
+                        
+                        # Build current text for this beam (without the newly selected token)
                         current_text_b = prompt_text + self.tokenizer.decode(
-                            beam_generated_tokens[b], skip_special_tokens=False
+                            old_tokens, skip_special_tokens=False
                         )
                         
                         # Compute outputs for relevance
