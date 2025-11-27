@@ -414,7 +414,13 @@ class MoEAutoSampler:
                 current_text = prompt_text + self.tokenizer.decode(generated_tokens, skip_special_tokens=False)
                 
                 if debug:
-                    print(f"Step {step_idx}: Computing outputs for text length {len(current_text)}")
+                    print(f"\n[Non-Beam Step {step_idx}]")
+                    print(f"  prompt_text: {repr(prompt_text)}")
+                    print(f"  generated_tokens: {generated_tokens}")
+                    generated_text = self.tokenizer.decode(generated_tokens, skip_special_tokens=False) if generated_tokens else ""
+                    print(f"  generated_text: {repr(generated_text)}")
+                    print(f"  current_text: {repr(current_text)}")
+                    print(f"  current_text length: {len(current_text)}")
                 
                 # Run MoE Backtrace compute_outputs for single step
                 all_out, all_in, _ = self.moe_bt.compute_outputs(
@@ -422,6 +428,12 @@ class MoEAutoSampler:
                     tokenizer=self.tokenizer,
                     max_length=1  # Generate one token at a time
                 )
+                
+                if debug:
+                    re_tokenized = self.tokenizer(current_text, return_tensors="pt")
+                    print(f"  re-tokenized input_ids shape: {re_tokenized['input_ids'].shape}")
+                    print(f"  re-tokenized input_ids: {re_tokenized['input_ids'][0].tolist()}")
+                    print(f"  all_out keys: {list(all_out.keys())}")
                 
                 # Extract logits from the last step
                 last_step_key = str(len(all_out) - 1)
