@@ -425,17 +425,17 @@ class Backtrace(object):
                 else:
                     all_wt[child_nodes[0]] += all_wt[start_layer]
 
-        # ---- post-scale/normalize (works on numpy) ----
-        if max_unit > 0 and scaler == 0:
-            temp_dict = {}
-            for k in all_wt.keys():
-                temp_dict[k] = UD2.weight_normalize(all_wt[k], max_val=max_unit)
-            all_wt = temp_dict
-        elif scaler > 0:
-            temp_dict = {}
-            for k in all_wt.keys():
-                temp_dict[k] = UD2.weight_scaler(all_wt[k], scaler=scaler)
-            all_wt = temp_dict
+        # # ---- post-scale/normalize (works on numpy) ----
+        # if max_unit > 0 and scaler == 0:
+        #     temp_dict = {}
+        #     for k in all_wt.keys():
+        #         temp_dict[k] = UD2.weight_normalize(all_wt[k], max_val=max_unit)
+        #     all_wt = temp_dict
+        # elif scaler > 0:
+        #     temp_dict = {}
+        #     for k in all_wt.keys():
+        #         temp_dict[k] = UD2.weight_scaler(all_wt[k], scaler=scaler)
+        #     all_wt = temp_dict
 
         # Store in instance variable (like PyTorch Backtrace)
         self.all_wt = all_wt
