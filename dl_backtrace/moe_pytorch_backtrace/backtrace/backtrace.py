@@ -292,6 +292,7 @@ class Backtrace(object):
             sw_src = out_arr if isinstance(out_arr, np.ndarray) else t2np32(out_arr)
             start_wt = UD2.calculate_start_wt(sw_src, scaler=scaler, task="generation")
         all_wt[out_layer] = start_wt * multiplier
+        print(f"all_wt[{[out_layer]}] start_wt: {np.sum(all_wt[out_layer])}")
 
         # ---- propagate relevance ----
         for start_layer in tqdm(layer_stack):
@@ -785,7 +786,7 @@ class Backtrace(object):
             # Calculate relevance sum for this node
             if node_name in self.all_wt:
                 relevance_sum = np.sum(np.abs(self.all_wt[node_name]))
-                label = f"{node_name}\n{node_class}\nRel: {relevance_sum:.2e}"
+                label = f"{node_name}\n{node_class}\nRel: {relevance_sum:.2f}"
                 
                 # Color nodes by relevance magnitude
                 if relevance_sum > 1.0:
