@@ -787,21 +787,10 @@ class Backtrace(object):
             if node_name in self.all_wt:
                 relevance_sum = np.sum(np.abs(self.all_wt[node_name]))
                 label = f"{node_name}\n{node_class}\nRel: {relevance_sum:.2f}"
-                
-                # Color nodes by relevance magnitude
-                if relevance_sum > 1.0:
-                    fillcolor = 'red'
-                elif relevance_sum > 0.1:
-                    fillcolor = 'orange'
-                elif relevance_sum > 0.01:
-                    fillcolor = 'yellow'
-                else:
-                    fillcolor = 'lightgreen'
             else:
                 label = f"{node_name}\n{node_class}"
-                fillcolor = 'lightgray'
             
-            dot.node(node_name, label, fillcolor=fillcolor)
+            dot.node(node_name, label, fillcolor='white')
 
         # Add edges (parent-child relationships)
         for node_name in nodes_to_show:
