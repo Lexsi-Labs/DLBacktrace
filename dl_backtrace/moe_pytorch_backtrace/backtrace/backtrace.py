@@ -12,6 +12,7 @@ from dl_backtrace.moe_pytorch_backtrace.backtrace.core import (
     helper as helper,
 )
 from dl_backtrace.moe_pytorch_backtrace.backtrace.utils import default_v2 as UD2
+from dl_backtrace.pytorch_backtrace.dlbacktrace.core.visualization import visualize_relevance_auto
 
 
 def t2np32(t):
@@ -712,4 +713,40 @@ class Backtrace(object):
             input_ids=input_ids,
             attention_mask=attention_mask,
             **kwargs
+        )
+
+    def visualize_dlbacktrace(self, output_path="backtrace_graph", top_k=None, relevance_threshold=None, engine_auto_threshold=1500):
+        """
+        Visualize DL-Backtrace graph with relevance scores for MoE models.
+        
+        Args:
+            output_path (str): Base path for output files (default: "backtrace_graph")
+            top_k (int, optional): Show only top-k most relevant nodes
+            relevance_threshold (float, optional): Filter nodes below this relevance threshold
+            engine_auto_threshold (int): Threshold for switching to fast rendering (default: 1500)
+        
+        Note:
+            This method requires that evaluation has been run first to populate self.all_wt.
+            For large graphs (>engine_auto_threshold nodes), a collapsed fast version is generated.
+        """
+        if not hasattr(self, "all_wt") or not self.all_wt:
+            raise RuntimeError(
+                "No relevance data found. Run evaluation() or run_task() with return_relevance=True first."
+            )
+        
+        if not hasattr(self, "model_resource") or not self.model_resource:
+            raise RuntimeError(
+                "No model graph found. Ensure the model was properly initialized."
+            )
+        
+        # Use the visualization function from pytorch_backtrace
+        visualize_relevance_auto(
+            self.model_resource,
+            self.all_wt,
+            output_path=output_path,          # pretty path for small graphs
+            node_threshold=500,
+            engine_auto_threshold=engine_auto_threshold,
+            fast_output_path="backtrace_collapsed_fast",  # path for large graphs
+            show=True,                        # show in Colab/Jupyter
+            inline_format="svg",              # or "png" if SVG too heavy
         )
