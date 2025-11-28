@@ -12,7 +12,6 @@ from dl_backtrace.moe_pytorch_backtrace.backtrace.core import (
     helper as helper,
 )
 from dl_backtrace.moe_pytorch_backtrace.backtrace.utils import default_v2 as UD2
-from dl_backtrace.pytorch_backtrace.dlbacktrace.core.visualization import visualize_relevance_auto
 
 
 def t2np32(t):
@@ -739,14 +738,99 @@ class Backtrace(object):
                 "No model graph found. Ensure the model was properly initialized."
             )
         
-        # Use the visualization function from pytorch_backtrace
-        visualize_relevance_auto(
-            self.model_resource,
-            self.all_wt,
-            output_path=output_path,          # pretty path for small graphs
-            node_threshold=500,
-            engine_auto_threshold=engine_auto_threshold,
-            fast_output_path="backtrace_collapsed_fast",  # path for large graphs
-            show=True,                        # show in Colab/Jupyter
-            inline_format="svg",              # or "png" if SVG too heavy
-        )
+        # MoE-specific visualization implementation
+        try:
+            import graphviz
+        except ImportError:
+            raise ImportError(
+                "graphviz package is required for visualization. "
+                "Install it with: pip install graphviz"
+            )
+
+        # Get the graph structure from model_resource
+        graph_dict = self.model_resource.get("graph", {})
+        num_nodes = len(graph_dict)
+        
+        print(f"📊 Visualizing MoE DL-Backtrace graph with {num_nodes} nodes...")
+
+        # Create a directed graph
+        dot = graphviz.Digraph(comment='MoE DL-Backtrace Graph')
+        dot.attr(rankdir='BT')  # Bottom to top (inputs at bottom, outputs at top)
+        dot.attr('node', shape='box', style='rounded,filled', fillcolor='lightblue')
+
+        # Filter nodes by relevance if threshold is set
+        nodes_to_show = set(graph_dict.keys())
+        if relevance_threshold is not None:
+            nodes_to_show = {
+                node for node in graph_dict.keys()
+                if node in self.all_wt and np.sum(np.abs(self.all_wt[node])) >= relevance_threshold
+            }
+            print(f"   Filtered to {len(nodes_to_show)} nodes with relevance >= {relevance_threshold}")
+
+        # Filter to top-k if specified
+        if top_k is not None and top_k < len(nodes_to_show):
+            node_relevances = {
+                node: np.sum(np.abs(self.all_wt.get(node, 0)))
+                for node in nodes_to_show
+            }
+            top_nodes = sorted(node_relevances.items(), key=lambda x: x[1], reverse=True)[:top_k]
+            nodes_to_show = {node for node, _ in top_nodes}
+            print(f"   Showing top {top_k} most relevant nodes")
+
+        # Add nodes with relevance information
+        for node_name in nodes_to_show:
+            node_info = graph_dict[node_name]
+            node_class = node_info.get('class', 'Unknown')
+            
+            # Calculate relevance sum for this node
+            if node_name in self.all_wt:
+                relevance_sum = np.sum(np.abs(self.all_wt[node_name]))
+                label = f"{node_name}\n{node_class}\nRel: {relevance_sum:.2e}"
+                
+                # Color nodes by relevance magnitude
+                if relevance_sum > 1.0:
+                    fillcolor = 'red'
+                elif relevance_sum > 0.1:
+                    fillcolor = 'orange'
+                elif relevance_sum > 0.01:
+                    fillcolor = 'yellow'
+                else:
+                    fillcolor = 'lightgreen'
+            else:
+                label = f"{node_name}\n{node_class}"
+                fillcolor = 'lightgray'
+            
+            dot.node(node_name, label, fillcolor=fillcolor)
+
+        # Add edges (parent-child relationships)
+        for node_name in nodes_to_show:
+            node_info = graph_dict[node_name]
+            children = node_info.get('child', [])
+            
+            if children:
+                if isinstance(children, str):
+                    children = [children]
+                
+                for child in children:
+                    if child in nodes_to_show:
+                        dot.edge(child, node_name)
+
+        # Render the graph
+        try:
+            output_file = dot.render(output_path, format='svg', cleanup=True)
+            print(f"✅ Graph saved to: {output_file}")
+            
+            # Try to display in Jupyter/Colab
+            try:
+                from IPython.display import SVG, display
+                display(SVG(output_file))
+                print("📊 Graph displayed inline")
+            except:
+                print("💡 To view the graph, open:", output_file)
+                
+        except Exception as e:
+            print(f"⚠️  Could not render graph: {e}")
+            print("💡 Make sure graphviz system package is installed:")
+            print("   - Ubuntu/Debian: sudo apt-get install graphviz")
+            print("   - macOS: brew install graphviz")
+            print("   - Windows: choco install graphviz")
