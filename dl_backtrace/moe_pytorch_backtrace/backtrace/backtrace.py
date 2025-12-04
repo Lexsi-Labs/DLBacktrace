@@ -292,6 +292,7 @@ class Backtrace(object):
             sw_src = out_arr if isinstance(out_arr, np.ndarray) else t2np32(out_arr)
             start_wt = UD2.calculate_start_wt(sw_src, scaler=scaler, task="generation")
         all_wt[out_layer] = start_wt * multiplier
+        print(f"all_wt[{[out_layer]}] start_wt: {np.sum(all_wt[out_layer])}")
 
         # ---- propagate relevance ----
         for start_layer in tqdm(layer_stack):
@@ -424,17 +425,17 @@ class Backtrace(object):
                 else:
                     all_wt[child_nodes[0]] += all_wt[start_layer]
 
-        # ---- post-scale/normalize (works on numpy) ----
-        if max_unit > 0 and scaler == 0:
-            temp_dict = {}
-            for k in all_wt.keys():
-                temp_dict[k] = UD2.weight_normalize(all_wt[k], max_val=max_unit)
-            all_wt = temp_dict
-        elif scaler > 0:
-            temp_dict = {}
-            for k in all_wt.keys():
-                temp_dict[k] = UD2.weight_scaler(all_wt[k], scaler=scaler)
-            all_wt = temp_dict
+        # # ---- post-scale/normalize (works on numpy) ----
+        # if max_unit > 0 and scaler == 0:
+        #     temp_dict = {}
+        #     for k in all_wt.keys():
+        #         temp_dict[k] = UD2.weight_normalize(all_wt[k], max_val=max_unit)
+        #     all_wt = temp_dict
+        # elif scaler > 0:
+        #     temp_dict = {}
+        #     for k in all_wt.keys():
+        #         temp_dict[k] = UD2.weight_scaler(all_wt[k], scaler=scaler)
+        #     all_wt = temp_dict
 
         # Store in instance variable (like PyTorch Backtrace)
         self.all_wt = all_wt
@@ -713,3 +714,113 @@ class Backtrace(object):
             attention_mask=attention_mask,
             **kwargs
         )
+
+    def visualize_dlbacktrace(self, output_path="backtrace_graph", top_k=None, relevance_threshold=None, engine_auto_threshold=1500):
+        """
+        Visualize DL-Backtrace graph with relevance scores for MoE models.
+        
+        Args:
+            output_path (str): Base path for output files (default: "backtrace_graph")
+            top_k (int, optional): Show only top-k most relevant nodes
+            relevance_threshold (float, optional): Filter nodes below this relevance threshold
+            engine_auto_threshold (int): Threshold for switching to fast rendering (default: 1500)
+        
+        Note:
+            This method requires that evaluation has been run first to populate self.all_wt.
+            For large graphs (>engine_auto_threshold nodes), a collapsed fast version is generated.
+        """
+        if not hasattr(self, "all_wt") or not self.all_wt:
+            raise RuntimeError(
+                "No relevance data found. Run evaluation() or run_task() with return_relevance=True first."
+            )
+        
+        if not hasattr(self, "model_resource") or not self.model_resource:
+            raise RuntimeError(
+                "No model graph found. Ensure the model was properly initialized."
+            )
+        
+        # MoE-specific visualization implementation
+        try:
+            import graphviz
+        except ImportError:
+            raise ImportError(
+                "graphviz package is required for visualization. "
+                "Install it with: pip install graphviz"
+            )
+
+        # Get the graph structure from model_resource
+        graph_dict = self.model_resource.get("graph", {})
+        num_nodes = len(graph_dict)
+        
+        print(f"📊 Visualizing MoE DL-Backtrace graph with {num_nodes} nodes...")
+
+        # Create a directed graph
+        dot = graphviz.Digraph(comment='MoE DL-Backtrace Graph')
+        dot.attr(rankdir='BT')  # Bottom to top (inputs at bottom, outputs at top)
+        dot.attr('node', shape='box', style='rounded,filled', fillcolor='lightblue')
+
+        # Filter nodes by relevance if threshold is set
+        nodes_to_show = set(graph_dict.keys())
+        if relevance_threshold is not None:
+            nodes_to_show = {
+                node for node in graph_dict.keys()
+                if node in self.all_wt and np.sum(np.abs(self.all_wt[node])) >= relevance_threshold
+            }
+            print(f"   Filtered to {len(nodes_to_show)} nodes with relevance >= {relevance_threshold}")
+
+        # Filter to top-k if specified
+        if top_k is not None and top_k < len(nodes_to_show):
+            node_relevances = {
+                node: np.sum(np.abs(self.all_wt.get(node, 0)))
+                for node in nodes_to_show
+            }
+            top_nodes = sorted(node_relevances.items(), key=lambda x: x[1], reverse=True)[:top_k]
+            nodes_to_show = {node for node, _ in top_nodes}
+            print(f"   Showing top {top_k} most relevant nodes")
+
+        # Add nodes with relevance information
+        for node_name in nodes_to_show:
+            node_info = graph_dict[node_name]
+            node_class = node_info.get('class', 'Unknown')
+            
+            # Calculate relevance sum for this node
+            if node_name in self.all_wt:
+                relevance_sum = np.sum(np.abs(self.all_wt[node_name]))
+                label = f"{node_name}\n{node_class}\nRel: {relevance_sum:.2f}"
+            else:
+                label = f"{node_name}\n{node_class}"
+            
+            dot.node(node_name, label, fillcolor='white')
+
+        # Add edges (parent-child relationships)
+        for node_name in nodes_to_show:
+            node_info = graph_dict[node_name]
+            children = node_info.get('child', [])
+            
+            if children:
+                if isinstance(children, str):
+                    children = [children]
+                
+                for child in children:
+                    if child in nodes_to_show:
+                        dot.edge(child, node_name)
+
+        # Render the graph
+        try:
+            output_file = dot.render(output_path, format='svg', cleanup=True)
+            print(f"✅ Graph saved to: {output_file}")
+            
+            # Try to display in Jupyter/Colab
+            try:
+                from IPython.display import SVG, display
+                display(SVG(output_file))
+                print("📊 Graph displayed inline")
+            except:
+                print("💡 To view the graph, open:", output_file)
+                
+        except Exception as e:
+            print(f"⚠️  Could not render graph: {e}")
+            print("💡 Make sure graphviz system package is installed:")
+            print("   - Ubuntu/Debian: sudo apt-get install graphviz")
+            print("   - macOS: brew install graphviz")
+            print("   - Windows: choco install graphviz")
