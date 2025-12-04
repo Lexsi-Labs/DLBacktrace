@@ -464,10 +464,11 @@ def calculate_moe_moa_output(inp, w, model):
     hidden_size = model.config.hidden_size
     top_k = model.config.num_experts_per_tok
     # Check if the config has 'num_key_value_heads' attribute
+    # JetMoeConfig uses num_key_value_heads, fallback to num_attention_heads if not present
     if hasattr(model.config, 'num_key_value_heads'):
         num_key_value_heads = model.config.num_key_value_heads
     else:
-        num_key_value_heads = model.config.num_heads
+        num_key_value_heads = model.config.num_attention_heads
     head_dim = model.config.kv_channels  # dimension of each attention head
 
     query_states = query_states.reshape(q_len, num_heads, head_dim).transpose(1, 0, 2)
@@ -550,7 +551,9 @@ def calculate_wt_projected_inp_parallel(wts, inp, w):
 
 
 def calculate_wt_jetmoe_self_attention_parallel(wts, inp, w, model):
-    inp = inp.detach().numpy()
+    # Handle both torch tensors and numpy arrays
+    if hasattr(inp, 'detach'):
+        inp = inp.detach().numpy()
     q_len, _ = inp.shape
 
     intermediate_states = calculate_moe_moa_output(inp, w, model)

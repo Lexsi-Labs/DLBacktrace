@@ -1,6 +1,8 @@
 <p align="center">
-  <img src="assets/images/dlb_logo.png" alt="DLB Logo" width="300px"/>
+  <img src="https://raw.githubusercontent.com/Lexsi-Labs/DLBacktrace/dlb_v2/assets/images/dlb_logo.png"
+       alt="DLB Logo" width="300px"/>
 </p>
+
 
 <h2 align="center">DLBacktrace: Model-Agnostic Explainability for Any Deep Learning Model</h2>
 
@@ -63,9 +65,9 @@ DLB v2 introduces **major architectural upgrades** to the explainability engine 
 
 | Metric | Comparison Plot |
 |:--------|:----------------|
-| 🕒 **Total Time vs Sequence Length** | <img src="assets/images/total_dlb_time_comparison.png" width="500"/> |
-| 🚀 **Token Throughput** | <img src="assets/images/throughput_comparison.png" width="500"/> |
-| ⚙️ **Speedup (v2 / v1)** | <img src="assets/images/speedup_comparison.png" width="500"/> |
+| 🕒 **Total Time vs Sequence Length** | <img src="https://raw.githubusercontent.com/Lexsi-Labs/DLBacktrace/dlb_v2/assets/images/total_dlb_time_comparison.png" width="500"/> |
+| 🚀 **Token Throughput** | <img src="https://raw.githubusercontent.com/Lexsi-Labs/DLBacktrace/dlb_v2/assets/images/throughput_comparison.png" width="500"/> |
+| ⚙️ **Speedup (v2 / v1)** | <img src="https://raw.githubusercontent.com/Lexsi-Labs/DLBacktrace/dlb_v2/assets/images/speedup_comparison.png" width="500"/> |
 
 ---
 
@@ -76,10 +78,8 @@ DLB v2 introduces **major architectural upgrades** to the explainability engine 
 ### From Source (Recommended)
 
 ```bash
-git clone https://github.com/Lexsi-Labs/DLBacktrace.git
-cd DLBacktrace
-pip install -r requirements.txt
-pip install -e .
+pip install torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu126
+pip install dl-backtrace
 ```
 
 ### Requirements
