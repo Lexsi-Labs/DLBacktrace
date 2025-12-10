@@ -15,6 +15,7 @@ from .core.token_relevance_visuals import (
     plot_tokenwise_relevance_map_swapped,
     plot_input_heatmap_for_token,
 )
+from .core.visualization_module_aware import visualize_relevance_with_modules
 
 import numpy as np 
 import torch
@@ -963,6 +964,31 @@ class DLBacktrace:
             fast_output_path="backtrace_collapsed_fast",  # path for large graphs
             show=True,                        # ⬅️ show in Colab
             inline_format="svg",              # or "png" if SVG too heavy
+        )
+
+    def visualize_dlbacktrace_with_modules(
+        self,
+        output_path="backtrace_graph_modules",
+        *,
+        show=True,
+        inline_format="svg",
+    ):
+        """
+        Visualize relevance graph with FX node → nn.Module mapping.
+        """
+        if not getattr(self, "fx_node_to_module", None):
+            raise RuntimeError(
+                "Module mapping not available. "
+                "Initialize DLBacktrace with collect_node_module_map=True."
+            )
+
+        return visualize_relevance_with_modules(
+            self.graph,
+            self.all_wt,
+            self.fx_node_to_module,
+            output_path=output_path,
+            show=show,
+            inline_format=inline_format,
         )
 
     def visualize_tokenwise_relevance_map(
