@@ -21,7 +21,7 @@ import torch
 import inspect
 
 class DLBacktrace:
-    def __init__(self, model, input_for_graph, dynamic_shapes=None, device="cpu", verbose=False, strict_cpu=True):
+    def __init__(self, model, input_for_graph, dynamic_shapes=None, device="cpu", verbose=False, strict_cpu=True, collect_node_module_map=False,):
         """
         Initialize DL-Backtrace FX for model tracing and explainability.
         
@@ -100,6 +100,14 @@ class DLBacktrace:
             print("---------------------------v6------------------------------------------", flush=True)
             print("🔧 Building computation graph...", flush=True)
 
+        # Optional: FX node → module mapping
+        self.fx_node_to_module = None
+        if collect_node_module_map:
+            if self.verbose:
+                print("🔧 Mapping FX nodes to nn.Module hierarchy...", flush=True)
+
+            self.fx_node_to_module = self.map_fx_nodes_to_modules()
+
         # Graph + metadata
         self.graph, self.layer_stack = build_graph(
             self.tracer, self.extracted_weights
@@ -113,6 +121,28 @@ class DLBacktrace:
         if self.verbose:
             print("---------------------------v8------------------------------------------", flush=True)
             print("✅ DL-Backtrace FX initialization complete!", flush=True)
+
+    def map_fx_nodes_to_modules(self):
+        """
+        Map FX graph node names to their originating nn.Module paths
+        using Dynamo's nn_module_stack metadata.
+
+        Returns:
+            Dict[str, Tuple[str, str]]:
+                FX node name -> (module_path, module_class)
+        """
+        graph = self.exported_program.graph_module.graph
+        node_to_module = {}
+
+        for node in graph.nodes:
+            mod_stack = node.meta.get("nn_module_stack", None)
+            if not mod_stack:
+                continue
+
+            module_path, module_class = list(mod_stack.values())[-1]
+            node_to_module[node.name] = (module_path, module_class)
+
+        return node_to_module
     
     def _parse_device_config(self, device):
         """
