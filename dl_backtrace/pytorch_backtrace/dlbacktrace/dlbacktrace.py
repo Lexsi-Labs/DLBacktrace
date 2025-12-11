@@ -15,7 +15,7 @@ from .core.token_relevance_visuals import (
     plot_tokenwise_relevance_map_swapped,
     plot_input_heatmap_for_token,
 )
-from .core.visualization_module_aware import visualize_relevance_with_modules
+from .core.visualization_module_aware import visualize_relevance_with_module_labels
 
 import numpy as np 
 import torch
@@ -974,7 +974,8 @@ class DLBacktrace:
         inline_format="svg",
     ):
         """
-        Visualize relevance graph with FX node → nn.Module mapping.
+        Visualize relevance graph with FX node → nn.Module mapping,
+        using the new module-aware visualization function.
         """
         if not getattr(self, "fx_node_to_module", None):
             raise RuntimeError(
@@ -982,7 +983,8 @@ class DLBacktrace:
                 "Initialize DLBacktrace with collect_node_module_map=True."
             )
 
-        return visualize_relevance_with_modules(
+        # Call the new visualization function (not the old wrapper)
+        return visualize_relevance_with_module_labels(
             self.graph,
             self.all_wt,
             self.fx_node_to_module,
