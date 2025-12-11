@@ -303,23 +303,23 @@ Full support for PyTorch's negative indexing and complex operations:
 
 ## Example Notebooks
 
-| Name        | Task        | Link                          |
-|-------------|-------------|-------------------------------|
-| Custom Tabular Model | Binary Classification | [Colab Link](https://colab.research.google.com/drive/1TqgeeBqQ1G9UGWfHV0MUloCccalpsRCh?usp=sharing)|
-| VGG Model | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1iJJZ0ApWHltTjnbGRKhJDrHlKTlm1koD?usp=sharing) |
-| ResNet Model | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1mpo--AD8vNqm6Y05rb46Yzjx6VhLwXZh?usp=sharing) |
-| ViT Model | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1BhzIw7Pf9-g1tqndaijwZ5FLaDUpjBaR?usp=sharing) |
-| DenseNet Model | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1CE2XBBGd5VSQuipJTyyRcb7mu5RSG6K5?usp=sharing) |
-| EfficientNet Model | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1O-MyvIKWoADG2RrF43p2k8mUYpF9N_8m?usp=sharing) |
-| MobileNet Model | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1BzsID9U3HndLrh67nPWRw_bm7UWLwLOH?usp=sharing) |
-| BERT-Base Model | Sentiment Classification | [Colab Link](https://colab.research.google.com/drive/1ANZPjaAxl2oF2WHj23f87AR9-ZDIMBm9?usp=sharing) |
-| ALBERT Model | Sentiment Classification | [Colab Link](https://colab.research.google.com/drive/1RuAW0FgtWqKkdVbc97VXf9z4oDXmA1ms?usp=sharing) |
-| RoBERTa Model | Sentiment Classification | [Colab Link](https://colab.research.google.com/drive/1Nw6lTSQKJvGU9JBZeXnA7EXboU7mE282?usp=sharing) |
-| DistilBERT Model | Sentiment Classification | [Colab Link](https://colab.research.google.com/drive/13_hqUC2vaJWfF-UheggHJU5RmWS5A2u3?usp=sharing) |
-| Electra Model | Sentiment Classification | [Colab Link](https://colab.research.google.com/drive/1sht3uLej8g-4hMtaHm7VwwUuGAmAqpH_?usp=sharing) |
-| XLNeT Model | Sentiment Classification | [Colab Link](https://colab.research.google.com/drive/1ZmVusCPgeXLGnbt7NzM-3SJuiGRgTzBa?usp=sharing) |
-| LLaMA-3.2-1B Model | Text Generation | [Colab Link](https://colab.research.google.com/drive/1i_CKoCfKdY4fcWyFdzuc_0e868jux12h?usp=sharing) |
-| LLaMA-3.2-3B Model | Text Generation | [Colab Link](https://colab.research.google.com/drive/1ki8kcc4ez8-kdvdlhtoq7Sed9v5hiaNs?usp=sharing) |
+| Name        | Task        | Colab Link                          | HTML Link                                       |
+|-------------|-------------|-------------------------------| -------------------------------|
+| Custom Tabular Model | Binary Classification | [Colab Link](https://colab.research.google.com/drive/1TqgeeBqQ1G9UGWfHV0MUloCccalpsRCh?usp=sharing)| [HTML Version]() |
+| VGG Model | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1LxSazvy1Y2i0Ho1Qw7K905aNmvh66GzR?usp=sharing) | [HTML Version](https://drive.google.com/file/d/1AO7cBJ9o6-Xtaqnall8HWG9ZccwtY-QZ/view?usp=sharing) |
+| ResNet Model | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1O8Is0X-IrKxXzgJeR1Xxy21OOR-UGfm7?usp=sharing) | [HTML Version](https://drive.google.com/file/d/1tU573KFG2HPwM0bhFnGSueSc1uYm1ZCb/view?usp=sharing) |
+| ViT Model | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1B1xN5w51-tRnHyycbHV6lxi0tKxONnoS?usp=sharing) | [HTML Version](https://drive.google.com/file/d/1E59Jlsv-v65V4qRL1q0xb0f5gmIsgPeg/view?usp=sharing) |
+| DenseNet Model | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1TspNRXd-qf81iZepUpU_TrUokZynynbu?usp=sharing) | [HTML Version](https://drive.google.com/file/d/1B-6YwaA97ZVk693bQVukRZjVmZeaJt5Z/view?usp=sharing) |
+| EfficientNet Model | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1Xv9ghxp0OXcfYOseoq37KiJbz-UkLvWq?usp=sharing) | [HTML Version](https://drive.google.com/file/d/19sl0_U9VZbFooX21osmKj35lwHNI6_uz/view?usp=sharing) |
+| MobileNet Model | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/12D6NgYTf4Gud3BXLRfnUK1m5-RLZY6dv?usp=sharing) | [HTML Version](https://drive.google.com/file/d/1Bi01z-_9Gejy7_eA7MsA6-fk9JTRfOQs/view?usp=sharing) |
+| BERT-Base Model | Sentiment Classification | [Colab Link](https://colab.research.google.com/drive/1eBAQ8TToJUs6EN4-md08cjfZUmAArX0s?usp=drive_link) | [HTML Version](https://drive.google.com/file/d/11YmWQ4KtztAk8TEIwFU3kajtM-VLc2O_/view?usp=sharing) |
+| LLaMA-3.2-1B Model | Text Generation | [Colab Link](https://colab.research.google.com/drive/1eZUK-PwI6iZeKnfcQHxIXO7xo8wYDEek?usp=sharing) | [HTML Version](https://drive.google.com/file/d/1QJMWMcxD5ifS8ygoySXgFo9OxhXZTgVY/view?usp=sharing) |
+| Qwen-3-0.6B Model | Text Generation | [Colab Link](https://colab.research.google.com/drive/1nJsxk7HPhiZ1DUIXn0eOnu0yjye-WOQT?usp=drive_link) | [HTML Version](https://drive.google.com/file/d/1yBqe34IExmfD-YYZF_U3wuOK8JiEBDM2/view?usp=sharing) |
+| JetMoE | Text Generation | [Colab Link](https://colab.research.google.com/drive/1MKxR60Mf1F_TNMuE31T3GRWHFPTm5IhP?usp=drive_link) | [HTML Version](https://drive.google.com/file/d/1z39LZVa88YCFKgQPTXKgZIVoav7t1PBH/view?usp=sharing) |
+| OLMoE | Text Generation | [Colab Link](https://colab.research.google.com/drive/1e13QAFw4A8jKhZVb1jh-C_16A2u1vZIH?usp=drive_link) | [HTML Version](https://drive.google.com/file/d/1cHByb9EcR-7k2BAL-HmbprNS5oiL2k8q/view?usp=sharing) |
+| Qwen-3-MoE | Text Generation | [Colab Link](https://colab.research.google.com/drive/1ja26JGNt22rOMT0HCyjOMASXxfnMpkm8?usp=sharing) | [HTML Version](https://drive.google.com/file/d/1Upk1l-SnDGT_Mw3Bm6mNmdAVWWYpyW-S/view?usp=sharing) |
+| GPT-Oss | Text Generation | [Colab Link](https://colab.research.google.com/drive/1zZXTOV4NOrauNDXjjYB8rausbBGoLYtX?usp=sharing) | [HTML Version](https://drive.google.com/file/d/1zs_XyjqmKiT-W3YEqFFTqEKL7z0N_bXq/view?usp=sharing) |
+
 
 For more detailed examples and use cases, check out our documentation.
 
