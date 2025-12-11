@@ -305,7 +305,7 @@ Full support for PyTorch's negative indexing and complex operations:
 
 | Name        | Task        | Colab Link                          | HTML Link                                       |
 |-------------|-------------|-------------------------------| -------------------------------|
-| Custom Tabular Model | Binary Classification | [Colab Link](https://colab.research.google.com/drive/1TqgeeBqQ1G9UGWfHV0MUloCccalpsRCh?usp=sharing)| [HTML Version]() |
+| Custom Tabular Model | Binary Classification | [Colab Link](https://colab.research.google.com/drive/13N2sfAxA_7GJsZ7VAKS5WIOg6GusQghI?usp=sharing)| [HTML Version](https://drive.google.com/file/d/1_5DZWIe0Q5eB4CtVhkbO4zTCRbe6yW5D/view?usp=sharing) |
 | VGG Model | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1LxSazvy1Y2i0Ho1Qw7K905aNmvh66GzR?usp=sharing) | [HTML Version](https://drive.google.com/file/d/1AO7cBJ9o6-Xtaqnall8HWG9ZccwtY-QZ/view?usp=sharing) |
 | ResNet Model | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1O8Is0X-IrKxXzgJeR1Xxy21OOR-UGfm7?usp=sharing) | [HTML Version](https://drive.google.com/file/d/1tU573KFG2HPwM0bhFnGSueSc1uYm1ZCb/view?usp=sharing) |
 | ViT Model | Multi-Class Classification | [Colab Link](https://colab.research.google.com/drive/1B1xN5w51-tRnHyycbHV6lxi0tKxONnoS?usp=sharing) | [HTML Version](https://drive.google.com/file/d/1E59Jlsv-v65V4qRL1q0xb0f5gmIsgPeg/view?usp=sharing) |
