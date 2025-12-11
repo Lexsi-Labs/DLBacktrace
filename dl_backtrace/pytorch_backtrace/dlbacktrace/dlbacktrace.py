@@ -546,11 +546,13 @@ class DLBacktrace:
         Args:
             task (str): Task type - "auto", "image-classification", "text-classification", or "generation"
                 - "auto": Automatically detect task based on inputs
+                - "tabular-classification": For PyTorch Tabular Classification models 
                 - "image-classification": For image classification models (e.g., MobileNet, ResNet)
                 - "text-classification": For text classification models (e.g., BERT sentiment)
                 - "generation": For text generation models (e.g., GPT, LLaMA)
             
             inputs: Input data for the model
+                - For tabular-classification: torch.Tensor of shape (B, F)
                 - For image-classification: torch.Tensor of shape (B, C, H, W)
                 - For text-classification: dict with 'input_ids' and 'attention_mask' or tuple of tensors
                 - For generation: dict with 'input_ids' and 'attention_mask' or tuple of tensors
@@ -582,9 +584,9 @@ class DLBacktrace:
                 - 'layerwise_output_trace': (if return_layerwise_output=True) Layer-wise output trace
         
         Examples:
-            # Image classification
+            # Image classification or Tabular classification
             results = dlb.run_task(
-                task="image-classification",
+                task="image-classification",  # "tabular-classification",
                 inputs=image_tensor
             )
             
@@ -607,15 +609,20 @@ class DLBacktrace:
                 return_scores=True
             )
         """
-        
+        # Validate task type
+        valid_tasks = [
+            "tabular-classification",
+            "image-classification", 
+            "text-classification", 
+            "generation"
+        ]
+
         # Auto-detect task if needed
         if task == "auto":
-            task = self._detect_task(inputs, tokenizer)
+            task = self._detect_task(inputs)
             if debug:
                 print(f"🔍 Auto-detected task: {task}")
-        
-        # Validate task type
-        valid_tasks = ["image-classification", "text-classification", "generation"]
+
         if task not in valid_tasks:
             raise ValueError(f"task must be one of {valid_tasks}, got: {task}")
         
@@ -679,7 +686,7 @@ class DLBacktrace:
                 print(f"🚀 Running {task} task...")
             
             # Prepare model inputs
-            if task == "image-classification":
+            if task in ["image-classification", "tabular-classification"]:
                 # Image input: single tensor
                 if isinstance(inputs, torch.Tensor):
                     model_inputs = (inputs,)
@@ -766,34 +773,38 @@ class DLBacktrace:
             
             return result
     
-    def _detect_task(self, inputs, tokenizer):
+    def _detect_task(self, inputs):
         """
         Auto-detect task type based on inputs and model characteristics.
         
         Returns:
             str: Detected task type
         """
-        # If tokenizer provided and inputs have input_ids, likely text-based
-        if tokenizer is not None:
-            if isinstance(inputs, dict) and "input_ids" in inputs:
-                # Check if model is generative (has generate method)
-                if hasattr(self.model, "generate"):
-                    return "generation"
-                else:
-                    return "text-classification"
-            elif isinstance(inputs, (tuple, list)) and len(inputs) >= 2:
-                # Assume (input_ids, attention_mask)
-                if hasattr(self.model, "generate"):
-                    return "generation"
-                else:
-                    return "text-classification"
         
-        # If single tensor input, likely image classification
+        # ------------------------------------------------------------------
+        # 1. TEXT INPUTS (dict or tuple formats)
+        # ------------------------------------------------------------------
+        if isinstance(inputs, dict) and "input_ids" in inputs:
+            # Check if model is generative (has generate method)
+            if hasattr(self.model, "generate"):
+                return "generation"
+            else:
+                return "text-classification"
+        elif isinstance(inputs, (tuple, list)) and len(inputs) >= 2:
+            # Assume (input_ids, attention_mask)
+            if hasattr(self.model, "generate"):
+                return "generation"
+            else:
+                return "text-classification"
+        
+        # ------------------------------------------------------------------
+        # 2. TENSOR INPUTS
+        # ------------------------------------------------------------------
         if isinstance(inputs, torch.Tensor):
             if inputs.dim() == 4:  # (B, C, H, W)
                 return "image-classification"
             elif inputs.dim() == 2:  # Could be input_ids (B, seq_len)
-                return "text-classification"
+                return "tabular-classification"
         
         # Default fallback
         return "image-classification"
