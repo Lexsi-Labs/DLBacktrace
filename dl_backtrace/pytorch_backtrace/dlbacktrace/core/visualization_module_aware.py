@@ -1,5 +1,4 @@
 from .visualization import visualize_relevance
-from copy import deepcopy
 
 
 def attach_module_metadata(graph, fx_node_to_module):
@@ -37,7 +36,7 @@ def visualize_relevance_with_modules(
     but extends node labels with module information.
     """
     # Work on a copy to avoid side effects
-    graph = deepcopy(graph)
+    graph = graph.copy()
 
     # Attach metadata
     attach_module_metadata(graph, fx_node_to_module)
