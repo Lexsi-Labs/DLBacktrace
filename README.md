@@ -55,9 +55,9 @@ DLB v2 introduces **major architectural upgrades** to the explainability engine 
 
 | Metric | DLB v1 | DLB v2 | Improvement |
 |:-------|:-------|:-------|:-------------|
-| ⏱️ **Explainability Time** | Up to 29,000 s | 🕒 20 s | 🔥 **1000× faster** |
-| 🚀 **Throughput** | ~0.03 tokens/s | 🧩 75 tokens/s | ⚡ **2000× higher** |
-| 📈 **Scalability** | Degrades sharply | Scales linearly | ✅ **Stable & predictable** |
+| ⏱️ **Explainability Time** | 250–30,000 s (grows exponentially) | 🕒 12–18 s (nearly constant) | 🔥 **20× → 1400× faster** depending on sequence length |
+| 🚀 **Throughput** | ~0.01–0.03 tokens/s | 🧩 3–75 tokens/s | ⚡ **100× → 2500× higher** |
+| 📈 **Scalability** | Time increases ~8× every doubling | Grows slowly with input size | ✅ **Stable & linear-like scaling** |
 
 ---
 
@@ -71,7 +71,7 @@ DLB v2 introduces **major architectural upgrades** to the explainability engine 
 
 ---
 
-> 💡 **DLB v2** achieves up to **1000× speedup** using fused GPU kernels.
+> 💡 **DLB v2** provides **consistent low latency** and achieves **20×–1400× speedup** over DLB v1 as sequence length increases. 
 
 ## Installation
 
