@@ -15,13 +15,14 @@ from .core.token_relevance_visuals import (
     plot_tokenwise_relevance_map_swapped,
     plot_input_heatmap_for_token,
 )
+from .core.visualization_module_aware import visualize_relevance_with_module_labels
 
 import numpy as np 
 import torch
 import inspect
 
 class DLBacktrace:
-    def __init__(self, model, input_for_graph, dynamic_shapes=None, device="cpu", verbose=False, strict_cpu=True):
+    def __init__(self, model, input_for_graph, dynamic_shapes=None, device="cpu", verbose=False, strict_cpu=True, collect_node_module_map=False,):
         """
         Initialize DL-Backtrace FX for model tracing and explainability.
         
@@ -100,6 +101,14 @@ class DLBacktrace:
             print("---------------------------v6------------------------------------------", flush=True)
             print("🔧 Building computation graph...", flush=True)
 
+        # Optional: FX node → module mapping
+        self.fx_node_to_module = None
+        if collect_node_module_map:
+            if self.verbose:
+                print("🔧 Mapping FX nodes to nn.Module hierarchy...", flush=True)
+
+            self.fx_node_to_module = self.map_fx_nodes_to_modules()
+
         # Graph + metadata
         self.graph, self.layer_stack = build_graph(
             self.tracer, self.extracted_weights
@@ -113,6 +122,28 @@ class DLBacktrace:
         if self.verbose:
             print("---------------------------v8------------------------------------------", flush=True)
             print("✅ DL-Backtrace FX initialization complete!", flush=True)
+
+    def map_fx_nodes_to_modules(self):
+        """
+        Map FX graph node names to their originating nn.Module paths
+        using Dynamo's nn_module_stack metadata.
+
+        Returns:
+            Dict[str, Tuple[str, str]]:
+                FX node name -> (module_path, module_class)
+        """
+        graph = self.exported_program.graph_module.graph
+        node_to_module = {}
+
+        for node in graph.nodes:
+            mod_stack = node.meta.get("nn_module_stack", None)
+            if not mod_stack:
+                continue
+
+            module_path, module_class = list(mod_stack.values())[-1]
+            node_to_module[node.name] = (module_path, module_class)
+
+        return node_to_module
     
     def _parse_device_config(self, device):
         """
@@ -515,11 +546,13 @@ class DLBacktrace:
         Args:
             task (str): Task type - "auto", "image-classification", "text-classification", or "generation"
                 - "auto": Automatically detect task based on inputs
+                - "tabular-classification": For PyTorch Tabular Classification models 
                 - "image-classification": For image classification models (e.g., MobileNet, ResNet)
                 - "text-classification": For text classification models (e.g., BERT sentiment)
                 - "generation": For text generation models (e.g., GPT, LLaMA)
             
             inputs: Input data for the model
+                - For tabular-classification: torch.Tensor of shape (B, F)
                 - For image-classification: torch.Tensor of shape (B, C, H, W)
                 - For text-classification: dict with 'input_ids' and 'attention_mask' or tuple of tensors
                 - For generation: dict with 'input_ids' and 'attention_mask' or tuple of tensors
@@ -551,9 +584,9 @@ class DLBacktrace:
                 - 'layerwise_output_trace': (if return_layerwise_output=True) Layer-wise output trace
         
         Examples:
-            # Image classification
+            # Image classification or Tabular classification
             results = dlb.run_task(
-                task="image-classification",
+                task="image-classification",  # "tabular-classification",
                 inputs=image_tensor
             )
             
@@ -576,15 +609,20 @@ class DLBacktrace:
                 return_scores=True
             )
         """
-        
+        # Validate task type
+        valid_tasks = [
+            "tabular-classification",
+            "image-classification", 
+            "text-classification", 
+            "generation"
+        ]
+
         # Auto-detect task if needed
         if task == "auto":
-            task = self._detect_task(inputs, tokenizer)
+            task = self._detect_task(inputs)
             if debug:
                 print(f"🔍 Auto-detected task: {task}")
-        
-        # Validate task type
-        valid_tasks = ["image-classification", "text-classification", "generation"]
+
         if task not in valid_tasks:
             raise ValueError(f"task must be one of {valid_tasks}, got: {task}")
         
@@ -648,7 +686,7 @@ class DLBacktrace:
                 print(f"🚀 Running {task} task...")
             
             # Prepare model inputs
-            if task == "image-classification":
+            if task in ["image-classification", "tabular-classification"]:
                 # Image input: single tensor
                 if isinstance(inputs, torch.Tensor):
                     model_inputs = (inputs,)
@@ -735,34 +773,38 @@ class DLBacktrace:
             
             return result
     
-    def _detect_task(self, inputs, tokenizer):
+    def _detect_task(self, inputs):
         """
         Auto-detect task type based on inputs and model characteristics.
         
         Returns:
             str: Detected task type
         """
-        # If tokenizer provided and inputs have input_ids, likely text-based
-        if tokenizer is not None:
-            if isinstance(inputs, dict) and "input_ids" in inputs:
-                # Check if model is generative (has generate method)
-                if hasattr(self.model, "generate"):
-                    return "generation"
-                else:
-                    return "text-classification"
-            elif isinstance(inputs, (tuple, list)) and len(inputs) >= 2:
-                # Assume (input_ids, attention_mask)
-                if hasattr(self.model, "generate"):
-                    return "generation"
-                else:
-                    return "text-classification"
         
-        # If single tensor input, likely image classification
+        # ------------------------------------------------------------------
+        # 1. TEXT INPUTS (dict or tuple formats)
+        # ------------------------------------------------------------------
+        if isinstance(inputs, dict) and "input_ids" in inputs:
+            # Check if model is generative (has generate method)
+            if hasattr(self.model, "generate"):
+                return "generation"
+            else:
+                return "text-classification"
+        elif isinstance(inputs, (tuple, list)) and len(inputs) >= 2:
+            # Assume (input_ids, attention_mask)
+            if hasattr(self.model, "generate"):
+                return "generation"
+            else:
+                return "text-classification"
+        
+        # ------------------------------------------------------------------
+        # 2. TENSOR INPUTS
+        # ------------------------------------------------------------------
         if isinstance(inputs, torch.Tensor):
             if inputs.dim() == 4:  # (B, C, H, W)
                 return "image-classification"
             elif inputs.dim() == 2:  # Could be input_ids (B, seq_len)
-                return "text-classification"
+                return "tabular-classification"
         
         # Default fallback
         return "image-classification"
@@ -933,6 +975,33 @@ class DLBacktrace:
             fast_output_path="backtrace_collapsed_fast",  # path for large graphs
             show=True,                        # ⬅️ show in Colab
             inline_format="svg",              # or "png" if SVG too heavy
+        )
+
+    def visualize_dlbacktrace_with_modules(
+        self,
+        output_path="backtrace_graph_modules",
+        *,
+        show=True,
+        inline_format="svg",
+    ):
+        """
+        Visualize relevance graph with FX node → nn.Module mapping,
+        using the new module-aware visualization function.
+        """
+        if not getattr(self, "fx_node_to_module", None):
+            raise RuntimeError(
+                "Module mapping not available. "
+                "Initialize DLBacktrace with collect_node_module_map=True."
+            )
+
+        # Call the new visualization function (not the old wrapper)
+        return visualize_relevance_with_module_labels(
+            self.graph,
+            self.all_wt,
+            self.fx_node_to_module,
+            output_path=output_path,
+            show=show,
+            inline_format=inline_format,
         )
 
     def visualize_tokenwise_relevance_map(
