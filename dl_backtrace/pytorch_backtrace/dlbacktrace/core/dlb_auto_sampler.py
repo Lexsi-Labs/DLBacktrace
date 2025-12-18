@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import time
+import numpy as np
 from pathlib import Path
 from typing import Optional, List, Tuple, cast, Any
 
@@ -285,6 +286,14 @@ class DLBAutoSampler:
             if target_dtype is not None:
                 tensor = tensor.to(dtype=target_dtype)
             return tensor.clone()
+        # Handle numpy arrays by converting to torch tensor with target dtype
+        if isinstance(data, np.ndarray):
+            tensor = torch.from_numpy(data)
+            if move_to_cpu:
+                tensor = tensor.to("cpu")
+            if target_dtype is not None:
+                tensor = tensor.to(dtype=target_dtype)
+            return tensor
         if isinstance(data, dict):
             return {k: self._compress_relevance_tree(v, target_dtype=target_dtype, move_to_cpu=move_to_cpu) for k, v in data.items()}
         if isinstance(data, list):
