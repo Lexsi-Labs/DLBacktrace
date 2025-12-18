@@ -15,20 +15,20 @@ def log(*args, **kwargs):
 
 
 def tensor_to_numpy(x):
-    """Convert Tensor, scalar, list/tuple, or ndarray to a NumPy array with memory-efficient float32."""
+    """Convert Tensor, scalar, list/tuple, or ndarray to a NumPy array, preserving dtype when possible."""
     if isinstance(x, np.ndarray):
-        # Convert to float32 if it's float64 to save memory
+        # Only convert float64 to float32 to save memory
         return x.astype(np.float32) if x.dtype == np.float64 else x
     if isinstance(x, torch.Tensor):
-        # Use float32 for memory efficiency
-        return x.detach().cpu().numpy().astype(np.float32)
+        # Preserve original dtype - don't force float32
+        return x.detach().cpu().numpy()
     if isinstance(x, (int, float)):
         return np.array(x, dtype=np.float32)
     if isinstance(x, (list, tuple)):
         arrs = []
         for xi in x:
             converted = tensor_to_numpy(xi) if not isinstance(xi, np.ndarray) else xi
-            # Ensure float32 for memory efficiency
+            # Only convert float64 to float32
             if hasattr(converted, 'dtype') and converted.dtype == np.float64:
                 converted = converted.astype(np.float32)
             arrs.append(converted)
@@ -40,23 +40,20 @@ def tensor_to_numpy(x):
 
 
 def process_input_for_eval(X):
-    """Unwrap single-element or multi-element lists/tuples and convert to NumPy with memory optimization."""
+    """Unwrap single-element or multi-element lists/tuples and convert to NumPy, preserving dtype when possible."""
     # Handle lists/tuples
     if isinstance(X, (list, tuple)):
         X = X[0] if len(X) == 1 else X[0]  # Assume first element is the actual input tensor
 
-    # Convert torch.Tensor to NumPy with memory-efficient float32
+    # Convert torch.Tensor to NumPy - preserve original dtype
     if isinstance(X, torch.Tensor):
         if X.is_cuda:
             X = X.cpu()
         
-        # Avoid copy if already float32 and contiguous
-        if X.dtype == torch.float32 and X.is_contiguous():
-            return X.detach().numpy()
-        else:
-            return X.detach().to(torch.float32).numpy()
+        # Preserve original dtype
+        return X.detach().numpy()
 
-    # Already a NumPy array - ensure float32 for memory efficiency
+    # Already a NumPy array - only convert float64 to float32
     if isinstance(X, np.ndarray):
         return X.astype(np.float32, copy=False) if X.dtype == np.float64 else X
 
