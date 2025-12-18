@@ -6,12 +6,20 @@ from __future__ import annotations
 
 import time
 import gzip
+import lzma
 import numpy as np
 from pathlib import Path
 from typing import Optional, List, Tuple, cast, Any
 
 import torch
 import torch.nn.functional as F
+
+# Optional: 7z support (requires py7zr)
+try:
+    import py7zr
+    HAS_7Z = True
+except ImportError:
+    HAS_7Z = False
 
 from transformers.generation.logits_process import (
     LogitsProcessorList,
@@ -70,6 +78,56 @@ class DLBAutoSampler:
     def __init__(self, dlb, tokenizer):
         self.dlb = dlb
         self.tokenizer = tokenizer
+
+    # ---------- compression helpers ----------
+
+    @staticmethod
+    def load_compressed_relevance(file_path: str):
+        """
+        Load relevance data from compressed file with automatic format detection.
+        
+        Args:
+            file_path: Path to compressed relevance file (.pt.gz, .pt.xz, .pt.7z, or .pt)
+        
+        Returns:
+            Loaded relevance dictionary
+        
+        Example:
+            >>> relevance = DLBAutoSampler.load_compressed_relevance("step_00000.pt.gz")
+        """
+        path = Path(file_path)
+        
+        if path.suffix == '.gz':
+            # Gzip compressed
+            with gzip.open(path, 'rb') as f:
+                return torch.load(f)
+        
+        elif path.suffix == '.xz':
+            # LZMA compressed
+            with lzma.open(path, 'rb') as f:
+                return torch.load(f)
+        
+        elif path.suffix == '.7z':
+            # 7z compressed
+            if not HAS_7Z:
+                raise ImportError(
+                    "py7zr library required to load 7z files. "
+                    "Install with: pip install py7zr"
+                )
+            import tempfile
+            with tempfile.TemporaryDirectory() as tmpdir:
+                tmpdir_path = Path(tmpdir)
+                with py7zr.SevenZipFile(path, 'r') as archive:
+                    archive.extractall(tmpdir_path)
+                # Find the extracted .pt file
+                pt_files = list(tmpdir_path.glob('*.pt'))
+                if not pt_files:
+                    raise ValueError(f"No .pt file found in 7z archive: {path}")
+                return torch.load(pt_files[0])
+        
+        else:
+            # Uncompressed or unknown format
+            return torch.load(path)
 
     # ---------- small dtype helpers ----------
 
@@ -324,6 +382,7 @@ class DLBAutoSampler:
         target_dtype,
         move_to_cpu: bool,
         use_compression: bool = True,
+        compression_method: str = "gzip",
         pickle_protocol: int = 4,
     ):
         """
@@ -336,7 +395,12 @@ class DLBAutoSampler:
             cache_dir: Directory for disk caching
             target_dtype: Target dtype for compression
             move_to_cpu: Whether to move tensors to CPU
-            use_compression: If True, use gzip compression for 2-3x additional size reduction (default: True)
+            use_compression: If True, use compression (default: True)
+            compression_method: Compression method - "gzip", "lzma", "7z", or "none"
+                              - "gzip": Fast, good compression (default)
+                              - "lzma": Better compression, slower
+                              - "7z": Best compression, slowest (requires py7zr)
+                              - "none": No compression
             pickle_protocol: Pickle protocol version (2-5). Higher = better compression.
                             Protocol 4 (default): Python 3.4+, good compression
                             Protocol 5: Best compression, Python 3.8+
@@ -355,29 +419,58 @@ class DLBAutoSampler:
         if normalized_policy == "disk":
             if cache_dir is None:
                 raise ValueError("relevance_cache_dir must be provided when relevance_cache_policy='disk'")
-            file_path = cache_dir / f"step_{step_idx:05d}.pt"
             
-            # Save with compression using higher pickle protocol
-            # Protocol 4+ provides better compression for large numpy/torch arrays
-            if use_compression:
-                # Use gzip compression for additional 2-3x size reduction
-                with gzip.open(str(file_path) + '.gz', 'wb', compresslevel=6) as f:
-                    torch.save(
-                        processed, 
-                        f,
-                        pickle_protocol=pickle_protocol,
+            base_file_path = cache_dir / f"step_{step_idx:05d}.pt"
+            
+            # Determine compression method and file extension
+            if not use_compression or compression_method == "none":
+                # No compression
+                file_path = base_file_path
+                torch.save(processed, file_path, pickle_protocol=pickle_protocol)
+            
+            elif compression_method == "gzip":
+                # Gzip compression (fast, good ratio)
+                file_path = Path(str(base_file_path) + '.gz')
+                with gzip.open(file_path, 'wb', compresslevel=6) as f:
+                    torch.save(processed, f, pickle_protocol=pickle_protocol)
+            
+            elif compression_method == "lzma":
+                # LZMA/xz compression (better ratio, slower)
+                file_path = Path(str(base_file_path) + '.xz')
+                with lzma.open(file_path, 'wb', preset=6) as f:
+                    torch.save(processed, f, pickle_protocol=pickle_protocol)
+            
+            elif compression_method == "7z":
+                # 7z compression (best ratio, slowest)
+                if not HAS_7Z:
+                    raise ImportError(
+                        "py7zr library required for 7z compression. "
+                        "Install with: pip install py7zr"
                     )
-                file_path = Path(str(file_path) + '.gz')
+                file_path = Path(str(base_file_path) + '.7z')
+                # Save to temporary .pt file first
+                import tempfile
+                with tempfile.NamedTemporaryFile(suffix='.pt', delete=False) as tmp:
+                    tmp_path = Path(tmp.name)
+                    torch.save(processed, tmp_path, pickle_protocol=pickle_protocol)
+                
+                # Compress with 7z
+                with py7zr.SevenZipFile(file_path, 'w') as archive:
+                    archive.write(tmp_path, arcname=f'step_{step_idx:05d}.pt')
+                
+                # Clean up temp file
+                tmp_path.unlink()
+            
             else:
-                torch.save(
-                    processed, 
-                    file_path,
-                    pickle_protocol=pickle_protocol,
+                raise ValueError(
+                    f"Unknown compression_method: {compression_method}. "
+                    f"Must be one of: 'gzip', 'lzma', '7z', 'none'"
                 )
             
             return {
                 "summary": self._summarize_relevance(processed),
                 "path": str(file_path),
+                "compression": compression_method,
             }
 
 
@@ -426,6 +519,7 @@ class DLBAutoSampler:
         relevance_compress_dtype: Optional[Any] = "float16",
         relevance_move_to_cpu: bool = True,
         relevance_use_compression: bool = True,
+        relevance_compression_method: str = "gzip",
         relevance_pickle_protocol: int = 4,
     ):
         """
@@ -437,8 +531,12 @@ class DLBAutoSampler:
             relevance_cache_policy: "full" (default), "summary", "disk", or "none".
             relevance_cache_dir: base directory for on-disk caching (policy="disk").
             relevance_compress_dtype: dtype hint (str or torch.dtype) for stored tensors.
-            relevance_use_compression: If True, use gzip compression + pickle protocol 4 (default: True).
-                                      Provides 2-3x additional size reduction beyond dtype compression.
+            relevance_use_compression: If True, use compression for disk storage (default: True).
+            relevance_compression_method: Compression method - "gzip" (default), "lzma", "7z", or "none".
+                                        - "gzip": Fast, good compression (~75% reduction)
+                                        - "lzma": Better compression (~80% reduction), slower
+                                        - "7z": Best compression (~82% reduction), slowest
+                                        - "none": No compression (only dtype compression)
             relevance_pickle_protocol: Pickle protocol (2-5). Higher = better compression. Default=4.
             relevance_move_to_cpu: move tensors to CPU before caching to reduce VRAM.
         """ 
@@ -611,6 +709,7 @@ class DLBAutoSampler:
                         target_dtype=cache_dtype,
                         move_to_cpu=relevance_move_to_cpu,
                         use_compression=relevance_use_compression,
+                        compression_method=relevance_compression_method,
                         pickle_protocol=relevance_pickle_protocol,
                     )
                     relevance_trace.append(entry)
@@ -827,6 +926,7 @@ class DLBAutoSampler:
                         target_dtype=cache_dtype,
                         move_to_cpu=relevance_move_to_cpu,
                         use_compression=relevance_use_compression,
+                        compression_method=relevance_compression_method,
                         pickle_protocol=relevance_pickle_protocol,
                     )
                     step_rel_scores.append(entry)
