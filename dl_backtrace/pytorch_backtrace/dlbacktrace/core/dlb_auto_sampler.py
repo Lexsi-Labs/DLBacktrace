@@ -100,12 +100,12 @@ class DLBAutoSampler:
         if path.suffix == '.gz':
             # Gzip compressed
             with gzip.open(path, 'rb') as f:
-                return torch.load(f)
+                return torch.load(f, weights_only=False)
         
         elif path.suffix == '.xz':
             # LZMA compressed
             with lzma.open(path, 'rb') as f:
-                return torch.load(f)
+                return torch.load(f, weights_only=False)
         
         elif path.suffix == '.7z':
             # 7z compressed
@@ -123,11 +123,11 @@ class DLBAutoSampler:
                 pt_files = list(tmpdir_path.glob('*.pt'))
                 if not pt_files:
                     raise ValueError(f"No .pt file found in 7z archive: {path}")
-                return torch.load(pt_files[0])
+                return torch.load(pt_files[0], weights_only=False)
         
         else:
             # Uncompressed or unknown format
-            return torch.load(path)
+            return torch.load(path, weights_only=False)
 
     # ---------- small dtype helpers ----------
 
