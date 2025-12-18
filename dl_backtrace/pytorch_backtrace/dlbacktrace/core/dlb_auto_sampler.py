@@ -322,7 +322,24 @@ class DLBAutoSampler:
         cache_dir: Optional[Path],
         target_dtype,
         move_to_cpu: bool,
+        use_compression: bool = True,
+        pickle_protocol: int = 4,
     ):
+        """
+        Store relevance entry according to specified policy.
+        
+        Args:
+            rel_dict: Relevance dictionary to store
+            policy: Cache policy ("full", "summary", "disk", "none")
+            step_idx: Generation step index
+            cache_dir: Directory for disk caching
+            target_dtype: Target dtype for compression
+            move_to_cpu: Whether to move tensors to CPU
+            use_compression: If True, use pickle protocol 4 for better compression (default: True)
+            pickle_protocol: Pickle protocol version (2-5). Higher = better compression.
+                            Protocol 4 (default): ~20-30% smaller files, Python 3.4+
+                            Protocol 5: Best compression, Python 3.8+
+        """
         normalized_policy = (policy or "full").lower()
         if normalized_policy == "none":
             return None
@@ -338,7 +355,19 @@ class DLBAutoSampler:
             if cache_dir is None:
                 raise ValueError("relevance_cache_dir must be provided when relevance_cache_policy='disk'")
             file_path = cache_dir / f"step_{step_idx:05d}.pt"
-            torch.save(processed, file_path)
+            
+            # Save with compression using higher pickle protocol
+            # Protocol 4+ provides better compression for large numpy/torch arrays
+            if use_compression:
+                torch.save(
+                    processed, 
+                    file_path,
+                    pickle_protocol=pickle_protocol,
+                    _use_new_zipfile_serialization=True  # Use ZIP64 format (PyTorch 1.6+)
+                )
+            else:
+                torch.save(processed, file_path)
+            
             return {
                 "summary": self._summarize_relevance(processed),
                 "path": str(file_path),
@@ -388,6 +417,8 @@ class DLBAutoSampler:
         relevance_cache_dir: Optional[str] = None,
         relevance_compress_dtype: Optional[Any] = "float16",
         relevance_move_to_cpu: bool = True,
+        relevance_use_compression: bool = True,
+        relevance_pickle_protocol: int = 4,
     ):
         """
         Always returns:
@@ -398,6 +429,8 @@ class DLBAutoSampler:
             relevance_cache_policy: "full" (default), "summary", "disk", or "none".
             relevance_cache_dir: base directory for on-disk caching (policy="disk").
             relevance_compress_dtype: dtype hint (str or torch.dtype) for stored tensors.
+            relevance_use_compression: If True, use optimized pickle protocol for compression (default: True).
+            relevance_pickle_protocol: Pickle protocol (2-5). Higher = better compression. Default=4.
             relevance_move_to_cpu: move tensors to CPU before caching to reduce VRAM.
         """ 
         model = self._get_causallm(self.dlb.model)
@@ -568,6 +601,8 @@ class DLBAutoSampler:
                         cache_dir=cache_dir_path,
                         target_dtype=cache_dtype,
                         move_to_cpu=relevance_move_to_cpu,
+                        use_compression=relevance_use_compression,
+                        pickle_protocol=relevance_pickle_protocol,
                     )
                     relevance_trace.append(entry)
 
@@ -782,6 +817,8 @@ class DLBAutoSampler:
                         cache_dir=cache_dir_path,
                         target_dtype=cache_dtype,
                         move_to_cpu=relevance_move_to_cpu,
+                        use_compression=relevance_use_compression,
+                        pickle_protocol=relevance_pickle_protocol,
                     )
                     step_rel_scores.append(entry)
 
