@@ -16,3 +16,4 @@ tqdm
 scikit-image
 lime
 tensorflow
+py7zr
