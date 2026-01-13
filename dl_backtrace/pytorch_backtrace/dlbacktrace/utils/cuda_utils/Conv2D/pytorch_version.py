@@ -38,16 +38,12 @@ def convert_to_pytorch_format(
             b = b.to(device=device, dtype=torch.float32)
     
     if strides is not None:
-        if not isinstance(strides, torch.Tensor):
-            strides = torch.tensor(strides, dtype=torch.int32, device=device)
-        else:
-            strides = strides.to(device=device, dtype=torch.int32)
+        if isinstance(strides, torch.Tensor):
+            strides = (strides[0].item(), strides[1].item())
     
     if padding != 'valid' and padding != 'same':
-        if not isinstance(padding, torch.Tensor):
-            padding = torch.tensor(padding, dtype=torch.int32, device=device)
-        else:
-            padding = padding.to(device=device, dtype=torch.int32)
+        if isinstance(padding, torch.Tensor):
+            padding = (padding[0].item(), padding[1].item())
         
     return relevance_y, input_array, w, b, padding, strides
     

@@ -1,7 +1,6 @@
 import numpy as np
 import re
 import torch
-import torch.nn as nn
 from tqdm import tqdm
 from dl_backtrace.moe_pytorch_backtrace.backtrace.config import activation_master
 from dl_backtrace.moe_pytorch_backtrace.backtrace.core import (
