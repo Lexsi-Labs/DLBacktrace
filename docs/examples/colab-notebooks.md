@@ -86,7 +86,7 @@ Lightweight model explanations.
 #### BERT Sentiment Analysis
 Explain BERT classifications.
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1eBAQ8TToJUs6EN4-md08cjfZUmAArX0s?usp=sharing)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1eBAQ8TToJUs6EN4-md08cjfZUmAArX0s?usp=drive_link)
 
 **What you'll learn:**
 - BERT model tracing
@@ -112,7 +112,7 @@ Explain LLaMA predictions.
 #### Qwen-3-0.6B Text Generation
 Explain Qwen predictions.
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1nJsxk7HPhiZ1DUIXn0eOnu0yjye-WOQT?usp=sharing)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1nJsxk7HPhiZ1DUIXn0eOnu0yjye-WOQT?usp=drive_link)
 
 **What you'll learn:**
 - Scaling law effects
@@ -126,7 +126,7 @@ Explain Qwen predictions.
 #### JetMoE 
 Explain JetMoE expert routing decisions.
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1MKxR60Mf1F_TNMuE31T3GRWHFPTm5IhP?usp=sharing)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1MKxR60Mf1F_TNMuE31T3GRWHFPTm5IhP?usp=drive_link)
 
 **What you'll learn:**
 - MoE model tracing
@@ -139,7 +139,7 @@ Explain JetMoE expert routing decisions.
 #### OLMoE 
 Explain OLMoE predictions and expert selection.
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1e13QAFw4A8jKhZVb1jh-C_16A2u1vZIH?usp=sharing)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1e13QAFw4A8jKhZVb1jh-C_16A2u1vZIH?usp=drive_link)
 
 **What you'll learn:**
 - MoE model tracing
@@ -180,7 +180,7 @@ Explain GPT-Oss open-source MoE predictions.
 #### Custom Tabular Binary Classification
 Explain tabular models.
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1TqgeeBqQ1G9UGWfHV0MUloCccalpsRCh?usp=sharing)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/13N2sfAxA_7GJsZ7VAKS5WIOg6GusQghI?usp=sharing)
 
 **What you'll learn:**
 - Feature importance for tabular data
