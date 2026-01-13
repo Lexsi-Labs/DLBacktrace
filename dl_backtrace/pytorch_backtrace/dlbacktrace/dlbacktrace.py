@@ -537,6 +537,10 @@ class DLBacktrace:
         return_scores=False,
         return_relevance=False,
         return_layerwise_output=False,
+        relevance_cache_policy="full",
+        relevance_cache_dir=None,
+        relevance_compress_dtype="float16",
+        relevance_move_to_cpu=True,
         debug=False,
         **generation_kwargs
     ):
@@ -567,6 +571,11 @@ class DLBacktrace:
             return_scores (bool): Return scores trace (default: False)
             return_relevance (bool): Return relevance trace (default: False)
             return_layerwise_output (bool): Return layer-wise output trace (default: False)
+            relevance_cache_policy (str): "full", "summary", "disk", or "none" storage policy for
+                per-token relevance data when generation traces are requested.
+            relevance_cache_dir (str | None): Directory root for on-disk relevance caching.
+            relevance_compress_dtype (str | torch.dtype): Target dtype for cached tensors (default: float16).
+            relevance_move_to_cpu (bool): Move cached relevance tensors to CPU memory (default: True).
             debug (bool): Enable debug logging (default: False)
             
             **generation_kwargs: Additional kwargs for generation task (passed to sample_auto)
@@ -645,6 +654,15 @@ class DLBacktrace:
             if debug:
                 print(f"🚀 Running generation task with sample_auto...")
             
+            cache_kwargs = {
+                "relevance_cache_policy": relevance_cache_policy,
+                "relevance_cache_dir": relevance_cache_dir,
+                "relevance_compress_dtype": relevance_compress_dtype,
+                "relevance_move_to_cpu": relevance_move_to_cpu,
+            }
+            for key, value in cache_kwargs.items():
+                generation_kwargs.setdefault(key, value)
+
             # Call sample_auto with generation kwargs and trace flags
             generated_output = self.sample_auto(
                 tokenizer=tokenizer,
@@ -815,7 +833,9 @@ class DLBacktrace:
         Accepts kwargs: temperature, top_k, top_p, max_new_tokens, min_new_tokens, max_time,
                         early_stopping, repetition_penalty, no_repeat_ngram_size,
                         bad_words_ids, bos_token_id, eos_token_id, pad_token_id,
-                        num_beams, num_return_sequences, length_penalty, return_scores, debug
+                        num_beams, num_return_sequences, length_penalty, return_scores, debug,
+                        relevance_cache_policy, relevance_cache_dir,
+                        relevance_compress_dtype, relevance_move_to_cpu
 
         Returns:
             - Always a single sequence with shape [1, T_total]

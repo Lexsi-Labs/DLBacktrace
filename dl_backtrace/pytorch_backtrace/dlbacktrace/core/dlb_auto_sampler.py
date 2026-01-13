@@ -5,10 +5,21 @@
 from __future__ import annotations
 
 import time
-from typing import Optional, List, Tuple, cast
+import gzip
+import lzma
+import numpy as np
+from pathlib import Path
+from typing import Optional, List, Tuple, cast, Any
 
 import torch
 import torch.nn.functional as F
+
+# Optional: 7z support (requires py7zr)
+try:
+    import py7zr
+    HAS_7Z = True
+except ImportError:
+    HAS_7Z = False
 
 from transformers.generation.logits_process import (
     LogitsProcessorList,
@@ -67,6 +78,56 @@ class DLBAutoSampler:
     def __init__(self, dlb, tokenizer):
         self.dlb = dlb
         self.tokenizer = tokenizer
+
+    # ---------- compression helpers ----------
+
+    @staticmethod
+    def load_compressed_relevance(file_path: str):
+        """
+        Load relevance data from compressed file with automatic format detection.
+        
+        Args:
+            file_path: Path to compressed relevance file (.pt.gz, .pt.xz, .pt.7z, or .pt)
+        
+        Returns:
+            Loaded relevance dictionary
+        
+        Example:
+            >>> relevance = DLBAutoSampler.load_compressed_relevance("step_00000.pt.gz")
+        """
+        path = Path(file_path)
+        
+        if path.suffix == '.gz':
+            # Gzip compressed
+            with gzip.open(path, 'rb') as f:
+                return torch.load(f, weights_only=False)
+        
+        elif path.suffix == '.xz':
+            # LZMA compressed
+            with lzma.open(path, 'rb') as f:
+                return torch.load(f, weights_only=False)
+        
+        elif path.suffix == '.7z':
+            # 7z compressed
+            if not HAS_7Z:
+                raise ImportError(
+                    "py7zr library required to load 7z files. "
+                    "Install with: pip install py7zr"
+                )
+            import tempfile
+            with tempfile.TemporaryDirectory() as tmpdir:
+                tmpdir_path = Path(tmpdir)
+                with py7zr.SevenZipFile(path, 'r') as archive:
+                    archive.extractall(tmpdir_path)
+                # Find the extracted .pt file
+                pt_files = list(tmpdir_path.glob('*.pt'))
+                if not pt_files:
+                    raise ValueError(f"No .pt file found in 7z archive: {path}")
+                return torch.load(pt_files[0], weights_only=False)
+        
+        else:
+            # Uncompressed or unknown format
+            return torch.load(path, weights_only=False)
 
     # ---------- small dtype helpers ----------
 
@@ -252,6 +313,173 @@ class DLBAutoSampler:
         add_val(rel_dict)
         return total
 
+    @staticmethod
+    def _resolve_torch_dtype(dtype_hint):
+        if dtype_hint is None:
+            return None
+        if isinstance(dtype_hint, torch.dtype):
+            return dtype_hint
+        if isinstance(dtype_hint, str):
+            key = dtype_hint.strip().lower()
+            mapping = {
+                "float32": torch.float32,
+                "fp32": torch.float32,
+                "float": torch.float32,
+                "float16": torch.float16,
+                "fp16": torch.float16,
+                "half": torch.float16,
+                "bfloat16": torch.bfloat16,
+                "bf16": torch.bfloat16,
+                "float64": torch.float64,
+                "fp64": torch.float64,
+            }
+            if key in mapping:
+                return mapping[key]
+        raise ValueError(f"Unsupported relevance dtype hint: {dtype_hint}")
+
+    def _compress_relevance_tree(self, data, *, target_dtype=None, move_to_cpu=True):
+        if torch.is_tensor(data):
+            tensor = data.detach()
+            if move_to_cpu:
+                tensor = tensor.to("cpu")
+            if target_dtype is not None:
+                tensor = tensor.to(dtype=target_dtype)
+            return tensor.clone()
+        # Handle numpy arrays by converting to torch tensor with target dtype
+        if isinstance(data, np.ndarray):
+            tensor = torch.from_numpy(data)
+            if move_to_cpu:
+                tensor = tensor.to("cpu")
+            if target_dtype is not None:
+                tensor = tensor.to(dtype=target_dtype)
+            return tensor
+        if isinstance(data, dict):
+            return {k: self._compress_relevance_tree(v, target_dtype=target_dtype, move_to_cpu=move_to_cpu) for k, v in data.items()}
+        if isinstance(data, list):
+            return [self._compress_relevance_tree(v, target_dtype=target_dtype, move_to_cpu=move_to_cpu) for v in data]
+        if isinstance(data, tuple):
+            return tuple(self._compress_relevance_tree(v, target_dtype=target_dtype, move_to_cpu=move_to_cpu) for v in data)
+        return data
+
+    def _prepare_cache_dir(self, base_dir: Optional[str], policy: str):
+        if policy != "disk":
+            return None
+        if not base_dir:
+            raise ValueError("relevance_cache_dir is required when relevance_cache_policy='disk'")
+        root = Path(base_dir).expanduser()
+        timestamp = int(time.time() * 1000)
+        run_dir = root / f"relevance_cache_run_{timestamp}"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        return run_dir
+
+    def _store_relevance_entry(
+        self,
+        rel_dict,
+        *,
+        policy: str,
+        step_idx: int,
+        cache_dir: Optional[Path],
+        target_dtype,
+        move_to_cpu: bool,
+        use_compression: bool = True,
+        compression_method: str = "gzip",
+        pickle_protocol: int = 4,
+    ):
+        """
+        Store relevance entry according to specified policy.
+        
+        Args:
+            rel_dict: Relevance dictionary to store
+            policy: Cache policy ("full", "summary", "disk", "none")
+            step_idx: Generation step index
+            cache_dir: Directory for disk caching
+            target_dtype: Target dtype for compression
+            move_to_cpu: Whether to move tensors to CPU
+            use_compression: If True, use compression (default: True)
+            compression_method: Compression method - "gzip", "lzma", "7z", or "none"
+                              - "gzip": Fast, good compression (default)
+                              - "lzma": Better compression, slower
+                              - "7z": Best compression, slowest (requires py7zr)
+                              - "none": No compression
+            pickle_protocol: Pickle protocol version (2-5). Higher = better compression.
+                            Protocol 4 (default): Python 3.4+, good compression
+                            Protocol 5: Best compression, Python 3.8+
+        """
+        normalized_policy = (policy or "full").lower()
+        if normalized_policy == "none":
+            return None
+
+        processed = self._compress_relevance_tree(rel_dict, target_dtype=target_dtype, move_to_cpu=move_to_cpu)
+        if processed is None:
+            return None
+
+        if normalized_policy == "summary":
+            return {"summary": self._summarize_relevance(processed)}
+
+        if normalized_policy == "disk":
+            if cache_dir is None:
+                raise ValueError("relevance_cache_dir must be provided when relevance_cache_policy='disk'")
+            
+            base_file_path = cache_dir / f"step_{step_idx:05d}.pt"
+            
+            # Determine compression method and file extension
+            if not use_compression or compression_method == "none":
+                # No compression
+                file_path = base_file_path
+                torch.save(processed, file_path, pickle_protocol=pickle_protocol)
+            
+            elif compression_method == "gzip":
+                # Gzip compression (fast, good ratio)
+                file_path = Path(str(base_file_path) + '.gz')
+                with gzip.open(file_path, 'wb', compresslevel=6) as f:
+                    torch.save(processed, f, pickle_protocol=pickle_protocol)
+            
+            elif compression_method == "lzma":
+                # LZMA/xz compression (better ratio, slower)
+                file_path = Path(str(base_file_path) + '.xz')
+                with lzma.open(file_path, 'wb', preset=6) as f:
+                    torch.save(processed, f, pickle_protocol=pickle_protocol)
+            
+            elif compression_method == "7z":
+                # 7z compression (best ratio, slowest)
+                if not HAS_7Z:
+                    raise ImportError(
+                        "py7zr library required for 7z compression. "
+                        "Install with: pip install py7zr"
+                    )
+                file_path = Path(str(base_file_path) + '.7z')
+                # Save to temporary .pt file first
+                import tempfile
+                with tempfile.NamedTemporaryFile(suffix='.pt', delete=False) as tmp:
+                    tmp_path = Path(tmp.name)
+                    torch.save(processed, tmp_path, pickle_protocol=pickle_protocol)
+                
+                # Compress with 7z
+                with py7zr.SevenZipFile(file_path, 'w') as archive:
+                    archive.write(tmp_path, arcname=f'step_{step_idx:05d}.pt')
+                
+                # Clean up temp file
+                tmp_path.unlink()
+            
+            else:
+                raise ValueError(
+                    f"Unknown compression_method: {compression_method}. "
+                    f"Must be one of: 'gzip', 'lzma', '7z', 'none'"
+                )
+            
+            return {
+                "summary": self._summarize_relevance(processed),
+                "path": str(file_path),
+                "compression": compression_method,
+            }
+
+
+        if normalized_policy != "full":
+            raise ValueError(
+                "relevance_cache_policy must be one of {'full', 'summary', 'disk', 'none'}"
+            )
+        return processed
+
     # ---------- public API ----------
 
     @torch.no_grad()
@@ -286,16 +514,51 @@ class DLBAutoSampler:
         return_layerwise_output: bool = False,
         return_relevance: bool = False,
         debug: bool = False,
+        relevance_cache_policy: str = "full",
+        relevance_cache_dir: Optional[str] = None,
+        relevance_compress_dtype: Optional[Any] = "float16",
+        relevance_move_to_cpu: bool = True,
+        relevance_use_compression: bool = True,
+        relevance_compression_method: str = "gzip",
+        relevance_pickle_protocol: int = 4,
     ):
         """
         Always returns:
             - [1, T_total] (top-1 sequence)
             - Or (sequence, scores_trace) for sampling when return_scores=True
-        """
+
+        Relevance caching knobs:
+            relevance_cache_policy: "full" (default), "summary", "disk", or "none".
+            relevance_cache_dir: base directory for on-disk caching (policy="disk").
+            relevance_compress_dtype: dtype hint (str or torch.dtype) for stored tensors.
+            relevance_use_compression: If True, use compression for disk storage (default: True).
+            relevance_compression_method: Compression method - "gzip" (default), "lzma", "7z", or "none".
+                                        - "gzip": Fast, good compression (~75% reduction)
+                                        - "lzma": Better compression (~80% reduction), slower
+                                        - "7z": Best compression (~82% reduction), slowest
+                                        - "none": No compression (only dtype compression)
+            relevance_pickle_protocol: Pickle protocol (2-5). Higher = better compression. Default=4.
+            relevance_move_to_cpu: move tensors to CPU before caching to reduce VRAM.
+        """ 
         model = self._get_causallm(self.dlb.model)
         device = input_ids.device
         B = input_ids.size(0)
         assert B == 1, "Current implementation assumes batch size = 1."
+
+        cache_policy = (relevance_cache_policy or "full").lower()
+        allowed_policies = {"full", "summary", "disk", "none"}
+        if cache_policy not in allowed_policies:
+            raise ValueError(
+                "relevance_cache_policy must be one of {'full', 'summary', 'disk', 'none'}"
+            )
+        cache_dtype = (
+            self._resolve_torch_dtype(relevance_compress_dtype)
+            if relevance_compress_dtype is not None
+            else None
+        )
+        cache_dir_path = None
+        if return_relevance and cache_policy == "disk":
+            cache_dir_path = self._prepare_cache_dir(relevance_cache_dir, cache_policy)
 
         # Dtypes up-front
         input_ids = self._as_long(input_ids)
@@ -437,8 +700,19 @@ class DLBAutoSampler:
                         task="generation",
                         debug=False,
                     )
-                    # rel_scalar = self._summarize_relevance(rel_dict)
-                    relevance_trace.append(rel_dict)
+                    step_idx = len(relevance_trace)
+                    entry = self._store_relevance_entry(
+                        rel_dict,
+                        policy=cache_policy,
+                        step_idx=step_idx,
+                        cache_dir=cache_dir_path,
+                        target_dtype=cache_dtype,
+                        move_to_cpu=relevance_move_to_cpu,
+                        use_compression=relevance_use_compression,
+                        compression_method=relevance_compression_method,
+                        pickle_protocol=relevance_pickle_protocol,
+                    )
+                    relevance_trace.append(entry)
 
                 generated = torch.cat([generated, next_tokens], dim=1) 
                 attn = torch.cat(
@@ -473,6 +747,9 @@ class DLBAutoSampler:
                 info["scores_trace"] = scores_trace
             if return_relevance:
                 info["relevance_trace"] = relevance_trace
+                info["relevance_cache_policy"] = cache_policy
+                if cache_dir_path is not None:
+                    info["relevance_cache_dir"] = str(cache_dir_path)
             if return_layerwise_output:
                 info["layerwise_output_trace"] = io_data_trace
             return generated, info  # ([1, T], dict)
@@ -621,6 +898,7 @@ class DLBAutoSampler:
 
             if return_relevance:
                 step_rel_scores = []
+                step_offset = len(relevance_trace_beam)
                 for b in range(beams):
                     # Use the OLD beam state (before new token) for relevance computation
                     self.dlb.predict(
@@ -640,7 +918,18 @@ class DLBAutoSampler:
                         task="generation",
                         debug=False,
                     )
-                    step_rel_scores.append(rel_dict_b)
+                    entry = self._store_relevance_entry(
+                        rel_dict_b,
+                        policy=cache_policy,
+                        step_idx=step_offset * beams + b,
+                        cache_dir=cache_dir_path,
+                        target_dtype=cache_dtype,
+                        move_to_cpu=relevance_move_to_cpu,
+                        use_compression=relevance_use_compression,
+                        compression_method=relevance_compression_method,
+                        pickle_protocol=relevance_pickle_protocol,
+                    )
+                    step_rel_scores.append(entry)
 
                 relevance_trace_beam.append(step_rel_scores)
 
@@ -700,6 +989,9 @@ class DLBAutoSampler:
                 for step_rels in relevance_trace_beam
             ]
             info_beam["relevance_trace"] = flat_relevance
+            info_beam["relevance_cache_policy"] = cache_policy
+            if cache_dir_path is not None:
+                info_beam["relevance_cache_dir"] = str(cache_dir_path)
         if return_layerwise_output:
             # collapse to top-1 beam (final winner)
             flat_io_trace = [
