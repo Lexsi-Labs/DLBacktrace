@@ -343,7 +343,7 @@
                 <li class="third-level"><a href="#what-is-temperature">What is Temperature?</a></li>
                 <li class="third-level"><a href="#temperature-effects">Temperature Effects</a></li>
                 <li class="third-level"><a href="#temperature-ranges">Temperature Ranges</a></li>
-            <li class="second-level"><a href="#usage-in-dl-backtrace">Usage in DL-Backtrace</a></li>
+            <li class="second-level"><a href="#usage-in-dlbacktrace">Usage in DLBacktrace</a></li>
                 
                 <li class="third-level"><a href="#basic-temperature-scaling">Basic Temperature Scaling</a></li>
             <li class="second-level"><a href="#temperature-in-different-contexts">Temperature in Different Contexts</a></li>
@@ -375,7 +375,7 @@
         <div class="col-md-9" role="main">
 
 <h1 id="temperature-scaling">Temperature Scaling<a class="headerlink" href="#temperature-scaling" title="Permanent link">&para;</a></h1>
-<p><strong>Temperature scaling</strong> is a powerful technique for controlling the confidence and diversity of model predictions by modulating the softmax distribution of logits. DL-Backtrace provides seamless temperature scaling integration for both inference and generation tasks.</p>
+<p><strong>Temperature scaling</strong> is a powerful technique for controlling the confidence and diversity of model predictions by modulating the softmax distribution of logits. DLBacktrace provides seamless temperature scaling integration for both inference and generation tasks.</p>
 <hr />
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
 <p>Temperature scaling provides:</p>
@@ -447,13 +447,13 @@ P(y_i) = \frac{\exp(z_i / T)}{\sum_j \exp(z_j / T)}
 </tbody>
 </table>
 <hr />
-<h2 id="usage-in-dl-backtrace">Usage in DL-Backtrace<a class="headerlink" href="#usage-in-dl-backtrace" title="Permanent link">&para;</a></h2>
+<h2 id="usage-in-dlbacktrace">Usage in DLBacktrace<a class="headerlink" href="#usage-in-dlbacktrace" title="Permanent link">&para;</a></h2>
 <h3 id="basic-temperature-scaling">Basic Temperature Scaling<a class="headerlink" href="#basic-temperature-scaling" title="Permanent link">&para;</a></h3>
 <h4 id="for-classification">For Classification<a class="headerlink" href="#for-classification" title="Permanent link">&para;</a></h4>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.pytorch_backtrace.dlbacktrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">DLBacktrace</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
 
-<span class="c1"># Initialize DL-Backtrace</span>
+<span class="c1"># Initialize DLBacktrace</span>
 <span class="n">model</span> <span class="o">=</span> <span class="o">...</span>  <span class="c1"># Your classification model</span>
 <span class="n">sample_input</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">224</span><span class="p">,</span> <span class="mi">224</span><span class="p">)</span>
 
@@ -482,7 +482,7 @@ P(y_i) = \frac{\exp(z_i / T)}{\sum_j \exp(z_j / T)}
 <span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;gpt2&quot;</span><span class="p">)</span>
 <span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;gpt2&quot;</span><span class="p">)</span>
 
-<span class="c1"># Initialize DL-Backtrace</span>
+<span class="c1"># Initialize DLBacktrace</span>
 <span class="n">sample_input</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1000</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>
 <span class="n">dlb</span> <span class="o">=</span> <span class="n">DLBacktrace</span><span class="p">(</span>
     <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
@@ -886,7 +886,7 @@ P(y_i) = \frac{\exp(z_i / T)}{\sum_j \exp(z_j / T)}
 <ul>
 <li>Learn about <a href="../auto-sampler/">DLB Auto Sampler</a> for advanced generation</li>
 <li>Explore <a href="../pipeline/">Pipeline</a> for high-level workflows</li>
-<li>Check <a href="../moe-models/">MoE Models</a> for expert-based generation</li>
+<li>Check <a href="../moe-models/">MoEs Models</a> for expert-based generation</li>
 <li>See <a href="../../../examples/colab-notebooks/">Examples</a> for complete use cases</li>
 </ul></div>
         

@@ -337,7 +337,7 @@
     <ul class="nav bs-sidenav">
         <li class="first-level active"><a href="#_1"></a></li>
         <li class="first-level "><a href="#overview">Overview</a></li>
-        <li class="first-level "><a href="#why-dl-backtrace">Why DL-Backtrace?</a></li>
+        <li class="first-level "><a href="#why-dlbacktrace">Why DLBacktrace?</a></li>
             <li class="second-level"><a href="#deep-model-interpretability">🔍 Deep Model Interpretability</a></li>
                 
             <li class="second-level"><a href="#high-performance">⚡ High Performance</a></li>
@@ -378,17 +378,17 @@
         <div class="col-md-9" role="main">
 
 <h2 id="_1"><a class="headerlink" href="#_1" title="Permanent link">&para;</a></h2>
-<p><img alt="DL-Backtrace Logo" src="assets/images/dlb_logo.png" /></p>
-<p><a href="https://github.com/Lexsi-Labs/DLBacktrace/blob/main/LICENSE.md"><img alt="License" src="https://img.shields.io/badge/License-LSAL%20v1.0-yellow.svg" /></a>
+<p><img alt="DLBacktrace Logo" src="assets/images/dlb_logo.png" /></p>
+<p><a href="https://github.com/Lexsi-Labs/DLBacktrace/blob/dlb_v2/LICENSE.md"><img alt="License" src="https://img.shields.io/badge/License-LSAL%20v1.0-yellow.svg" /></a>
 <a href="https://python.org"><img alt="Python" src="https://img.shields.io/badge/Python-3.8%2B-blue.svg" /></a>
 <a href="https://pytorch.org"><img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-2.6%2B-red.svg" /></a></p>
 <p><a class="md-button md-button--primary" href="home/quickstart/">Get Started</a></p>
 <p><a class="md-button" href="https://github.com/Lexsi-Labs/DLBacktrace">View on GitHub</a></p>
 <hr />
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p>DLBacktrace is a model-agnostic explainability framework developed by Lexsi Labs. It provides comprehensive layer-wise importance values (relevance) and model tracing capabilities across a wide range of model architectures — including transformers, LLMs, MoEs, and more — as well as diverse task types such as tabular, vision, and text. The framework is designed for robust and efficient execution on both CPU and GPU environments.</p>
+<p>DLBacktrace is a model-agnostic explainability framework developed by <em>Lexsi Labs</em>. It provides comprehensive layer-wise importance values (relevance) and model tracing capabilities across a wide range of model architectures — including Transformers, Large Language Models (LLMs), Mixture-of-Experts (MoEs), and more — as well as diverse task types such as Tabular, Vision, and Text. The framework is designed for robust and efficient execution on both CPU and GPU environments.</p>
 <hr />
-<h2 id="why-dl-backtrace">Why DL-Backtrace?<a class="headerlink" href="#why-dl-backtrace" title="Permanent link">&para;</a></h2>
+<h2 id="why-dlbacktrace">Why DLBacktrace?<a class="headerlink" href="#why-dlbacktrace" title="Permanent link">&para;</a></h2>
 <h3 id="deep-model-interpretability">🔍 <strong>Deep Model Interpretability</strong><a class="headerlink" href="#deep-model-interpretability" title="Permanent link">&para;</a></h3>
 <p>Gain comprehensive insights into your AI models using advanced relevance propagation algorithms. Understand which features and layers contribute most to your model's predictions.</p>
 <h3 id="high-performance">⚡ <strong>High Performance</strong><a class="headerlink" href="#high-performance" title="Permanent link">&para;</a></h3>
@@ -396,7 +396,7 @@
 <h3 id="architecture-agnostic">🏗️ <strong>Architecture Agnostic</strong><a class="headerlink" href="#architecture-agnostic" title="Permanent link">&para;</a></h3>
 <p>Support for CNN, RNN, Transformer, and custom architectures. Works seamlessly with popular models like ResNet, BERT, LLaMA, and more.</p>
 <h3 id="multi-task-support">🎯 <strong>Multi-Task Support</strong><a class="headerlink" href="#multi-task-support" title="Permanent link">&para;</a></h3>
-<p>Binary/multi-class classification, segmentation, and text generation - all supported out of the box.</p>
+<p>Binary/Multi-class classification, segmentation, and text generation - all supported out of the box.</p>
 <h3 id="production-ready">🛡️ <strong>Production Ready</strong><a class="headerlink" href="#production-ready" title="Permanent link">&para;</a></h3>
 <p>Deterministic execution environment with comprehensive error handling. Battle-tested on real-world models and datasets.</p>
 <hr />
@@ -419,7 +419,7 @@
         <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pool</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="n">flatten</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">fc</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
 
-<span class="c1"># Initialize model and DL-Backtrace</span>
+<span class="c1"># Initialize model and DLBacktrace</span>
 <span class="n">model</span> <span class="o">=</span> <span class="n">MyModel</span><span class="p">()</span>
 <span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">224</span><span class="p">,</span> <span class="mi">224</span><span class="p">)</span>
 
@@ -444,7 +444,7 @@
 </code></pre></div>
 <hr />
 <h2 id="supported-models">Supported Models<a class="headerlink" href="#supported-models" title="Permanent link">&para;</a></h2>
-<p>DL-Backtrace has been extensively tested with:</p>
+<p>DLBacktrace has been extensively tested with:</p>
 <h3 id="vision-models">Vision Models<a class="headerlink" href="#vision-models" title="Permanent link">&para;</a></h3>
 <ul>
 <li>ResNet, VGG, DenseNet, EfficientNet, MobileNet</li>
@@ -456,7 +456,7 @@
 <li>BERT, ALBERT, RoBERTa, DistilBERT</li>
 <li>ELECTRA, XLNet</li>
 <li>LLaMA-3.2 (1B, 3B), Qwen3</li>
-<li>MoE's like JetMoE, OLMoE, GPT-oss, Qwen MoE</li>
+<li>MoE's like JetMoE, OLMoE, GPT-Oss, Qwen3 MoE</li>
 </ul>
 <h3 id="tasks">Tasks<a class="headerlink" href="#tasks" title="Permanent link">&para;</a></h3>
 <ul>
@@ -494,10 +494,10 @@
 <p>Interactive notebooks and real-world use cases.</p>
 <p>→ <a href="examples/colab-notebooks/">Explore Examples</a></p>
 <h3 id="developer-guide">🤝 Developer Guide<a class="headerlink" href="#developer-guide" title="Permanent link">&para;</a></h3>
-<p>Contributing and extending DL-Backtrace.</p>
+<p>Contributing and extending DLBacktrace.</p>
 <p>→ <a href="developer/contributing/">Developer Docs</a></p>
 <hr />
-<p>DL-Backtrace - Making AI Transparent and Explainable 🚀</p>
+<p>DLBacktrace - Making AI Transparent and Explainable 🚀</p>
 <p>Built with ❤️ by <a href="https://lexsi.ai/">Lexsi Labs</a></p></div>
         
         

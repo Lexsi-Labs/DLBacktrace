@@ -360,7 +360,7 @@
                 <li class="third-level"><a href="#beam-search-parameters">Beam Search Parameters</a></li>
                 <li class="third-level"><a href="#stopping-criteria">Stopping Criteria</a></li>
                 <li class="third-level"><a href="#output-control">Output Control</a></li>
-            <li class="second-level"><a href="#integration-with-dl-backtrace">Integration with DL-Backtrace</a></li>
+            <li class="second-level"><a href="#integration-with-dlbacktrace">Integration with DLBacktrace</a></li>
                 
                 <li class="third-level"><a href="#token-level-relevance-tracking">Token-Level Relevance Tracking</a></li>
                 <li class="third-level"><a href="#temperature-scaling-in-generation">Temperature Scaling in Generation</a></li>
@@ -389,12 +389,12 @@
         <div class="col-md-9" role="main">
 
 <h1 id="dlb-auto-sampler">DLB Auto Sampler<a class="headerlink" href="#dlb-auto-sampler" title="Permanent link">&para;</a></h1>
-<p>The <strong>DLB Auto Sampler</strong> is a powerful text generation module that integrates DL-Backtrace's explainability capabilities directly into the generation process, enabling token-by-token relevance tracking while maintaining compatibility with HuggingFace's generation API.</p>
+<p>The <strong>DLB Auto Sampler</strong> is a powerful text generation module that integrates DLBacktrace's explainability capabilities directly into the generation process, enabling token-by-token relevance tracking while maintaining compatibility with HuggingFace's generation API.</p>
 <hr />
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
 <p>DLB Auto Sampler provides:</p>
 <ul>
-<li><strong>🎯 DLB-Native Generation</strong>: All logits come from DL-Backtrace's execution engine</li>
+<li><strong>🎯 DLB-Native Generation</strong>: All logits come from DLBacktrace's execution engine</li>
 <li><strong>⚡ Multiple Sampling Strategies</strong>: Greedy, temperature, top-k, top-p, and beam search</li>
 <li><strong>🔍 Token-Level Relevance</strong>: Track relevance for each generated token</li>
 <li><strong>🤝 HuggingFace Compatible</strong>: Drop-in replacement for standard generation</li>
@@ -414,7 +414,7 @@
 <span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;gpt2&quot;</span><span class="p">)</span>
 <span class="n">tokenizer</span><span class="o">.</span><span class="n">pad_token</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">eos_token</span>
 
-<span class="c1"># Initialize DL-Backtrace</span>
+<span class="c1"># Initialize DLBacktrace</span>
 <span class="n">sample_input</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1000</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>
 <span class="n">dlb</span> <span class="o">=</span> <span class="n">DLBacktrace</span><span class="p">(</span>
     <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
@@ -759,7 +759,7 @@
 </tbody>
 </table>
 <hr />
-<h2 id="integration-with-dl-backtrace">Integration with DL-Backtrace<a class="headerlink" href="#integration-with-dl-backtrace" title="Permanent link">&para;</a></h2>
+<h2 id="integration-with-dlbacktrace">Integration with DLBacktrace<a class="headerlink" href="#integration-with-dlbacktrace" title="Permanent link">&para;</a></h2>
 <h3 id="token-level-relevance-tracking">Token-Level Relevance Tracking<a class="headerlink" href="#token-level-relevance-tracking" title="Permanent link">&para;</a></h3>
 <p>The Auto Sampler allows relevance computation for generated sequences.</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># Generate with DLB</span>
@@ -873,7 +873,7 @@
 <tr>
 <td>Logits Source</td>
 <td>Model directly</td>
-<td>DL-Backtrace engine</td>
+<td>DLBacktrace engine</td>
 </tr>
 <tr>
 <td>Relevance Tracking</td>

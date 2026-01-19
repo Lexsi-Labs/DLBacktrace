@@ -342,7 +342,7 @@
                 <li class="third-level"><a href="#relevance-attribution">Relevance Attribution</a></li>
             <li class="second-level"><a href="#high-level-pipeline-interface">🚀 High-Level Pipeline Interface</a></li>
                 
-                <li class="third-level"><a href="#dl-backtrace-pipeline">DL-Backtrace Pipeline</a></li>
+                <li class="third-level"><a href="#unified-run_task-method">Unified run_task() Method</a></li>
             <li class="second-level"><a href="#advanced-text-generation">🎨 Advanced Text Generation</a></li>
                 
                 <li class="third-level"><a href="#dlb-auto-sampler">DLB Auto Sampler</a></li>
@@ -386,7 +386,7 @@
         <div class="col-md-9" role="main">
 
 <h1 id="key-features">Key Features<a class="headerlink" href="#key-features" title="Permanent link">&para;</a></h1>
-<p>DL-Backtrace provides a comprehensive set of features for explainable AI and model interpretability. Here's a detailed look at what makes it powerful.</p>
+<p>DLBacktrace provides a comprehensive set of features for explainable AI and model interpretability. Here's a detailed look at what makes it powerful.</p>
 <hr />
 <h2 id="deep-model-interpretability">🔍 Deep Model Interpretability<a class="headerlink" href="#deep-model-interpretability" title="Permanent link">&para;</a></h2>
 <h3 id="layer-wise-relevance-propagation">Layer-wise Relevance Propagation<a class="headerlink" href="#layer-wise-relevance-propagation" title="Permanent link">&para;</a></h3>
@@ -403,50 +403,90 @@
 </ul>
 <hr />
 <h2 id="high-level-pipeline-interface">🚀 High-Level Pipeline Interface<a class="headerlink" href="#high-level-pipeline-interface" title="Permanent link">&para;</a></h2>
-<h3 id="dl-backtrace-pipeline">DL-Backtrace Pipeline<a class="headerlink" href="#dl-backtrace-pipeline" title="Permanent link">&para;</a></h3>
-<p>Simplified, batteries-included interface for running explainability analysis:</p>
+<h3 id="unified-run_task-method">Unified <code>run_task()</code> Method<a class="headerlink" href="#unified-run_task-method" title="Permanent link">&para;</a></h3>
+<p>Simplified, unified interface for running explainability analysis with a single method call:</p>
 <ul>
-<li><strong>🔧 Automatic Model Loading</strong>: Seamless HuggingFace &amp; TorchVision integration</li>
-<li><strong>🎯 Multi-Modal Support</strong>: Text classification, image classification, text generation</li>
-<li><strong>⚙️ Flexible Configuration</strong>: Comprehensive parameter control</li>
+<li><strong>🎯 Unified API</strong>: Single method for all task types (classification, generation)</li>
+<li><strong>🔧 Auto Task Detection</strong>: Automatically detect task from inputs</li>
 <li><strong>📊 Built-in Relevance</strong>: Automatic layer-wise propagation</li>
-<li><strong>💾 Result Management</strong>: Auto-save results and visualizations</li>
+<li><strong>�  Generation Support</strong>: Greedy, sampling, and beam search with tracing</li>
+<li><strong>⚙️ Flexible Configuration</strong>: Comprehensive parameter control</li>
+<li><strong>💾 Structured Results</strong>: Easy access to predictions, relevance, and traces</li>
 </ul>
-<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.pytorch_backtrace.dlbacktrace.pipeline</span><span class="w"> </span><span class="kn">import</span> <span class="n">DLBacktracePipeline</span>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.pytorch_backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">DLBacktrace</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoTokenizer</span><span class="p">,</span> <span class="n">AutoModelForSequenceClassification</span>
 
-<span class="c1"># Create a simple pipeline</span>
-<span class="n">pipeline</span> <span class="o">=</span> <span class="n">DLBacktracePipeline</span><span class="o">.</span><span class="n">create_simple</span><span class="p">(</span>
-    <span class="n">model_name</span><span class="o">=</span><span class="s2">&quot;bert-base&quot;</span><span class="p">,</span>
-    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cpu&quot;</span>
+<span class="c1"># Load model</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForSequenceClassification</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;bert-base-uncased&quot;</span><span class="p">)</span>
+<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;bert-base-uncased&quot;</span><span class="p">)</span>
+
+<span class="c1"># Prepare input</span>
+<span class="n">text</span> <span class="o">=</span> <span class="s2">&quot;This product is amazing!&quot;</span>
+<span class="n">tokens</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">)</span>
+
+<span class="c1"># Initialize DLBacktrace</span>
+<span class="n">dlb</span> <span class="o">=</span> <span class="n">DLBacktrace</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+    <span class="n">input_for_graph</span><span class="o">=</span><span class="p">(</span><span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;input_ids&quot;</span><span class="p">],</span> <span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;attention_mask&quot;</span><span class="p">]),</span>
+    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
 <span class="p">)</span>
 
-<span class="c1"># Run analysis</span>
-<span class="n">results</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">run_simple_analysis</span><span class="p">(</span>
-    <span class="s2">&quot;This product is amazing!&quot;</span><span class="p">,</span>
-    <span class="n">label</span><span class="o">=</span><span class="s2">&quot;positive&quot;</span>
+<span class="c1"># Run analysis with one call</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">run_task</span><span class="p">(</span>
+    <span class="n">task</span><span class="o">=</span><span class="s2">&quot;text-classification&quot;</span><span class="p">,</span>  <span class="c1"># or &quot;auto&quot; for automatic detection</span>
+    <span class="n">inputs</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;input_ids&#39;</span><span class="p">:</span> <span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;input_ids&quot;</span><span class="p">],</span> <span class="s1">&#39;attention_mask&#39;</span><span class="p">:</span> <span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;attention_mask&quot;</span><span class="p">]}</span>
 <span class="p">)</span>
+
+<span class="c1"># Access results</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Prediction: </span><span class="si">{</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;predictions&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">argmax</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Token relevance: </span><span class="si">{</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;relevance&#39;</span><span class="p">][</span><span class="s1">&#39;input_ids&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </code></pre></div>
 <p><a href="../../guide/pytorch/pipeline/">Learn more about Pipeline →</a></p>
 <hr />
 <h2 id="advanced-text-generation">🎨 Advanced Text Generation<a class="headerlink" href="#advanced-text-generation" title="Permanent link">&para;</a></h2>
 <h3 id="dlb-auto-sampler">DLB Auto Sampler<a class="headerlink" href="#dlb-auto-sampler" title="Permanent link">&para;</a></h3>
-<p>Native text generation with explainability built-in:</p>
+<p>Native text generation with explainability built-in via <code>run_task()</code>:</p>
 <ul>
 <li><strong>🎯 Multiple Sampling Strategies</strong>: Greedy, temperature, top-k, top-p, beam search</li>
 <li><strong>🔍 Token-Level Relevance</strong>: Track relevance for each generated token</li>
-<li><strong>🤝 HuggingFace Compatible</strong>: Drop-in replacement for standard generation</li>
+<li><strong>🤝 HuggingFace Compatible</strong>: Familiar generation parameters</li>
 <li><strong>🎛️ Flexible Control</strong>: Full parameter customization</li>
+<li><strong>📊 Generation Tracing</strong>: Optional scores, relevance, and layer output traces</li>
 </ul>
-<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.pytorch_backtrace.dlbacktrace.core.dlb_auto_sampler</span><span class="w"> </span><span class="kn">import</span> <span class="n">DLBAutoSampler</span>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.pytorch_backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">DLBacktrace</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoTokenizer</span><span class="p">,</span> <span class="n">AutoModelForCausalLM</span>
 
-<span class="n">sampler</span> <span class="o">=</span> <span class="n">DLBAutoSampler</span><span class="p">(</span><span class="n">dlb</span><span class="o">=</span><span class="n">dlb</span><span class="p">,</span> <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">)</span>
+<span class="c1"># Load model</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;gpt2&quot;</span><span class="p">)</span>
+<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;gpt2&quot;</span><span class="p">)</span>
 
-<span class="n">output</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
-    <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
+<span class="c1"># Prepare input</span>
+<span class="n">prompt</span> <span class="o">=</span> <span class="s2">&quot;The future of AI is&quot;</span>
+<span class="n">tokens</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="n">prompt</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">)</span>
+
+<span class="c1"># Initialize DLBacktrace</span>
+<span class="n">dlb</span> <span class="o">=</span> <span class="n">DLBacktrace</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+    <span class="n">input_for_graph</span><span class="o">=</span><span class="p">(</span><span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;input_ids&quot;</span><span class="p">],),</span>
+    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
+<span class="p">)</span>
+
+<span class="c1"># Generate with relevance tracing</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">run_task</span><span class="p">(</span>
+    <span class="n">task</span><span class="o">=</span><span class="s2">&quot;generation&quot;</span><span class="p">,</span>
+    <span class="n">inputs</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;input_ids&#39;</span><span class="p">:</span> <span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;input_ids&quot;</span><span class="p">]},</span>
+    <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
     <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
     <span class="n">temperature</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>
-    <span class="n">top_p</span><span class="o">=</span><span class="mf">0.9</span>
+    <span class="n">top_p</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span>
+    <span class="n">return_relevance</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">return_scores</span><span class="o">=</span><span class="kc">True</span>
 <span class="p">)</span>
+
+<span class="c1"># Decode and analyze</span>
+<span class="n">generated_text</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;generated_ids&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">skip_special_tokens</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Generated: </span><span class="si">{</span><span class="n">generated_text</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Relevance trace: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;relevance_trace&#39;</span><span class="p">])</span><span class="si">}</span><span class="s2"> steps&quot;</span><span class="p">)</span>
 </code></pre></div>
 <p><a href="../../guide/pytorch/auto-sampler/">Learn more about Auto Sampler →</a></p>
 <h3 id="temperature-scaling">Temperature Scaling<a class="headerlink" href="#temperature-scaling" title="Permanent link">&para;</a></h3>
@@ -482,7 +522,7 @@
 <li>Custom transformer architectures</li>
 </ul>
 </div>
-<input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><label for="__tabbed_1_3">Mixture of Experts</label><div class="tabbed-content">
+<input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><label for="__tabbed_1_3">Mixture-of-Experts</label><div class="tabbed-content">
 <ul>
 <li><strong>JetMoE</strong>: Efficient MoE with sparse activation</li>
 <li><strong>OLMoE</strong>: Open Language MoE</li>
@@ -494,7 +534,7 @@
 - Understand expert routing patterns
 - Analyze expert contributions
 - CUDA-accelerated MoE layers</p>
-<p><a href="../../guide/pytorch/moe-models/">Learn more about MoE Support →</a></p>
+<p><a href="../../guide/pytorch/moe-models/">Learn more about MoEs Support →</a></p>
 </div>
 <input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><label for="__tabbed_1_4">Recurrent Networks</label><div class="tabbed-content">
 <ul>
@@ -723,7 +763,7 @@
 <hr />
 <h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../installation/">Installation Guide</a> - Get DL-Backtrace installed</li>
+<li><a href="../installation/">Installation Guide</a> - Get DLBacktrace installed</li>
 <li><a href="../quickstart/">Quick Start</a> - Build your first explainable model</li>
 <li><a href="../../guide/introduction/">User Guide</a> - Learn the details</li>
 <li><a href="../../examples/colab-notebooks/">Examples</a> - Interactive notebooks and use cases</li>

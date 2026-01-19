@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="A powerful explainable AI (XAI) framework for deep learning model interpretability">
+    <meta name="author" content="Lexsi Labs">
+    <link rel="canonical" href="https://lexsi.ai/memory_optimization_plan/">
+    <link rel="shortcut icon" href="../img/favicon.ico">
+
+    
+    <title>Relevance Memory Optimization Plan - DLBacktrace</title>
+    
+
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/all.css">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/v4-shims.css">
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/hack-font@3.3.0/build/web/hack.min.css">
+    <link href='//rsms.me/inter/inter.css' rel='stylesheet' type='text/css'>
+    <link href='//fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,700italic,400,300,600,700&subset=latin-ext,latin' rel='stylesheet' type='text/css'>
+    <link href="../css/bootstrap-custom.min.css" rel="stylesheet">
+    <link href="../css/base.min.css" rel="stylesheet">
+    <link href="../css/cinder.min.css" rel="stylesheet">
+
+    
+        
+        <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/styles/github.min.css">
+        
+    
+    <link href="../assets/css/custom.css" rel="stylesheet">
+    <link href="https://unpkg.com/katex@0/dist/katex.min.css" rel="stylesheet">
+
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+            <script src="https://cdn.jsdelivr.net/npm/html5shiv@3.7.3/dist/html5shiv.min.js"></script>
+            <script src="https://cdn.jsdelivr.net/npm/respond.js@1.4.2/dest/respond.min.js"></script>
+        <![endif]-->
+
+    
+
+     
+</head>
+
+<body>
+
+    <div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+
+        <!-- Collapsed navigation -->
+        <div class="navbar-header">
+            <!-- Expander button -->
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            
+
+            <!-- Main title -->
+
+            
+              <a class="navbar-brand" href="..">DLBacktrace</a>
+            
+        </div>
+
+        <!-- Expanded navigation -->
+        <div class="navbar-collapse collapse">
+                <!-- Main navigation -->
+                <ul class="nav navbar-nav">
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Home <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="..">Overview</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../home/features/">Key Features</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../home/installation/">Installation</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../home/quickstart/">Quick Start</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../home/whats-new/">What's New</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">User Guide <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../guide/introduction/">Introduction</a>
+</li>
+
+                        
+                            
+  <li class="dropdown-submenu">
+    <a tabindex="-1" href="">PyTorch Backend</a>
+    <ul class="dropdown-menu">
+        
+            
+<li >
+    <a href="../guide/pytorch/overview/">Overview</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/pytorch/dlbacktrace/">DLBacktrace</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/pytorch/pipeline/">Pipeline</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/pytorch/auto-sampler/">DLB Auto Sampler</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/pytorch/temperature-scaling/">Temperature Scaling</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/pytorch/moe-models/">MoE Models</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/pytorch/execution-engines/">Execution Engines</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/pytorch/operations/">Supported Operations</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/pytorch/tracing/">Model Tracing</a>
+</li>
+
+        
+    </ul>
+  </li>
+
+                        
+                            
+  <li class="dropdown-submenu">
+    <a tabindex="-1" href="">Relevance Propagation</a>
+    <ul class="dropdown-menu">
+        
+            
+<li >
+    <a href="../guide/relevance/overview/">Overview</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/relevance/parameters/">Parameters</a>
+</li>
+
+        
+    </ul>
+  </li>
+
+                        
+                            
+<li >
+    <a href="../guide/best-practices/">Best Practices</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Examples <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../examples/colab-notebooks/">Colab Notebooks</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../examples/use-cases/">Use Cases</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Developer Guide <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../developer/architecture/">Architecture</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../developer/contributing/">Contributing</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../developer/execution-engine/">Execution Engine</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../developer/cuda-development/">CUDA Development</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../developer/testing/">Testing</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Support <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../support/faq/">FAQ</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../support/known-issues/">Known Issues</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../support/changelog/">Changelog</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../support/license/">License</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                </ul>
+
+            <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="#" data-toggle="modal" data-target="#mkdocs_search_modal">
+                            <i class="fas fa-search"></i> Search
+                        </a>
+                    </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+    <div class="container">
+        
+        
+        <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
+    <ul class="nav bs-sidenav">
+        <li class="first-level active"><a href="#relevance-memory-optimization-plan">Relevance Memory Optimization Plan</a></li>
+            <li class="second-level"><a href="#objectives">Objectives</a></li>
+                
+            <li class="second-level"><a href="#key-references-to-inspect">Key References To Inspect</a></li>
+                
+            <li class="second-level"><a href="#investigation-steps">Investigation Steps</a></li>
+                
+            <li class="second-level"><a href="#design-exploration">Design Exploration</a></li>
+                
+            <li class="second-level"><a href="#implementation-plan-tentative">Implementation Plan (Tentative)</a></li>
+                
+            <li class="second-level"><a href="#validation">Validation</a></li>
+                
+            <li class="second-level"><a href="#phase-1-relevance-cache-investigation-december-2025">Phase 1: Relevance Cache Investigation (December 2025)</a></li>
+                
+                <li class="third-level"><a href="#objective">Objective</a></li>
+                <li class="third-level"><a href="#phase-1-code-investigation">Phase 1: Code Investigation</a></li>
+                <li class="third-level"><a href="#phase-2-documentation">Phase 2: Documentation</a></li>
+                <li class="third-level"><a href="#phase-3-identify-issues">Phase 3: Identify Issues</a></li>
+                <li class="third-level"><a href="#expected-outputs">Expected Outputs</a></li>
+            <li class="second-level"><a href="#investigation-results-summary-december-17-2025">Investigation Results Summary (December 17, 2025)</a></li>
+                
+                <li class="third-level"><a href="#confirmed-float16-compression-applied-to-all-policies">✅ Confirmed: Float16 Compression Applied to ALL Policies</a></li>
+            <li class="second-level"><a href="#phase-2-comprehensive-storage-optimization-plan">Phase 2: Comprehensive Storage Optimization Plan</a></li>
+                
+                <li class="third-level"><a href="#problem-statement">Problem Statement</a></li>
+                <li class="third-level"><a href="#optimization-strategies">Optimization Strategies</a></li>
+                <li class="third-level"><a href="#expected-results">Expected Results</a></li>
+                <li class="third-level"><a href="#implementation-roadmap">Implementation Roadmap</a></li>
+                <li class="third-level"><a href="#configuration-presets">Configuration Presets</a></li>
+                <li class="third-level"><a href="#validation-metrics">Validation Metrics</a></li>
+                <li class="third-level"><a href="#next-actions">Next Actions</a></li>
+    </ul>
+</div></div>
+        <div class="col-md-9" role="main">
+
+<h1 id="relevance-memory-optimization-plan">Relevance Memory Optimization Plan<a class="headerlink" href="#relevance-memory-optimization-plan" title="Permanent link">&para;</a></h1>
+<h2 id="objectives">Objectives<a class="headerlink" href="#objectives" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Reduce peak memory used while collecting relevance traces during text generation via <code>run_task()</code> / <code>DLBAutoSampler.generate()</code>.</li>
+<li>Preserve the ability to inspect per-node relevance when explicitly requested, without forcing users to keep every tensor resident on GPU/CPU RAM.</li>
+<li>Keep <code>run_task()</code> API backward-compatible for existing notebooks such as <code>cuda_llama_3_2_1B_run_task.ipynb</code>.</li>
+</ul>
+<h2 id="key-references-to-inspect">Key References To Inspect<a class="headerlink" href="#key-references-to-inspect" title="Permanent link">&para;</a></h2>
+<ol>
+<li><code>dl_backtrace/pytorch_backtrace/dlbacktrace/core/dlb_auto_sampler.py</code> (focus on <code>generate()</code> paths for sampling vs. beam search, plus <code>_compute_relevance</code>).</li>
+<li><code>dl_backtrace/pytorch_backtrace/dlbacktrace/dlbacktrace.py</code> (<code>run_task()</code> plumbing for <code>return_relevance</code>, <code>return_layerwise_output</code>, <code>return_scores</code>).</li>
+<li>Notebook <code>cuda_llama_3_2_1B_run_task.ipynb</code> to understand how <code>run_task()</code> outputs are consumed in practice.</li>
+<li>Repository documentation via <code>mcp_docs-mcp_describe_tenant</code> to capture any existing guidance on trace storage expectations.</li>
+<li><code>semantic_search</code> over <code>dl_backtrace/pytorch_backtrace</code> to locate other consumers of <code>relevance_trace</code> / <code>all_wt</code> that must stay compatible.</li>
+</ol>
+<h2 id="investigation-steps">Investigation Steps<a class="headerlink" href="#investigation-steps" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Run semantic search</strong> for <code>relevance_trace</code>, <code>relevance_data</code>, <code>all_wt</code>, and <code>relevance</code> storage patterns across <code>pytorch_backtrace</code> to gauge scope.</li>
+<li><strong>Review notebook usage</strong> to see which fields are actually plotted/visualized and whether entire dictionaries are required, or summaries suffice.</li>
+<li><strong>Trace data shape audit</strong> within <code>DLBAutoSampler.generate()</code> for both sampling and beam paths to pinpoint where 14 GB arises (tensor dtype, device placement, duplication per step).</li>
+<li><strong>Check evaluation outputs</strong> (<code>self.dlb.evaluation</code>) to determine minimal data needed for downstream metrics/visualizations.</li>
+<li><strong>Consult docs via mcp_docs-mcp_describe_tenant</strong> for any constraints on how relevance data should be serialized or summarized.</li>
+</ol>
+<h2 id="design-exploration">Design Exploration<a class="headerlink" href="#design-exploration" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Lazy / streaming storage</strong>: move per-token relevance dicts to disk (JSON or npz) or expose iterator; keep only per-token summaries in-memory by default. Can we use any compression way to do it. Give more emphasize on it.</li>
+<li><strong>Selective retention</strong>: allow callers to specify <code>relevance_cache_policy</code> (e.g., <code>"none" | "summary" | "full"</code>) passed from <code>run_task()</code> to <code>sample_auto()</code>/<code>generate()</code>.</li>
+<li><strong>Tensor compaction</strong>: detach relevance tensors to CPU float16 before storing, optionally prune near-zero entries.</li>
+</ul>
+<h2 id="implementation-plan-tentative">Implementation Plan (Tentative)<a class="headerlink" href="#implementation-plan-tentative" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Add configuration knobs (e.g., <code>relevance_store</code> dict) to <code>run_task()</code> and pass through to <code>sample_auto()</code> / <code>DLBAutoSampler.generate()</code>.</li>
+<li>Implement a small helper in <code>DLBAutoSampler</code> to compress or offload relevance dicts (CPU move, dtype_CAST, pruning, summary-only mode).</li>
+<li>Ensure beam + sampling paths share the same helper to avoid duplication.</li>
+<li>Update notebook (if needed) to demonstrate new options and verify memory savings.</li>
+<li>Extend tests or add a lightweight script confirming that relevance summaries still match existing visualizations when <code>full</code> mode is enabled.</li>
+<li>Check for any compression way  for memory optimization. So that memory to store the layerwise relevance should be as minimum as possible. </li>
+</ol>
+<h2 id="validation">Validation<a class="headerlink" href="#validation" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Measure peak memory before/after with a representative prompt (seq=64, next 5 tokens) to confirm substantial reduction.</li>
+<li>Run notebook <code>cuda_llama_3_2_1B_run_task.ipynb</code> (or a smaller mock) to ensure outputs consumed by visualization helpers remain intact.</li>
+<li>Document new knobs in README/docs to keep API clarity.</li>
+</ul>
+<hr />
+<h2 id="phase-1-relevance-cache-investigation-december-2025">Phase 1: Relevance Cache Investigation (December 2025)<a class="headerlink" href="#phase-1-relevance-cache-investigation-december-2025" title="Permanent link">&para;</a></h2>
+<h3 id="objective">Objective<a class="headerlink" href="#objective" title="Permanent link">&para;</a></h3>
+<p>Investigate why <code>relevance_cache_policy="full"</code> still uses ~14GB per sample and document all compression techniques.</p>
+<h3 id="phase-1-code-investigation">Phase 1: Code Investigation<a class="headerlink" href="#phase-1-code-investigation" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Search for relevance caching logic</strong> in <code>dl_backtrace/pytorch_backtrace/dlbacktrace/core/</code></li>
+<li>Examine <code>dlb_auto_sampler.py</code> for cache policy implementation</li>
+<li>Look for compression techniques in <code>_store_relevance_entry()</code> method</li>
+<li>
+<p>Check if <code>float16</code> compression is actually being applied with <code>policy="full"</code></p>
+</li>
+<li>
+<p><strong>Analyze memory footprint calculation</strong></p>
+</li>
+<li>Understand what gets stored in "full" mode</li>
+<li>Check tensor shapes and dtypes being persisted</li>
+<li>
+<p>Verify if CPU offload is working as intended</p>
+</li>
+<li>
+<p><strong>Search PyTorch documentation</strong> via MCP tools for:</p>
+</li>
+<li>Tensor serialization best practices</li>
+<li><code>torch.save()</code> compression options</li>
+<li>Memory-efficient storage techniques</li>
+</ol>
+<h3 id="phase-2-documentation">Phase 2: Documentation<a class="headerlink" href="#phase-2-documentation" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Update <code>relevance_memory_scopes.md</code></strong> with:</li>
+<li><strong>Current Implementation Details</strong> section explaining each policy</li>
+<li><strong>Memory Footprint Analysis</strong> showing actual sizes per policy</li>
+<li><strong>Compression Techniques</strong> table with:<ul>
+<li>What's implemented (dtype conversion, CPU offload, etc.)</li>
+<li>What's NOT implemented (zipfile compression, quantization, etc.)</li>
+</ul>
+</li>
+<li><strong>Optimization Recommendations</strong> with PyTorch doc links</li>
+<li><strong>Example Usage</strong> showing memory-optimal configurations</li>
+</ol>
+<h3 id="phase-3-identify-issues">Phase 3: Identify Issues<a class="headerlink" href="#phase-3-identify-issues" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Root cause analysis</strong> of why "full" still uses 14GB:</li>
+<li>Check if <code>relevance_compress_dtype</code> is being applied in "full" mode</li>
+<li>Verify tensor storage format (pickled vs. raw)</li>
+<li>Document if "full" bypasses compression intentionally</li>
+</ol>
+<h3 id="expected-outputs">Expected Outputs<a class="headerlink" href="#expected-outputs" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Clear explanation of current behavior</li>
+<li>Documentation of all compression knobs</li>
+<li>Recommendations for reducing 14GB footprint</li>
+<li>Links to relevant PyTorch documentation</li>
+</ul>
+<hr />
+<h2 id="investigation-results-summary-december-17-2025">Investigation Results Summary (December 17, 2025)<a class="headerlink" href="#investigation-results-summary-december-17-2025" title="Permanent link">&para;</a></h2>
+<h3 id="confirmed-float16-compression-applied-to-all-policies">✅ Confirmed: Float16 Compression Applied to ALL Policies<a class="headerlink" href="#confirmed-float16-compression-applied-to-all-policies" title="Permanent link">&para;</a></h3>
+<p><strong>Question</strong>: Are all relevances being saved in float16 format regardless of policy chosen?</p>
+<p><strong>Answer</strong>: <strong>YES</strong> ✅</p>
+<h4 id="evidence">Evidence:<a class="headerlink" href="#evidence" title="Permanent link">&para;</a></h4>
+<ol>
+<li><strong>Code Location</strong>: <code>dl_backtrace/pytorch_backtrace/dlbacktrace/core/dlb_auto_sampler.py</code></li>
+<li>Line 381: <code>relevance_compress_dtype: Optional[Any] = "float16"</code> (default parameter)</li>
+<li>Line 320: ALL policies call <code>_compress_relevance_tree()</code> before policy-specific logic</li>
+<li>
+<p>Line 286: dtype conversion applied unconditionally if <code>target_dtype is not None</code></p>
+</li>
+<li>
+<p><strong>Implementation Flow</strong>:
+   <div class="highlight"><pre><span></span><code><span class="n">_store_relevance_entry</span><span class="p">()</span> <span class="p">[</span><span class="n">line</span> <span class="mi">307</span><span class="p">]</span>
+<span class="err">├─</span> <span class="n">Line</span> <span class="mi">320</span><span class="p">:</span> <span class="n">processed</span> <span class="o">=</span> <span class="n">_compress_relevance_tree</span><span class="p">(</span><span class="n">rel_dict</span><span class="p">,</span> <span class="n">target_dtype</span><span class="o">=</span><span class="n">cache_dtype</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+<span class="err">│</span>  <span class="err">└─</span> <span class="n">Line</span> <span class="mi">286</span><span class="p">:</span> <span class="n">tensor</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">target_dtype</span><span class="p">)</span>  <span class="c1"># ← ALWAYS EXECUTED</span>
+<span class="err">├─</span> <span class="n">Line</span> <span class="mi">324</span><span class="p">:</span> <span class="k">if</span> <span class="n">policy</span> <span class="o">==</span> <span class="s2">&quot;summary&quot;</span> <span class="err">→</span> <span class="k">return</span> <span class="n">summary</span> <span class="n">of</span> <span class="n">COMPRESSED</span> <span class="n">tree</span>
+<span class="err">├─</span> <span class="n">Line</span> <span class="mi">327</span><span class="p">:</span> <span class="k">if</span> <span class="n">policy</span> <span class="o">==</span> <span class="s2">&quot;disk&quot;</span> <span class="err">→</span> <span class="n">save</span> <span class="n">COMPRESSED</span> <span class="n">tree</span> <span class="n">to</span> <span class="n">disk</span>
+<span class="err">└─</span> <span class="n">Line</span> <span class="mi">341</span><span class="p">:</span> <span class="k">if</span> <span class="n">policy</span> <span class="o">==</span> <span class="s2">&quot;full&quot;</span> <span class="err">→</span> <span class="k">return</span> <span class="n">COMPRESSED</span> <span class="n">tree</span>
+</code></pre></div></p>
+</li>
+<li>
+<p><strong>Applies To</strong>:</p>
+</li>
+<li>✅ <code>policy="full"</code> — compressed tree returned</li>
+<li>✅ <code>policy="summary"</code> — compressed tree summarized</li>
+<li>✅ <code>policy="disk"</code> — compressed tree saved</li>
+<li>
+<p>❌ <code>policy="none"</code> — no processing</p>
+</li>
+<li>
+<p><strong>Memory Impact</strong>:</p>
+</li>
+<li><strong>With compression</strong> (default): ~340 MB per sample (10 tokens)</li>
+<li><strong>Without compression</strong>: ~680 MB per sample (10 tokens)</li>
+<li>
+<p><strong>Savings</strong>: 50% reduction</p>
+</li>
+<li>
+<p><strong>To Override</strong>:
+   <div class="highlight"><pre><span></span><code><span class="c1"># Keep float32 precision</span>
+<span class="n">relevance_compress_dtype</span><span class="o">=</span><span class="kc">None</span>
+
+<span class="c1"># Use different precision</span>
+<span class="n">relevance_compress_dtype</span><span class="o">=</span><span class="s2">&quot;bfloat16&quot;</span>  <span class="c1"># Better range</span>
+<span class="n">relevance_compress_dtype</span><span class="o">=</span><span class="s2">&quot;float32&quot;</span>   <span class="c1"># Full precision (2x memory)</span>
+</code></pre></div></p>
+</li>
+</ol>
+<h4 id="documentation-updated">Documentation Updated:<a class="headerlink" href="#documentation-updated" title="Permanent link">&para;</a></h4>
+<ul>
+<li>✅ Added critical finding section to <code>relevance_memory_scopes.md</code></li>
+<li>✅ Updated compression techniques table with "Applies To" column</li>
+<li>✅ Added dtype precision control section</li>
+<li>✅ Created verification script: <code>docs/examples/verify_dtype_compression.py</code></li>
+<li>✅ Added PyTorch documentation references for <code>tensor.to()</code> behavior</li>
+</ul>
+<h4 id="key-takeaway">Key Takeaway:<a class="headerlink" href="#key-takeaway" title="Permanent link">&para;</a></h4>
+<p>The 14GB storage per sample is NOT due to missing compression—compression IS working. The data is simply massive even after 50% reduction because:
+- Vocabulary size: 151,936 tokens
+- 32+ layers with hidden dim 3,584
+- Full relevance stored for every layer, every token</p>
+<p><strong>Recommendation</strong>: Use <code>policy="disk"</code> to keep RAM constant while still benefiting from float16 compression on disk.</p>
+<hr />
+<h2 id="phase-2-comprehensive-storage-optimization-plan">Phase 2: Comprehensive Storage Optimization Plan<a class="headerlink" href="#phase-2-comprehensive-storage-optimization-plan" title="Permanent link">&para;</a></h2>
+<p>📋 <strong>See:</strong> <a href="../relevance_storage_optimization_plan/">Relevance Storage Optimization Plan</a></p>
+<h3 id="problem-statement">Problem Statement<a class="headerlink" href="#problem-statement" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Current storage:</strong> 2.75 GB per token × 5 tokens = <strong>13.75 GB per sample</strong></li>
+<li><strong>Root cause:</strong> Storing ALL computation graph nodes per generation step</li>
+<li><strong>Constraint:</strong> Must maintain node-level granularity for full LRP attribution</li>
+</ul>
+<h3 id="optimization-strategies">Optimization Strategies<a class="headerlink" href="#optimization-strategies" title="Permanent link">&para;</a></h3>
+<p>A comprehensive plan has been developed with multiple complementary techniques:</p>
+<h4 id="1-sparse-tensor-compression-pytorch-csrcoo">1. <strong>Sparse Tensor Compression (PyTorch CSR/COO)</strong><a class="headerlink" href="#1-sparse-tensor-compression-pytorch-csrcoo" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Reduction:</strong> 20-100x for &gt;90% sparse matrices</li>
+<li><strong>Implementation:</strong> Convert to <code>torch.sparse_csr</code> after threshold pruning</li>
+<li><strong>Trade-off:</strong> CPU-only operations (PyTorch 2.9)</li>
+</ul>
+<h4 id="2-top-k-vocabulary-pruning">2. <strong>Top-K Vocabulary Pruning</strong><a class="headerlink" href="#2-top-k-vocabulary-pruning" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Reduction:</strong> 484x by keeping only top-100 tokens per position</li>
+<li><strong>Implementation:</strong> <code>torch.topk()</code> on vocabulary dimension</li>
+<li><strong>Use case:</strong> Most interpretability needs &lt;100 tokens</li>
+</ul>
+<h4 id="3-hierarchical-layer-sampling">3. <strong>Hierarchical Layer Sampling</strong><a class="headerlink" href="#3-hierarchical-layer-sampling" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Reduction:</strong> 32,000x by storing full data only for critical layers</li>
+<li><strong>Strategy:</strong> Full storage for layers [0, mid, -1], summaries for others</li>
+<li><strong>Benefit:</strong> Preserves end-to-end attribution path</li>
+</ul>
+<h4 id="4-int8-quantization">4. <strong>Int8 Quantization</strong><a class="headerlink" href="#4-int8-quantization" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Reduction:</strong> Additional 2x on top of float16</li>
+<li><strong>Accuracy:</strong> &lt;1% relative error, preserves ranking</li>
+<li><strong>Implementation:</strong> Dynamic quantization with scale/zero_point</li>
+</ul>
+<h4 id="5-zstandard-compression">5. <strong>Zstandard Compression</strong><a class="headerlink" href="#5-zstandard-compression" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Reduction:</strong> 3-5x additional for disk storage</li>
+<li><strong>Latency:</strong> &lt;100ms decompression per step</li>
+<li><strong>Better than gzip:</strong> Optimized for tensor data patterns</li>
+</ul>
+<h3 id="expected-results">Expected Results<a class="headerlink" href="#expected-results" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Configuration</th>
+<th>Storage/Sample</th>
+<th>Reduction Factor</th>
+<th>Quality Loss</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Current (float16 only)</td>
+<td>13.75 GB</td>
+<td>1x (baseline)</td>
+<td>0%</td>
+</tr>
+<tr>
+<td>+ Top-K (k=100)</td>
+<td>28 MB</td>
+<td><strong>491x</strong></td>
+<td>&lt;1%</td>
+</tr>
+<tr>
+<td>+ Sparse CSR + Top-K</td>
+<td>5 MB</td>
+<td><strong>2,750x</strong></td>
+<td>1-3%</td>
+</tr>
+<tr>
+<td>+ Hierarchical layers</td>
+<td>500 KB</td>
+<td><strong>28,160x</strong></td>
+<td>3-5%</td>
+</tr>
+<tr>
+<td>+ Zstandard</td>
+<td>100 KB</td>
+<td><strong>140,800x</strong></td>
+<td>3-5%</td>
+</tr>
+</tbody>
+</table>
+<h3 id="implementation-roadmap">Implementation Roadmap<a class="headerlink" href="#implementation-roadmap" title="Permanent link">&para;</a></h3>
+<p><strong>Week 1-2:</strong> Quick wins (10-50x reduction)
+- Top-K pruning (k=100)
+- Threshold-based sparsification (&gt;90% zeros)
+- Zstandard compression on disk writes</p>
+<p><strong>Week 3-4:</strong> Advanced compression (100-500x reduction)
+- CSR sparse format integration
+- Hierarchical layer storage
+- Int8 quantization pipeline</p>
+<p><strong>Week 5-6:</strong> Production optimization
+- Memory-mapped lazy loading
+- Configuration presets (quality/balanced/minimal)
+- Validation suite for quality preservation</p>
+<h3 id="configuration-presets">Configuration Presets<a class="headerlink" href="#configuration-presets" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="n">CACHE_CONFIG</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;policy&quot;</span><span class="p">:</span> <span class="s2">&quot;disk&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;compression_preset&quot;</span><span class="p">:</span> <span class="s2">&quot;balanced&quot;</span><span class="p">,</span>  <span class="c1"># NEW</span>
+    <span class="s2">&quot;sparse_threshold&quot;</span><span class="p">:</span> <span class="mf">1e-4</span><span class="p">,</span>          <span class="c1"># NEW: Sparsification</span>
+    <span class="s2">&quot;topk_tokens&quot;</span><span class="p">:</span> <span class="mi">100</span><span class="p">,</span>                <span class="c1"># NEW: Vocabulary pruning</span>
+    <span class="s2">&quot;critical_layers&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">14</span><span class="p">,</span> <span class="mi">27</span><span class="p">],</span>    <span class="c1"># NEW: Hierarchical storage</span>
+    <span class="s2">&quot;external_compression&quot;</span><span class="p">:</span> <span class="s2">&quot;zstd&quot;</span><span class="p">,</span>    <span class="c1"># NEW: Disk compression</span>
+    <span class="s2">&quot;quantization&quot;</span><span class="p">:</span> <span class="s2">&quot;float16&quot;</span><span class="p">,</span>         <span class="c1"># Existing, could be int8</span>
+<span class="p">}</span>
+</code></pre></div>
+<h3 id="validation-metrics">Validation Metrics<a class="headerlink" href="#validation-metrics" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Top-K ranking overlap:</strong> &gt;95% (critical for interpretability)</li>
+<li><strong>Spearman correlation:</strong> &gt;0.95</li>
+<li><strong>Reconstruction latency:</strong> &lt;500ms per step</li>
+<li><strong>Compression ratio:</strong> &gt;100x</li>
+</ul>
+<h3 id="next-actions">Next Actions<a class="headerlink" href="#next-actions" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Implement Top-K pruning in <code>_compress_relevance_tree()</code></li>
+<li>Benchmark on HEx-PHI dataset (10 samples)</li>
+<li>Validate reconstruction quality</li>
+<li>Update notebook with new configuration options</li>
+</ol>
+<p>See full plan for detailed PyTorch implementations, code integration points, and benchmark scripts.</p></div>
+        
+        
+    </div>
+
+    
+      <footer class="col-md-12 text-center">
+          
+          
+            <hr>
+            <p>
+            <small>Copyright &copy; 2025 Lexsi Labs</small><br>
+            
+            <small>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</small>
+            </p>
+          
+
+          
+          
+      </footer>
+    
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script src="../js/bootstrap-3.0.3.min.js"></script>
+
+    
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/highlight.min.js"></script>
+        
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/python.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/yaml.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/bash.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/javascript.min.js"></script>
+        
+    <script>hljs.initHighlightingOnLoad();</script>
+    
+
+    <script>var base_url = ".."</script>
+    
+    <script src="../js/base.js"></script>
+    <script src="../javascripts/mathjax.js"></script>
+    <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="../javascripts/katex.js"></script>
+    <script src="https://unpkg.com/katex@0/dist/katex.min.js"></script>
+    <script src="https://unpkg.com/katex@0/dist/contrib/auto-render.min.js"></script>
+    <script src="../search/main.js"></script>
+
+    <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    <span aria-hidden="true">&times;</span>
+                    <span class="sr-only">Close</span>
+                </button>
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+            </div>
+            <div class="modal-body">
+                <p>
+                    From here you can search these documents. Enter
+                    your search terms below.
+                </p>
+                <form>
+                    <div class="form-group">
+                        <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+    </body>
+
+</html>

@@ -350,7 +350,7 @@
         <div class="col-md-9" role="main">
 
 <h1 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h1>
-<p>Understanding DL-Backtrace's architecture.</p>
+<p>Understanding DLBacktrace's architecture.</p>
 <hr />
 <h2 id="system-overview">System Overview<a class="headerlink" href="#system-overview" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code>┌─────────────────┐
@@ -384,12 +384,11 @@
 <hr />
 <h2 id="core-components">Core Components<a class="headerlink" href="#core-components" title="Permanent link">&para;</a></h2>
 <h3 id="1-graph-builder">1. Graph Builder<a class="headerlink" href="#1-graph-builder" title="Permanent link">&para;</a></h3>
-<p>Uses PyTorch Train Export to construct the computational graphs with fundamental torch aten node operations = layers + inline operation alongside weights and hyperparameter extraction for comprehensive node-wise model output tracing.</p>
+<p>Uses PyTorch Train Export to construct the computational graphs with fundamental torch aten node operations = layers + inline operation alongside weights and hyperparameters extraction for comprehensive nodewise model output tracing.</p>
 <h3 id="2-execution-engine">2. Execution Engine<a class="headerlink" href="#2-execution-engine" title="Permanent link">&para;</a></h3>
-<p>High-performance forward pass execution using the computation graph to compute the output of each node while ensuring consistent precision and correct hyper-params and weight being used with settings to ensure deterministic results. With warning logs for extremely high values.</p>
+<p>High performance forward pass execution using the computation graph to compute the output of each node while ensuring consistent precision and correct hyperparams and weights being used with settings to ensure deterministic results. With warning logs for extremely high values.</p>
 <h3 id="3-relevance-propagation">3. Relevance Propagation<a class="headerlink" href="#3-relevance-propagation" title="Permanent link">&para;</a></h3>
-<p>Layer-specific algorithms (Linear, Convolutional, Attention) that distribute relevance based on each layer's mathematical properties and activation patterns
-It distributes relevance scores across layers, providing insights into feature importance, information flow, and bias, enabling better model interpretation and validation without external dependencies.</p>
+<p>Layer-specific algorithms (Linear, Convolutional, Attention) that distribute relevance based on each layer's mathematical properties and activation patterns. It distributes relevance scores across layers, providing insights into feature importance, information flow, and bias, enabling better model interpretation and validation without external dependencies.</p>
 <hr />
 <h2 id="data-flow">Data Flow<a class="headerlink" href="#data-flow" title="Permanent link">&para;</a></h2>
 <ol>

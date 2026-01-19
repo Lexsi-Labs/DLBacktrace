@@ -341,7 +341,7 @@
             <li class="second-level"><a href="#your-first-example">Your First Example</a></li>
                 
                 <li class="third-level"><a href="#step-1-import-and-define-model">Step 1: Import and Define Model</a></li>
-                <li class="third-level"><a href="#step-2-initialize-dl-backtrace">Step 2: Initialize DL-Backtrace</a></li>
+                <li class="third-level"><a href="#step-2-initialize-dlbacktrace">Step 2: Initialize DLBacktrace</a></li>
                 <li class="third-level"><a href="#step-3-run-forward-pass">Step 3: Run Forward Pass</a></li>
                 <li class="third-level"><a href="#step-4-calculate-relevance">Step 4: Calculate Relevance</a></li>
                 <li class="third-level"><a href="#step-5-visualize-optional">Step 5: Visualize (Optional)</a></li>
@@ -351,11 +351,14 @@
                 
                 <li class="third-level"><a href="#resnet-example">ResNet Example</a></li>
                 <li class="third-level"><a href="#bert-example">BERT Example</a></li>
-            <li class="second-level"><a href="#simplified-pipeline-approach">Simplified Pipeline Approach</a></li>
+            <li class="second-level"><a href="#simplified-run_task-api">Simplified run_task() API</a></li>
                 
-                <li class="third-level"><a href="#text-classification-with-pipeline">Text Classification with Pipeline</a></li>
-                <li class="third-level"><a href="#image-classification-with-pipeline">Image Classification with Pipeline</a></li>
-                <li class="third-level"><a href="#text-generation-with-pipeline">Text Generation with Pipeline</a></li>
+                <li class="third-level"><a href="#text-classification-with-run_task">Text Classification with run_task()</a></li>
+                <li class="third-level"><a href="#image-classification-with-run_task">Image Classification with run_task()</a></li>
+                <li class="third-level"><a href="#text-generation-with-run_task">Text Generation with run_task()</a></li>
+                <li class="third-level"><a href="#text-generation-with-moe-models">Text Generation with MoE Models</a></li>
+                <li class="third-level"><a href="#supported-tasks">Supported Tasks</a></li>
+                <li class="third-level"><a href="#run_task-benefits">run_task() Benefits</a></li>
             <li class="second-level"><a href="#understanding-the-output">Understanding the Output</a></li>
                 
                 <li class="third-level"><a href="#node-io-dictionary">Node I/O Dictionary</a></li>
@@ -366,10 +369,11 @@
                 <li class="third-level"><a href="#dlbacktrace-initialization">DLBacktrace Initialization</a></li>
                 <li class="third-level"><a href="#evaluation-parameters">Evaluation Parameters</a></li>
                 <li class="third-level"><a href="#task-types">Task Types</a></li>
+                <li class="third-level"><a href="#generation-parameters-for-taskgeneration">Generation Parameters (for task="generation")</a></li>
             <li class="second-level"><a href="#advanced-features">Advanced Features</a></li>
                 
                 <li class="third-level"><a href="#temperature-scaling">Temperature Scaling</a></li>
-                <li class="third-level"><a href="#moe-models">MoE Models</a></li>
+                <li class="third-level"><a href="#moes-models">MoEs Models</a></li>
                 <li class="third-level"><a href="#dlb-auto-sampler">DLB Auto Sampler</a></li>
             <li class="second-level"><a href="#next-steps">Next Steps</a></li>
                 
@@ -386,10 +390,10 @@
         <div class="col-md-9" role="main">
 
 <h1 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h1>
-<p>Get started with DL-Backtrace in minutes! This guide will walk you through your first explainability analysis.</p>
+<p>Get started with DLBacktrace in minutes! This guide will walk you through your first explainability analysis.</p>
 <hr />
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
-<p>Make sure you have DL-Backtrace installed. If not, see the <a href="../installation/">Installation Guide</a>.</p>
+<p>Make sure you have DLBacktrace installed. If not, see the <a href="../installation/">Installation Guide</a>.</p>
 <hr />
 <h2 id="your-first-example">Your First Example<a class="headerlink" href="#your-first-example" title="Permanent link">&para;</a></h2>
 <p>Let's start with a simple PyTorch model and make it explainable.</p>
@@ -422,18 +426,18 @@
 <span class="n">model</span> <span class="o">=</span> <span class="n">SimpleCNN</span><span class="p">(</span><span class="n">num_classes</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
 <span class="n">model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>  <span class="c1"># Set to evaluation mode</span>
 </code></pre></div>
-<h3 id="step-2-initialize-dl-backtrace">Step 2: Initialize DL-Backtrace<a class="headerlink" href="#step-2-initialize-dl-backtrace" title="Permanent link">&para;</a></h3>
+<h3 id="step-2-initialize-dlbacktrace">Step 2: Initialize DLBacktrace<a class="headerlink" href="#step-2-initialize-dlbacktrace" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="c1"># Create dummy input for graph tracing</span>
 <span class="n">dummy_input</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">32</span><span class="p">)</span>
 
-<span class="c1"># Initialize DL-Backtrace</span>
+<span class="c1"># Initialize DLBacktrace</span>
 <span class="n">dlb</span> <span class="o">=</span> <span class="n">DLBacktrace</span><span class="p">(</span>
     <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
     <span class="n">input_for_graph</span><span class="o">=</span><span class="p">(</span><span class="n">dummy_input</span><span class="p">,),</span>
     <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
 <span class="p">)</span>
 
-<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;✅ DL-Backtrace initialized successfully!&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;✅ DLBacktrace initialized successfully!&quot;</span><span class="p">)</span>
 </code></pre></div>
 <h3 id="step-3-run-forward-pass">Step 3: Run Forward Pass<a class="headerlink" href="#step-3-run-forward-pass" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="c1"># Prepare your actual input</span>
@@ -526,7 +530,7 @@
 <span class="n">model</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">resnet18</span><span class="p">(</span><span class="n">pretrained</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="n">model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
 
-<span class="c1"># Initialize DL-Backtrace</span>
+<span class="c1"># Initialize DLBacktrace</span>
 <span class="n">dummy_input</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">224</span><span class="p">,</span> <span class="mi">224</span><span class="p">)</span>
 <span class="n">dlb</span> <span class="o">=</span> <span class="n">DLBacktrace</span><span class="p">(</span>
     <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
@@ -572,10 +576,10 @@
 <span class="n">model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
 
 <span class="c1"># Prepare input</span>
-<span class="n">text</span> <span class="o">=</span> <span class="s2">&quot;DL-Backtrace makes AI explainable!&quot;</span>
+<span class="n">text</span> <span class="o">=</span> <span class="s2">&quot;DLBacktrace makes AI explainable!&quot;</span>
 <span class="n">inputs</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
-<span class="c1"># Initialize DL-Backtrace</span>
+<span class="c1"># Initialize DLBacktrace</span>
 <span class="n">dlb</span> <span class="o">=</span> <span class="n">DLBacktrace</span><span class="p">(</span>
     <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
     <span class="n">input_for_graph</span><span class="o">=</span><span class="p">(</span><span class="n">inputs</span><span class="p">[</span><span class="s1">&#39;input_ids&#39;</span><span class="p">],</span> <span class="n">inputs</span><span class="p">[</span><span class="s1">&#39;attention_mask&#39;</span><span class="p">]),</span>
@@ -593,64 +597,216 @@
 <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;✅ BERT analysis complete!&quot;</span><span class="p">)</span>
 </code></pre></div>
 <hr />
-<h2 id="simplified-pipeline-approach">Simplified Pipeline Approach<a class="headerlink" href="#simplified-pipeline-approach" title="Permanent link">&para;</a></h2>
-<p>For even faster setup, use the high-level <strong>Pipeline</strong> interface:</p>
-<h3 id="text-classification-with-pipeline">Text Classification with Pipeline<a class="headerlink" href="#text-classification-with-pipeline" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.pytorch_backtrace.dlbacktrace.pipeline</span><span class="w"> </span><span class="kn">import</span> <span class="n">DLBacktracePipeline</span>
+<h2 id="simplified-run_task-api">Simplified <code>run_task()</code> API<a class="headerlink" href="#simplified-run_task-api" title="Permanent link">&para;</a></h2>
+<p>For even faster setup, use the streamlined <strong><code>run_task()</code></strong> method that combines prediction and relevance evaluation in a single call:</p>
+<h3 id="text-classification-with-run_task">Text Classification with <code>run_task()</code><a class="headerlink" href="#text-classification-with-run_task" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoTokenizer</span><span class="p">,</span> <span class="n">AutoModelForSequenceClassification</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.pytorch_backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">DLBacktrace</span>
 
-<span class="c1"># Create pipeline with one line</span>
-<span class="n">pipeline</span> <span class="o">=</span> <span class="n">DLBacktracePipeline</span><span class="o">.</span><span class="n">create_simple</span><span class="p">(</span>
-    <span class="n">model_name</span><span class="o">=</span><span class="s2">&quot;bert-base&quot;</span><span class="p">,</span>
-    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cpu&quot;</span>
-<span class="p">)</span>
+<span class="c1"># Load model and tokenizer</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForSequenceClassification</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span>
+    <span class="s2">&quot;textattack/bert-base-uncased-SST-2&quot;</span>
+<span class="p">)</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
+<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;textattack/bert-base-uncased-SST-2&quot;</span><span class="p">)</span>
 
-<span class="c1"># Run analysis with one line</span>
-<span class="n">results</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">run_simple_analysis</span><span class="p">(</span>
-    <span class="s2">&quot;This product exceeded my expectations!&quot;</span><span class="p">,</span>
-    <span class="n">label</span><span class="o">=</span><span class="s2">&quot;positive&quot;</span>
-<span class="p">)</span>
+<span class="c1"># Tokenize input</span>
+<span class="n">sentences</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;This movie is fantastic!&quot;</span><span class="p">]</span>
+<span class="n">tokens</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="n">sentences</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">truncation</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">)</span>
+<span class="n">input_ids</span> <span class="o">=</span> <span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;input_ids&quot;</span><span class="p">]</span>
+<span class="n">attention_mask</span> <span class="o">=</span> <span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;attention_mask&quot;</span><span class="p">]</span>
 
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Prediction: </span><span class="si">{</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;predictions&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Relevance computed: </span><span class="si">{</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;relevance_computed&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</code></pre></div>
-<h3 id="image-classification-with-pipeline">Image Classification with Pipeline<a class="headerlink" href="#image-classification-with-pipeline" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">PIL</span><span class="w"> </span><span class="kn">import</span> <span class="n">Image</span>
-
-<span class="c1"># Create pipeline</span>
-<span class="n">pipeline</span> <span class="o">=</span> <span class="n">DLBacktracePipeline</span><span class="o">.</span><span class="n">create_simple</span><span class="p">(</span>
-    <span class="n">model_name</span><span class="o">=</span><span class="s2">&quot;resnet&quot;</span><span class="p">,</span>
+<span class="c1"># Initialize DLBacktrace</span>
+<span class="n">dlb</span> <span class="o">=</span> <span class="n">DLBacktrace</span><span class="p">(</span>
+    <span class="n">model</span><span class="p">,</span>
+    <span class="p">(</span><span class="n">input_ids</span><span class="p">,</span> <span class="n">attention_mask</span><span class="p">),</span>
     <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
 <span class="p">)</span>
 
-<span class="c1"># Load image and classify</span>
-<span class="n">image</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">&quot;cat.jpg&quot;</span><span class="p">)</span>
-<span class="n">results</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">run_simple_analysis</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;cat&quot;</span><span class="p">)</span>
+<span class="c1"># Run text classification - ONE CALL!</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">run_task</span><span class="p">(</span>
+    <span class="n">task</span><span class="o">=</span><span class="s2">&quot;text-classification&quot;</span><span class="p">,</span>  <span class="c1"># or &quot;auto&quot; for automatic detection</span>
+    <span class="n">inputs</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;input_ids&#39;</span><span class="p">:</span> <span class="n">input_ids</span><span class="p">,</span> <span class="s1">&#39;attention_mask&#39;</span><span class="p">:</span> <span class="n">attention_mask</span><span class="p">},</span>
+    <span class="n">debug</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span>
 
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Prediction: </span><span class="si">{</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;predictions&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="c1"># Access results</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Task: </span><span class="si">{</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;task&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Predictions: </span><span class="si">{</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;predictions&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Relevance keys: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;relevance&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="c1"># Get token-level relevance</span>
+<span class="n">relevance_input_ids</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="s1">&#39;relevance&#39;</span><span class="p">][</span><span class="s2">&quot;input_ids&quot;</span><span class="p">]</span>
 </code></pre></div>
-<h3 id="text-generation-with-pipeline">Text Generation with Pipeline<a class="headerlink" href="#text-generation-with-pipeline" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><span class="c1"># Create pipeline for generation</span>
-<span class="n">pipeline</span> <span class="o">=</span> <span class="n">DLBacktracePipeline</span><span class="o">.</span><span class="n">create_simple</span><span class="p">(</span>
-    <span class="n">model_name</span><span class="o">=</span><span class="s2">&quot;llama3.2-1b&quot;</span><span class="p">,</span>
+<h3 id="image-classification-with-run_task">Image Classification with <code>run_task()</code><a class="headerlink" href="#image-classification-with-run_task" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchvision.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">mobilenet_v2</span><span class="p">,</span> <span class="n">MobileNet_V2_Weights</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.pytorch_backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">DLBacktrace</span>
+
+<span class="c1"># Load pre-trained model</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">mobilenet_v2</span><span class="p">(</span><span class="n">weights</span><span class="o">=</span><span class="n">MobileNet_V2_Weights</span><span class="o">.</span><span class="n">IMAGENET1K_V1</span><span class="p">)</span>
+<span class="n">model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
+
+<span class="c1"># Prepare input image (3, 224, 224)</span>
+<span class="n">test_image</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">224</span><span class="p">,</span> <span class="mi">224</span><span class="p">)</span>
+
+<span class="c1"># Initialize DLBacktrace</span>
+<span class="n">dlb</span> <span class="o">=</span> <span class="n">DLBacktrace</span><span class="p">(</span>
+    <span class="n">model</span><span class="p">,</span>
+    <span class="n">input_for_graph</span><span class="o">=</span><span class="n">test_image</span><span class="p">,</span>
     <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
 <span class="p">)</span>
 
-<span class="c1"># Generate text with relevance analysis</span>
-<span class="n">results</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">run_text_generation</span><span class="p">(</span>
-    <span class="n">prompts</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;The future of AI is&quot;</span><span class="p">],</span>
-    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
-    <span class="n">temperature</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>
-    <span class="n">return_relevance</span><span class="o">=</span><span class="kc">True</span>
+<span class="c1"># Run image classification - ONE CALL!</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">run_task</span><span class="p">(</span>
+    <span class="n">task</span><span class="o">=</span><span class="s2">&quot;image-classification&quot;</span><span class="p">,</span>  <span class="c1"># or &quot;auto&quot;</span>
+    <span class="n">inputs</span><span class="o">=</span><span class="n">test_image</span><span class="p">,</span>
+    <span class="n">debug</span><span class="o">=</span><span class="kc">True</span>
 <span class="p">)</span>
 
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Generated: </span><span class="si">{</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;generated_texts&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="c1"># Access results</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Predicted class: </span><span class="si">{</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;predictions&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">argmax</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Number of nodes: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;relevance&#39;</span><span class="p">])</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="c1"># Visualize</span>
+<span class="n">dlb</span><span class="o">.</span><span class="n">visualize_dlbacktrace</span><span class="p">(</span><span class="n">output_path</span><span class="o">=</span><span class="s2">&quot;mobilenet&quot;</span><span class="p">)</span>
 </code></pre></div>
-<p><strong>Pipeline Benefits:</strong>
-- 🔧 Automatic model loading
-- ⚙️ Sensible defaults
-- 📊 Built-in result management
-- 🎯 Task-specific methods</p>
-<p><a href="../../guide/pytorch/pipeline/">Learn more about Pipeline →</a></p>
+<h3 id="text-generation-with-run_task">Text Generation with <code>run_task()</code><a class="headerlink" href="#text-generation-with-run_task" title="Permanent link">&para;</a></h3>
+<p>For standard language models (non-MoE) like Qwen, LLaMA, GPT-2:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoTokenizer</span><span class="p">,</span> <span class="n">AutoModelForCausalLM</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.pytorch_backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">DLBacktrace</span>
+
+<span class="c1"># Load language model</span>
+<span class="n">model_id</span> <span class="o">=</span> <span class="s2">&quot;Qwen/Qwen3-0.6B&quot;</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span>
+    <span class="n">model_id</span><span class="p">,</span>
+    <span class="n">torch_dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span>
+<span class="p">)</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
+<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_id</span><span class="p">)</span>
+<span class="n">tokenizer</span><span class="o">.</span><span class="n">pad_token</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">eos_token</span>
+
+<span class="c1"># Tokenize input</span>
+<span class="n">prompt</span> <span class="o">=</span> <span class="s2">&quot;What is the capital of France?&quot;</span>
+<span class="n">tokens</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="n">prompt</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">truncation</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">input_ids</span> <span class="o">=</span> <span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;input_ids&quot;</span><span class="p">]</span>
+<span class="n">attention_mask</span> <span class="o">=</span> <span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;attention_mask&quot;</span><span class="p">]</span>
+
+<span class="c1"># Initialize DLBacktrace</span>
+<span class="n">dlb</span> <span class="o">=</span> <span class="n">DLBacktrace</span><span class="p">(</span>
+    <span class="n">model</span><span class="p">,</span>
+    <span class="p">(</span><span class="n">input_ids</span><span class="p">,</span> <span class="n">attention_mask</span><span class="p">),</span>
+    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
+<span class="p">)</span>
+
+<span class="c1"># Run generation - ONE CALL!</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">run_task</span><span class="p">(</span>
+    <span class="n">task</span><span class="o">=</span><span class="s2">&quot;generation&quot;</span><span class="p">,</span>
+    <span class="n">inputs</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;input_ids&#39;</span><span class="p">:</span> <span class="n">input_ids</span><span class="p">,</span> <span class="s1">&#39;attention_mask&#39;</span><span class="p">:</span> <span class="n">attention_mask</span><span class="p">},</span>
+    <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span>        <span class="c1"># Optional: sampling</span>
+    <span class="n">top_p</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span>              <span class="c1"># Optional: nucleus sampling</span>
+    <span class="n">return_relevance</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>  <span class="c1"># Track token relevance per step</span>
+    <span class="n">return_scores</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>     <span class="c1"># Return generation scores</span>
+    <span class="n">debug</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span>
+
+<span class="c1"># Access results</span>
+<span class="n">generated_text</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">batch_decode</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;generated_ids&#39;</span><span class="p">],</span> <span class="n">skip_special_tokens</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Generated: </span><span class="si">{</span><span class="n">generated_text</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Relevance trace steps: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;relevance_trace&#39;</span><span class="p">])</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="c1"># Visualize token-wise relevance</span>
+<span class="n">dlb</span><span class="o">.</span><span class="n">visualize_tokenwise_relevance_map</span><span class="p">(</span>
+    <span class="n">results</span><span class="p">[</span><span class="s1">&#39;relevance_trace&#39;</span><span class="p">],</span>
+    <span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">tokenizer</span><span class="p">,</span>
+    <span class="n">generated_ids</span><span class="o">=</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;generated_ids&#39;</span><span class="p">]</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Generation Modes Supported:</strong>
+- 🎯 Greedy decoding (default)
+- 🎲 Sampling with temperature
+- 🔝 Top-k and top-p (nucleus) sampling
+- 🌟 Beam search with <code>num_beams</code> parameter</p>
+<h3 id="text-generation-with-moe-models">Text Generation with MoE Models<a class="headerlink" href="#text-generation-with-moe-models" title="Permanent link">&para;</a></h3>
+<p>For Mixture of Experts (MoE) models like Qwen3-MoE, GPT-OSS, JetMoE, and OLMoE:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoTokenizer</span><span class="p">,</span> <span class="n">AutoModelForCausalLM</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.moe_pytorch_backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">Backtrace</span>
+
+<span class="c1"># Load MoE model</span>
+<span class="n">model_id</span> <span class="o">=</span> <span class="s2">&quot;Qwen/Qwen3-30B-A3B&quot;</span>  <span class="c1"># or &quot;openai/gpt-oss-20b&quot;</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span>
+    <span class="n">model_id</span><span class="p">,</span>
+    <span class="n">torch_dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span>
+<span class="p">)</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
+<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_id</span><span class="p">)</span>
+<span class="n">tokenizer</span><span class="o">.</span><span class="n">pad_token</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">eos_token</span>
+
+<span class="c1"># Initialize MoE Backtrace</span>
+<span class="n">bt</span> <span class="o">=</span> <span class="n">Backtrace</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+    <span class="n">model_type</span><span class="o">=</span><span class="s1">&#39;qwen3_moe&#39;</span><span class="p">,</span>  <span class="c1"># or &#39;gpt_oss&#39;, &#39;jetmoe&#39;, &#39;olmoe&#39;</span>
+    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
+<span class="p">)</span>
+
+<span class="c1"># Tokenize input</span>
+<span class="n">prompt</span> <span class="o">=</span> <span class="s2">&quot;What is the capital of France?&quot;</span>
+<span class="n">tokens</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="n">prompt</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">)</span>
+<span class="n">input_ids</span> <span class="o">=</span> <span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;input_ids&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">&quot;cuda&quot;</span><span class="p">)</span>
+<span class="n">attention_mask</span> <span class="o">=</span> <span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;attention_mask&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">&quot;cuda&quot;</span><span class="p">)</span>
+
+<span class="c1"># Run generation with relevance tracing - ONE CALL!</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">bt</span><span class="o">.</span><span class="n">run_task</span><span class="p">(</span>
+    <span class="n">task</span><span class="o">=</span><span class="s2">&quot;generation&quot;</span><span class="p">,</span>
+    <span class="n">inputs</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;input_ids&#39;</span><span class="p">:</span> <span class="n">input_ids</span><span class="p">,</span> <span class="s1">&#39;attention_mask&#39;</span><span class="p">:</span> <span class="n">attention_mask</span><span class="p">},</span>
+    <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span>        <span class="c1"># Optional: sampling</span>
+    <span class="n">top_p</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span>              <span class="c1"># Optional: nucleus sampling</span>
+    <span class="n">return_relevance</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>  <span class="c1"># Track token &amp; expert relevance</span>
+    <span class="n">return_scores</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>     <span class="c1"># Return generation scores</span>
+    <span class="n">debug</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span>
+
+<span class="c1"># Access results</span>
+<span class="n">generated_text</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;generated_ids&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">skip_special_tokens</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Generated: </span><span class="si">{</span><span class="n">generated_text</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Relevance trace steps: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;relevance_trace&#39;</span><span class="p">])</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="c1"># Access expert routing information</span>
+<span class="n">expert_relevance</span> <span class="o">=</span> <span class="n">bt</span><span class="o">.</span><span class="n">all_layer_expert_relevance</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Expert layers tracked: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">expert_relevance</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><strong>MoE Generation Features:</strong>
+- 🎯 Automatic expert routing analysis
+- 📊 Per-token relevance tracking across generation
+- 🔍 Expert-level contribution scores
+- 🚀 Supports greedy, sampling, and beam search</p>
+<h3 id="supported-tasks">Supported Tasks<a class="headerlink" href="#supported-tasks" title="Permanent link">&para;</a></h3>
+<p>The <code>run_task()</code> method supports:</p>
+<ul>
+<li><code>"text-classification"</code> - Sentiment analysis, text categorization</li>
+<li><code>"image-classification"</code> - Image recognition, object classification</li>
+<li><code>"generation"</code> - Text generation (both standard LMs and MoE models)</li>
+<li><code>"auto"</code> - Automatic task detection based on model output</li>
+</ul>
+<p><strong>Generation Task Features:</strong>
+- Works with both <code>DLBacktrace</code> (standard models) and <code>Backtrace</code> (MoE models)
+- Automatic relevance tracing per generation step
+- Support for greedy, sampling (temperature, top-k, top-p), and beam search
+- Per-token relevance visualization
+- Expert routing analysis (MoE models only)</p>
+<h3 id="run_task-benefits"><code>run_task()</code> Benefits<a class="headerlink" href="#run_task-benefits" title="Permanent link">&para;</a></h3>
+<ul>
+<li>✨ <strong>Single call</strong>: Combines <code>predict()</code> + <code>evaluation()</code> into one</li>
+<li>🎯 <strong>Task-aware</strong>: Automatically configures evaluation parameters</li>
+<li>📦 <strong>Structured output</strong>: Consistent return format across tasks</li>
+<li>🔍 <strong>Easy access</strong>: Direct access to predictions and relevance</li>
+<li>🚀 <strong>Cleaner code</strong>: Less boilerplate, more readable</li>
+</ul>
 <hr />
 <h2 id="understanding-the-output">Understanding the Output<a class="headerlink" href="#understanding-the-output" title="Permanent link">&para;</a></h2>
 <h3 id="node-io-dictionary">Node I/O Dictionary<a class="headerlink" href="#node-io-dictionary" title="Permanent link">&para;</a></h3>
@@ -739,11 +895,70 @@
 </table>
 <h3 id="task-types">Task Types<a class="headerlink" href="#task-types" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>"binary-classification"</code></li>
-<li><code>"multi-class classification"</code></li>
+<li><code>"text-classification"</code> / <code>"binary-classification"</code> / <code>"multi-class classification"</code></li>
+<li><code>"image-classification"</code></li>
+<li><code>"generation"</code></li>
 <li><code>"bbox-regression"</code></li>
 <li><code>"binary-segmentation"</code></li>
+<li><code>"auto"</code> - Automatic detection</li>
 </ul>
+<h3 id="generation-parameters-for-taskgeneration">Generation Parameters (for <code>task="generation"</code>)<a class="headerlink" href="#generation-parameters-for-taskgeneration" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Description</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tokenizer</code></td>
+<td>HuggingFace tokenizer</td>
+<td>Required</td>
+</tr>
+<tr>
+<td><code>max_new_tokens</code></td>
+<td>Maximum tokens to generate</td>
+<td><code>20</code></td>
+</tr>
+<tr>
+<td><code>temperature</code></td>
+<td>Sampling temperature (None = greedy)</td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>top_k</code></td>
+<td>Top-k sampling</td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>top_p</code></td>
+<td>Nucleus sampling threshold</td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>num_beams</code></td>
+<td>Number of beams for beam search</td>
+<td><code>1</code></td>
+</tr>
+<tr>
+<td><code>return_relevance</code></td>
+<td>Return per-step relevance trace</td>
+<td><code>False</code></td>
+</tr>
+<tr>
+<td><code>return_scores</code></td>
+<td>Return per-step generation scores</td>
+<td><code>False</code></td>
+</tr>
+<tr>
+<td><code>return_layerwise_output</code></td>
+<td>Return per-step layer outputs</td>
+<td><code>False</code></td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="advanced-features">Advanced Features<a class="headerlink" href="#advanced-features" title="Permanent link">&para;</a></h2>
 <h3 id="temperature-scaling">Temperature Scaling<a class="headerlink" href="#temperature-scaling" title="Permanent link">&para;</a></h3>
@@ -762,8 +977,8 @@
 <span class="p">)</span>
 </code></pre></div>
 <p><a href="../../guide/pytorch/temperature-scaling/">Learn more →</a></p>
-<h3 id="moe-models">MoE Models<a class="headerlink" href="#moe-models" title="Permanent link">&para;</a></h3>
-<p>Analyze Mixture of Experts models with expert-level tracking:</p>
+<h3 id="moes-models">MoEs Models<a class="headerlink" href="#moes-models" title="Permanent link">&para;</a></h3>
+<p>Analyze Mixture-of-Experts models with expert-level tracking:</p>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.moe_pytorch_backtrace.backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">Backtrace</span>
 
 <span class="c1"># Supported: JetMoE, OLMoE, Qwen MoE, GPT-OSS</span>
@@ -808,10 +1023,10 @@
 <p>Now that you've run your first example, dive deeper:</p>
 <h3 id="learn-the-concepts">Learn the Concepts<a class="headerlink" href="#learn-the-concepts" title="Permanent link">&para;</a></h3>
 <ul>
-<li><a href="../../guide/introduction/">Introduction to DL-Backtrace</a></li>
+<li><a href="../../guide/introduction/">Introduction to DLBacktrace</a></li>
 <li><a href="../../guide/pytorch/pipeline/">Pipeline Interface</a> - High-level workflows</li>
 <li><a href="../../guide/relevance/overview/">Understanding Relevance Propagation</a></li>
-<li><a href="../../guide/pytorch/execution-engines/">Execution Engines Explained</a></li>
+<li><a href="../../guide/pytorch/execution-engines/">Execution Engine Explained</a></li>
 </ul>
 <h3 id="explore-examples">Explore Examples<a class="headerlink" href="#explore-examples" title="Permanent link">&para;</a></h3>
 <ul>
@@ -834,7 +1049,7 @@
 </div>
 <div class="admonition tip">
 <p class="admonition-title">Use GPU When Available</p>
-<p>DL-Backtrace benefits significantly from GPU acceleration for large models.</p>
+<p>DLBacktrace benefits significantly from GPU acceleration for large models.</p>
 </div>
 <div class="admonition tip">
 <p class="admonition-title">Check Model Compatibility</p>

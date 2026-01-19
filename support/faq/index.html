@@ -338,13 +338,13 @@
         <li class="first-level active"><a href="#frequently-asked-questions">Frequently Asked Questions</a></li>
             <li class="second-level"><a href="#general-questions">General Questions</a></li>
                 
-                <li class="third-level"><a href="#what-is-dl-backtrace">What is DL-Backtrace?</a></li>
+                <li class="third-level"><a href="#what-is-dlbacktrace">What is DLBacktrace?</a></li>
                 <li class="third-level"><a href="#which-frameworks-does-it-support">Which frameworks does it support?</a></li>
                 <li class="third-level"><a href="#is-it-free-and-open-source">Is it free and open source?</a></li>
-                <li class="third-level"><a href="#who-develops-dl-backtrace">Who develops DL-Backtrace?</a></li>
+                <li class="third-level"><a href="#who-develops-dlbacktrace">Who develops DLBacktrace?</a></li>
             <li class="second-level"><a href="#installation-questions">Installation Questions</a></li>
                 
-                <li class="third-level"><a href="#how-do-i-install-dl-backtrace">How do I install DL-Backtrace?</a></li>
+                <li class="third-level"><a href="#how-do-i-install-dlbacktrace">How do I install DLBacktrace?</a></li>
                 <li class="third-level"><a href="#do-i-need-a-gpu">Do I need a GPU?</a></li>
                 <li class="third-level"><a href="#what-python-version-is-required">What Python version is required?</a></li>
                 <li class="third-level"><a href="#can-i-install-it-via-pip">Can I install it via pip?</a></li>
@@ -402,34 +402,36 @@
         <div class="col-md-9" role="main">
 
 <h1 id="frequently-asked-questions">Frequently Asked Questions<a class="headerlink" href="#frequently-asked-questions" title="Permanent link">&para;</a></h1>
-<p>Common questions and answers about DL-Backtrace.</p>
+<p>Common questions and answers about DLBacktrace.</p>
 <hr />
 <h2 id="general-questions">General Questions<a class="headerlink" href="#general-questions" title="Permanent link">&para;</a></h2>
-<h3 id="what-is-dl-backtrace">What is DL-Backtrace?<a class="headerlink" href="#what-is-dl-backtrace" title="Permanent link">&para;</a></h3>
-<p>DL-Backtrace is an explainable AI (XAI) framework that helps you understand how deep learning models make decisions through layer-wise relevance propagation.</p>
+<h3 id="what-is-dlbacktrace">What is DLBacktrace?<a class="headerlink" href="#what-is-dlbacktrace" title="Permanent link">&para;</a></h3>
+<p>DLBacktrace is an explainable AI (XAI) framework that helps you understand how deep learning models make decisions through layer-wise relevance propagation.</p>
 <h3 id="which-frameworks-does-it-support">Which frameworks does it support?<a class="headerlink" href="#which-frameworks-does-it-support" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>PyTorch</strong> 2.6+ (full support)</li>
 </ul>
 <h3 id="is-it-free-and-open-source">Is it free and open source?<a class="headerlink" href="#is-it-free-and-open-source" title="Permanent link">&para;</a></h3>
-<p>DL-Backtrace is source-available under the Lexsi Labs Source Available License (LSAL) v1.0. It is free for personal, academic, and research purposes, but requires a commercial license for commercial use.</p>
-<h3 id="who-develops-dl-backtrace">Who develops DL-Backtrace?<a class="headerlink" href="#who-develops-dl-backtrace" title="Permanent link">&para;</a></h3>
-<p>DL-Backtrace is developed by <a href="https://lexsi.ai">Lexsi Labs</a>, with contributions from the community.</p>
+<p>DLBacktrace is source-available under the Lexsi Labs Source Available License (LSAL) v1.0. It is free for personal, academic, and research purposes, but requires a commercial license for commercial use.</p>
+<h3 id="who-develops-dlbacktrace">Who develops DLBacktrace?<a class="headerlink" href="#who-develops-dlbacktrace" title="Permanent link">&para;</a></h3>
+<p>DLBacktrace is developed by <a href="https://lexsi.ai">Lexsi Labs</a>, with contributions from the community.</p>
 <hr />
 <h2 id="installation-questions">Installation Questions<a class="headerlink" href="#installation-questions" title="Permanent link">&para;</a></h2>
-<h3 id="how-do-i-install-dl-backtrace">How do I install DL-Backtrace?<a class="headerlink" href="#how-do-i-install-dl-backtrace" title="Permanent link">&para;</a></h3>
+<h3 id="how-do-i-install-dlbacktrace">How do I install DLBacktrace?<a class="headerlink" href="#how-do-i-install-dlbacktrace" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/Lexsi-Labs/DLBacktrace.git
-<span class="nb">cd</span><span class="w"> </span>DL-Backtrace
+<span class="nb">cd</span><span class="w"> </span>DLBacktrace
 pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>requirements.txt
 pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
 </code></pre></div>
 <p>See the <a href="../../home/installation/">Installation Guide</a> for details.</p>
 <h3 id="do-i-need-a-gpu">Do I need a GPU?<a class="headerlink" href="#do-i-need-a-gpu" title="Permanent link">&para;</a></h3>
-<p>No, DL-Backtrace works on both CPU and GPU. However, GPU significantly speeds up execution for large models.</p>
+<p>No, DLBacktrace works on both CPU and GPU. However, GPU significantly speeds up execution for large models.</p>
 <h3 id="what-python-version-is-required">What Python version is required?<a class="headerlink" href="#what-python-version-is-required" title="Permanent link">&para;</a></h3>
 <p>Python 3.8 or higher is required.</p>
 <h3 id="can-i-install-it-via-pip">Can I install it via pip?<a class="headerlink" href="#can-i-install-it-via-pip" title="Permanent link">&para;</a></h3>
-<p>Currently, installation from source is recommended. PyPI distribution is planned for future releases.</p>
+<p>Yes — the PyPI package is now available. You can install it directly using:</p>
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>dl-backtrace<span class="o">==</span><span class="m">0</span>.1.0
+</code></pre></div>
 <hr />
 <h2 id="usage-questions">Usage Questions<a class="headerlink" href="#usage-questions" title="Permanent link">&para;</a></h2>
 <h3 id="how-do-i-trace-my-model">How do I trace my model?<a class="headerlink" href="#how-do-i-trace-my-model" title="Permanent link">&para;</a></h3>
@@ -455,7 +457,7 @@ pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </s
 </ul>
 <p>See <a href="../../guide/relevance/overview/">Relevance Propagation</a>.</p>
 <h3 id="can-i-use-it-with-pre-trained-models">Can I use it with pre-trained models?<a class="headerlink" href="#can-i-use-it-with-pre-trained-models" title="Permanent link">&para;</a></h3>
-<p>Yes! DL-Backtrace works with any PyTorch model, including pre-trained ones from Hugging Face, torchvision, etc.</p>
+<p>Yes! DLBacktrace works with any PyTorch model, including pre-trained ones from Hugging Face, torchvision, etc.</p>
 <hr />
 <h2 id="performance-questions">Performance Questions<a class="headerlink" href="#performance-questions" title="Permanent link">&para;</a></h2>
 <h3 id="how-long-does-tracing-take">How long does tracing take?<a class="headerlink" href="#how-long-does-tracing-take" title="Permanent link">&para;</a></h3>
@@ -488,13 +490,13 @@ pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </s
 - Custom CNN architectures</p>
 <p><strong>NLP:</strong>
 - BERT, RoBERTa, ALBERT, DistilBERT
-- LLaMA-3.2
+- LLaMA-3.2, Qwen3 
 - GPT-style models
 - Custom transformers</p>
 <p><strong>Others:</strong>
 - Custom architectures using supported operations</p>
 <h3 id="are-all-pytorch-operations-supported">Are all PyTorch operations supported?<a class="headerlink" href="#are-all-pytorch-operations-supported" title="Permanent link">&para;</a></h3>
-<p>DL-Backtrace supports 100+ common operations. See the <a href="../../guide/pytorch/operations/">operations list</a>.</p>
+<p>DLBacktrace supports 100+ common operations. See the <a href="../../guide/pytorch/operations/">operations list</a>.</p>
 <h3 id="can-i-use-custom-layers">Can I use custom layers?<a class="headerlink" href="#can-i-use-custom-layers" title="Permanent link">&para;</a></h3>
 <p>If your custom layers use supported operations, they should work. Otherwise, you may need to decompose them or request support.</p>
 <h3 id="does-it-work-with-dynamic-graphs">Does it work with dynamic graphs?<a class="headerlink" href="#does-it-work-with-dynamic-graphs" title="Permanent link">&para;</a></h3>
@@ -510,13 +512,13 @@ pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </s
 </ul>
 <p>Relevance is better for understanding model decisions.</p>
 <h3 id="can-i-use-it-for-model-debugging">Can I use it for model debugging?<a class="headerlink" href="#can-i-use-it-for-model-debugging" title="Permanent link">&para;</a></h3>
-<p>Yes! DL-Backtrace helps identify:
+<p>Yes! DLBacktrace helps identify:
 - Biases in model decisions
 - Spurious correlations
 - Feature importance
 - Layer contributions</p>
 <h3 id="is-execution-deterministic">Is execution deterministic?<a class="headerlink" href="#is-execution-deterministic" title="Permanent link">&para;</a></h3>
-<p>Yes, DL-Backtrace automatically sets up a deterministic environment for reproducible results.</p>
+<p>Yes, DLBacktrace automatically sets up a deterministic environment for reproducible results.</p>
 <hr />
 <h2 id="error-questions">Error Questions<a class="headerlink" href="#error-questions" title="Permanent link">&para;</a></h2>
 <h3 id="i-get-cuda-out-of-memory-errors">I get "CUDA out of memory" errors<a class="headerlink" href="#i-get-cuda-out-of-memory-errors" title="Permanent link">&para;</a></h3>
@@ -540,14 +542,14 @@ pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </s
 - Check for loops in forward()
 - Monitor memory usage</p>
 <h3 id="i-get-dtype-mismatch-errors">I get dtype mismatch errors<a class="headerlink" href="#i-get-dtype-mismatch-errors" title="Permanent link">&para;</a></h3>
-<p>DL-Backtrace should handle this automatically. If not:
+<p>DLBacktrace should handle this automatically. If not:
 1. Ensure model and input have same dtype
 2. Convert explicitly: <code>model.float()</code>, <code>input.float()</code>
 3. Report the issue</p>
 <hr />
 <h2 id="licensing-questions">Licensing Questions<a class="headerlink" href="#licensing-questions" title="Permanent link">&para;</a></h2>
 <h3 id="can-i-use-it-commercially">Can I use it commercially?<a class="headerlink" href="#can-i-use-it-commercially" title="Permanent link">&para;</a></h3>
-<p>Commercial use of DL-Backtrace requires a separate commercial license from Lexsi Labs. Please contact <a href="mailto:support@lexsi.ai">support@lexsi.ai</a> for commercial licensing inquiries.</p>
+<p>Commercial use of DLBacktrace requires a separate commercial license from Lexsi Labs. Please contact <a href="mailto:support@lexsi.ai">support@lexsi.ai</a> for commercial licensing inquiries.</p>
 <h3 id="do-i-need-to-cite-it">Do I need to cite it?<a class="headerlink" href="#do-i-need-to-cite-it" title="Permanent link">&para;</a></h3>
 <p>While not required, we appreciate citations in academic work.</p>
 <h3 id="can-i-modify-the-code">Can I modify the code?<a class="headerlink" href="#can-i-modify-the-code" title="Permanent link">&para;</a></h3>
@@ -559,7 +561,7 @@ pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </s
 <h3 id="can-i-add-support-for-new-operations">Can I add support for new operations?<a class="headerlink" href="#can-i-add-support-for-new-operations" title="Permanent link">&para;</a></h3>
 <p>Yes! See the <a href="../../developer/contributing/">Developer Guide</a> for details on adding new operations.</p>
 <h3 id="can-i-use-it-in-production">Can I use it in production?<a class="headerlink" href="#can-i-use-it-in-production" title="Permanent link">&para;</a></h3>
-<p>Yes! DL-Backtrace is production-ready with:
+<p>Yes! DLBacktrace is production-ready with:
 - Deterministic execution
 - Error handling
 - Performance optimization

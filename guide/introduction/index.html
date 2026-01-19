@@ -335,17 +335,17 @@
         
         <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
     <ul class="nav bs-sidenav">
-        <li class="first-level active"><a href="#introduction-to-dl-backtrace">Introduction to DL-Backtrace</a></li>
-            <li class="second-level"><a href="#what-is-dl-backtrace">What is DL-Backtrace?</a></li>
+        <li class="first-level active"><a href="#introduction-to-dlbacktrace">Introduction to DLBacktrace</a></li>
+            <li class="second-level"><a href="#what-is-dlbacktrace">What is DLBacktrace?</a></li>
                 
                 <li class="third-level"><a href="#core-concept-layer-wise-relevance-propagation">Core Concept: Layer-wise Relevance Propagation</a></li>
-            <li class="second-level"><a href="#why-use-dl-backtrace">Why Use DL-Backtrace?</a></li>
+            <li class="second-level"><a href="#why-use-dlbacktrace">Why Use DLBacktrace?</a></li>
                 
                 <li class="third-level"><a href="#1-model-understanding">1. Model Understanding</a></li>
                 <li class="third-level"><a href="#2-model-debugging">2. Model Debugging</a></li>
                 <li class="third-level"><a href="#3-regulatory-compliance">3. Regulatory Compliance</a></li>
                 <li class="third-level"><a href="#4-research-development">4. Research &amp; Development</a></li>
-            <li class="second-level"><a href="#how-dl-backtrace-works">How DL-Backtrace Works</a></li>
+            <li class="second-level"><a href="#how-dlbacktrace-works">How DLBacktrace Works</a></li>
                 
                 <li class="third-level"><a href="#step-1-graph-tracing">Step 1: Graph Tracing</a></li>
                 <li class="third-level"><a href="#step-2-forward-execution">Step 2: Forward Execution</a></li>
@@ -362,7 +362,7 @@
             <li class="second-level"><a href="#typical-workflow">Typical Workflow</a></li>
                 
                 <li class="third-level"><a href="#1-prepare-your-model">1. Prepare Your Model</a></li>
-                <li class="third-level"><a href="#2-initialize-dl-backtrace">2. Initialize DL-Backtrace</a></li>
+                <li class="third-level"><a href="#2-initialize-dlbacktrace">2. Initialize DLBacktrace</a></li>
                 <li class="third-level"><a href="#3-prepare-real-input">3. Prepare Real Input</a></li>
                 <li class="third-level"><a href="#4-run-analysis">4. Run Analysis</a></li>
                 <li class="third-level"><a href="#5-interpret-results">5. Interpret Results</a></li>
@@ -370,7 +370,7 @@
             <li class="second-level"><a href="#advanced-capabilities">Advanced Capabilities</a></li>
                 
                 <li class="third-level"><a href="#high-level-pipeline-interface">High-Level Pipeline Interface</a></li>
-                <li class="third-level"><a href="#moe-model-support">MoE Model Support</a></li>
+                <li class="third-level"><a href="#moes-model-support">MoEs Model Support</a></li>
                 <li class="third-level"><a href="#dlb-auto-sampler">DLB Auto Sampler</a></li>
                 <li class="third-level"><a href="#temperature-scaling">Temperature Scaling</a></li>
             <li class="second-level"><a href="#whats-next">What's Next?</a></li>
@@ -388,20 +388,20 @@
 </div></div>
         <div class="col-md-9" role="main">
 
-<h1 id="introduction-to-dl-backtrace">Introduction to DL-Backtrace<a class="headerlink" href="#introduction-to-dl-backtrace" title="Permanent link">&para;</a></h1>
-<p>Welcome to the DL-Backtrace user guide! This guide will help you understand and effectively use DL-Backtrace for explainable AI and model interpretability.</p>
+<h1 id="introduction-to-dlbacktrace">Introduction to DLBacktrace<a class="headerlink" href="#introduction-to-dlbacktrace" title="Permanent link">&para;</a></h1>
+<p>Welcome to the DLBacktrace user guide! This guide will help you understand and effectively use DLBacktrace for explainable AI and model interpretability.</p>
 <hr />
-<h2 id="what-is-dl-backtrace">What is DL-Backtrace?<a class="headerlink" href="#what-is-dl-backtrace" title="Permanent link">&para;</a></h2>
-<p>DL-Backtrace is an <strong>explainable AI (XAI) framework</strong> that helps you understand how deep learning models make decisions. It provides layer-wise relevance propagation and comprehensive model tracing to reveal which parts of your input contribute most to the model's predictions.</p>
+<h2 id="what-is-dlbacktrace">What is DLBacktrace?<a class="headerlink" href="#what-is-dlbacktrace" title="Permanent link">&para;</a></h2>
+<p>DLBacktrace is an <strong>explainable AI (XAI) framework</strong> that helps you understand how deep learning models make decisions. It provides layer-wise relevance propagation and comprehensive model tracing to reveal which parts of your input contribute most to the model's predictions.</p>
 <h3 id="core-concept-layer-wise-relevance-propagation">Core Concept: Layer-wise Relevance Propagation<a class="headerlink" href="#core-concept-layer-wise-relevance-propagation" title="Permanent link">&para;</a></h3>
-<p>At its heart, DL-Backtrace uses <strong>relevance propagation</strong> - a technique that traces the "importance" of each input feature backward through the network:</p>
+<p>At its heart, DLBacktrace uses <strong>relevance propagation</strong> - a technique that traces the "importance" of each input feature backward through the network:</p>
 <div class="highlight"><pre><span></span><code>Input → Layer 1 → Layer 2 → ... → Output
   ↑       ↑         ↑              ↑
   R₀  ←   R₁    ←   R₂    ←  ...  R_final (100%)
 </code></pre></div>
 <p>Starting with the output (100% relevance), we trace backward to see how this relevance distributes across layers and ultimately back to the input features.</p>
 <hr />
-<h2 id="why-use-dl-backtrace">Why Use DL-Backtrace?<a class="headerlink" href="#why-use-dl-backtrace" title="Permanent link">&para;</a></h2>
+<h2 id="why-use-dlbacktrace">Why Use DLBacktrace?<a class="headerlink" href="#why-use-dlbacktrace" title="Permanent link">&para;</a></h2>
 <h3 id="1-model-understanding">1. <strong>Model Understanding</strong><a class="headerlink" href="#1-model-understanding" title="Permanent link">&para;</a></h3>
 <p>Gain deep insights into your model's decision-making process:</p>
 <ul>
@@ -431,9 +431,9 @@
 <li>Guide architecture improvements</li>
 </ul>
 <hr />
-<h2 id="how-dl-backtrace-works">How DL-Backtrace Works<a class="headerlink" href="#how-dl-backtrace-works" title="Permanent link">&para;</a></h2>
+<h2 id="how-dlbacktrace-works">How DLBacktrace Works<a class="headerlink" href="#how-dlbacktrace-works" title="Permanent link">&para;</a></h2>
 <h3 id="step-1-graph-tracing">Step 1: Graph Tracing<a class="headerlink" href="#step-1-graph-tracing" title="Permanent link">&para;</a></h3>
-<p>DL-Backtrace first traces your model's computational graph:</p>
+<p>DLBacktrace first traces your model's computational graph:</p>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.pytorch_backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">DLBacktrace</span>
 
 <span class="n">dlb</span> <span class="o">=</span> <span class="n">DLBacktrace</span><span class="p">(</span>
@@ -481,7 +481,7 @@
 <li>Conserves total relevance (∑R = 100%)</li>
 </ul>
 <h3 id="execution-engines">Execution Engines<a class="headerlink" href="#execution-engines" title="Permanent link">&para;</a></h3>
-<p>DL-Backtrace provides optimized execution engines:</p>
+<p>DLBacktrace provides optimized execution engines:</p>
 <p><strong>ExecutionEngineNoCache</strong>
 - In-memory execution
 - Fast and memory-efficient
@@ -518,7 +518,7 @@
 - 100+ ATen operations</p>
 <hr />
 <h2 id="typical-workflow">Typical Workflow<a class="headerlink" href="#typical-workflow" title="Permanent link">&para;</a></h2>
-<p>Here's a typical DL-Backtrace workflow:</p>
+<p>Here's a typical DLBacktrace workflow:</p>
 <h3 id="1-prepare-your-model">1. Prepare Your Model<a class="headerlink" href="#1-prepare-your-model" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torchvision.models</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">models</span>
@@ -527,7 +527,7 @@
 <span class="n">model</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">resnet18</span><span class="p">(</span><span class="n">pretrained</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="n">model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
 </code></pre></div>
-<h3 id="2-initialize-dl-backtrace">2. Initialize DL-Backtrace<a class="headerlink" href="#2-initialize-dl-backtrace" title="Permanent link">&para;</a></h3>
+<h3 id="2-initialize-dlbacktrace">2. Initialize DLBacktrace<a class="headerlink" href="#2-initialize-dlbacktrace" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.pytorch_backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">DLBacktrace</span>
 
 <span class="c1"># Create dummy input for tracing</span>
@@ -593,34 +593,51 @@
 </code></pre></div>
 <hr />
 <h2 id="advanced-capabilities">Advanced Capabilities<a class="headerlink" href="#advanced-capabilities" title="Permanent link">&para;</a></h2>
-<p>DL-Backtrace includes powerful features for advanced use cases:</p>
+<p>DLBacktrace includes powerful features for advanced use cases:</p>
 <h3 id="high-level-pipeline-interface">High-Level Pipeline Interface<a class="headerlink" href="#high-level-pipeline-interface" title="Permanent link">&para;</a></h3>
-<p>Simplify your workflow with the Pipeline interface:</p>
-<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.pytorch_backtrace.dlbacktrace.pipeline</span><span class="w"> </span><span class="kn">import</span> <span class="n">DLBacktracePipeline</span>
+<p>Simplify your workflow with the unified <code>run_task()</code> method:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.pytorch_backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">DLBacktrace</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoTokenizer</span><span class="p">,</span> <span class="n">AutoModelForSequenceClassification</span>
 
-<span class="c1"># One-line setup</span>
-<span class="n">pipeline</span> <span class="o">=</span> <span class="n">DLBacktracePipeline</span><span class="o">.</span><span class="n">create_simple</span><span class="p">(</span>
-    <span class="n">model_name</span><span class="o">=</span><span class="s2">&quot;bert-base&quot;</span><span class="p">,</span>
+<span class="c1"># Load model</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForSequenceClassification</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;bert-base-uncased&quot;</span><span class="p">)</span>
+<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;bert-base-uncased&quot;</span><span class="p">)</span>
+
+<span class="c1"># Prepare input</span>
+<span class="n">text</span> <span class="o">=</span> <span class="s2">&quot;This product is amazing!&quot;</span>
+<span class="n">tokens</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">)</span>
+
+<span class="c1"># Initialize DLBacktrace</span>
+<span class="n">dlb</span> <span class="o">=</span> <span class="n">DLBacktrace</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+    <span class="n">input_for_graph</span><span class="o">=</span><span class="p">(</span><span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;input_ids&quot;</span><span class="p">],</span> <span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;attention_mask&quot;</span><span class="p">]),</span>
     <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
 <span class="p">)</span>
 
-<span class="c1"># One-line analysis</span>
-<span class="n">results</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">run_simple_analysis</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">label</span><span class="p">)</span>
+<span class="c1"># Run analysis with one call</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">dlb</span><span class="o">.</span><span class="n">run_task</span><span class="p">(</span>
+    <span class="n">task</span><span class="o">=</span><span class="s2">&quot;text-classification&quot;</span><span class="p">,</span>  <span class="c1"># or &quot;auto&quot; for automatic detection</span>
+    <span class="n">inputs</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;input_ids&#39;</span><span class="p">:</span> <span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;input_ids&quot;</span><span class="p">],</span> <span class="s1">&#39;attention_mask&#39;</span><span class="p">:</span> <span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;attention_mask&quot;</span><span class="p">]}</span>
+<span class="p">)</span>
+
+<span class="c1"># Access results</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Prediction: </span><span class="si">{</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;predictions&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">argmax</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Token relevance: </span><span class="si">{</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;relevance&#39;</span><span class="p">][</span><span class="s1">&#39;input_ids&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </code></pre></div>
 <p><strong><a href="../pytorch/pipeline/">Learn more about Pipeline →</a></strong></p>
-<h3 id="moe-model-support">MoE Model Support<a class="headerlink" href="#moe-model-support" title="Permanent link">&para;</a></h3>
-<p>Analyze Mixture of Experts models with expert-level tracking:</p>
+<h3 id="moes-model-support">MoEs Model Support<a class="headerlink" href="#moes-model-support" title="Permanent link">&para;</a></h3>
+<p>Analyze Mixture-of-Experts models with expert-level tracking:</p>
 <ul>
 <li><strong>JetMoE</strong>, <strong>OLMoE</strong>, <strong>Qwen MoE</strong>, <strong>GPT-OSS</strong></li>
 <li>Track which experts contribute most</li>
 <li>Understand expert routing patterns</li>
 <li>CUDA-accelerated MoE layer implementations</li>
 </ul>
-<p><strong><a href="../pytorch/moe-models/">Learn more about MoE Models →</a></strong></p>
+<p><strong><a href="../pytorch/moe-models/">Learn more about MoEs Models →</a></strong></p>
 <h3 id="dlb-auto-sampler">DLB Auto Sampler<a class="headerlink" href="#dlb-auto-sampler" title="Permanent link">&para;</a></h3>
 <p>Advanced text generation with explainability:</p>
 <ul>
-<li>Multiple sampling strategies (greedy, temperature, top-k, top-p, beam search)</li>
+<li>Multiple decoding strategies (greedy, temperature, top-k, top-p, beam search) </li>
 <li>Token-level relevance tracking</li>
 <li>HuggingFace-compatible generation API</li>
 <li>Full control over generation parameters</li>
@@ -692,7 +709,7 @@
 </ol>
 <hr />
 <h2 id="contributing">Contributing<a class="headerlink" href="#contributing" title="Permanent link">&para;</a></h2>
-<p>DL-Backtrace is open source! Contributions are welcome:</p>
+<p>DLBacktrace is open source! Contributions are welcome:</p>
 <ul>
 <li>Report bugs</li>
 <li>Suggest features</li>

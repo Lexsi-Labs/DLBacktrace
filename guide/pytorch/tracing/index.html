@@ -370,7 +370,7 @@
         <div class="col-md-9" role="main">
 
 <h1 id="model-tracing">Model Tracing<a class="headerlink" href="#model-tracing" title="Permanent link">&para;</a></h1>
-<p>Learn how DL-Backtrace traces PyTorch models to create computational graphs.</p>
+<p>Learn how DLBacktrace traces PyTorch models to create computational graphs.</p>
 <hr />
 <h2 id="what-is-model-tracing">What is Model Tracing?<a class="headerlink" href="#what-is-model-tracing" title="Permanent link">&para;</a></h2>
 <p>Model tracing is the process of capturing a model's computational graph - the sequence of operations that transform inputs to outputs.</p>
@@ -388,7 +388,7 @@
 <hr />
 <h2 id="how-tracing-works">How Tracing Works<a class="headerlink" href="#how-tracing-works" title="Permanent link">&para;</a></h2>
 <h3 id="step-1-torchexport_for_training">Step 1: torch.export_for_training<a class="headerlink" href="#step-1-torchexport_for_training" title="Permanent link">&para;</a></h3>
-<p>DL-Backtrace uses PyTorch's <code>torch.export_for_training</code> to trace models:</p>
+<p>DLBacktrace uses PyTorch's <code>torch.export_for_training</code> to trace models:</p>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.pytorch_backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">DLBacktrace</span>
 
 <span class="c1"># Provide a dummy input for tracing</span>
@@ -409,7 +409,7 @@
 <li><strong>Metadata</strong>: Operation types and arguments</li>
 </ul>
 <h3 id="step-3-graph-building">Step 3: Graph Building<a class="headerlink" href="#step-3-graph-building" title="Permanent link">&para;</a></h3>
-<p>DL-Backtrace processes the traced graph:</p>
+<p>DLBacktrace processes the traced graph:</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># Internal process</span>
 <span class="mf">1.</span> <span class="n">Extract</span> <span class="nb">all</span> <span class="n">nodes</span>
 <span class="mf">2.</span> <span class="n">Identify</span> <span class="n">node</span> <span class="n">types</span> <span class="p">(</span><span class="n">placeholder</span><span class="p">,</span> <span class="n">call_function</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
@@ -539,7 +539,7 @@
 
 <span class="c1">### Symbolic Dimensions</span>
 
-<span class="n">DL</span><span class="o">-</span><span class="n">Backtrace</span> <span class="n">handles</span> <span class="n">dynamic</span> <span class="n">shapes</span> <span class="n">using</span> <span class="n">symbolic</span> <span class="n">dimensions</span><span class="p">:</span>
+<span class="n">DLBacktrace</span> <span class="n">handles</span> <span class="n">dynamic</span> <span class="n">shapes</span> <span class="n">using</span> <span class="n">symbolic</span> <span class="n">dimensions</span><span class="p">:</span>
 
 <span class="err">```</span><span class="n">python</span>
 <span class="c1"># Variable sequence length</span>

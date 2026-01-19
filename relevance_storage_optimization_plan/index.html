@@ -1,0 +1,1307 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="A powerful explainable AI (XAI) framework for deep learning model interpretability">
+    <meta name="author" content="Lexsi Labs">
+    <link rel="canonical" href="https://lexsi.ai/relevance_storage_optimization_plan/">
+    <link rel="shortcut icon" href="../img/favicon.ico">
+
+    
+    <title>Relevance Storage Optimization Plan - DLBacktrace</title>
+    
+
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/all.css">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/v4-shims.css">
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/hack-font@3.3.0/build/web/hack.min.css">
+    <link href='//rsms.me/inter/inter.css' rel='stylesheet' type='text/css'>
+    <link href='//fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,700italic,400,300,600,700&subset=latin-ext,latin' rel='stylesheet' type='text/css'>
+    <link href="../css/bootstrap-custom.min.css" rel="stylesheet">
+    <link href="../css/base.min.css" rel="stylesheet">
+    <link href="../css/cinder.min.css" rel="stylesheet">
+
+    
+        
+        <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/styles/github.min.css">
+        
+    
+    <link href="../assets/css/custom.css" rel="stylesheet">
+    <link href="https://unpkg.com/katex@0/dist/katex.min.css" rel="stylesheet">
+
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+            <script src="https://cdn.jsdelivr.net/npm/html5shiv@3.7.3/dist/html5shiv.min.js"></script>
+            <script src="https://cdn.jsdelivr.net/npm/respond.js@1.4.2/dest/respond.min.js"></script>
+        <![endif]-->
+
+    
+
+     
+</head>
+
+<body>
+
+    <div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+
+        <!-- Collapsed navigation -->
+        <div class="navbar-header">
+            <!-- Expander button -->
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            
+
+            <!-- Main title -->
+
+            
+              <a class="navbar-brand" href="..">DLBacktrace</a>
+            
+        </div>
+
+        <!-- Expanded navigation -->
+        <div class="navbar-collapse collapse">
+                <!-- Main navigation -->
+                <ul class="nav navbar-nav">
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Home <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="..">Overview</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../home/features/">Key Features</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../home/installation/">Installation</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../home/quickstart/">Quick Start</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../home/whats-new/">What's New</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">User Guide <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../guide/introduction/">Introduction</a>
+</li>
+
+                        
+                            
+  <li class="dropdown-submenu">
+    <a tabindex="-1" href="">PyTorch Backend</a>
+    <ul class="dropdown-menu">
+        
+            
+<li >
+    <a href="../guide/pytorch/overview/">Overview</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/pytorch/dlbacktrace/">DLBacktrace</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/pytorch/pipeline/">Pipeline</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/pytorch/auto-sampler/">DLB Auto Sampler</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/pytorch/temperature-scaling/">Temperature Scaling</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/pytorch/moe-models/">MoE Models</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/pytorch/execution-engines/">Execution Engines</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/pytorch/operations/">Supported Operations</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/pytorch/tracing/">Model Tracing</a>
+</li>
+
+        
+    </ul>
+  </li>
+
+                        
+                            
+  <li class="dropdown-submenu">
+    <a tabindex="-1" href="">Relevance Propagation</a>
+    <ul class="dropdown-menu">
+        
+            
+<li >
+    <a href="../guide/relevance/overview/">Overview</a>
+</li>
+
+        
+            
+<li >
+    <a href="../guide/relevance/parameters/">Parameters</a>
+</li>
+
+        
+    </ul>
+  </li>
+
+                        
+                            
+<li >
+    <a href="../guide/best-practices/">Best Practices</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Examples <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../examples/colab-notebooks/">Colab Notebooks</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../examples/use-cases/">Use Cases</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Developer Guide <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../developer/architecture/">Architecture</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../developer/contributing/">Contributing</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../developer/execution-engine/">Execution Engine</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../developer/cuda-development/">CUDA Development</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../developer/testing/">Testing</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">Support <b class="caret"></b></a>
+                        <ul class="dropdown-menu">
+                        
+                            
+<li >
+    <a href="../support/faq/">FAQ</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../support/known-issues/">Known Issues</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../support/changelog/">Changelog</a>
+</li>
+
+                        
+                            
+<li >
+    <a href="../support/license/">License</a>
+</li>
+
+                        
+                        </ul>
+                    </li>
+                
+                
+                </ul>
+
+            <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="#" data-toggle="modal" data-target="#mkdocs_search_modal">
+                            <i class="fas fa-search"></i> Search
+                        </a>
+                    </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+    <div class="container">
+        
+        
+        <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
+    <ul class="nav bs-sidenav">
+        <li class="first-level active"><a href="#relevance-storage-optimization-plan">Relevance Storage Optimization Plan</a></li>
+            <li class="second-level"><a href="#dlbacktrace-node-level-relevance-per-step-storage-strategy">DLBacktrace Node-Level Relevance Per-Step Storage Strategy</a></li>
+                
+            <li class="second-level"><a href="#1-problem-statement">1. Problem Statement</a></li>
+                
+                <li class="third-level"><a href="#current-situation">Current Situation</a></li>
+                <li class="third-level"><a href="#root-cause-analysis">Root Cause Analysis</a></li>
+                <li class="third-level"><a href="#critical-constraint">Critical Constraint</a></li>
+            <li class="second-level"><a href="#2-optimization-strategy-framework">2. Optimization Strategy Framework</a></li>
+                
+                <li class="third-level"><a href="#21-architecture-overview">2.1 Architecture Overview</a></li>
+            <li class="second-level"><a href="#3-detailed-optimization-techniques">3. Detailed Optimization Techniques</a></li>
+                
+                <li class="third-level"><a href="#31-sparse-tensor-compression-pytorch-native">3.1 Sparse Tensor Compression (PyTorch Native)</a></li>
+                <li class="third-level"><a href="#32-top-k-relevance-pruning">3.2 Top-K Relevance Pruning</a></li>
+                <li class="third-level"><a href="#33-quantization-to-int8int4">3.3 Quantization to Int8/Int4</a></li>
+                <li class="third-level"><a href="#34-hierarchical-storage-with-layer-sampling">3.4 Hierarchical Storage with Layer Sampling</a></li>
+                <li class="third-level"><a href="#35-incremental-compression-with-memory-mapped-files">3.5 Incremental Compression with Memory-Mapped Files</a></li>
+            <li class="second-level"><a href="#4-implementation-roadmap">4. Implementation Roadmap</a></li>
+                
+                <li class="third-level"><a href="#phase-1-low-hanging-fruit-week-1-2">Phase 1: Low-Hanging Fruit (Week 1-2)</a></li>
+                <li class="third-level"><a href="#phase-2-advanced-compression-week-3-4">Phase 2: Advanced Compression (Week 3-4)</a></li>
+                <li class="third-level"><a href="#phase-3-production-optimization-week-5-6">Phase 3: Production Optimization (Week 5-6)</a></li>
+            <li class="second-level"><a href="#5-recommended-configuration-matrix">5. Recommended Configuration Matrix</a></li>
+                
+                <li class="third-level"><a href="#51-storage-presets">5.1 Storage Presets</a></li>
+                <li class="third-level"><a href="#52-implementation-example">5.2 Implementation Example</a></li>
+            <li class="second-level"><a href="#6-validation-metrics">6. Validation Metrics</a></li>
+                
+                <li class="third-level"><a href="#61-storage-efficiency">6.1 Storage Efficiency</a></li>
+                <li class="third-level"><a href="#62-relevance-quality-preservation">6.2 Relevance Quality Preservation</a></li>
+            <li class="second-level"><a href="#7-risk-mitigation">7. Risk Mitigation</a></li>
+                
+                <li class="third-level"><a href="#71-backward-compatibility">7.1 Backward Compatibility</a></li>
+                <li class="third-level"><a href="#72-performance-monitoring">7.2 Performance Monitoring</a></li>
+            <li class="second-level"><a href="#8-expected-outcomes">8. Expected Outcomes</a></li>
+                
+                <li class="third-level"><a href="#81-storage-reduction">8.1 Storage Reduction</a></li>
+                <li class="third-level"><a href="#82-workflow-improvements">8.2 Workflow Improvements</a></li>
+                <li class="third-level"><a href="#83-analysis-capabilities-preserved">8.3 Analysis Capabilities Preserved</a></li>
+            <li class="second-level"><a href="#9-next-steps">9. Next Steps</a></li>
+                
+                <li class="third-level"><a href="#immediate-actions-this-week">Immediate Actions (This Week)</a></li>
+                <li class="third-level"><a href="#research-questions">Research Questions</a></li>
+            <li class="second-level"><a href="#10-references">10. References</a></li>
+                
+                <li class="third-level"><a href="#pytorch-documentation">PyTorch Documentation</a></li>
+                <li class="third-level"><a href="#external-libraries">External Libraries</a></li>
+                <li class="third-level"><a href="#research-papers">Research Papers</a></li>
+            <li class="second-level"><a href="#appendix-a-code-integration-points">Appendix A: Code Integration Points</a></li>
+                
+                <li class="third-level"><a href="#a1-modify-_compress_relevance_tree">A.1 Modify _compress_relevance_tree()</a></li>
+                <li class="third-level"><a href="#a2-add-configuration-to-run_task">A.2 Add Configuration to run_task()</a></li>
+            <li class="second-level"><a href="#appendix-b-benchmark-script">Appendix B: Benchmark Script</a></li>
+                
+    </ul>
+</div></div>
+        <div class="col-md-9" role="main">
+
+<h1 id="relevance-storage-optimization-plan">Relevance Storage Optimization Plan<a class="headerlink" href="#relevance-storage-optimization-plan" title="Permanent link">&para;</a></h1>
+<h2 id="dlbacktrace-node-level-relevance-per-step-storage-strategy">DLBacktrace Node-Level Relevance Per-Step Storage Strategy<a class="headerlink" href="#dlbacktrace-node-level-relevance-per-step-storage-strategy" title="Permanent link">&para;</a></h2>
+<p><strong>Document Version:</strong> 1.0<br />
+<strong>Date:</strong> December 17, 2025<br />
+<strong>Status:</strong> Planning Phase</p>
+<hr />
+<h2 id="1-problem-statement">1. Problem Statement<a class="headerlink" href="#1-problem-statement" title="Permanent link">&para;</a></h2>
+<h3 id="current-situation">Current Situation<a class="headerlink" href="#current-situation" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Storage per token:</strong> 2.75 GB</li>
+<li><strong>Tokens per sample:</strong> 5 tokens</li>
+<li><strong>Total per sample:</strong> 13.75 GB</li>
+<li><strong>Dataset size:</strong> 290 samples</li>
+<li><strong>Total required:</strong> ~4 TB</li>
+</ul>
+<h3 id="root-cause-analysis">Root Cause Analysis<a class="headerlink" href="#root-cause-analysis" title="Permanent link">&para;</a></h3>
+<p>Using PyTorch Export + DLBacktrace with LRP-style relevance attribution, we store:
+- <strong>All computation graph nodes</strong> per generation step
+- <strong>Full vocabulary relevance</strong> (151,936 tokens) for each sequence position
+- <strong>All intermediate layers</strong> (embeddings, attention, MLP, normalization)
+- <strong>Float16 compression</strong> already applied (50% reduction from float32)</p>
+<h3 id="critical-constraint">Critical Constraint<a class="headerlink" href="#critical-constraint" title="Permanent link">&para;</a></h3>
+<p><strong>Goal:</strong> Maintain node-level granularity for all computation graph nodes per generation step while reducing storage by 10-100x.</p>
+<hr />
+<h2 id="2-optimization-strategy-framework">2. Optimization Strategy Framework<a class="headerlink" href="#2-optimization-strategy-framework" title="Permanent link">&para;</a></h2>
+<h3 id="21-architecture-overview">2.1 Architecture Overview<a class="headerlink" href="#21-architecture-overview" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>┌─────────────────────────────────────────────────────────────┐
+│                  RELEVANCE STORAGE LAYERS                    │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  Layer 1: Data Type Optimization                             │
+│  ├─ Float16 (current) ✓                                      │
+│  ├─ BFloat16 (alternative)                                   │
+│  ├─ Int8 quantization                                        │
+│  └─ Dynamic quantization per layer                           │
+│                                                               │
+│  Layer 2: Structural Optimization                            │
+│  ├─ Sparse tensor formats (CSR/COO)                          │
+│  ├─ Top-K pruning                                            │
+│  ├─ Threshold-based sparsification                           │
+│  └─ Layer-wise compression strategies                        │
+│                                                               │
+│  Layer 3: Storage Format Optimization                        │
+│  ├─ Incremental disk writes (policy=&quot;disk&quot;) ✓                │
+│  ├─ Memory-mapped files (mmap)                               │
+│  ├─ Compressed archives (gzip/zstd)                          │
+│  └─ Safetensors format                                       │
+│                                                               │
+│  Layer 4: Selective Storage                                  │
+│  ├─ Critical node identification                             │
+│  ├─ Layer sampling (skip intermediate layers)                │
+│  ├─ Token position sampling                                  │
+│  └─ Vocabulary pruning (top-P tokens)                        │
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+</code></pre></div>
+<hr />
+<h2 id="3-detailed-optimization-techniques">3. Detailed Optimization Techniques<a class="headerlink" href="#3-detailed-optimization-techniques" title="Permanent link">&para;</a></h2>
+<h3 id="31-sparse-tensor-compression-pytorch-native">3.1 Sparse Tensor Compression (PyTorch Native)<a class="headerlink" href="#31-sparse-tensor-compression-pytorch-native" title="Permanent link">&para;</a></h3>
+<p><strong>Reference:</strong> <a href="https://docs.pytorch.org/docs/2.9/sparse.html">PyTorch Sparse Tensors Documentation</a></p>
+<h4 id="311-csr-compressed-sparse-row-format">3.1.1 CSR (Compressed Sparse Row) Format<a class="headerlink" href="#311-csr-compressed-sparse-row-format" title="Permanent link">&para;</a></h4>
+<p><strong>When to use:</strong>
+- Relevance matrices with &gt;90% zero values
+- After threshold-based pruning (e.g., keep only top 1% of relevance scores)</p>
+<p><strong>PyTorch Implementation:</strong>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">convert_to_sparse_csr</span><span class="p">(</span><span class="n">relevance_tensor</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">threshold</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-4</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Convert dense relevance tensor to CSR sparse format.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        relevance_tensor: Shape (batch, seq_len, vocab_size) or (seq_len, vocab_size)</span>
+<span class="sd">        threshold: Values below this are zeroed out</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Sparse CSR tensor with significantly reduced storage</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Apply threshold to create sparsity</span>
+    <span class="n">mask</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">relevance_tensor</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">threshold</span>
+    <span class="n">sparse_tensor</span> <span class="o">=</span> <span class="n">relevance_tensor</span> <span class="o">*</span> <span class="n">mask</span>
+
+    <span class="c1"># Convert to CSR format (works with 2D tensors)</span>
+    <span class="k">if</span> <span class="n">sparse_tensor</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+        <span class="c1"># Process batch dimension separately</span>
+        <span class="n">sparse_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">sparse_tensor</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">)):</span>
+            <span class="n">sparse_2d</span> <span class="o">=</span> <span class="n">sparse_tensor</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">to_sparse_csr</span><span class="p">()</span>
+            <span class="n">sparse_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">sparse_2d</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">sparse_list</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">sparse_tensor</span><span class="o">.</span><span class="n">to_sparse_csr</span><span class="p">()</span>
+</code></pre></div></p>
+<p><strong>Expected Compression:</strong>
+- Threshold 1e-4: 95-98% sparsity → <strong>20-50x reduction</strong>
+- Threshold 1e-3: 98-99% sparsity → <strong>50-100x reduction</strong></p>
+<p><strong>Trade-offs:</strong>
+- ✅ Lossless compression of sparse data
+- ✅ Native PyTorch support
+- ✅ Can reconstruct full tensor on demand
+- ⚠️ Requires threshold tuning per use case
+- ⚠️ CPU-only for CSR operations (as of PyTorch 2.9)</p>
+<hr />
+<h3 id="32-top-k-relevance-pruning">3.2 Top-K Relevance Pruning<a class="headerlink" href="#32-top-k-relevance-pruning" title="Permanent link">&para;</a></h3>
+<p><strong>Insight:</strong> For most interpretability tasks, only the highest-relevance tokens matter.</p>
+<h4 id="321-vocabulary-level-top-k">3.2.1 Vocabulary-Level Top-K<a class="headerlink" href="#321-vocabulary-level-top-k" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">prune_topk_vocabulary</span><span class="p">(</span>
+    <span class="n">relevance_tensor</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> 
+    <span class="n">k</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span>
+    <span class="n">keep_indices</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Keep only top-K tokens per sequence position.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        relevance_tensor: Shape (batch, seq_len, vocab_size)</span>
+<span class="sd">        k: Number of top tokens to retain (default: 100)</span>
+<span class="sd">        keep_indices: Store token indices for reconstruction</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Dict with &#39;values&#39;, &#39;indices&#39;, &#39;shape&#39; for sparse storage</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">batch</span><span class="p">,</span> <span class="n">seq_len</span><span class="p">,</span> <span class="n">vocab_size</span> <span class="o">=</span> <span class="n">relevance_tensor</span><span class="o">.</span><span class="n">shape</span>
+
+    <span class="c1"># Get top-K values and indices per position</span>
+    <span class="n">topk_values</span><span class="p">,</span> <span class="n">topk_indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">topk</span><span class="p">(</span>
+        <span class="n">relevance_tensor</span><span class="p">,</span> 
+        <span class="n">k</span><span class="o">=</span><span class="nb">min</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">),</span> 
+        <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> 
+        <span class="n">largest</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> 
+        <span class="nb">sorted</span><span class="o">=</span><span class="kc">True</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Store in compressed format</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s1">&#39;values&#39;</span><span class="p">:</span> <span class="n">topk_values</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float16</span><span class="p">),</span>      <span class="c1"># (batch, seq_len, k)</span>
+        <span class="s1">&#39;indices&#39;</span><span class="p">:</span> <span class="n">topk_indices</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">int32</span><span class="p">),</span>      <span class="c1"># (batch, seq_len, k)</span>
+        <span class="s1">&#39;shape&#39;</span><span class="p">:</span> <span class="n">relevance_tensor</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+        <span class="s1">&#39;k&#39;</span><span class="p">:</span> <span class="n">k</span><span class="p">,</span>
+    <span class="p">}</span>
+</code></pre></div>
+<p><strong>Memory Calculation:</strong>
+- <strong>Before:</strong> <code>1 × 32 × 151,936 × 2 bytes</code> = 9.3 MB (one step, float16)
+- <strong>After (k=100):</strong> <code>1 × 32 × 100 × (2+4) bytes</code> = 19.2 KB (values + indices)
+- <strong>Compression ratio:</strong> <strong>484x reduction</strong></p>
+<p><strong>Use Cases:</strong>
+- Attention head analysis (k=50-100)
+- Token attribution (k=20-50)
+- Layer importance (k=10-20)</p>
+<hr />
+<h3 id="33-quantization-to-int8int4">3.3 Quantization to Int8/Int4<a class="headerlink" href="#33-quantization-to-int8int4" title="Permanent link">&para;</a></h3>
+<p><strong>Reference:</strong> <a href="https://docs.pytorch.org/docs/2.9/quantization.html">PyTorch Quantization</a></p>
+<h4 id="331-dynamic-quantization">3.3.1 Dynamic Quantization<a class="headerlink" href="#331-dynamic-quantization" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">torch.ao.quantization</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">quantization</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">quantize_relevance_int8</span><span class="p">(</span><span class="n">relevance_tensor</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Quantize float16 relevance to int8 with scale/zero_point tracking.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        relevance_tensor: Float16 tensor</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Dict with quantized data + dequantization parameters</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Calculate quantization parameters</span>
+    <span class="n">r_min</span> <span class="o">=</span> <span class="n">relevance_tensor</span><span class="o">.</span><span class="n">min</span><span class="p">()</span>
+    <span class="n">r_max</span> <span class="o">=</span> <span class="n">relevance_tensor</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+
+    <span class="c1"># Compute scale and zero point for int8 range [-128, 127]</span>
+    <span class="n">scale</span> <span class="o">=</span> <span class="p">(</span><span class="n">r_max</span> <span class="o">-</span> <span class="n">r_min</span><span class="p">)</span> <span class="o">/</span> <span class="mf">255.0</span>
+    <span class="n">zero_point</span> <span class="o">=</span> <span class="o">-</span><span class="mi">128</span> <span class="o">-</span> <span class="p">(</span><span class="n">r_min</span> <span class="o">/</span> <span class="n">scale</span><span class="p">)</span><span class="o">.</span><span class="n">round</span><span class="p">()</span>
+
+    <span class="c1"># Quantize</span>
+    <span class="n">quantized</span> <span class="o">=</span> <span class="p">((</span><span class="n">relevance_tensor</span> <span class="o">/</span> <span class="n">scale</span><span class="p">)</span> <span class="o">+</span> <span class="n">zero_point</span><span class="p">)</span><span class="o">.</span><span class="n">round</span><span class="p">()</span><span class="o">.</span><span class="n">clamp</span><span class="p">(</span><span class="o">-</span><span class="mi">128</span><span class="p">,</span> <span class="mi">127</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">int8</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s1">&#39;data&#39;</span><span class="p">:</span> <span class="n">quantized</span><span class="p">,</span>
+        <span class="s1">&#39;scale&#39;</span><span class="p">:</span> <span class="n">scale</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+        <span class="s1">&#39;zero_point&#39;</span><span class="p">:</span> <span class="n">zero_point</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+        <span class="s1">&#39;shape&#39;</span><span class="p">:</span> <span class="n">relevance_tensor</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+    <span class="p">}</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">dequantize_relevance_int8</span><span class="p">(</span><span class="n">quantized_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Reconstruct float16 tensor from quantized int8.&quot;&quot;&quot;</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">quantized_dict</span><span class="p">[</span><span class="s1">&#39;data&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="n">scale</span> <span class="o">=</span> <span class="n">quantized_dict</span><span class="p">[</span><span class="s1">&#39;scale&#39;</span><span class="p">]</span>
+    <span class="n">zero_point</span> <span class="o">=</span> <span class="n">quantized_dict</span><span class="p">[</span><span class="s1">&#39;zero_point&#39;</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="p">((</span><span class="n">data</span> <span class="o">-</span> <span class="n">zero_point</span><span class="p">)</span> <span class="o">*</span> <span class="n">scale</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">float16</span><span class="p">)</span>
+</code></pre></div>
+<p><strong>Memory Calculation:</strong>
+- <strong>Float16:</strong> 2 bytes per value
+- <strong>Int8:</strong> 1 byte per value + 8 bytes (scale + zero_point)
+- <strong>Compression ratio:</strong> <strong>~2x reduction</strong> (plus float16's existing 2x)</p>
+<p><strong>Accuracy Analysis:</strong>
+- Int8 quantization: ~0.39% relative error
+- Acceptable for most interpretability tasks
+- Preserves ranking of relevance scores</p>
+<hr />
+<h3 id="34-hierarchical-storage-with-layer-sampling">3.4 Hierarchical Storage with Layer Sampling<a class="headerlink" href="#34-hierarchical-storage-with-layer-sampling" title="Permanent link">&para;</a></h3>
+<p><strong>Strategy:</strong> Not all layers need full storage - sample strategically.</p>
+<div class="highlight"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">HierarchicalRelevanceStorage</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Store full relevance for critical layers, summaries for others.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">num_layers</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">critical_layers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Args:</span>
+<span class="sd">            num_layers: Total transformer layers</span>
+<span class="sd">            critical_layers: Layers to store fully (default: [0, mid, -1])</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">critical_layers</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">mid</span> <span class="o">=</span> <span class="n">num_layers</span> <span class="o">//</span> <span class="mi">2</span>
+            <span class="n">critical_layers</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">mid</span><span class="p">,</span> <span class="n">num_layers</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_layers</span> <span class="o">=</span> <span class="n">num_layers</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">critical_layers</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">critical_layers</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">store_layer_relevance</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> 
+        <span class="n">layer_idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> 
+        <span class="n">relevance</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Store relevance with strategy based on layer importance.</span>
+
+<span class="sd">        Storage strategies:</span>
+<span class="sd">        - Critical layers: Full sparse tensor (top-K=1000)</span>
+<span class="sd">        - Intermediate layers: Top-K=100</span>
+<span class="sd">        - Non-critical: Statistical summary only</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">layer_idx</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">critical_layers</span><span class="p">:</span>
+            <span class="c1"># Full storage with moderate pruning</span>
+            <span class="k">return</span> <span class="n">prune_topk_vocabulary</span><span class="p">(</span><span class="n">relevance</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">1000</span><span class="p">)</span>
+
+        <span class="k">elif</span> <span class="n">layer_idx</span> <span class="o">%</span> <span class="mi">3</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>  <span class="c1"># Every 3rd layer</span>
+            <span class="c1"># Compressed storage</span>
+            <span class="k">return</span> <span class="n">prune_topk_vocabulary</span><span class="p">(</span><span class="n">relevance</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># Summary statistics only</span>
+            <span class="k">return</span> <span class="p">{</span>
+                <span class="s1">&#39;mean&#39;</span><span class="p">:</span> <span class="n">relevance</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">),</span>
+                <span class="s1">&#39;std&#39;</span><span class="p">:</span> <span class="n">relevance</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">),</span>
+                <span class="s1">&#39;max&#39;</span><span class="p">:</span> <span class="n">relevance</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">values</span><span class="p">,</span>
+                <span class="s1">&#39;layer_idx&#39;</span><span class="p">:</span> <span class="n">layer_idx</span><span class="p">,</span>
+                <span class="s1">&#39;storage_mode&#39;</span><span class="p">:</span> <span class="s1">&#39;summary&#39;</span><span class="p">,</span>
+            <span class="p">}</span>
+</code></pre></div>
+<p><strong>Memory Savings:</strong>
+- Qwen3-0.6B: 28 layers
+- Critical layers (3): Full storage @ 20 KB each = 60 KB
+- Sampled layers (9): Compressed @ 2 KB each = 18 KB
+- Summary layers (16): Stats @ 0.5 KB each = 8 KB
+- <strong>Total per step:</strong> ~86 KB vs 2.75 GB = <strong>32,000x reduction</strong></p>
+<hr />
+<h3 id="35-incremental-compression-with-memory-mapped-files">3.5 Incremental Compression with Memory-Mapped Files<a class="headerlink" href="#35-incremental-compression-with-memory-mapped-files" title="Permanent link">&para;</a></h3>
+<p><strong>Reference:</strong> <a href="https://docs.pytorch.org/docs/2.9/distributed.checkpoint.html">PyTorch Distributed Checkpoint</a></p>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">mmap</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">MemoryMappedRelevanceStore</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Memory-mapped storage for streaming relevance data.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cache_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">max_tokens</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cache_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">cache_dir</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cache_dir</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">max_tokens</span> <span class="o">=</span> <span class="n">max_tokens</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">metadata</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">write_step</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> 
+        <span class="n">step_idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> 
+        <span class="n">relevance_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span>
+        <span class="n">compression</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;zstd&quot;</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Write one generation step with compression.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            step_idx: Generation step number</span>
+<span class="sd">            relevance_dict: Node relevances for this step</span>
+<span class="sd">            compression: &quot;none&quot;, &quot;gzip&quot;, &quot;zstd&quot; (recommended)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">step_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache_dir</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;step_</span><span class="si">{</span><span class="n">step_idx</span><span class="si">:</span><span class="s2">05d</span><span class="si">}</span><span class="s2">.pt.zst&quot;</span>
+
+        <span class="c1"># Apply sparse conversion before saving</span>
+        <span class="n">compressed_dict</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">node_name</span><span class="p">,</span> <span class="n">tensor</span> <span class="ow">in</span> <span class="n">relevance_dict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">tensor</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">&gt;</span> <span class="mi">10000</span><span class="p">:</span>  <span class="c1"># Large tensors</span>
+                <span class="n">compressed_dict</span><span class="p">[</span><span class="n">node_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">convert_to_sparse_csr</span><span class="p">(</span><span class="n">tensor</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mf">1e-4</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">compressed_dict</span><span class="p">[</span><span class="n">node_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">tensor</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float16</span><span class="p">)</span>
+
+        <span class="c1"># Save with torch.save + external compression</span>
+        <span class="n">torch</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">compressed_dict</span><span class="p">,</span> <span class="n">step_file</span><span class="p">)</span>
+
+        <span class="c1"># Compress with zstd (better than gzip for tensor data)</span>
+        <span class="k">if</span> <span class="n">compression</span> <span class="o">==</span> <span class="s2">&quot;zstd&quot;</span><span class="p">:</span>
+            <span class="kn">import</span><span class="w"> </span><span class="nn">zstandard</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">zstd</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">step_file</span><span class="o">.</span><span class="n">with_suffix</span><span class="p">(</span><span class="s1">&#39;.pt&#39;</span><span class="p">),</span> <span class="s1">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f_in</span><span class="p">:</span>
+                <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">step_file</span><span class="p">,</span> <span class="s1">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f_out</span><span class="p">:</span>
+                    <span class="n">cctx</span> <span class="o">=</span> <span class="n">zstd</span><span class="o">.</span><span class="n">ZstdCompressor</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+                    <span class="n">cctx</span><span class="o">.</span><span class="n">copy_stream</span><span class="p">(</span><span class="n">f_in</span><span class="p">,</span> <span class="n">f_out</span><span class="p">)</span>
+            <span class="n">step_file</span><span class="o">.</span><span class="n">with_suffix</span><span class="p">(</span><span class="s1">&#39;.pt&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>  <span class="c1"># Remove uncompressed</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+            <span class="s1">&#39;step&#39;</span><span class="p">:</span> <span class="n">step_idx</span><span class="p">,</span>
+            <span class="s1">&#39;file&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">step_file</span><span class="p">),</span>
+            <span class="s1">&#39;size_bytes&#39;</span><span class="p">:</span> <span class="n">step_file</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span><span class="p">,</span>
+        <span class="p">})</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">read_step_lazy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">step_idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Lazy load one step from disk.&quot;&quot;&quot;</span>
+        <span class="n">step_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache_dir</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;step_</span><span class="si">{</span><span class="n">step_idx</span><span class="si">:</span><span class="s2">05d</span><span class="si">}</span><span class="s2">.pt.zst&quot;</span>
+
+        <span class="c1"># Decompress and load</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">zstandard</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">zstd</span>
+        <span class="n">dctx</span> <span class="o">=</span> <span class="n">zstd</span><span class="o">.</span><span class="n">ZstdDecompressor</span><span class="p">()</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">step_file</span><span class="p">,</span> <span class="s1">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">decompressed</span> <span class="o">=</span> <span class="n">dctx</span><span class="o">.</span><span class="n">decompress</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
+
+        <span class="kn">import</span><span class="w"> </span><span class="nn">io</span>
+        <span class="n">buffer</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">BytesIO</span><span class="p">(</span><span class="n">decompressed</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">buffer</span><span class="p">)</span>
+</code></pre></div>
+<p><strong>Expected Compression:</strong>
+- Zstandard level 3: <strong>3-5x additional reduction</strong> on sparse tensors
+- Memory-mapped loading: Load only requested steps
+- <strong>Combined with sparse CSR:</strong> 100-500x total reduction possible</p>
+<hr />
+<h2 id="4-implementation-roadmap">4. Implementation Roadmap<a class="headerlink" href="#4-implementation-roadmap" title="Permanent link">&para;</a></h2>
+<h3 id="phase-1-low-hanging-fruit-week-1-2">Phase 1: Low-Hanging Fruit (Week 1-2)<a class="headerlink" href="#phase-1-low-hanging-fruit-week-1-2" title="Permanent link">&para;</a></h3>
+<p><strong>Priority:</strong> Immediate 10-50x reduction with minimal code changes</p>
+<ol class="task-list">
+<li><strong>✅ Already Implemented:</strong></li>
+<li>Float16 compression (2x reduction)</li>
+<li>Disk policy for incremental writes</li>
+<li>CPU offloading</li>
+<li><strong>Pickle protocol 4+ compression (1.2-1.3x additional)</strong></li>
+<li>
+<p><strong>ZIP64 serialization format</strong></p>
+</li>
+<li>
+<p><strong>Quick Wins (To Implement):</strong></p>
+</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Top-K pruning (k=100) → <strong>484x reduction</strong></li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Threshold-based sparsification (threshold=1e-4) → <strong>50x reduction</strong></li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> External compression (zstd) → <strong>3-5x additional</strong></li>
+</ol>
+<p><strong>Target:</strong> 2.75 GB → <strong>5-50 MB per sample</strong></p>
+<p><strong>Current Status:</strong> Pickle protocol 4 compression now enabled by default for <code>policy="disk"</code></p>
+<hr />
+<h3 id="phase-2-advanced-compression-week-3-4">Phase 2: Advanced Compression (Week 3-4)<a class="headerlink" href="#phase-2-advanced-compression-week-3-4" title="Permanent link">&para;</a></h3>
+<p><strong>Priority:</strong> 100-500x reduction with structural changes</p>
+<ol class="task-list">
+<li><strong>Sparse Tensor Integration:</strong></li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Implement CSR conversion in <code>_compress_relevance_tree()</code></li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Test on Qwen3-0.6B vocabulary relevance</li>
+<li class="task-list-item">
+<p><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Benchmark reconstruction latency</p>
+</li>
+<li>
+<p><strong>Hierarchical Storage:</strong></p>
+</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Identify critical layers via relevance variance analysis</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Implement layer-wise storage strategies</li>
+<li class="task-list-item">
+<p><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Add configuration for user-defined critical layers</p>
+</li>
+<li>
+<p><strong>Quantization Pipeline:</strong></p>
+</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Int8 quantization for intermediate layers</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Accuracy validation on HEx-PHI dataset</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> A/B test: float16 vs int8 interpretability quality</li>
+</ol>
+<p><strong>Target:</strong> 2.75 GB → <strong>1-5 MB per sample</strong></p>
+<hr />
+<h3 id="phase-3-production-optimization-week-5-6">Phase 3: Production Optimization (Week 5-6)<a class="headerlink" href="#phase-3-production-optimization-week-5-6" title="Permanent link">&para;</a></h3>
+<p><strong>Priority:</strong> Scalability + Usability</p>
+<ol class="task-list">
+<li><strong>Streaming Architecture:</strong></li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Memory-mapped relevance store</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Lazy loading API for analysis</li>
+<li class="task-list-item">
+<p><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Parallel compression workers</p>
+</li>
+<li>
+<p><strong>Configuration System:</strong></p>
+</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> User-facing presets: "quality", "balanced", "minimal"</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Automatic strategy selection based on model size</li>
+<li class="task-list-item">
+<p><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Storage budget constraints</p>
+</li>
+<li>
+<p><strong>Validation Suite:</strong></p>
+</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Relevance reconstruction accuracy tests</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Compression ratio benchmarks</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Interpretability quality metrics (attention consistency, token ranking)</li>
+</ol>
+<p><strong>Target:</strong> 2.75 GB → <strong>500 KB - 2 MB per sample</strong> with negligible quality loss</p>
+<hr />
+<h2 id="5-recommended-configuration-matrix">5. Recommended Configuration Matrix<a class="headerlink" href="#5-recommended-configuration-matrix" title="Permanent link">&para;</a></h2>
+<h3 id="51-storage-presets">5.1 Storage Presets<a class="headerlink" href="#51-storage-presets" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Preset</th>
+<th>Compression</th>
+<th>Storage/Sample</th>
+<th>Quality Loss</th>
+<th>Use Case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Maximum Quality</strong></td>
+<td>Float16 + Top-K (k=1000)</td>
+<td>~50 MB</td>
+<td>&lt;1%</td>
+<td>Research, critical analysis</td>
+</tr>
+<tr>
+<td><strong>Balanced</strong></td>
+<td>Float16 + Sparse CSR (1e-4) + Top-K (k=100)</td>
+<td>~5 MB</td>
+<td>1-3%</td>
+<td>Production explainability</td>
+</tr>
+<tr>
+<td><strong>Minimal</strong></td>
+<td>Int8 + Hierarchical + Top-K (k=50)</td>
+<td>~500 KB</td>
+<td>3-5%</td>
+<td>Large-scale datasets</td>
+</tr>
+<tr>
+<td><strong>Ultra-Minimal</strong></td>
+<td>Summary statistics only</td>
+<td>~50 KB</td>
+<td>N/A</td>
+<td>Monitoring, dashboards</td>
+</tr>
+</tbody>
+</table>
+<h3 id="52-implementation-example">5.2 Implementation Example<a class="headerlink" href="#52-implementation-example" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># In relevance_data_generation_optimize_demo.ipynb</span>
+
+<span class="n">CACHE_CONFIG</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;policy&quot;</span><span class="p">:</span> <span class="s2">&quot;disk&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;dtype&quot;</span><span class="p">:</span> <span class="s2">&quot;float16&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;move_to_cpu&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="s2">&quot;dir&quot;</span><span class="p">:</span> <span class="n">OUTPUT_DIR</span> <span class="o">/</span> <span class="s2">&quot;relevance_cache&quot;</span><span class="p">,</span>
+
+    <span class="c1"># NEW: Advanced compression options</span>
+    <span class="s2">&quot;compression_preset&quot;</span><span class="p">:</span> <span class="s2">&quot;balanced&quot;</span><span class="p">,</span>  <span class="c1"># &quot;maximum_quality&quot; | &quot;balanced&quot; | &quot;minimal&quot;</span>
+    <span class="s2">&quot;sparse_threshold&quot;</span><span class="p">:</span> <span class="mf">1e-4</span><span class="p">,</span>          <span class="c1"># Sparsification threshold</span>
+    <span class="s2">&quot;topk_tokens&quot;</span><span class="p">:</span> <span class="mi">100</span><span class="p">,</span>                <span class="c1"># Vocabulary pruning</span>
+    <span class="s2">&quot;critical_layers&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">14</span><span class="p">,</span> <span class="mi">27</span><span class="p">],</span>    <span class="c1"># Layers for full storage (auto-detect if None)</span>
+    <span class="s2">&quot;external_compression&quot;</span><span class="p">:</span> <span class="s2">&quot;zstd&quot;</span><span class="p">,</span>    <span class="c1"># &quot;none&quot; | &quot;gzip&quot; | &quot;zstd&quot;</span>
+    <span class="s2">&quot;quantization&quot;</span><span class="p">:</span> <span class="s2">&quot;float16&quot;</span><span class="p">,</span>         <span class="c1"># &quot;float16&quot; | &quot;int8&quot; | &quot;int4&quot;</span>
+<span class="p">}</span>
+</code></pre></div>
+<hr />
+<h2 id="6-validation-metrics">6. Validation Metrics<a class="headerlink" href="#6-validation-metrics" title="Permanent link">&para;</a></h2>
+<h3 id="61-storage-efficiency">6.1 Storage Efficiency<a class="headerlink" href="#61-storage-efficiency" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">measure_storage_efficiency</span><span class="p">(</span><span class="n">original_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">compressed_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Calculate compression metrics.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s1">&#39;compression_ratio&#39;</span><span class="p">:</span> <span class="n">original_size</span> <span class="o">/</span> <span class="n">compressed_size</span><span class="p">,</span>
+        <span class="s1">&#39;space_saving_percent&#39;</span><span class="p">:</span> <span class="p">((</span><span class="n">original_size</span> <span class="o">-</span> <span class="n">compressed_size</span><span class="p">)</span> <span class="o">/</span> <span class="n">original_size</span><span class="p">)</span> <span class="o">*</span> <span class="mi">100</span><span class="p">,</span>
+        <span class="s1">&#39;size_reduction_factor&#39;</span><span class="p">:</span> <span class="n">original_size</span> <span class="o">/</span> <span class="n">compressed_size</span><span class="p">,</span>
+    <span class="p">}</span>
+</code></pre></div>
+<p><strong>Target Metrics:</strong>
+- Compression ratio: <strong>&gt;100x</strong>
+- Space saving: <strong>&gt;99%</strong>
+- Reconstruction time: <strong>&lt;500ms per step</strong></p>
+<h3 id="62-relevance-quality-preservation">6.2 Relevance Quality Preservation<a class="headerlink" href="#62-relevance-quality-preservation" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">validate_relevance_quality</span><span class="p">(</span>
+    <span class="n">original</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> 
+    <span class="n">reconstructed</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Measure quality preservation after compression/decompression.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Ranking consistency (most important for interpretability)</span>
+    <span class="n">topk_orig</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">topk</span><span class="p">(</span><span class="n">original</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">indices</span>
+    <span class="n">topk_recon</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">topk</span><span class="p">(</span><span class="n">reconstructed</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">indices</span>
+    <span class="n">ranking_overlap</span> <span class="o">=</span> <span class="p">(</span><span class="n">topk_orig</span> <span class="o">==</span> <span class="n">topk_recon</span><span class="p">)</span><span class="o">.</span><span class="n">float</span><span class="p">()</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+
+    <span class="c1"># Value accuracy</span>
+    <span class="n">mse</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">functional</span><span class="o">.</span><span class="n">mse_loss</span><span class="p">(</span><span class="n">original</span><span class="p">,</span> <span class="n">reconstructed</span><span class="p">)</span>
+    <span class="n">relative_error</span> <span class="o">=</span> <span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">original</span> <span class="o">-</span> <span class="n">reconstructed</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">original</span><span class="p">)</span> <span class="o">+</span> <span class="mf">1e-8</span><span class="p">))</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+
+    <span class="c1"># Spearman correlation</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">scipy.stats</span><span class="w"> </span><span class="kn">import</span> <span class="n">spearmanr</span>
+    <span class="n">flat_orig</span> <span class="o">=</span> <span class="n">original</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
+    <span class="n">flat_recon</span> <span class="o">=</span> <span class="n">reconstructed</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
+    <span class="n">correlation</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">spearmanr</span><span class="p">(</span><span class="n">flat_orig</span><span class="p">,</span> <span class="n">flat_recon</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s1">&#39;topk_ranking_overlap&#39;</span><span class="p">:</span> <span class="n">ranking_overlap</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+        <span class="s1">&#39;mse&#39;</span><span class="p">:</span> <span class="n">mse</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+        <span class="s1">&#39;relative_error&#39;</span><span class="p">:</span> <span class="n">relative_error</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+        <span class="s1">&#39;spearman_correlation&#39;</span><span class="p">:</span> <span class="n">correlation</span><span class="p">,</span>
+    <span class="p">}</span>
+</code></pre></div>
+<p><strong>Acceptance Criteria:</strong>
+- Top-K overlap: <strong>&gt;95%</strong> (critical for interpretability)
+- Spearman correlation: <strong>&gt;0.95</strong>
+- Relative error: <strong>&lt;5%</strong></p>
+<hr />
+<h2 id="7-risk-mitigation">7. Risk Mitigation<a class="headerlink" href="#7-risk-mitigation" title="Permanent link">&para;</a></h2>
+<h3 id="71-backward-compatibility">7.1 Backward Compatibility<a class="headerlink" href="#71-backward-compatibility" title="Permanent link">&para;</a></h3>
+<ul class="task-list">
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Implement format version tracking</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Auto-detect and convert legacy <code>.pt</code> files</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Provide migration script for existing datasets</li>
+</ul>
+<h3 id="72-performance-monitoring">7.2 Performance Monitoring<a class="headerlink" href="#72-performance-monitoring" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">CompressionProfiler</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Track compression performance in production.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">metrics</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;compression_time&#39;</span><span class="p">:</span> <span class="p">[],</span>
+            <span class="s1">&#39;decompression_time&#39;</span><span class="p">:</span> <span class="p">[],</span>
+            <span class="s1">&#39;compression_ratio&#39;</span><span class="p">:</span> <span class="p">[],</span>
+            <span class="s1">&#39;quality_metrics&#39;</span><span class="p">:</span> <span class="p">[],</span>
+        <span class="p">}</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">log_compression</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">original_size</span><span class="p">,</span> <span class="n">compressed_size</span><span class="p">,</span> <span class="n">duration</span><span class="p">,</span> <span class="n">quality</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;compression_time&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">duration</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;compression_ratio&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">original_size</span> <span class="o">/</span> <span class="n">compressed_size</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;quality_metrics&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">quality</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">report</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s1">&#39;avg_compression_time&#39;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;compression_time&#39;</span><span class="p">]),</span>
+            <span class="s1">&#39;avg_compression_ratio&#39;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;compression_ratio&#39;</span><span class="p">]),</span>
+            <span class="s1">&#39;avg_quality_score&#39;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">([</span><span class="n">q</span><span class="p">[</span><span class="s1">&#39;topk_ranking_overlap&#39;</span><span class="p">]</span> 
+                                          <span class="k">for</span> <span class="n">q</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;quality_metrics&#39;</span><span class="p">]]),</span>
+        <span class="p">}</span>
+</code></pre></div>
+<hr />
+<h2 id="8-expected-outcomes">8. Expected Outcomes<a class="headerlink" href="#8-expected-outcomes" title="Permanent link">&para;</a></h2>
+<h3 id="81-storage-reduction">8.1 Storage Reduction<a class="headerlink" href="#81-storage-reduction" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Configuration</th>
+<th>Current</th>
+<th>Target</th>
+<th>Reduction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Per sample (5 tokens)</td>
+<td>13.75 GB</td>
+<td><strong>13-138 MB</strong></td>
+<td><strong>100-1000x</strong></td>
+</tr>
+<tr>
+<td>Full dataset (290 samples)</td>
+<td>~4 TB</td>
+<td><strong>4-40 GB</strong></td>
+<td><strong>100-1000x</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="82-workflow-improvements">8.2 Workflow Improvements<a class="headerlink" href="#82-workflow-improvements" title="Permanent link">&para;</a></h3>
+<ul>
+<li>✅ <strong>Reduced disk I/O bottleneck</strong> (10-100x faster saves)</li>
+<li>✅ <strong>Faster dataset loading</strong> (lazy loading + sparse format)</li>
+<li>✅ <strong>Lower cloud storage costs</strong> (100x reduction in S3/GCS bills)</li>
+<li>✅ <strong>Scalable to larger models</strong> (e.g., Qwen3-4B-Instruct with 151,936 vocab)</li>
+</ul>
+<h3 id="83-analysis-capabilities-preserved">8.3 Analysis Capabilities Preserved<a class="headerlink" href="#83-analysis-capabilities-preserved" title="Permanent link">&para;</a></h3>
+<ul>
+<li>✅ Token-level attribution</li>
+<li>✅ Layer-wise relevance flow</li>
+<li>✅ Attention head analysis</li>
+<li>✅ Vocabulary ranking for explanations</li>
+</ul>
+<hr />
+<h2 id="9-next-steps">9. Next Steps<a class="headerlink" href="#9-next-steps" title="Permanent link">&para;</a></h2>
+<h3 id="immediate-actions-this-week">Immediate Actions (This Week)<a class="headerlink" href="#immediate-actions-this-week" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Implement Top-K Pruning</strong></li>
+<li>Modify <code>_compress_relevance_tree()</code> in <a href="../dl_backtrace/pytorch_backtrace/dlbacktrace/core/dlb_auto_sampler.py#L280">dlb_auto_sampler.py</a></li>
+<li>Add <code>relevance_topk</code> parameter (default: 100)</li>
+<li>
+<p>Test on one sample from HEx-PHI dataset</p>
+</li>
+<li>
+<p><strong>Benchmark Storage Reduction</strong></p>
+</li>
+<li>Run notebook with Top-K=100 compression</li>
+<li>Measure actual file sizes</li>
+<li>
+<p>Validate reconstruction quality</p>
+</li>
+<li>
+<p><strong>Document Configuration</strong></p>
+</li>
+<li>Update <a href="../relevance_memory_scopes/">relevance_memory_scopes.md</a> with new options</li>
+<li>Add usage examples to notebook</li>
+<li>Create migration guide from <code>policy="full"</code></li>
+</ol>
+<h3 id="research-questions">Research Questions<a class="headerlink" href="#research-questions" title="Permanent link">&para;</a></h3>
+<ul class="task-list">
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> What's the optimal threshold for sparse CSR on LLM relevance matrices?</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Do different model sizes (0.6B vs 4B) require different compression strategies?</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> How does relevance sparsity vary across layers (embeddings vs final layer)?</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Can we predict compression ratio from model architecture?</li>
+</ul>
+<hr />
+<h2 id="10-references">10. References<a class="headerlink" href="#10-references" title="Permanent link">&para;</a></h2>
+<h3 id="pytorch-documentation">PyTorch Documentation<a class="headerlink" href="#pytorch-documentation" title="Permanent link">&para;</a></h3>
+<ul>
+<li><a href="https://docs.pytorch.org/docs/2.9/sparse.html">Sparse Tensors (CSR/COO)</a></li>
+<li><a href="https://docs.pytorch.org/docs/2.9/quantization.html">Quantization</a></li>
+<li><a href="https://docs.pytorch.org/docs/2.9/distributed.checkpoint.html">Distributed Checkpoint</a></li>
+<li><a href="https://docs.pytorch.org/docs/2.9/cuda.memory.html">Memory Profiling</a></li>
+</ul>
+<h3 id="external-libraries">External Libraries<a class="headerlink" href="#external-libraries" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Zstandard:</strong> <a href="https://github.com/facebook/zstd">https://github.com/facebook/zstd</a> - Fast compression</li>
+<li><strong>Safetensors:</strong> <a href="https://github.com/huggingface/safetensors">https://github.com/huggingface/safetensors</a> - Safe tensor serialization</li>
+<li><strong>PyArrow:</strong> <a href="https://arrow.apache.org/docs/python/">https://arrow.apache.org/docs/python/</a> - Columnar storage for metadata</li>
+</ul>
+<h3 id="research-papers">Research Papers<a class="headerlink" href="#research-papers" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Layer-wise Relevance Propagation: [Bach et al., 2015]</li>
+<li>Sparse Attention Mechanisms: [Child et al., 2019]</li>
+<li>Quantization-Aware Training: [Jacob et al., 2018]</li>
+</ul>
+<hr />
+<h2 id="appendix-a-code-integration-points">Appendix A: Code Integration Points<a class="headerlink" href="#appendix-a-code-integration-points" title="Permanent link">&para;</a></h2>
+<h3 id="a1-modify-_compress_relevance_tree">A.1 Modify <code>_compress_relevance_tree()</code><a class="headerlink" href="#a1-modify-_compress_relevance_tree" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <a href="../dl_backtrace/pytorch_backtrace/dlbacktrace/core/dlb_auto_sampler.py#L280-L294">dl_backtrace/pytorch_backtrace/dlbacktrace/core/dlb_auto_sampler.py</a></p>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">_compress_relevance_tree</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span> 
+    <span class="n">rel_dict</span><span class="p">,</span> 
+    <span class="n">target_dtype</span><span class="p">,</span> 
+    <span class="n">move_to_cpu</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="c1"># NEW PARAMETERS</span>
+    <span class="n">topk</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">sparse_threshold</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">compression_preset</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;float16&quot;</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Compress relevance tree with multiple strategies.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        topk: Keep only top-K tokens per position (None = no pruning)</span>
+<span class="sd">        sparse_threshold: Convert to sparse CSR if sparsity &gt; threshold</span>
+<span class="sd">        compression_preset: &quot;float16&quot; | &quot;int8&quot; | &quot;balanced&quot; | &quot;minimal&quot;</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">rel_dict</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">compress_tensor</span><span class="p">(</span><span class="n">tensor</span><span class="p">):</span>
+        <span class="c1"># Existing float16/dtype conversion</span>
+        <span class="n">tensor</span> <span class="o">=</span> <span class="n">tensor</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">target_dtype</span><span class="p">)</span>
+
+        <span class="c1"># NEW: Top-K pruning for vocabulary dimension</span>
+        <span class="k">if</span> <span class="n">topk</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">tensor</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span> <span class="o">&gt;=</span> <span class="mi">2</span> <span class="ow">and</span> <span class="n">tensor</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">topk</span><span class="p">:</span>
+            <span class="n">tensor</span> <span class="o">=</span> <span class="n">prune_topk_vocabulary</span><span class="p">(</span><span class="n">tensor</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="n">topk</span><span class="p">)</span>
+
+        <span class="c1"># NEW: Sparse conversion for high-sparsity tensors</span>
+        <span class="k">if</span> <span class="n">sparse_threshold</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">sparsity</span> <span class="o">=</span> <span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">tensor</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">sparse_threshold</span><span class="p">)</span><span class="o">.</span><span class="n">float</span><span class="p">()</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">sparsity</span> <span class="o">&gt;</span> <span class="mf">0.90</span><span class="p">:</span>  <span class="c1"># &gt;90% zeros</span>
+                <span class="n">tensor</span> <span class="o">=</span> <span class="n">convert_to_sparse_csr</span><span class="p">(</span><span class="n">tensor</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="n">sparse_threshold</span><span class="p">)</span>
+
+        <span class="c1"># Move to CPU if requested</span>
+        <span class="k">if</span> <span class="n">move_to_cpu</span><span class="p">:</span>
+            <span class="n">tensor</span> <span class="o">=</span> <span class="n">tensor</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span>
+
+        <span class="k">return</span> <span class="n">tensor</span>
+
+    <span class="c1"># Apply compression recursively</span>
+    <span class="k">return</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">compress_tensor</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">else</span> <span class="n">v</span> 
+            <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">rel_dict</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+</code></pre></div>
+<h3 id="a2-add-configuration-to-run_task">A.2 Add Configuration to <code>run_task()</code><a class="headerlink" href="#a2-add-configuration-to-run_task" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <a href="../dl_backtrace/pytorch_backtrace/dlbacktrace/dlbacktrace.py">dl_backtrace/pytorch_backtrace/dlbacktrace/dlbacktrace.py</a></p>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">run_task</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span>
+    <span class="c1"># ... existing parameters ...</span>
+    <span class="n">relevance_cache_policy</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;full&quot;</span><span class="p">,</span>
+    <span class="n">relevance_compress_dtype</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;float16&quot;</span><span class="p">,</span>
+    <span class="c1"># NEW PARAMETERS</span>
+    <span class="n">relevance_compression_preset</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;float16&quot;</span><span class="p">,</span>
+    <span class="n">relevance_topk_tokens</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">relevance_sparse_threshold</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Run generation task with advanced relevance compression.</span>
+
+<span class="sd">    New Args:</span>
+<span class="sd">        relevance_compression_preset: &quot;maximum_quality&quot; | &quot;balanced&quot; | &quot;minimal&quot;</span>
+<span class="sd">        relevance_topk_tokens: Keep only top-K tokens (None = all)</span>
+<span class="sd">        relevance_sparse_threshold: Sparsify tensors with this threshold</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Pass to _store_relevance_entry via auto_sampler</span>
+    <span class="k">pass</span>
+</code></pre></div>
+<hr />
+<h2 id="appendix-b-benchmark-script">Appendix B: Benchmark Script<a class="headerlink" href="#appendix-b-benchmark-script" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="ch">#!/usr/bin/env python3</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Benchmark compression strategies on HEx-PHI dataset.</span>
+
+<span class="sd">Usage:</span>
+<span class="sd">    python benchmark_compression.py --preset balanced --samples 10</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">argparse</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">tqdm</span><span class="w"> </span><span class="kn">import</span> <span class="n">tqdm</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">benchmark_compression</span><span class="p">(</span><span class="n">preset</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">num_samples</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Test compression on real relevance data.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;preset&#39;</span><span class="p">:</span> <span class="n">preset</span><span class="p">,</span>
+        <span class="s1">&#39;samples&#39;</span><span class="p">:</span> <span class="p">[],</span>
+    <span class="p">}</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">num_samples</span><span class="p">),</span> <span class="n">desc</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Testing </span><span class="si">{</span><span class="n">preset</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">):</span>
+        <span class="c1"># Load original data</span>
+        <span class="n">original_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;sample_</span><span class="si">{</span><span class="n">i</span><span class="si">:</span><span class="s2">04d</span><span class="si">}</span><span class="s2">.pt&quot;</span><span class="p">)</span>
+        <span class="n">original_data</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">original_path</span><span class="p">)</span>
+        <span class="n">original_size</span> <span class="o">=</span> <span class="n">original_path</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span>
+
+        <span class="c1"># Apply compression</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+        <span class="n">compressed</span> <span class="o">=</span> <span class="n">apply_compression</span><span class="p">(</span><span class="n">original_data</span><span class="p">[</span><span class="s1">&#39;relevance_trace&#39;</span><span class="p">],</span> <span class="n">preset</span><span class="p">)</span>
+        <span class="n">compression_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span>
+
+        <span class="c1"># Save compressed</span>
+        <span class="n">compressed_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;sample_</span><span class="si">{</span><span class="n">i</span><span class="si">:</span><span class="s2">04d</span><span class="si">}</span><span class="s2">_compressed.pt&quot;</span><span class="p">)</span>
+        <span class="n">torch</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">compressed</span><span class="p">,</span> <span class="n">compressed_path</span><span class="p">)</span>
+        <span class="n">compressed_size</span> <span class="o">=</span> <span class="n">compressed_path</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span>
+
+        <span class="c1"># Test decompression</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+        <span class="n">reconstructed</span> <span class="o">=</span> <span class="n">decompress_relevance</span><span class="p">(</span><span class="n">compressed</span><span class="p">)</span>
+        <span class="n">decompression_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span>
+
+        <span class="c1"># Validate quality</span>
+        <span class="n">quality</span> <span class="o">=</span> <span class="n">validate_relevance_quality</span><span class="p">(</span>
+            <span class="n">original_data</span><span class="p">[</span><span class="s1">&#39;relevance_trace&#39;</span><span class="p">],</span>
+            <span class="n">reconstructed</span>
+        <span class="p">)</span>
+
+        <span class="n">results</span><span class="p">[</span><span class="s1">&#39;samples&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+            <span class="s1">&#39;sample_id&#39;</span><span class="p">:</span> <span class="n">i</span><span class="p">,</span>
+            <span class="s1">&#39;original_size_mb&#39;</span><span class="p">:</span> <span class="n">original_size</span> <span class="o">/</span> <span class="mi">1024</span><span class="o">**</span><span class="mi">2</span><span class="p">,</span>
+            <span class="s1">&#39;compressed_size_mb&#39;</span><span class="p">:</span> <span class="n">compressed_size</span> <span class="o">/</span> <span class="mi">1024</span><span class="o">**</span><span class="mi">2</span><span class="p">,</span>
+            <span class="s1">&#39;compression_ratio&#39;</span><span class="p">:</span> <span class="n">original_size</span> <span class="o">/</span> <span class="n">compressed_size</span><span class="p">,</span>
+            <span class="s1">&#39;compression_time_s&#39;</span><span class="p">:</span> <span class="n">compression_time</span><span class="p">,</span>
+            <span class="s1">&#39;decompression_time_s&#39;</span><span class="p">:</span> <span class="n">decompression_time</span><span class="p">,</span>
+            <span class="s1">&#39;quality&#39;</span><span class="p">:</span> <span class="n">quality</span><span class="p">,</span>
+        <span class="p">})</span>
+
+        <span class="n">compressed_path</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>  <span class="c1"># Clean up</span>
+
+    <span class="c1"># Aggregate results</span>
+    <span class="n">avg_ratio</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;compression_ratio&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">results</span><span class="p">[</span><span class="s1">&#39;samples&#39;</span><span class="p">])</span> <span class="o">/</span> <span class="n">num_samples</span>
+    <span class="n">avg_quality</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;quality&#39;</span><span class="p">][</span><span class="s1">&#39;topk_ranking_overlap&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">results</span><span class="p">[</span><span class="s1">&#39;samples&#39;</span><span class="p">])</span> <span class="o">/</span> <span class="n">num_samples</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="si">{</span><span class="s1">&#39;=&#39;</span><span class="o">*</span><span class="mi">60</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Preset: </span><span class="si">{</span><span class="n">preset</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Average Compression Ratio: </span><span class="si">{</span><span class="n">avg_ratio</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">x&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Average Quality (Top-K Overlap): </span><span class="si">{</span><span class="n">avg_quality</span><span class="si">:</span><span class="s2">.2%</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Average Compression Time: </span><span class="si">{</span><span class="nb">sum</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;compression_time_s&#39;</span><span class="p">]</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;samples&#39;</span><span class="p">])</span><span class="o">/</span><span class="n">num_samples</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">s&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;=&#39;</span><span class="o">*</span><span class="mi">60</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">results</span>
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">()</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--preset&quot;</span><span class="p">,</span> <span class="n">choices</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;maximum_quality&quot;</span><span class="p">,</span> <span class="s2">&quot;balanced&quot;</span><span class="p">,</span> <span class="s2">&quot;minimal&quot;</span><span class="p">],</span> 
+                       <span class="n">default</span><span class="o">=</span><span class="s2">&quot;balanced&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--samples&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="n">results</span> <span class="o">=</span> <span class="n">benchmark_compression</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">preset</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">samples</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<p><strong>End of Document</strong></p></div>
+        
+        
+    </div>
+
+    
+      <footer class="col-md-12 text-center">
+          
+          
+            <hr>
+            <p>
+            <small>Copyright &copy; 2025 Lexsi Labs</small><br>
+            
+            <small>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</small>
+            </p>
+          
+
+          
+          
+      </footer>
+    
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script src="../js/bootstrap-3.0.3.min.js"></script>
+
+    
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/highlight.min.js"></script>
+        
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/python.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/yaml.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/bash.min.js"></script>
+                <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.18.0/build/languages/javascript.min.js"></script>
+        
+    <script>hljs.initHighlightingOnLoad();</script>
+    
+
+    <script>var base_url = ".."</script>
+    
+    <script src="../js/base.js"></script>
+    <script src="../javascripts/mathjax.js"></script>
+    <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="../javascripts/katex.js"></script>
+    <script src="https://unpkg.com/katex@0/dist/katex.min.js"></script>
+    <script src="https://unpkg.com/katex@0/dist/contrib/auto-render.min.js"></script>
+    <script src="../search/main.js"></script>
+
+    <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">
+                    <span aria-hidden="true">&times;</span>
+                    <span class="sr-only">Close</span>
+                </button>
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+            </div>
+            <div class="modal-body">
+                <p>
+                    From here you can search these documents. Enter
+                    your search terms below.
+                </p>
+                <form>
+                    <div class="form-group">
+                        <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+    </body>
+
+</html>

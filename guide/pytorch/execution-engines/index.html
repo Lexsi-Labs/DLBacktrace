@@ -384,7 +384,7 @@
         <div class="col-md-9" role="main">
 
 <h1 id="execution-engines">Execution Engines<a class="headerlink" href="#execution-engines" title="Permanent link">&para;</a></h1>
-<p>DL-Backtrace provides optimized execution engines for running traced models.</p>
+<p>DLBacktrace provides optimized execution engines for running traced models.</p>
 <hr />
 <h2 id="executionenginenocache">ExecutionEngineNoCache<a class="headerlink" href="#executionenginenocache" title="Permanent link">&para;</a></h2>
 <p>The <strong>ExecutionEngineNoCache</strong> is the recommended engine for most use cases.</p>
@@ -399,7 +399,7 @@
 <span class="n">dlb</span> <span class="o">=</span> <span class="n">DLBacktrace</span><span class="p">(</span>
     <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
     <span class="n">input_for_graph</span><span class="o">=</span><span class="p">(</span><span class="n">dummy_input</span><span class="p">,),</span>
-    <span class="n">layer_implementation</span><span class="o">=</span><span class="s2">&quot;pytorch&quot;</span>
+    <span class="n">device</span><span class="o">=</span><span class="s1">&#39;cuda&#39;</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="c1"># Forward pass uses ExecutionEngineNoCache</span>
@@ -510,7 +510,7 @@
 <hr />
 <h2 id="deterministic-execution">Deterministic Execution<a class="headerlink" href="#deterministic-execution" title="Permanent link">&para;</a></h2>
 <h3 id="environment-setup">Environment Setup<a class="headerlink" href="#environment-setup" title="Permanent link">&para;</a></h3>
-<p>DL-Backtrace automatically configures deterministic execution:</p>
+<p>DLBacktrace automatically configures deterministic execution:</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># Set in reproducibility.py</span>
 <span class="n">torch</span><span class="o">.</span><span class="n">backends</span><span class="o">.</span><span class="n">cudnn</span><span class="o">.</span><span class="n">deterministic</span> <span class="o">=</span> <span class="kc">True</span>
 <span class="n">torch</span><span class="o">.</span><span class="n">backends</span><span class="o">.</span><span class="n">cudnn</span><span class="o">.</span><span class="n">benchmark</span> <span class="o">=</span> <span class="kc">False</span>

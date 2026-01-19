@@ -335,10 +335,10 @@
         
         <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
     <ul class="nav bs-sidenav">
-        <li class="first-level active"><a href="#mixture-of-experts-moe-support">Mixture of Experts (MoE) Support</a></li>
+        <li class="first-level active"><a href="#mixture-of-experts-moes-support">Mixture-of-Experts (MoEs) Support</a></li>
             <li class="second-level"><a href="#overview">Overview</a></li>
                 
-            <li class="second-level"><a href="#supported-moe-models">Supported MoE Models</a></li>
+            <li class="second-level"><a href="#supported-moes-models">Supported MoEs Models</a></li>
                 
                 <li class="third-level"><a href="#1-jetmoe">1. JetMoE</a></li>
                 <li class="third-level"><a href="#2-olmoe">2. OLMoE</a></li>
@@ -355,10 +355,10 @@
                 <li class="third-level"><a href="#model-configuration-access">Model Configuration Access</a></li>
             <li class="second-level"><a href="#expert-analysis-workflow">Expert Analysis Workflow</a></li>
                 
-                <li class="third-level"><a href="#complete-moe-analysis-example">Complete MoE Analysis Example</a></li>
+                <li class="third-level"><a href="#complete-moes-analysis-example">Complete MoEs Analysis Example</a></li>
             <li class="second-level"><a href="#implementation-details">Implementation Details</a></li>
                 
-                <li class="third-level"><a href="#moe-layer-processing">MoE Layer Processing</a></li>
+                <li class="third-level"><a href="#moes-layer-processing">MoEs Layer Processing</a></li>
                 <li class="third-level"><a href="#expert-routing">Expert Routing</a></li>
             <li class="second-level"><a href="#performance-considerations">Performance Considerations</a></li>
                 
@@ -375,23 +375,23 @@
 </div></div>
         <div class="col-md-9" role="main">
 
-<h1 id="mixture-of-experts-moe-support">Mixture of Experts (MoE) Support<a class="headerlink" href="#mixture-of-experts-moe-support" title="Permanent link">&para;</a></h1>
-<p>DL-Backtrace provides comprehensive support for <strong>Mixture of Experts (MoE)</strong> models, enabling explainability analysis for these advanced architectures with expert-level relevance tracking.</p>
+<h1 id="mixture-of-experts-moes-support">Mixture-of-Experts (MoEs) Support<a class="headerlink" href="#mixture-of-experts-moes-support" title="Permanent link">&para;</a></h1>
+<p>DLBacktrace provides comprehensive support for <strong>Mixture-of-Experts (MoEs)</strong> models, enabling explainability analysis for these advanced architectures with expert-level relevance tracking.</p>
 <hr />
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p>MoE models use multiple specialized "expert" networks that are dynamically activated based on the input. DL-Backtrace provides:</p>
+<p>MoEs models use multiple specialized "expert" networks that are dynamically activated based on the input. DLBacktrace provides:</p>
 <ul>
 <li><strong>✨ Expert-Level Relevance Tracking</strong>: Track which experts contribute most to predictions</li>
-<li><strong>🎯 Model-Specific Implementations</strong>: Optimized support for popular MoE architectures</li>
-<li><strong>⚡ CUDA Acceleration</strong>: GPU-accelerated relevance propagation for MoE layers</li>
+<li><strong>🎯 Model-Specific Implementations</strong>: Optimized support for popular MoEs architectures</li>
+<li><strong>⚡ CUDA Acceleration</strong>: GPU-accelerated relevance propagation for MoEs layers</li>
 <li><strong>📊 Expert Routing Analysis</strong>: Understand expert selection and contribution patterns</li>
-<li><strong>🔍 Layer-wise Attribution</strong>: Full relevance flow through MoE feed-forward and attention blocks</li>
+<li><strong>🔍 Layer-wise Attribution</strong>: Full relevance flow through MoEs feed-forward and attention blocks</li>
 </ul>
 <hr />
-<h2 id="supported-moe-models">Supported MoE Models<a class="headerlink" href="#supported-moe-models" title="Permanent link">&para;</a></h2>
+<h2 id="supported-moes-models">Supported MoEs Models<a class="headerlink" href="#supported-moes-models" title="Permanent link">&para;</a></h2>
 <h3 id="1-jetmoe">1. JetMoE<a class="headerlink" href="#1-jetmoe" title="Permanent link">&para;</a></h3>
-<p><strong>JetMoE</strong> is an efficient MoE architecture with sparse expert activation.</p>
-<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.moe_pytorch_backtrace.backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">Backtrace</span>
+<p><strong>JetMoE</strong> is an efficient MoEs architecture with sparse expert activation.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.moe_pytorch_backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">Backtrace</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoModelForCausalLM</span><span class="p">,</span> <span class="n">AutoTokenizer</span>
 
 <span class="c1"># Load JetMoE model</span>
@@ -399,61 +399,87 @@
 <span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name</span><span class="p">)</span>
 <span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name</span><span class="p">)</span>
 
-<span class="c1"># Initialize DL-Backtrace for JetMoE</span>
-<span class="n">backtrace</span> <span class="o">=</span> <span class="n">Backtrace</span><span class="p">(</span>
+<span class="c1"># Initialize DLBacktrace for JetMoE</span>
+<span class="n">bt</span> <span class="o">=</span> <span class="n">Backtrace</span><span class="p">(</span>
     <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
     <span class="n">model_type</span><span class="o">=</span><span class="s1">&#39;jetmoe&#39;</span><span class="p">,</span>
-    <span class="n">input_text</span><span class="o">=</span><span class="s2">&quot;Your prompt here&quot;</span><span class="p">,</span>
+    <span class="n">device</span><span class="o">=</span><span class="s1">&#39;cuda&#39;</span>  <span class="c1"># or &#39;cpu&#39;</span>
+<span class="p">)</span>
+
+<span class="c1"># Prepare input</span>
+<span class="n">prompt</span> <span class="o">=</span> <span class="s2">&quot;What is the capital of France?&quot;</span>
+<span class="n">tokens</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="n">prompt</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">)</span>
+<span class="n">input_ids</span> <span class="o">=</span> <span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;input_ids&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">cuda</span><span class="p">()</span>
+<span class="n">attention_mask</span> <span class="o">=</span> <span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;attention_mask&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">cuda</span><span class="p">()</span>
+
+<span class="c1"># Run generation with run_task() - ONE CALL!</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">bt</span><span class="o">.</span><span class="n">run_task</span><span class="p">(</span>
+    <span class="n">task</span><span class="o">=</span><span class="s2">&quot;generation&quot;</span><span class="p">,</span>
+    <span class="n">inputs</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;input_ids&#39;</span><span class="p">:</span> <span class="n">input_ids</span><span class="p">,</span> <span class="s1">&#39;attention_mask&#39;</span><span class="p">:</span> <span class="n">attention_mask</span><span class="p">},</span>
     <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
-    <span class="n">max_length</span><span class="o">=</span><span class="mi">512</span><span class="p">,</span>
-    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+    <span class="n">return_relevance</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">return_scores</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">debug</span><span class="o">=</span><span class="kc">False</span>
 <span class="p">)</span>
 
-<span class="c1"># Get model outputs</span>
-<span class="n">input_ids</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="s2">&quot;Your prompt&quot;</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">input_ids</span>
-<span class="n">all_in</span><span class="p">,</span> <span class="n">all_out</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">model</span><span class="p">(</span><span class="n">input_ids</span><span class="p">,</span> <span class="n">return_dict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-
-<span class="c1"># Compute relevance with expert tracking</span>
-<span class="n">relevance</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span>
-    <span class="n">all_in</span><span class="o">=</span><span class="n">all_in</span><span class="p">,</span>
-    <span class="n">all_out</span><span class="o">=</span><span class="n">all_out</span><span class="p">,</span>
-    <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;default&quot;</span><span class="p">,</span>
-    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
-<span class="p">)</span>
+<span class="c1"># Access generated text and relevance</span>
+<span class="n">generated_text</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;generated_ids&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">skip_special_tokens</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Generated: </span><span class="si">{</span><span class="n">generated_text</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
 <span class="c1"># Access expert-level relevance</span>
-<span class="n">expert_relevance</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">all_layer_expert_relevance</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Layers with expert analysis: </span><span class="si">{</span><span class="n">expert_relevance</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="n">expert_relevance</span> <span class="o">=</span> <span class="n">bt</span><span class="o">.</span><span class="n">all_layer_expert_relevance</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Expert routing across </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">expert_relevance</span><span class="p">)</span><span class="si">}</span><span class="s2"> layers&quot;</span><span class="p">)</span>
+
+<span class="c1"># Access token and expert relevance per step</span>
+<span class="k">for</span> <span class="n">step_data</span> <span class="ow">in</span> <span class="n">results</span><span class="p">[</span><span class="s1">&#39;relevance_trace&#39;</span><span class="p">]:</span>
+    <span class="n">token_rel</span> <span class="o">=</span> <span class="n">step_data</span><span class="p">[</span><span class="s1">&#39;all_wt&#39;</span><span class="p">]</span>  <span class="c1"># Token relevance</span>
+    <span class="n">expert_rel</span> <span class="o">=</span> <span class="n">step_data</span><span class="p">[</span><span class="s1">&#39;expert_relevance&#39;</span><span class="p">]</span>  <span class="c1"># Expert relevance</span>
 </code></pre></div>
 <p><strong>Key Features:</strong>
 - Sparse expert activation
 - Efficient attention mechanisms
 - Expert-level feed-forward and attention tracking</p>
 <h3 id="2-olmoe">2. OLMoE<a class="headerlink" href="#2-olmoe" title="Permanent link">&para;</a></h3>
-<p><strong>OLMoE</strong> (Open Language MoE) is an open-source MoE model optimized for efficiency.</p>
-<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.moe_pytorch_backtrace.backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">Backtrace</span>
+<p><strong>OLMoE</strong> (Open Language MoE) is an open-source MoEs model optimized for efficiency.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.moe_pytorch_backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">Backtrace</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoModelForCausalLM</span><span class="p">,</span> <span class="n">AutoTokenizer</span>
 
 <span class="c1"># Load OLMoE model</span>
-<span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;allenai/OLMoE-1B-7B-0924&quot;</span><span class="p">)</span>
-<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;allenai/OLMoE-1B-7B-0924&quot;</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;allenai/OLMoE-1B-7B-0125-Instruct&quot;</span><span class="p">)</span>
+<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;allenai/OLMoE-1B-7B-0125-Instruct&quot;</span><span class="p">)</span>
 
 <span class="c1"># Initialize backtrace</span>
-<span class="n">backtrace</span> <span class="o">=</span> <span class="n">Backtrace</span><span class="p">(</span>
+<span class="n">bt</span> <span class="o">=</span> <span class="n">Backtrace</span><span class="p">(</span>
     <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
     <span class="n">model_type</span><span class="o">=</span><span class="s1">&#39;olmoe&#39;</span><span class="p">,</span>
-    <span class="n">input_text</span><span class="o">=</span><span class="s2">&quot;Example text&quot;</span><span class="p">,</span>
-    <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
-    <span class="n">max_length</span><span class="o">=</span><span class="mi">512</span><span class="p">,</span>
-    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
+    <span class="n">device</span><span class="o">=</span><span class="s1">&#39;cuda&#39;</span>  <span class="c1"># or &#39;cpu&#39;</span>
 <span class="p">)</span>
 
-<span class="c1"># Run analysis</span>
-<span class="n">all_in</span><span class="p">,</span> <span class="n">all_out</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">model</span><span class="p">(</span><span class="n">input_ids</span><span class="p">,</span> <span class="n">return_dict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="n">relevance</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="n">all_in</span><span class="p">,</span> <span class="n">all_out</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span><span class="p">)</span>
+<span class="c1"># Prepare input</span>
+<span class="n">prompt</span> <span class="o">=</span> <span class="s2">&quot;What is the capital of France?&quot;</span>
+<span class="n">tokens</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="n">prompt</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">)</span>
+<span class="n">input_ids</span> <span class="o">=</span> <span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;input_ids&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">cuda</span><span class="p">()</span>
+<span class="n">attention_mask</span> <span class="o">=</span> <span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;attention_mask&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">cuda</span><span class="p">()</span>
+
+<span class="c1"># Run generation with run_task() - ONE CALL!</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">bt</span><span class="o">.</span><span class="n">run_task</span><span class="p">(</span>
+    <span class="n">task</span><span class="o">=</span><span class="s2">&quot;generation&quot;</span><span class="p">,</span>
+    <span class="n">inputs</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;input_ids&#39;</span><span class="p">:</span> <span class="n">input_ids</span><span class="p">,</span> <span class="s1">&#39;attention_mask&#39;</span><span class="p">:</span> <span class="n">attention_mask</span><span class="p">},</span>
+    <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+    <span class="n">return_relevance</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">return_scores</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">debug</span><span class="o">=</span><span class="kc">False</span>
+<span class="p">)</span>
+
+<span class="c1"># Access generated text</span>
+<span class="n">generated_text</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;generated_ids&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">skip_special_tokens</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Generated: </span><span class="si">{</span><span class="n">generated_text</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
 <span class="c1"># Analyze expert contributions</span>
-<span class="k">for</span> <span class="n">layer_name</span><span class="p">,</span> <span class="n">expert_rel</span> <span class="ow">in</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">all_layer_expert_relevance</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+<span class="n">expert_relevance</span> <span class="o">=</span> <span class="n">bt</span><span class="o">.</span><span class="n">all_layer_expert_relevance</span>
+<span class="k">for</span> <span class="n">layer_name</span><span class="p">,</span> <span class="n">expert_rel</span> <span class="ow">in</span> <span class="n">expert_relevance</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">layer_name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">expert_rel</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </code></pre></div>
 <p><strong>Key Features:</strong>
@@ -461,70 +487,99 @@
 - Multiple expert configurations
 - Optimized for research and production</p>
 <h3 id="3-qwen-moe">3. Qwen MoE<a class="headerlink" href="#3-qwen-moe" title="Permanent link">&para;</a></h3>
-<p><strong>Qwen MoE</strong> model combines strong language understanding with efficient MoE architecture.</p>
-<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.moe_pytorch_backtrace.backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">Backtrace</span>
+<p><strong>Qwen MoE</strong> model combines strong language understanding with efficient MoEs architecture.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.moe_pytorch_backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">Backtrace</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoModelForCausalLM</span><span class="p">,</span> <span class="n">AutoTokenizer</span>
 
 <span class="c1"># Load Qwen MoE model</span>
-<span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;Qwen/Qwen1.5-MoE-A2.7B&quot;</span><span class="p">)</span>
-<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;Qwen/Qwen1.5-MoE-A2.7B&quot;</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;Qwen/Qwen3-30B-A3B&quot;</span><span class="p">)</span>
+<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;Qwen/Qwen3-30B-A3B&quot;</span><span class="p">)</span>
 
 <span class="c1"># Initialize backtrace</span>
-<span class="n">backtrace</span> <span class="o">=</span> <span class="n">Backtrace</span><span class="p">(</span>
+<span class="n">bt</span> <span class="o">=</span> <span class="n">Backtrace</span><span class="p">(</span>
     <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
     <span class="n">model_type</span><span class="o">=</span><span class="s1">&#39;qwen3_moe&#39;</span><span class="p">,</span>
-    <span class="n">input_text</span><span class="o">=</span><span class="s2">&quot;Your input text&quot;</span><span class="p">,</span>
+    <span class="n">device</span><span class="o">=</span><span class="s1">&#39;cuda&#39;</span>  <span class="c1"># or &#39;cpu&#39;</span>
+<span class="p">)</span>
+
+<span class="c1"># Prepare input</span>
+<span class="n">prompt</span> <span class="o">=</span> <span class="s2">&quot;What is the capital of France?&quot;</span>
+<span class="n">tokens</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="n">prompt</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">)</span>
+<span class="n">input_ids</span> <span class="o">=</span> <span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;input_ids&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">cuda</span><span class="p">()</span>
+<span class="n">attention_mask</span> <span class="o">=</span> <span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;attention_mask&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">cuda</span><span class="p">()</span>
+
+<span class="c1"># Run generation with run_task() - ONE CALL!</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">bt</span><span class="o">.</span><span class="n">run_task</span><span class="p">(</span>
+    <span class="n">task</span><span class="o">=</span><span class="s2">&quot;generation&quot;</span><span class="p">,</span>
+    <span class="n">inputs</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;input_ids&#39;</span><span class="p">:</span> <span class="n">input_ids</span><span class="p">,</span> <span class="s1">&#39;attention_mask&#39;</span><span class="p">:</span> <span class="n">attention_mask</span><span class="p">},</span>
     <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
-    <span class="n">max_length</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span>
-    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+    <span class="n">return_relevance</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">return_scores</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">debug</span><span class="o">=</span><span class="kc">False</span>
 <span class="p">)</span>
 
-<span class="c1"># Compute relevance</span>
-<span class="n">input_ids</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="s2">&quot;Input&quot;</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">input_ids</span>
-<span class="n">all_in</span><span class="p">,</span> <span class="n">all_out</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">model</span><span class="p">(</span><span class="n">input_ids</span><span class="p">,</span> <span class="n">return_dict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="c1"># Access generated text and relevance</span>
+<span class="n">generated_text</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;generated_ids&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">skip_special_tokens</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Generated: </span><span class="si">{</span><span class="n">generated_text</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
-<span class="n">relevance</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span>
-    <span class="n">all_in</span><span class="o">=</span><span class="n">all_in</span><span class="p">,</span>
-    <span class="n">all_out</span><span class="o">=</span><span class="n">all_out</span><span class="p">,</span>
-    <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;default&quot;</span><span class="p">,</span>
-    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
-<span class="p">)</span>
+<span class="c1"># Access expert-level relevance</span>
+<span class="n">expert_relevance</span> <span class="o">=</span> <span class="n">bt</span><span class="o">.</span><span class="n">all_layer_expert_relevance</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Expert routing across </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">expert_relevance</span><span class="p">)</span><span class="si">}</span><span class="s2"> layers&quot;</span><span class="p">)</span>
 </code></pre></div>
 <p><strong>Key Features:</strong>
 - Grouped query attention
 - Advanced expert routing
 - Strong multilingual capabilities</p>
 <h3 id="4-gpt-oss">4. GPT-OSS<a class="headerlink" href="#4-gpt-oss" title="Permanent link">&para;</a></h3>
-<p><strong>GPT-OSS</strong> is an open-source MoE implementation with configurable expert architectures.</p>
-<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.moe_pytorch_backtrace.backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">Backtrace</span>
+<p><strong>GPT-OSS</strong> is an open-source MoEs implementation with configurable expert architectures.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.moe_pytorch_backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">Backtrace</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoModelForCausalLM</span><span class="p">,</span> <span class="n">AutoTokenizer</span>
 
 <span class="c1"># Load GPT-OSS model</span>
-<span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;gpt-oss/gpt-oss-model&quot;</span><span class="p">)</span>
-<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;gpt-oss/gpt-oss-model&quot;</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;openai/gpt-oss-20b&quot;</span><span class="p">)</span>
+<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;openai/gpt-oss-20b&quot;</span><span class="p">)</span>
 
 <span class="c1"># Initialize backtrace</span>
-<span class="n">backtrace</span> <span class="o">=</span> <span class="n">Backtrace</span><span class="p">(</span>
+<span class="n">bt</span> <span class="o">=</span> <span class="n">Backtrace</span><span class="p">(</span>
     <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
     <span class="n">model_type</span><span class="o">=</span><span class="s1">&#39;gpt_oss&#39;</span><span class="p">,</span>
-    <span class="n">input_text</span><span class="o">=</span><span class="s2">&quot;Example prompt&quot;</span><span class="p">,</span>
-    <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
-    <span class="n">max_length</span><span class="o">=</span><span class="mi">512</span><span class="p">,</span>
-    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
+    <span class="n">device</span><span class="o">=</span><span class="s1">&#39;cuda&#39;</span>  <span class="c1"># or &#39;cpu&#39;</span>
 <span class="p">)</span>
 
-<span class="c1"># Run with sliding window attention support</span>
-<span class="n">all_in</span><span class="p">,</span> <span class="n">all_out</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">model</span><span class="p">(</span><span class="n">input_ids</span><span class="p">,</span> <span class="n">return_dict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="n">relevance</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="n">all_in</span><span class="p">,</span> <span class="n">all_out</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span><span class="p">)</span>
+<span class="c1"># Prepare input</span>
+<span class="n">prompt</span> <span class="o">=</span> <span class="s2">&quot;What is the capital of France?&quot;</span>
+<span class="n">tokens</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="n">prompt</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">)</span>
+<span class="n">input_ids</span> <span class="o">=</span> <span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;input_ids&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">cuda</span><span class="p">()</span>
+<span class="n">attention_mask</span> <span class="o">=</span> <span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;attention_mask&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">cuda</span><span class="p">()</span>
+
+<span class="c1"># Run generation with run_task() - ONE CALL!</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">bt</span><span class="o">.</span><span class="n">run_task</span><span class="p">(</span>
+    <span class="n">task</span><span class="o">=</span><span class="s2">&quot;generation&quot;</span><span class="p">,</span>
+    <span class="n">inputs</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;input_ids&#39;</span><span class="p">:</span> <span class="n">input_ids</span><span class="p">,</span> <span class="s1">&#39;attention_mask&#39;</span><span class="p">:</span> <span class="n">attention_mask</span><span class="p">},</span>
+    <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+    <span class="n">return_relevance</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">return_scores</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">debug</span><span class="o">=</span><span class="kc">False</span>
+<span class="p">)</span>
+
+<span class="c1"># Access generated text and relevance</span>
+<span class="n">generated_text</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;generated_ids&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">skip_special_tokens</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Generated: </span><span class="si">{</span><span class="n">generated_text</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="c1"># Access expert-level relevance</span>
+<span class="n">expert_relevance</span> <span class="o">=</span> <span class="n">bt</span><span class="o">.</span><span class="n">all_layer_expert_relevance</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Expert routing across </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">expert_relevance</span><span class="p">)</span><span class="si">}</span><span class="s2"> layers&quot;</span><span class="p">)</span>
 </code></pre></div>
 <p><strong>Key Features:</strong>
 - Sliding window attention support
 - Flexible expert configuration
-- Full attention and feed-forward MoE layers</p>
+- Full attention and feed-forward MoEs layers</p>
 <hr />
 <h2 id="moe-specific-features">MoE-Specific Features<a class="headerlink" href="#moe-specific-features" title="Permanent link">&para;</a></h2>
 <h3 id="expert-relevance-tracking">Expert Relevance Tracking<a class="headerlink" href="#expert-relevance-tracking" title="Permanent link">&para;</a></h3>
-<p>DL-Backtrace tracks relevance at the expert level, allowing you to understand which experts contribute to predictions.</p>
+<p>DLBacktrace tracks relevance at the expert level, allowing you to understand which experts contribute to predictions.</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># After running evaluation</span>
 <span class="n">expert_relevance</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">all_layer_expert_relevance</span>
 
@@ -541,15 +596,15 @@
         <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Top 3 experts: </span><span class="si">{</span><span class="n">top_experts</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </code></pre></div>
 <h3 id="layer-types">Layer Types<a class="headerlink" href="#layer-types" title="Permanent link">&para;</a></h3>
-<p>MoE models have specialized layer types:</p>
+<p>MoEs models have specialized layer types:</p>
 <ul>
-<li><strong>MoE Feed-Forward Layers</strong>: Multiple expert networks with routing</li>
-<li><strong>MoE Self-Attention Layers</strong>: Expert-based attention mechanisms  </li>
+<li><strong>MoEs Feed-Forward Layers</strong>: Multiple expert networks with routing</li>
+<li><strong>MoEs Self-Attention Layers</strong>: Expert-based attention mechanisms  </li>
 <li><strong>Router Layers</strong>: Gate networks that select experts</li>
 <li><strong>Standard Transformer Layers</strong>: Traditional attention and FFN</li>
 </ul>
 <h3 id="device-configuration">Device Configuration<a class="headerlink" href="#device-configuration" title="Permanent link">&para;</a></h3>
-<p>MoE models benefit significantly from GPU acceleration:</p>
+<p>MoEs models benefit significantly from GPU acceleration:</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># CPU mode (slower, uses original implementations)</span>
 <span class="n">backtrace</span> <span class="o">=</span> <span class="n">Backtrace</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cpu&quot;</span><span class="p">)</span>
 <span class="n">relevance</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="n">all_in</span><span class="p">,</span> <span class="n">all_out</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cpu&quot;</span><span class="p">)</span>
@@ -559,8 +614,8 @@
 <span class="n">relevance</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="n">all_in</span><span class="p">,</span> <span class="n">all_out</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span><span class="p">)</span>
 </code></pre></div>
 <p><strong>Performance Tips:</strong>
-- Always use <code>device="cuda"</code> for MoE models when possible
-- CUDA implementations provide 10-100x speedup for large MoE models
+- Always use <code>device="cuda"</code> for MoEs models when possible
+- CUDA implementations provide 10-100x speedup for large MoEs models
 - Memory usage scales with number of experts and sequence length</p>
 <hr />
 <h2 id="advanced-configuration">Advanced Configuration<a class="headerlink" href="#advanced-configuration" title="Permanent link">&para;</a></h2>
@@ -590,44 +645,49 @@
 </code></pre></div>
 <hr />
 <h2 id="expert-analysis-workflow">Expert Analysis Workflow<a class="headerlink" href="#expert-analysis-workflow" title="Permanent link">&para;</a></h2>
-<h3 id="complete-moe-analysis-example">Complete MoE Analysis Example<a class="headerlink" href="#complete-moe-analysis-example" title="Permanent link">&para;</a></h3>
+<h3 id="complete-moes-analysis-example">Complete MoEs Analysis Example<a class="headerlink" href="#complete-moes-analysis-example" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.moe_pytorch_backtrace.backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">Backtrace</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dl_backtrace.moe_pytorch_backtrace</span><span class="w"> </span><span class="kn">import</span> <span class="n">Backtrace</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoModelForCausalLM</span><span class="p">,</span> <span class="n">AutoTokenizer</span>
 
 <span class="c1"># 1. Load model and tokenizer</span>
-<span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;your-moe-model&quot;</span><span class="p">)</span>
-<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;your-moe-model&quot;</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;jetmoe/jetmoe-8b&quot;</span><span class="p">)</span>
+<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;jetmoe/jetmoe-8b&quot;</span><span class="p">)</span>
 
-<span class="c1"># 2. Prepare input</span>
-<span class="n">text</span> <span class="o">=</span> <span class="s2">&quot;Analyze this important text for expert routing&quot;</span>
-<span class="n">input_ids</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">input_ids</span><span class="o">.</span><span class="n">cuda</span><span class="p">()</span>
-
-<span class="c1"># 3. Initialize backtrace</span>
-<span class="n">backtrace</span> <span class="o">=</span> <span class="n">Backtrace</span><span class="p">(</span>
+<span class="c1"># 2. Initialize backtrace</span>
+<span class="n">bt</span> <span class="o">=</span> <span class="n">Backtrace</span><span class="p">(</span>
     <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
     <span class="n">model_type</span><span class="o">=</span><span class="s1">&#39;jetmoe&#39;</span><span class="p">,</span>  <span class="c1"># or &#39;olmoe&#39;, &#39;qwen3_moe&#39;, &#39;gpt_oss&#39;</span>
-    <span class="n">input_text</span><span class="o">=</span><span class="n">text</span><span class="p">,</span>
+    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
+<span class="p">)</span>
+
+<span class="c1"># 3. Prepare input</span>
+<span class="n">prompt</span> <span class="o">=</span> <span class="s2">&quot;Analyze this important text for expert routing&quot;</span>
+<span class="n">tokens</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="n">prompt</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">)</span>
+<span class="n">input_ids</span> <span class="o">=</span> <span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;input_ids&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">cuda</span><span class="p">()</span>
+<span class="n">attention_mask</span> <span class="o">=</span> <span class="n">tokens</span><span class="p">[</span><span class="s2">&quot;attention_mask&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">cuda</span><span class="p">()</span>
+
+<span class="c1"># 4. Run generation with run_task() - ONE CALL!</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">bt</span><span class="o">.</span><span class="n">run_task</span><span class="p">(</span>
+    <span class="n">task</span><span class="o">=</span><span class="s2">&quot;generation&quot;</span><span class="p">,</span>
+    <span class="n">inputs</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;input_ids&#39;</span><span class="p">:</span> <span class="n">input_ids</span><span class="p">,</span> <span class="s1">&#39;attention_mask&#39;</span><span class="p">:</span> <span class="n">attention_mask</span><span class="p">},</span>
     <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
-    <span class="n">max_length</span><span class="o">=</span><span class="mi">512</span><span class="p">,</span>
-    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
+    <span class="n">return_relevance</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">return_scores</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">debug</span><span class="o">=</span><span class="kc">False</span>
 <span class="p">)</span>
 
-<span class="c1"># 4. Get model outputs</span>
-<span class="n">all_in</span><span class="p">,</span> <span class="n">all_out</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">model</span><span class="p">(</span><span class="n">input_ids</span><span class="p">,</span> <span class="n">return_dict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="c1"># 5. Access generated text</span>
+<span class="n">generated_text</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;generated_ids&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">skip_special_tokens</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">✅ Generated text: </span><span class="si">{</span><span class="n">generated_text</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;📊 Relevance trace: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;relevance_trace&#39;</span><span class="p">])</span><span class="si">}</span><span class="s2"> generation steps&quot;</span><span class="p">)</span>
 
-<span class="c1"># 5. Compute relevance</span>
-<span class="n">relevance</span> <span class="o">=</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span>
-    <span class="n">all_in</span><span class="o">=</span><span class="n">all_in</span><span class="p">,</span>
-    <span class="n">all_out</span><span class="o">=</span><span class="n">all_out</span><span class="p">,</span>
-    <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;default&quot;</span><span class="p">,</span>
-    <span class="n">multiplier</span><span class="o">=</span><span class="mf">100.0</span><span class="p">,</span>
-    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span>
-<span class="p">)</span>
-
-<span class="c1"># 6. Analyze expert routing</span>
+<span class="c1"># 6. Analyze expert routing across all generation steps</span>
 <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">=== Expert Routing Analysis ===&quot;</span><span class="p">)</span>
-<span class="k">for</span> <span class="n">layer_name</span><span class="p">,</span> <span class="n">expert_rel</span> <span class="ow">in</span> <span class="n">backtrace</span><span class="o">.</span><span class="n">all_layer_expert_relevance</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+<span class="n">expert_relevance</span> <span class="o">=</span> <span class="n">bt</span><span class="o">.</span><span class="n">all_layer_expert_relevance</span>
+
+<span class="k">for</span> <span class="n">layer_name</span><span class="p">,</span> <span class="n">expert_rel</span> <span class="ow">in</span> <span class="n">expert_relevance</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="si">{</span><span class="n">layer_name</span><span class="si">}</span><span class="s2">:&quot;</span><span class="p">)</span>
 
     <span class="c1"># Get layer and expert type</span>
@@ -660,52 +720,95 @@
         <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">expert_idx</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">top_experts</span><span class="p">):</span>
             <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    </span><span class="si">{</span><span class="n">idx</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s2">. Expert </span><span class="si">{</span><span class="n">expert_idx</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">expert_means</span><span class="p">[</span><span class="n">expert_idx</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
-<span class="c1"># 7. Analyze overall relevance flow</span>
-<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">=== Overall Relevance Flow ===&quot;</span><span class="p">)</span>
-<span class="k">for</span> <span class="n">layer_name</span><span class="p">,</span> <span class="n">layer_rel</span> <span class="ow">in</span> <span class="n">relevance</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer_rel</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">layer_name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">layer_rel</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">, sum=</span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">layer_rel</span><span class="p">)</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="c1"># 7. Analyze token relevance per generation step</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">=== Token Relevance Per Step ===&quot;</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">step_idx</span><span class="p">,</span> <span class="n">step_data</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;relevance_trace&#39;</span><span class="p">]):</span>
+    <span class="n">all_wt</span> <span class="o">=</span> <span class="n">step_data</span><span class="p">[</span><span class="s1">&#39;all_wt&#39;</span><span class="p">]</span>  <span class="c1"># Token relevance</span>
+    <span class="n">expert_rel</span> <span class="o">=</span> <span class="n">step_data</span><span class="p">[</span><span class="s1">&#39;expert_relevance&#39;</span><span class="p">]</span>  <span class="c1"># Expert relevance</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Step </span><span class="si">{</span><span class="n">step_idx</span><span class="si">}</span><span class="s2">:&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Token relevance nodes: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">all_wt</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Expert relevance layers: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">expert_rel</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Show decoder embeddings relevance</span>
+    <span class="k">if</span> <span class="s1">&#39;decoder_embeddings&#39;</span> <span class="ow">in</span> <span class="n">all_wt</span><span class="p">:</span>
+        <span class="n">decoder_rel</span> <span class="o">=</span> <span class="n">all_wt</span><span class="p">[</span><span class="s1">&#39;decoder_embeddings&#39;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">decoder_rel</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+            <span class="n">token_scores</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">decoder_rel</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Token relevance sum: </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">token_scores</span><span class="p">)</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="c1"># 8. Visualize expert specialization</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">=== Expert Specialization Analysis ===&quot;</span><span class="p">)</span>
+<span class="c1"># Aggregate expert relevance across all layers</span>
+<span class="n">all_expert_scores</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">layer_name</span><span class="p">,</span> <span class="n">expert_rel</span> <span class="ow">in</span> <span class="n">expert_relevance</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="k">if</span> <span class="s2">&quot;ff_expert&quot;</span> <span class="ow">in</span> <span class="n">layer_name</span> <span class="ow">or</span> <span class="s2">&quot;attention_expert&quot;</span> <span class="ow">in</span> <span class="n">layer_name</span><span class="p">:</span>
+        <span class="c1"># Sum across tokens/batch dimensions</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">expert_rel</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">layer_expert_sum</span> <span class="o">=</span> <span class="n">expert_rel</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">expert_rel</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">)))</span>
+            <span class="n">all_expert_scores</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">layer_expert_sum</span><span class="p">)</span>
+
+<span class="k">if</span> <span class="n">all_expert_scores</span><span class="p">:</span>
+    <span class="c1"># Average across layers</span>
+    <span class="n">avg_expert_scores</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">all_expert_scores</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">top_5_experts</span> <span class="o">=</span> <span class="n">avg_expert_scores</span><span class="o">.</span><span class="n">argsort</span><span class="p">()[</span><span class="o">-</span><span class="mi">5</span><span class="p">:][::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Top 5 Most Active Experts (averaged across all layers):&quot;</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">rank</span><span class="p">,</span> <span class="n">expert_idx</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">top_5_experts</span><span class="p">,</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">rank</span><span class="si">}</span><span class="s2">. Expert </span><span class="si">{</span><span class="n">expert_idx</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">avg_expert_scores</span><span class="p">[</span><span class="n">expert_idx</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </code></pre></div>
 <hr />
 <h2 id="implementation-details">Implementation Details<a class="headerlink" href="#implementation-details" title="Permanent link">&para;</a></h2>
-<h3 id="moe-layer-processing">MoE Layer Processing<a class="headerlink" href="#moe-layer-processing" title="Permanent link">&para;</a></h3>
-<p>DL-Backtrace processes MoE layers with specialized implementations:</p>
-<div class="highlight"><pre><span></span><code><span class="c1"># Feed-forward MoE layer</span>
-<span class="k">if</span> <span class="n">model_resource</span><span class="p">[</span><span class="s1">&#39;graph&#39;</span><span class="p">][</span><span class="n">start_layer</span><span class="p">][</span><span class="s2">&quot;class&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;JetMoE_Feed_Forward&#39;</span><span class="p">:</span>
+<h3 id="moes-layer-processing">MoEs Layer Processing<a class="headerlink" href="#moes-layer-processing" title="Permanent link">&para;</a></h3>
+<p>DLBacktrace processes MoEs layers with specialized implementations for each model type:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># JetMoE Feed-Forward Layer</span>
+<span class="k">if</span> <span class="n">node_class</span> <span class="o">==</span> <span class="s2">&quot;JetMoE_Feed_Forward&quot;</span><span class="p">:</span>
     <span class="n">weights</span> <span class="o">=</span> <span class="n">all_wts</span><span class="p">[</span><span class="n">start_layer</span><span class="p">]</span>
-    <span class="n">feed_forward_weights</span> <span class="o">=</span> <span class="n">helper</span><span class="o">.</span><span class="n">rename_jetmoe_feed_forward_keys</span><span class="p">(</span><span class="n">weights</span><span class="p">)</span>
-
+    <span class="n">ff_w</span> <span class="o">=</span> <span class="n">helper</span><span class="o">.</span><span class="n">rename_jetmoe_feed_forward_keys</span><span class="p">(</span><span class="n">weights</span><span class="p">)</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">arr_from_key</span><span class="p">(</span><span class="n">child_nodes</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
     <span class="n">temp_wt</span><span class="p">,</span> <span class="n">ff_expert</span> <span class="o">=</span> <span class="n">UD2</span><span class="o">.</span><span class="n">launch_jetmoe_feed_forward</span><span class="p">(</span>
-        <span class="n">impl</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span><span class="p">,</span>  <span class="c1"># or &quot;original&quot;</span>
-        <span class="n">all_wt</span><span class="p">[</span><span class="n">start_layer</span><span class="p">],</span>
-        <span class="n">all_out</span><span class="p">[</span><span class="n">child_nodes</span><span class="p">[</span><span class="mi">0</span><span class="p">]][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">(),</span>
-        <span class="n">feed_forward_weights</span><span class="p">,</span>
-        <span class="n">model</span>
+        <span class="n">impl</span><span class="p">,</span> <span class="n">all_wt</span><span class="p">[</span><span class="n">start_layer</span><span class="p">],</span> <span class="n">x</span><span class="p">,</span> <span class="n">ff_w</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span>
     <span class="p">)</span>
-
-    <span class="c1"># Store expert relevance</span>
-    <span class="n">layer</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">start_layer</span><span class="si">}</span><span class="s2">_ff_expert&quot;</span>
-    <span class="n">all_layer_expert_relevance</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span> <span class="o">=</span> <span class="n">ff_expert</span>
+    <span class="n">all_wt</span><span class="p">[</span><span class="n">child_nodes</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">+=</span> <span class="n">to_np64</span><span class="p">(</span><span class="n">temp_wt</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">all_layer_expert_relevance</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">start_layer</span><span class="si">}</span><span class="s2">_ff_expert&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ff_expert</span> 
 </code></pre></div>
+<p><strong>Key Features:</strong></p>
+<ul>
+<li><strong>Device-Aware Processing</strong>: Automatically handles CPU (<code>devide="cpu"</code>) or CUDA (<code>device="cuda"</code>) execution based on initialization</li>
+<li><strong>Dual Relevance Tracking</strong>: Each MoEs layer returns:</li>
+<li><code>temp_wt</code>: Token-level relevance propagated to child nodes</li>
+<li><code>ff_expert</code> / <code>attn_expert</code>: Expert-level relevance stored separately</li>
+<li><strong>Model-Specific Implementations</strong>: Optimized launchers for each architecture:</li>
+<li><code>launch_jetmoe_feed_forward()</code> / <code>launch_jetmoe_self_attention()</code></li>
+<li><code>launch_olmoe_feed_forward()</code></li>
+<li><code>launch_qwen3_moe_feed_forward()</code></li>
+<li><code>launch_gpt_oss_feed_forward()</code> / <code>launch_gpt_oss_self_attention()</code></li>
+<li><strong>JetMoE Unique Feature</strong>: Only model with MoEs in both feed-forward AND self-attention layers</li>
+<li><strong>GPT-OSS Sliding Window</strong>: Supports both full and sliding window attention patterns</li>
+<li><strong>Numerical Stability</strong>: Token relevance accumulated using <code>to_np64()</code> (float64) to prevent precision loss</li>
+<li><strong>Hierarchical Storage</strong>: </li>
+<li>Token relevance in <code>all_wt[node_name]</code></li>
+<li>Expert relevance in <code>self.all_layer_expert_relevance[layer_expert_key]</code></li>
+</ul>
 <h3 id="expert-routing">Expert Routing<a class="headerlink" href="#expert-routing" title="Permanent link">&para;</a></h3>
-<p>The routing mechanism determines which experts process each token:</p>
+<p>The routing mechanism determines which experts process the token:</p>
 <ol>
 <li><strong>Router Network</strong>: Computes scores for each expert</li>
-<li><strong>Top-K Selection</strong>: Selects top experts based on scores</li>
+<li><strong>Top-K Selection</strong>: Selects top-K experts based on scores</li>
 <li><strong>Expert Execution</strong>: Selected experts process the input</li>
 <li><strong>Weighted Combination</strong>: Expert outputs are weighted by router scores</li>
 </ol>
-<p>DL-Backtrace tracks relevance through this entire routing process.</p>
+<p>DLBacktrace tracks relevance through this entire routing process.</p>
 <hr />
 <h2 id="performance-considerations">Performance Considerations<a class="headerlink" href="#performance-considerations" title="Permanent link">&para;</a></h2>
 <h3 id="memory-usage">Memory Usage<a class="headerlink" href="#memory-usage" title="Permanent link">&para;</a></h3>
-<p>MoE models require more memory due to multiple expert networks:</p>
+<p>MoEs models require more memory due to multiple expert networks:</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># Estimate memory requirements</span>
 <span class="n">num_experts</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">num_experts</span>
 <span class="n">expert_size</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">hidden_size</span> <span class="o">*</span> <span class="n">config</span><span class="o">.</span><span class="n">intermediate_size</span>
 <span class="n">memory_per_layer</span> <span class="o">=</span> <span class="n">num_experts</span> <span class="o">*</span> <span class="n">expert_size</span> <span class="o">*</span> <span class="mi">4</span>  <span class="c1"># bytes (float32)</span>
 
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Approx memory per MoE layer: </span><span class="si">{</span><span class="n">memory_per_layer</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mf">1e9</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> GB&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Approx memory per MoEs layer: </span><span class="si">{</span><span class="n">memory_per_layer</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mf">1e9</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> GB&quot;</span><span class="p">)</span>
 </code></pre></div>
 <h3 id="computation-time">Computation Time<a class="headerlink" href="#computation-time" title="Permanent link">&para;</a></h3>
 <p>CUDA acceleration is essential for reasonable performance:</p>
@@ -759,8 +862,8 @@
 <hr />
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong>Always use CUDA</strong> for MoE models when possible</li>
-<li><strong>Monitor memory usage</strong> - MoE models are memory-intensive</li>
+<li><strong>Always use CUDA</strong> for MoEs models when possible</li>
+<li><strong>Monitor memory usage</strong> - MoEs models are memory-intensive</li>
 <li><strong>Analyze expert specialization</strong> - identify which experts handle specific patterns</li>
 <li><strong>Compare across prompts</strong> - see how expert routing varies</li>
 <li><strong>Use appropriate <code>multiplier</code></strong> - scale relevance for visualization</li>
@@ -768,10 +871,10 @@
 <hr />
 <h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Learn about <a href="../auto-sampler/">DLB Auto Sampler</a> for MoE text generation</li>
+<li>Learn about <a href="../auto-sampler/">DLB Auto Sampler</a> for MoEs text generation</li>
 <li>Explore <a href="../temperature-scaling/">Temperature Scaling</a> for controlled generation</li>
-<li>Check <a href="../pipeline/">Pipeline</a> for high-level MoE workflows</li>
-<li>See <a href="../../../examples/colab-notebooks/">Examples</a> for complete MoE use cases</li>
+<li>Check <a href="../pipeline/">Pipeline</a> for high-level MoEs workflows</li>
+<li>See <a href="../../../examples/colab-notebooks/">Examples</a> for complete MoEs use cases</li>
 </ul></div>
         
         
