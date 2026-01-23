@@ -360,6 +360,12 @@
                 <li class="third-level"><a href="#beam-search-parameters">Beam Search Parameters</a></li>
                 <li class="third-level"><a href="#stopping-criteria">Stopping Criteria</a></li>
                 <li class="third-level"><a href="#output-control">Output Control</a></li>
+            <li class="second-level"><a href="#limiting-dlb-relevance-computation">Limiting DLB Relevance Computation</a></li>
+                
+                <li class="third-level"><a href="#basic-usage">Basic Usage</a></li>
+                <li class="third-level"><a href="#via-run_task-api">Via run_task() API</a></li>
+                <li class="third-level"><a href="#benefits">Benefits</a></li>
+                <li class="third-level"><a href="#when-to-use">When to Use</a></li>
             <li class="second-level"><a href="#integration-with-dlbacktrace">Integration with DLBacktrace</a></li>
                 
                 <li class="third-level"><a href="#token-level-relevance-tracking">Token-Level Relevance Tracking</a></li>
@@ -745,19 +751,76 @@
 <td>Return per-token scores</td>
 </tr>
 <tr>
-<td><code>output_attentions</code></td>
+<td><code>return_relevance</code></td>
 <td>bool</td>
 <td><code>False</code></td>
-<td>Return attention weights</td>
+<td>Return per-token relevance trace</td>
 </tr>
 <tr>
-<td><code>output_hidden_states</code></td>
-<td>bool</td>
-<td><code>False</code></td>
-<td>Return hidden states</td>
+<td><code>dlb_tokens_count</code></td>
+<td>int</td>
+<td><code>None</code></td>
+<td>Limit DLB relevance to first N tokens (None = all)</td>
 </tr>
 </tbody>
 </table>
+<hr />
+<h2 id="limiting-dlb-relevance-computation">Limiting DLB Relevance Computation<a class="headerlink" href="#limiting-dlb-relevance-computation" title="Permanent link">&para;</a></h2>
+<p>For long sequence generation, computing DLB relevance for every token can be expensive. Use <code>dlb_tokens_count</code> to limit relevance computation to the <strong>first N tokens</strong> only.</p>
+<h3 id="basic-usage">Basic Usage<a class="headerlink" href="#basic-usage" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Generate 50 tokens, but only compute DLB relevance for first 10</span>
+<span class="n">output</span><span class="p">,</span> <span class="n">info</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+    <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+    <span class="n">dlb_tokens_count</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>  <span class="c1"># Only first 10 tokens get relevance</span>
+    <span class="n">return_relevance</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Total tokens generated: 50&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Relevance entries: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;relevance_trace&#39;</span><span class="p">])</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># Will be 10</span>
+</code></pre></div>
+<h3 id="via-run_task-api">Via run_task() API<a class="headerlink" href="#via-run_task-api" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="n">results</span> <span class="o">=</span> <span class="n">ir</span><span class="o">.</span><span class="n">run_task</span><span class="p">(</span>
+    <span class="n">task</span><span class="o">=</span><span class="s2">&quot;generation&quot;</span><span class="p">,</span>
+    <span class="n">inputs</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;input_ids&#39;</span><span class="p">:</span> <span class="n">input_ids</span><span class="p">,</span> <span class="s1">&#39;attention_mask&#39;</span><span class="p">:</span> <span class="n">attention_mask</span><span class="p">},</span>
+    <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+    <span class="n">dlb_tokens_count</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>  <span class="c1"># First 10 tokens get DLB relevance</span>
+    <span class="n">return_relevance</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Total generated: </span><span class="si">{</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;generated_ids&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">input_ids</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Relevance computed for: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;relevance_trace&#39;</span><span class="p">])</span><span class="si">}</span><span class="s2"> tokens&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="benefits">Benefits<a class="headerlink" href="#benefits" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Benefit</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Performance</strong></td>
+<td>Skip expensive relevance computation after N tokens</td>
+</tr>
+<tr>
+<td><strong>Memory</strong></td>
+<td>Automatic cleanup after each relevance step</td>
+</tr>
+<tr>
+<td><strong>Flexibility</strong></td>
+<td>Focus analysis on initial predictions</td>
+</tr>
+</tbody>
+</table>
+<h3 id="when-to-use">When to Use<a class="headerlink" href="#when-to-use" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Long generations</strong>: When generating 100+ tokens but only need relevance for early tokens</li>
+<li><strong>Quick analysis</strong>: When you want to understand initial token predictions</li>
+<li><strong>Memory constrained</strong>: When VRAM is limited and full relevance is not needed</li>
+</ul>
 <hr />
 <h2 id="integration-with-dlbacktrace">Integration with DLBacktrace<a class="headerlink" href="#integration-with-dlbacktrace" title="Permanent link">&para;</a></h2>
 <h3 id="token-level-relevance-tracking">Token-Level Relevance Tracking<a class="headerlink" href="#token-level-relevance-tracking" title="Permanent link">&para;</a></h3>
