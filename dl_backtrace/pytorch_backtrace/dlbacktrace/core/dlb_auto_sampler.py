@@ -4,12 +4,13 @@
 
 from __future__ import annotations
 
+import gc
 import time
 import gzip
 import lzma
 import numpy as np
 from pathlib import Path
-from typing import Optional, List, Tuple, cast, Any
+from typing import Optional, List, Tuple, cast, Any, Dict
 
 import torch
 import torch.nn.functional as F
@@ -34,22 +35,33 @@ try:
     from transformers.generation.stopping_criteria import (
         StoppingCriteriaList,
         MaxTimeCriteria,
-        MaxNewTokensCriteria,  # newer HF
+        MaxNewTokensCriteria,
+        EosTokenCriteria,
     )
-except ImportError:  # older HF
-    from transformers.generation.stopping_criteria import (
-        StoppingCriteriaList,
-        MaxTimeCriteria,
-        StoppingCriteria,
-    )
+    HAS_EOS_CRITERIA = True
+except ImportError:
+    try:
+        from transformers.generation.stopping_criteria import (
+            StoppingCriteriaList,
+            MaxTimeCriteria,
+            MaxNewTokensCriteria,
+        )
+        HAS_EOS_CRITERIA = False
+    except ImportError:
+        from transformers.generation.stopping_criteria import (
+            StoppingCriteriaList,
+            MaxTimeCriteria,
+            StoppingCriteria,
+        )
+        HAS_EOS_CRITERIA = False
 
-    class MaxNewTokensCriteria(StoppingCriteria):
-        def __init__(self, start_length: int, max_new_tokens: int):
-            self.start_length = int(start_length)
-            self.max_new_tokens = int(max_new_tokens)
-        def __call__(self, input_ids, scores, **kwargs) -> bool:
-            cur = input_ids.shape[1]
-            return (cur - self.start_length) >= self.max_new_tokens
+        class MaxNewTokensCriteria(StoppingCriteria):
+            def __init__(self, start_length: int, max_new_tokens: int):
+                self.start_length = int(start_length)
+                self.max_new_tokens = int(max_new_tokens)
+            def __call__(self, input_ids, scores, **kwargs) -> bool:
+                cur = input_ids.shape[1]
+                return (cur - self.start_length) >= self.max_new_tokens
 
 
 # Optional: steadier math (helps parity on CUDA)
@@ -78,6 +90,21 @@ class DLBAutoSampler:
     def __init__(self, dlb, tokenizer):
         self.dlb = dlb
         self.tokenizer = tokenizer
+
+    def _clear_dlb_memory(self):
+        """Clear DLB intermediate storage and CUDA cache."""
+        self.dlb.node_io = {}
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
+
+    def _print_generated_sequence(self, generated: torch.Tensor, prefix: str = ""):
+        """Print decoded sequence using self.tokenizer."""
+        text = self.tokenizer.decode(generated[0], skip_special_tokens=False)
+        if prefix:
+            print(f"{prefix}: {text}")
+        else:
+            print(text)
 
     # ---------- compression helpers ----------
 
@@ -233,16 +260,22 @@ class DLBAutoSampler:
         return w
 
     @staticmethod
-    def _build_stopping(start_len: int, max_new_tokens: Optional[int], max_time: Optional[float]) -> StoppingCriteriaList:
+    def _build_stopping(
+        start_len: int,
+        max_new_tokens: Optional[int],
+        max_time: Optional[float],
+        eos_token_id: Optional[int | List[int]] = None,
+    ) -> StoppingCriteriaList:
         sc = StoppingCriteriaList()
         if max_new_tokens is not None:
-            # Works for both native and fallback MaxNewTokensCriteria
             try:
                 sc.append(MaxNewTokensCriteria(max_new_tokens=int(max_new_tokens)))
             except TypeError:
                 sc.append(MaxNewTokensCriteria(start_length=int(start_len), max_new_tokens=int(max_new_tokens)))
         if max_time is not None:
             sc.append(MaxTimeCriteria(max_time=float(max_time)))
+        if eos_token_id is not None and HAS_EOS_CRITERIA:
+            sc.append(EosTokenCriteria(eos_token_id=eos_token_id))
         return sc
 
     def _compute_relevance(
@@ -513,6 +546,7 @@ class DLBAutoSampler:
         return_scores: bool = False,
         return_layerwise_output: bool = False,
         return_relevance: bool = False,
+        dlb_tokens_count: Optional[int] = None,
         debug: bool = False,
         relevance_cache_policy: str = "full",
         relevance_cache_dir: Optional[str] = None,
@@ -526,6 +560,12 @@ class DLBAutoSampler:
         Always returns:
             - [1, T_total] (top-1 sequence)
             - Or (sequence, scores_trace) for sampling when return_scores=True
+
+        Args:
+            dlb_tokens_count: How many generated tokens to compute DLB relevance for.
+                - None (default): Compute relevance for all generated tokens
+                - int: Compute relevance for first N generated tokens only
+                Only applies when return_relevance=True.
 
         Relevance caching knobs:
             relevance_cache_policy: "full" (default), "summary", "disk", or "none".
@@ -577,7 +617,6 @@ class DLBAutoSampler:
         do_sample = self._decide_do_sample(T, K, P)
 
         start_len = input_ids.shape[1]
-        stopping_criteria = self._build_stopping(start_len, max_new_tokens=max_new_tokens, max_time=max_time)
 
         # If BEAM mode, **hard-disable** sampling knobs to avoid warnings
         if num_beams > 1:
@@ -621,6 +660,13 @@ class DLBAutoSampler:
             eos_list = [int(generation_config.eos_token_id)]
         eos_set = set(eos_list)
         PAD = pad_token_id if pad_token_id is not None else (eos_list[0] if eos_list else 0)
+
+        stopping_criteria = self._build_stopping(
+            start_len,
+            max_new_tokens=max_new_tokens,
+            max_time=max_time,
+            eos_token_id=eos_list if eos_list else None,
+        )
 
         # Processors (HF builds them; we apply per step)
         input_ids_seq_length = input_ids.shape[1]
@@ -688,31 +734,30 @@ class DLBAutoSampler:
                     io_data_trace.append(io_data)
 
                 if return_relevance:
-                    # We already ran self.dlb.predict(...) above, so self.dlb.node_io
-                    # matches the current prefix `generated`.
-                    # But relevance seeding wants the token we are OUTPUTTING *now*.
-                    rel_dict = self._compute_relevance(
-                        target_token_ids=next_tokens.view(-1),  # torch.Tensor([token_id])
-                        mode="default",
-                        multiplier=100.0,
-                        scaler=1.0,
-                        thresholding=0.5,
-                        task="generation",
-                        debug=False,
-                    )
                     step_idx = len(relevance_trace)
-                    entry = self._store_relevance_entry(
-                        rel_dict,
-                        policy=cache_policy,
-                        step_idx=step_idx,
-                        cache_dir=cache_dir_path,
-                        target_dtype=cache_dtype,
-                        move_to_cpu=relevance_move_to_cpu,
-                        use_compression=relevance_use_compression,
-                        compression_method=relevance_compression_method,
-                        pickle_protocol=relevance_pickle_protocol,
-                    )
-                    relevance_trace.append(entry)
+                    if dlb_tokens_count is None or step_idx < dlb_tokens_count:
+                        rel_dict = self._compute_relevance(
+                            target_token_ids=next_tokens.view(-1),
+                            mode="default",
+                            multiplier=100.0,
+                            scaler=1.0,
+                            thresholding=0.5,
+                            task="generation",
+                            debug=False,
+                        )
+                        entry = self._store_relevance_entry(
+                            rel_dict,
+                            policy=cache_policy,
+                            step_idx=step_idx,
+                            cache_dir=cache_dir_path,
+                            target_dtype=cache_dtype,
+                            move_to_cpu=relevance_move_to_cpu,
+                            use_compression=relevance_use_compression,
+                            compression_method=relevance_compression_method,
+                            pickle_protocol=relevance_pickle_protocol,
+                        )
+                        relevance_trace.append(entry)
+                        self._clear_dlb_memory()
 
                 generated = torch.cat([generated, next_tokens], dim=1) 
                 attn = torch.cat(
@@ -738,7 +783,14 @@ class DLBAutoSampler:
             if debug:
                 print(f"[greedy/sampling] stopped_by={stopped_by}")
 
-            want_extras = return_scores or return_relevance
+            if return_relevance:
+                print("\n" + "=" * 60)
+                print("GENERATED SEQUENCE (Prompt + Generated):")
+                print("=" * 60)
+                self._print_generated_sequence(generated)
+                print("=" * 60 + "\n")
+
+            want_extras = return_scores or return_relevance or return_layerwise_output
             if not want_extras:
                 return generated  # [1, T]
 
@@ -897,41 +949,42 @@ class DLBAutoSampler:
             cur_len += 1
 
             if return_relevance:
-                step_rel_scores = []
                 step_offset = len(relevance_trace_beam)
-                for b in range(beams):
-                    # Use the OLD beam state (before new token) for relevance computation
-                    self.dlb.predict(
-                        old_generated[b:b+1],
-                        old_attn[b:b+1],
-                        debug=False,
-                        temperature=1.0,
-                    )
+                if dlb_tokens_count is None or step_offset < dlb_tokens_count:
+                    step_rel_scores = []
+                    for b in range(beams):
+                        self.dlb.predict(
+                            old_generated[b:b+1],
+                            old_attn[b:b+1],
+                            debug=False,
+                            temperature=1.0,
+                        )
 
-                    chosen_tok_b = next_beam_tokens[b:b+1]  # tensor([token_id]) on device
-                    rel_dict_b = self._compute_relevance(
-                        target_token_ids=chosen_tok_b,
-                        mode="default",
-                        multiplier=100.0,
-                        scaler=1.0,
-                        thresholding=0.5,
-                        task="generation",
-                        debug=False,
-                    )
-                    entry = self._store_relevance_entry(
-                        rel_dict_b,
-                        policy=cache_policy,
-                        step_idx=step_offset * beams + b,
-                        cache_dir=cache_dir_path,
-                        target_dtype=cache_dtype,
-                        move_to_cpu=relevance_move_to_cpu,
-                        use_compression=relevance_use_compression,
-                        compression_method=relevance_compression_method,
-                        pickle_protocol=relevance_pickle_protocol,
-                    )
-                    step_rel_scores.append(entry)
+                        chosen_tok_b = next_beam_tokens[b:b+1]
+                        rel_dict_b = self._compute_relevance(
+                            target_token_ids=chosen_tok_b,
+                            mode="default",
+                            multiplier=100.0,
+                            scaler=1.0,
+                            thresholding=0.5,
+                            task="generation",
+                            debug=False,
+                        )
+                        entry = self._store_relevance_entry(
+                            rel_dict_b,
+                            policy=cache_policy,
+                            step_idx=step_offset * beams + b,
+                            cache_dir=cache_dir_path,
+                            target_dtype=cache_dtype,
+                            move_to_cpu=relevance_move_to_cpu,
+                            use_compression=relevance_use_compression,
+                            compression_method=relevance_compression_method,
+                            pickle_protocol=relevance_pickle_protocol,
+                        )
+                        step_rel_scores.append(entry)
+                        self._clear_dlb_memory()
 
-                relevance_trace_beam.append(step_rel_scores)
+                    relevance_trace_beam.append(step_rel_scores)
 
             # Stopping: HF early stopping OR stopping criteria
             if beam_scorer.is_done:
@@ -975,7 +1028,14 @@ class DLBAutoSampler:
         sequences = final["sequences"]  # [1, T_total] because num_beam_hyps_to_keep=1
         out_top1 = sequences[:1, :]     # ensure [1, T_total]
 
-        want_extras = return_scores or return_relevance
+        if return_relevance:
+            print("\n" + "=" * 60)
+            print("GENERATED SEQUENCE (Prompt + Generated):")
+            print("=" * 60)
+            self._print_generated_sequence(out_top1)
+            print("=" * 60 + "\n")
+
+        want_extras = return_scores or return_relevance or return_layerwise_output
         if not want_extras:
             return out_top1
 
@@ -983,7 +1043,6 @@ class DLBAutoSampler:
         if return_scores:
             info_beam["scores_trace"] = scores_trace_beam
         if return_relevance:
-            # collapse to top-1 beam (final winner)
             flat_relevance = [
                 step_rels[0] if isinstance(step_rels, (list, tuple)) and len(step_rels) > 0 else {}
                 for step_rels in relevance_trace_beam
@@ -993,7 +1052,6 @@ class DLBAutoSampler:
             if cache_dir_path is not None:
                 info_beam["relevance_cache_dir"] = str(cache_dir_path)
         if return_layerwise_output:
-            # collapse to top-1 beam (final winner)
             flat_io_trace = [
                 step_ios[0] if isinstance(step_ios, (list, tuple)) and len(step_ios) > 0 else {}
                 for step_ios in io_data_trace_beam

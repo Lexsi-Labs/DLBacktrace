@@ -104,6 +104,7 @@ results = dlb.run_task(
     inputs={'input_ids': tokens["input_ids"]},
     tokenizer=tokenizer,
     max_new_tokens=50,
+    dlb_tokens_count=10,  # Compute DLB relevance for first 10 tokens only
     temperature=0.8,
     top_p=0.9,
     return_relevance=True,
