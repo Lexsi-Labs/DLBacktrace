@@ -189,6 +189,7 @@ results = dlb.run_task(
     inputs={'input_ids': tokens["input_ids"], 'attention_mask': tokens["attention_mask"]},
     tokenizer=tokenizer,
     max_new_tokens=50,
+    dlb_tokens_count=10,  # Compute DLB relevance for first 10 tokens only
     temperature=0.8,
     top_p=0.9,
     top_k=50,
@@ -200,7 +201,7 @@ results = dlb.run_task(
 # Access generated text and traces
 generated_text = tokenizer.decode(results['generated_ids'][0], skip_special_tokens=True)
 print(f"Generated: {generated_text}")
-print(f"Relevance trace steps: {len(results['relevance_trace'])}")
+print(f"Relevance trace steps: {len(results['relevance_trace'])}")  # Will have 10 entries
 print(f"Scores trace steps: {len(results['scores_trace'])}")
 ```
 
@@ -262,6 +263,7 @@ results = dlb.run_task(
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `max_new_tokens` | int | `50` | Maximum tokens to generate |
+| `dlb_tokens_count` | int | `None` | Limit DLB relevance to first N tokens (None = all tokens) |
 | `temperature` | float | `1.0` | Sampling temperature (in generation_kwargs) |
 | `top_k` | int | `50` | Top-k sampling |
 | `top_p` | float | `0.9` | Nucleus sampling threshold |
@@ -321,12 +323,13 @@ results = dlb.run_task(
     inputs={'input_ids': input_ids, 'attention_mask': attention_mask},
     tokenizer=tokenizer,
     max_new_tokens=20,
-    return_relevance=True,      # Track relevance per step
+    dlb_tokens_count=5,          # Only first 5 tokens get DLB relevance
+    return_relevance=True,       # Track relevance per step
     return_scores=True,          # Track logits per step
     return_layerwise_output=True # Track layer outputs per step
 )
 
-# Access traces
+# Access traces (relevance_trace has 5 entries, scores_trace has 20)
 for step_idx, relevance_data in enumerate(results['relevance_trace']):
     print(f"Step {step_idx}: {len(relevance_data)} nodes with relevance")
 
@@ -364,6 +367,7 @@ results = dlb.run_task(
     inputs={'input_ids': input_ids, 'attention_mask': attention_mask},
     tokenizer=tokenizer,
     max_new_tokens=50,
+    dlb_tokens_count=10,      # Compute DLB relevance for first 10 tokens only
     num_beams=4,              # Use 4 beams
     length_penalty=1.0,       # Neutral length penalty
     early_stopping=True,      # Stop when all beams finish
@@ -431,6 +435,7 @@ results = dlb.run_task(
     inputs=tokens,
     tokenizer=tokenizer,
     max_new_tokens=10,
+    dlb_tokens_count=5,       # Compute DLB relevance for first 5 tokens only
     return_relevance=True,
     return_scores=True
 )
@@ -478,6 +483,7 @@ results = dlb.run_task(
     inputs={'input_ids': input_ids, 'attention_mask': attention_mask},
     tokenizer=tokenizer,
     max_new_tokens=10,
+    dlb_tokens_count=5,       # Compute DLB relevance for first 5 tokens only
     return_relevance=True
 )
 
@@ -531,10 +537,11 @@ results = dlb.run_task(
     task="generation",
     inputs=tokens,
     tokenizer=tokenizer,
-    max_new_tokens=50,  # Adjust based on use case
-    temperature=0.7,    # Lower for more focused output
-    top_p=0.9,          # Nucleus sampling
-    debug=False         # Enable for troubleshooting
+    max_new_tokens=50,      # Adjust based on use case
+    dlb_tokens_count=10,    # Limit DLB relevance to first 10 tokens
+    temperature=0.7,        # Lower for more focused output
+    top_p=0.9,              # Nucleus sampling
+    debug=False             # Enable for troubleshooting
 )
 ```
 
@@ -621,7 +628,8 @@ results = dlb.run_task(
     inputs=tokens,
     tokenizer=tokenizer,
     max_new_tokens=10,
-    debug=True  # Shows step-by-step progress
+    dlb_tokens_count=5,  # Limit DLB relevance computation
+    debug=True           # Shows step-by-step progress
 )
 
 # Check execution differences
@@ -729,6 +737,7 @@ results = dlb.run_task(
     inputs={'input_ids': tokens["input_ids"]},
     tokenizer=tokenizer,
     max_new_tokens=20,
+    dlb_tokens_count=5,       # Compute DLB relevance for first 5 tokens only
     temperature=0.7,
     return_relevance=True,
     return_scores=True
