@@ -705,6 +705,7 @@
     <span class="n">inputs</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;input_ids&#39;</span><span class="p">:</span> <span class="n">input_ids</span><span class="p">,</span> <span class="s1">&#39;attention_mask&#39;</span><span class="p">:</span> <span class="n">attention_mask</span><span class="p">},</span>
     <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
     <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+    <span class="n">dlb_tokens_count</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>     <span class="c1"># Compute DLB relevance for first 3 tokens only</span>
     <span class="n">temperature</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span>        <span class="c1"># Optional: sampling</span>
     <span class="n">top_p</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span>              <span class="c1"># Optional: nucleus sampling</span>
     <span class="n">return_relevance</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>  <span class="c1"># Track token relevance per step</span>
@@ -764,6 +765,7 @@
     <span class="n">inputs</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;input_ids&#39;</span><span class="p">:</span> <span class="n">input_ids</span><span class="p">,</span> <span class="s1">&#39;attention_mask&#39;</span><span class="p">:</span> <span class="n">attention_mask</span><span class="p">},</span>
     <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
     <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+    <span class="n">dlb_tokens_count</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>     <span class="c1"># Compute DLB relevance for first 5 tokens only</span>
     <span class="n">temperature</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span>        <span class="c1"># Optional: sampling</span>
     <span class="n">top_p</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span>              <span class="c1"># Optional: nucleus sampling</span>
     <span class="n">return_relevance</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>  <span class="c1"># Track token &amp; expert relevance</span>
@@ -923,6 +925,11 @@
 <td><code>20</code></td>
 </tr>
 <tr>
+<td><code>dlb_tokens_count</code></td>
+<td>Limit DLB relevance to first N tokens (None = all)</td>
+<td><code>None</code></td>
+</tr>
+<tr>
 <td><code>temperature</code></td>
 <td>Sampling temperature (None = greedy)</td>
 <td><code>None</code></td>
@@ -973,6 +980,7 @@
 <span class="n">output</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
     <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
     <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+    <span class="n">dlb_tokens_count</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>  <span class="c1"># Limit DLB relevance to first 10 tokens</span>
     <span class="n">temperature</span><span class="o">=</span><span class="mf">1.2</span>  <span class="c1"># Higher = more creative</span>
 <span class="p">)</span>
 </code></pre></div>
