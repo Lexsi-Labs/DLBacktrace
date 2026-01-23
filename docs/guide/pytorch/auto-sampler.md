@@ -290,8 +290,59 @@ for i, output in enumerate(outputs):
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `return_scores` | bool | `False` | Return per-token scores |
-| `output_attentions` | bool | `False` | Return attention weights |
-| `output_hidden_states` | bool | `False` | Return hidden states |
+| `return_relevance` | bool | `False` | Return per-token relevance trace |
+| `dlb_tokens_count` | int | `None` | Limit DLB relevance to first N tokens (None = all) |
+
+---
+
+## Limiting DLB Relevance Computation
+
+For long sequence generation, computing DLB relevance for every token can be expensive. Use `dlb_tokens_count` to limit relevance computation to the **first N tokens** only.
+
+### Basic Usage
+
+```python
+# Generate 50 tokens, but only compute DLB relevance for first 10
+output, info = sampler.generate(
+    input_ids=input_ids,
+    max_new_tokens=50,
+    dlb_tokens_count=10,  # Only first 10 tokens get relevance
+    return_relevance=True
+)
+
+print(f"Total tokens generated: 50")
+print(f"Relevance entries: {len(info['relevance_trace'])}")  # Will be 10
+```
+
+### Via run_task() API
+
+```python
+results = ir.run_task(
+    task="generation",
+    inputs={'input_ids': input_ids, 'attention_mask': attention_mask},
+    tokenizer=tokenizer,
+    max_new_tokens=50,
+    dlb_tokens_count=10,  # First 10 tokens get DLB relevance
+    return_relevance=True,
+)
+
+print(f"Total generated: {results['generated_ids'].shape[1] - input_ids.shape[1]}")
+print(f"Relevance computed for: {len(results['relevance_trace'])} tokens")
+```
+
+### Benefits
+
+| Benefit | Description |
+|---------|-------------|
+| **Performance** | Skip expensive relevance computation after N tokens |
+| **Memory** | Automatic cleanup after each relevance step |
+| **Flexibility** | Focus analysis on initial predictions |
+
+### When to Use
+
+- **Long generations**: When generating 100+ tokens but only need relevance for early tokens
+- **Quick analysis**: When you want to understand initial token predictions
+- **Memory constrained**: When VRAM is limited and full relevance is not needed
 
 ---
 
