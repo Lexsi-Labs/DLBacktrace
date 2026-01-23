@@ -2,6 +2,7 @@ from .dlbacktrace import DLBacktrace
 from .activation import activation_master
 from .utils import *
 from .aten_operations import *
+from .core.relevance_saver import save_relevance, load_relevance, Precision
 
 # Export pipeline modules (optional, can be imported separately)
 try:
