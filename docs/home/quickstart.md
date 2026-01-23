@@ -362,6 +362,7 @@ results = dlb.run_task(
     inputs={'input_ids': input_ids, 'attention_mask': attention_mask},
     tokenizer=tokenizer,
     max_new_tokens=5,
+    dlb_tokens_count=3,     # Compute DLB relevance for first 3 tokens only
     temperature=0.7,        # Optional: sampling
     top_p=0.9,              # Optional: nucleus sampling
     return_relevance=True,  # Track token relevance per step
@@ -426,6 +427,7 @@ results = bt.run_task(
     inputs={'input_ids': input_ids, 'attention_mask': attention_mask},
     tokenizer=tokenizer,
     max_new_tokens=10,
+    dlb_tokens_count=5,     # Compute DLB relevance for first 5 tokens only
     temperature=0.7,        # Optional: sampling
     top_p=0.9,              # Optional: nucleus sampling
     return_relevance=True,  # Track token & expert relevance
@@ -546,6 +548,7 @@ The visualization methods save files to your current directory:
 |-----------|-------------|---------|
 | `tokenizer` | HuggingFace tokenizer | Required |
 | `max_new_tokens` | Maximum tokens to generate | `20` |
+| `dlb_tokens_count` | Limit DLB relevance to first N tokens (None = all) | `None` |
 | `temperature` | Sampling temperature (None = greedy) | `None` |
 | `top_k` | Top-k sampling | `None` |
 | `top_p` | Nucleus sampling threshold | `None` |
@@ -573,6 +576,7 @@ sampler = DLBAutoSampler(dlb=dlb, tokenizer=tokenizer)
 output = sampler.generate(
     input_ids=input_ids,
     max_new_tokens=50,
+    dlb_tokens_count=10,  # Limit DLB relevance to first 10 tokens
     temperature=1.2  # Higher = more creative
 )
 ```
