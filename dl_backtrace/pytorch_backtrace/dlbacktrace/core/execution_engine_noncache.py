@@ -3852,11 +3852,27 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
     node_io = {}
 
     model_signature = inspect.signature(model.forward)
-    expected_input_names = list(model_signature.parameters.keys())
-
-    if len(inputs) != len(expected_input_names):
-        raise ValueError("Mismatch between model input count and provided inputs.")
-
+    all_param_names = list(model_signature.parameters.keys())
+    
+    required_params = [
+        name for name, param in model_signature.parameters.items()
+        if param.default is inspect.Parameter.empty 
+        and param.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+    ]
+    
+    if len(inputs) < len(required_params):
+        raise ValueError(
+            f"Not enough inputs: got {len(inputs)}, but model requires at least {len(required_params)} "
+            f"(required: {required_params})"
+        )
+    
+    if len(inputs) > len(all_param_names):
+        raise ValueError(
+            f"Too many inputs: got {len(inputs)}, but model accepts at most {len(all_param_names)} "
+            f"(parameters: {all_param_names})"
+        )
+    
+    expected_input_names = all_param_names[:len(inputs)]
     inp_map = dict(zip(expected_input_names, inputs))
     
     # 🔧 CRITICAL FIX: Ensure input tensors are consistent from the start
