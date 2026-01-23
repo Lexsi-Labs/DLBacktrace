@@ -16,6 +16,7 @@ from .core.token_relevance_visuals import (
     plot_input_heatmap_for_token,
 )
 from .core.visualization_module_aware import visualize_relevance_with_module_labels
+from .core.relevance_saver import save_relevance as _save_relevance, Precision
 
 import numpy as np 
 import torch
@@ -542,6 +543,13 @@ class DLBacktrace:
         relevance_compress_dtype="float16",
         relevance_move_to_cpu=True,
         debug=False,
+        # Save relevance parameters
+        save_relevance=False,
+        save_path="./relevance_output",
+        save_format="fp8",
+        save_name=None,
+        save_compress=True,
+        save_metadata=None,
         **generation_kwargs
     ):
         """
@@ -578,6 +586,13 @@ class DLBacktrace:
             relevance_move_to_cpu (bool): Move cached relevance tensors to CPU memory (default: True).
             debug (bool): Enable debug logging (default: False)
             
+            save_relevance (bool): Save relevance trace to disk (default: False)
+            save_path (str): Output directory for saved files (default: "./relevance_output")
+            save_format (str): Quantization format - "fp16", "fp8", or "fp4" (default: "fp8")
+            save_name (str | None): Custom filename prefix (auto-generated if None)
+            save_compress (bool): Enable gzip compression (default: True)
+            save_metadata (dict | None): Custom user metadata to include in saved file
+            
             **generation_kwargs: Additional kwargs for generation task (passed to sample_auto)
                 - max_new_tokens, top_k, top_p, num_beams, etc.
         
@@ -591,6 +606,7 @@ class DLBacktrace:
                 - 'scores_trace': (if return_scores=True) Scores trace
                 - 'relevance_trace': (if return_relevance=True) Relevance trace
                 - 'layerwise_output_trace': (if return_layerwise_output=True) Layer-wise output trace
+                - 'save_path': (if save_relevance=True) Path to saved relevance file
         
         Examples:
             # Image classification or Tabular classification
@@ -617,6 +633,20 @@ class DLBacktrace:
                 return_relevance=True,
                 return_scores=True
             )
+            
+            # Text generation with saving relevance to disk
+            results = dlb.run_task(
+                task="generation",
+                inputs={'input_ids': input_ids, 'attention_mask': attention_mask},
+                tokenizer=tokenizer,
+                max_new_tokens=5,
+                return_relevance=True,
+                save_relevance=True,
+                save_path="./my_relevance_data",
+                save_format="fp8",
+                save_metadata={"input_text": "What is the capital of France?"}
+            )
+            print(f"Saved to: {results['save_path']}")
         """
         # Validate task type
         valid_tasks = [
@@ -695,6 +725,22 @@ class DLBacktrace:
             else:
                 # Just generated_ids
                 result['generated_ids'] = generated_output
+            
+            # Save relevance if requested
+            if save_relevance and 'relevance_trace' in result:
+                if debug:
+                    print(f"💾 Saving relevance to {save_path}...")
+                saved_path = _save_relevance(
+                    relevance_trace=result['relevance_trace'],
+                    output_dir=save_path,
+                    precision=save_format,
+                    name=save_name,
+                    compress=save_compress,
+                    metadata=save_metadata,
+                )
+                result['save_path'] = saved_path
+                if debug:
+                    print(f"   ✅ Saved to: {saved_path}")
             
             return result
         
@@ -788,6 +834,22 @@ class DLBacktrace:
             if return_layerwise_output:
                 # For classification, layerwise output is the node_io
                 result['layerwise_output_trace'] = [node_io]
+            
+            # Save relevance if requested
+            if save_relevance and 'relevance_trace' in result:
+                if debug:
+                    print(f"💾 Saving relevance to {save_path}...")
+                saved_path = _save_relevance(
+                    relevance_trace=result['relevance_trace'],
+                    output_dir=save_path,
+                    precision=save_format,
+                    name=save_name,
+                    compress=save_compress,
+                    metadata=save_metadata,
+                )
+                result['save_path'] = saved_path
+                if debug:
+                    print(f"   ✅ Saved to: {saved_path}")
             
             return result
     
