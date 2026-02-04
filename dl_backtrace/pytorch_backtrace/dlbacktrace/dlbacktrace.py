@@ -595,8 +595,9 @@ class DLBacktrace:
                 - 'node_io': Layer-wise outputs from predict()
                 - 'relevance': Relevance scores from evaluation()
                 - 'predictions': Model predictions (logits for classification)
-                - 'generated_ids': (generation tasks) Generated token IDs as tensor [1, T]
-                - 'generated_token_ids': (forward-only-generation) List[int] of generated tokens
+                - 'generated_ids': (generation task) Generated token IDs as tensor [1, T]
+                - 'generated_token_ids': (forward-only-generation) List[int] of newly generated tokens
+                - 'complete_sequence': (forward-only-generation) Full sequence tensor [1, T] (input + generated)
                 - 'scores_trace': (if return_scores=True) Scores trace
                 - 'relevance_trace': (if return_relevance=True) Relevance trace
                 - 'layerwise_output_trace': (if return_layerwise_output=True) Layer-wise output trace
@@ -827,7 +828,7 @@ class DLBacktrace:
             return {
                 'task': task,
                 'generated_token_ids': generated_tokens,
-                'generated_ids': generated,
+                'complete_sequence': generated,
             }
         
         else:
