@@ -19,6 +19,7 @@ from .core.visualization_module_aware import visualize_relevance_with_module_lab
 
 import numpy as np 
 import torch
+import torch.nn.functional as F
 import inspect
 
 class DLBacktrace:
@@ -548,20 +549,22 @@ class DLBacktrace:
         Unified method for running DL-Backtrace on different tasks.
         
         Args:
-            task (str): Task type - "auto", "image-classification", "text-classification", or "generation"
+            task (str): Task type - "auto", "image-classification", "text-classification", "generation", or "forward-only-generation"
                 - "auto": Automatically detect task based on inputs
                 - "tabular-classification": For PyTorch Tabular Classification models 
                 - "image-classification": For image classification models (e.g., MobileNet, ResNet)
                 - "text-classification": For text classification models (e.g., BERT sentiment)
-                - "generation": For text generation models (e.g., GPT, LLaMA)
+                - "generation": For text generation models with relevance tracing (e.g., GPT, LLaMA)
+                - "forward-only-generation": Fast token generation without relevance computation
             
             inputs: Input data for the model
                 - For tabular-classification: torch.Tensor of shape (B, F)
                 - For image-classification: torch.Tensor of shape (B, C, H, W)
                 - For text-classification: dict with 'input_ids' and 'attention_mask' or tuple of tensors
                 - For generation: dict with 'input_ids' and 'attention_mask' or tuple of tensors
+                - For forward-only-generation: dict with 'input_ids' and 'attention_mask' or tuple of tensors
             
-            tokenizer: Required for generation tasks (HuggingFace tokenizer)
+            tokenizer: Required for "generation" task (not needed for "forward-only-generation")
             
             mode (str): Relevance propagation mode (default: "default")
             multiplier (float): Starting relevance value (default: 100.0)
@@ -578,8 +581,13 @@ class DLBacktrace:
             relevance_move_to_cpu (bool): Move cached relevance tensors to CPU memory (default: True).
             debug (bool): Enable debug logging (default: False)
             
-            **generation_kwargs: Additional kwargs for generation task (passed to sample_auto)
-                - max_new_tokens, top_k, top_p, num_beams, etc.
+            **generation_kwargs: Additional kwargs for generation tasks
+                - max_new_tokens: Maximum tokens to generate (default: 50)
+                - temperature: Sampling temperature (default: None for greedy)
+                - top_k: Top-k sampling (default: None)
+                - top_p: Nucleus sampling threshold (default: None)
+                - eos_token_id: Stop generation when this token is produced
+                - num_beams: Beam search (only for "generation" task)
         
         Returns:
             dict: Results containing:
@@ -587,7 +595,8 @@ class DLBacktrace:
                 - 'node_io': Layer-wise outputs from predict()
                 - 'relevance': Relevance scores from evaluation()
                 - 'predictions': Model predictions (logits for classification)
-                - 'generated_ids': (generation only) Generated token IDs
+                - 'generated_ids': (generation tasks) Generated token IDs as tensor [1, T]
+                - 'generated_token_ids': (forward-only-generation) List[int] of generated tokens
                 - 'scores_trace': (if return_scores=True) Scores trace
                 - 'relevance_trace': (if return_relevance=True) Relevance trace
                 - 'layerwise_output_trace': (if return_layerwise_output=True) Layer-wise output trace
@@ -617,13 +626,25 @@ class DLBacktrace:
                 return_relevance=True,
                 return_scores=True
             )
+            
+            # Fast forward-only generation (no relevance, no tokenizer needed)
+            results = dlb.run_task(
+                task="forward-only-generation",
+                inputs={'input_ids': input_ids, 'attention_mask': attention_mask},
+                max_new_tokens=10,
+                temperature=0.8,
+                top_k=50,
+                top_p=0.9,
+            )
+            generated_tokens = results['generated_token_ids']  # List[int]
         """
         # Validate task type
         valid_tasks = [
             "tabular-classification",
             "image-classification", 
             "text-classification", 
-            "generation"
+            "generation",
+            "forward-only-generation"
         ]
 
         # Auto-detect task if needed
@@ -697,6 +718,117 @@ class DLBacktrace:
                 result['generated_ids'] = generated_output
             
             return result
+        
+        elif task == "forward-only-generation":
+            if isinstance(inputs, dict):
+                input_ids = inputs.get("input_ids")
+                attention_mask = inputs.get("attention_mask")
+            elif isinstance(inputs, (tuple, list)):
+                input_ids = inputs[0]
+                attention_mask = inputs[1] if len(inputs) > 1 else None
+            else:
+                raise ValueError("For forward-only-generation, inputs must be dict or tuple of (input_ids, attention_mask)")
+            
+            if input_ids is None:
+                raise ValueError("input_ids is required for forward-only-generation")
+            
+            if not isinstance(input_ids, torch.Tensor):
+                input_ids = torch.tensor(input_ids)
+            if input_ids.dim() == 1:
+                input_ids = input_ids.unsqueeze(0)
+            input_ids = input_ids.long()
+            
+            if attention_mask is None:
+                attention_mask = torch.ones_like(input_ids)
+            elif not isinstance(attention_mask, torch.Tensor):
+                attention_mask = torch.tensor(attention_mask)
+            if attention_mask.dim() == 1:
+                attention_mask = attention_mask.unsqueeze(0)
+            attention_mask = attention_mask.long()
+            
+            max_new_tokens = generation_kwargs.get("max_new_tokens", 50)
+            temp = generation_kwargs.get("temperature", None)
+            top_k = generation_kwargs.get("top_k", None)
+            top_p = generation_kwargs.get("top_p", None)
+            eos_token_id = generation_kwargs.get("eos_token_id", None)
+            
+            do_sample = (temp is not None and temp != 1.0) or (top_k is not None and top_k > 0) or (top_p is not None and 0.0 < top_p < 1.0)
+            
+            if debug:
+                print(f"🚀 Running forward-only-generation task...")
+                print(f"   max_new_tokens: {max_new_tokens}")
+                print(f"   temperature: {temp}, top_k: {top_k}, top_p: {top_p}")
+                print(f"   do_sample: {do_sample}")
+            
+            generated_tokens = []
+            generated = input_ids.clone()
+            attn = attention_mask.clone()
+            
+            for step in range(max_new_tokens):
+                node_io = self.predict(generated, attn, debug=False, temperature=1.0)
+                
+                if "output" in node_io and "output_values" in node_io["output"]:
+                    logits = node_io["output"]["output_values"]
+                else:
+                    last_node = list(node_io.keys())[-1]
+                    logits = node_io[last_node].get("output_values")
+                
+                if logits is None:
+                    raise RuntimeError("Could not extract logits from model output")
+                
+                next_logits = logits[:, -1, :].float()
+                
+                if do_sample:
+                    if temp is not None and temp != 1.0 and temp > 0:
+                        next_logits = next_logits / temp
+                    
+                    if top_k is not None and top_k > 0:
+                        top_k_val = min(top_k, next_logits.size(-1))
+                        indices_to_remove = next_logits < torch.topk(next_logits, top_k_val)[0][..., -1, None]
+                        next_logits[indices_to_remove] = float('-inf')
+                    
+                    if top_p is not None and 0.0 < top_p < 1.0:
+                        sorted_logits, sorted_indices = torch.sort(next_logits, descending=True)
+                        cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+                        sorted_indices_to_remove = cumulative_probs > top_p
+                        sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+                        sorted_indices_to_remove[..., 0] = False
+                        indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
+                        next_logits[indices_to_remove] = float('-inf')
+                    
+                    probs = F.softmax(next_logits, dim=-1)
+                    next_token = torch.multinomial(probs, num_samples=1)
+                else:
+                    next_token = torch.argmax(next_logits, dim=-1, keepdim=True)
+                
+                next_token = next_token.long()
+                token_id = int(next_token.view(-1)[0].item())
+                generated_tokens.append(token_id)
+                
+                if debug:
+                    print(f"   Step {step+1}: token_id={token_id}")
+                
+                generated = torch.cat([generated, next_token], dim=-1)
+                attn = torch.cat([attn, torch.ones_like(next_token)], dim=-1)
+                
+                self.node_io = {}
+                
+                if eos_token_id is not None:
+                    if isinstance(eos_token_id, (list, tuple)):
+                        if token_id in eos_token_id:
+                            if debug:
+                                print(f"   EOS token reached at step {step+1}")
+                            break
+                    elif token_id == eos_token_id:
+                        if debug:
+                            print(f"   EOS token reached at step {step+1}")
+                        break
+            
+            return {
+                'task': task,
+                'generated_token_ids': generated_tokens,
+                'generated_ids': generated,
+            }
         
         else:
             # Classification tasks (image or text)
@@ -985,16 +1117,16 @@ class DLBacktrace:
     def visualize(self, save_path="graph.png"):
         visualize_graph(self.graph, save_path)
 
-    def visualize_dlbacktrace(self, output_path="backtrace_graph", top_k=None, relevance_threshold=None, engine_auto_threshold=1500):
+    def visualize_dlbacktrace(self, output_path="backtrace_graph", top_k=None, relevance_threshold=None, engine_auto_threshold=1500, show=True, inline_format="svg"):
         visualize_relevance_auto(
             self.graph,
             self.all_wt,
             output_path=output_path,          # pretty path for small graphs
             node_threshold=500,
             engine_auto_threshold=engine_auto_threshold,
-            fast_output_path="backtrace_collapsed_fast",  # path for large graphs
-            show=True,                        # ⬅️ show in Colab
-            inline_format="svg",              # or "png" if SVG too heavy
+            fast_output_path=output_path,  # path for large graphs
+            show=show,                        # ⬅️ show in Colab
+            inline_format=inline_format,              # or "png" if SVG too heavy
         )
 
     def visualize_dlbacktrace_with_modules(
