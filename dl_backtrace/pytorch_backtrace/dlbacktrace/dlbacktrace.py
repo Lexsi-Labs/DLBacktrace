@@ -17,6 +17,8 @@ from .core.token_relevance_visuals import (
 )
 from .core.visualization_module_aware import visualize_relevance_with_module_labels
 
+import gc
+import copy
 import numpy as np 
 import torch
 import torch.nn.functional as F
@@ -524,6 +526,357 @@ class DLBacktrace:
             debug=debug
         )
         return self.all_wt
+
+    # ------------------------------------------------------------------ #
+    #  Two-step API: forward_pass() + relevance_pass()                    #
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def _snapshot_node_io(node_io, move_to_cpu=True):
+        """
+        Create a memory-efficient deep copy of node_io for one generation step.
+
+        Only the large tensor fields (input_values, output_values) are cloned
+        and optionally moved to CPU.  All other metadata (layer_name, func_name,
+        input_sources, output_children, layer_hyperparams, …) is shallow-copied
+        because it is immutable across generation steps.
+
+        Args:
+            node_io (dict): The node I/O dict produced by predict().
+            move_to_cpu (bool): Move cloned tensors to CPU to free GPU memory.
+
+        Returns:
+            dict: A snapshot suitable for later relevance computation.
+        """
+        def _clone_val(v):
+            if isinstance(v, torch.Tensor):
+                t = v.detach().clone()
+                return t.cpu() if move_to_cpu else t
+            if isinstance(v, (list, tuple)):
+                return type(v)(_clone_val(x) for x in v)
+            return v                    # scalars, None, etc.
+
+        snapshot = {}
+        for name, info in node_io.items():
+            entry = dict(info)          # shallow copy of metadata
+            entry["input_values"]  = _clone_val(info.get("input_values"))
+            entry["output_values"] = _clone_val(info.get("output_values"))
+            # layer_hyperparams may contain weight tensors; clone them too
+            hp = info.get("layer_hyperparams")
+            if isinstance(hp, dict):
+                hp_copy = {}
+                for k, v in hp.items():
+                    hp_copy[k] = _clone_val(v) if isinstance(v, torch.Tensor) else v
+                entry["layer_hyperparams"] = hp_copy
+            snapshot[name] = entry
+        return snapshot
+
+    def forward_pass(
+        self,
+        inputs,
+        max_new_tokens=50,
+        temperature=None,
+        top_k=None,
+        top_p=None,
+        eos_token_id=None,
+        store_node_io=True,
+        move_snapshots_to_cpu=True,
+        debug=False,
+    ):
+        """
+        Run autoregressive generation for N tokens, storing node I/O per step.
+
+        This is **Step 1** of the two-step API.  It performs only the forward
+        pass — no relevance is computed.  The per-step node I/O snapshots are
+        saved in ``self.node_io_trace`` so that ``relevance_pass()`` can
+        consume them later.
+
+        Args:
+            inputs: dict with 'input_ids' (and optionally 'attention_mask'),
+                    or a tuple/list of (input_ids, attention_mask).
+            max_new_tokens (int): Number of tokens to generate.
+            temperature (float | None): Sampling temperature (None ≡ greedy).
+            top_k (int | None): Top-k sampling.
+            top_p (float | None): Nucleus sampling threshold.
+            eos_token_id (int | list[int] | None): Stop on these token(s).
+            store_node_io (bool): If True (default), store a snapshot of
+                node_io for every generation step so that relevance_pass()
+                can use it.  Set to False if you only need generated tokens.
+            move_snapshots_to_cpu (bool): Move snapshot tensors to CPU to
+                free GPU VRAM (default True).
+            debug (bool): Print per-step diagnostics.
+
+        Returns:
+            dict with keys:
+                - 'generated_token_ids': List[int] — newly generated tokens
+                - 'complete_sequence': Tensor [1, T] — full input + generated
+                - 'num_steps': int — actual number of generation steps run
+        """
+        # ---- parse inputs ----
+        if isinstance(inputs, dict):
+            input_ids = inputs.get("input_ids")
+            attention_mask = inputs.get("attention_mask")
+        elif isinstance(inputs, (tuple, list)):
+            input_ids = inputs[0]
+            attention_mask = inputs[1] if len(inputs) > 1 else None
+        else:
+            raise ValueError(
+                "inputs must be a dict with 'input_ids' or a tuple/list "
+                "of (input_ids, attention_mask)"
+            )
+
+        if input_ids is None:
+            raise ValueError("input_ids is required")
+
+        if not isinstance(input_ids, torch.Tensor):
+            input_ids = torch.tensor(input_ids)
+        if input_ids.dim() == 1:
+            input_ids = input_ids.unsqueeze(0)
+        input_ids = input_ids.long()
+
+        if attention_mask is None:
+            attention_mask = torch.ones_like(input_ids)
+        elif not isinstance(attention_mask, torch.Tensor):
+            attention_mask = torch.tensor(attention_mask)
+        if attention_mask.dim() == 1:
+            attention_mask = attention_mask.unsqueeze(0)
+        attention_mask = attention_mask.long()
+
+        # ---- sampling config ----
+        temp = temperature
+        do_sample = (
+            (temp is not None and temp != 1.0)
+            or (top_k is not None and top_k > 0)
+            or (top_p is not None and 0.0 < top_p < 1.0)
+        )
+
+        if debug:
+            print(f"🚀 forward_pass: max_new_tokens={max_new_tokens}, "
+                  f"temperature={temp}, top_k={top_k}, top_p={top_p}, "
+                  f"do_sample={do_sample}, store_node_io={store_node_io}")
+
+        # ---- state ----
+        generated_tokens: list[int] = []
+        generated = input_ids.clone()
+        attn = attention_mask.clone()
+        self.node_io_trace: list[dict] = []   # snapshots for relevance_pass
+        self._forward_pass_token_ids: list[int] = []  # for relevance_pass reference
+
+        for step in range(max_new_tokens):
+            # --- forward through DLB engine ---
+            node_io = self.predict(generated, attn, debug=False, temperature=1.0)
+
+            # --- extract logits ---
+            if "output" in node_io and "output_values" in node_io["output"]:
+                logits = node_io["output"]["output_values"]
+            else:
+                last_node = list(node_io.keys())[-1]
+                logits = node_io[last_node].get("output_values")
+
+            if logits is None:
+                raise RuntimeError("Could not extract logits from model output")
+
+            next_logits = logits[:, -1, :].float()
+
+            # --- sampling / greedy ---
+            if do_sample:
+                if temp is not None and temp != 1.0 and temp > 0:
+                    next_logits = next_logits / temp
+
+                if top_k is not None and top_k > 0:
+                    top_k_val = min(top_k, next_logits.size(-1))
+                    kth_vals = torch.topk(next_logits, top_k_val)[0][..., -1, None]
+                    next_logits[next_logits < kth_vals] = float('-inf')
+
+                if top_p is not None and 0.0 < top_p < 1.0:
+                    sorted_logits, sorted_indices = torch.sort(
+                        next_logits, descending=True
+                    )
+                    cum_probs = torch.cumsum(
+                        F.softmax(sorted_logits, dim=-1), dim=-1
+                    )
+                    remove_mask = cum_probs > top_p
+                    remove_mask[..., 1:] = remove_mask[..., :-1].clone()
+                    remove_mask[..., 0] = False
+                    indices_to_remove = remove_mask.scatter(
+                        1, sorted_indices, remove_mask
+                    )
+                    next_logits[indices_to_remove] = float('-inf')
+
+                probs = F.softmax(next_logits, dim=-1)
+                next_token = torch.multinomial(probs, num_samples=1)
+            else:
+                next_token = torch.argmax(next_logits, dim=-1, keepdim=True)
+
+            next_token = next_token.long()
+            token_id = int(next_token.view(-1)[0].item())
+            generated_tokens.append(token_id)
+
+            if debug:
+                print(f"   Step {step + 1}: token_id={token_id}")
+
+            # --- snapshot node_io BEFORE clearing ---
+            if store_node_io:
+                snapshot = self._snapshot_node_io(
+                    node_io, move_to_cpu=move_snapshots_to_cpu
+                )
+                self.node_io_trace.append(snapshot)
+                self._forward_pass_token_ids.append(token_id)
+
+            # --- advance sequence ---
+            generated = torch.cat([generated, next_token], dim=-1)
+            attn = torch.cat(
+                [attn, torch.ones_like(next_token)], dim=-1
+            )
+
+            # --- free GPU memory ---
+            self.node_io = {}
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+
+            # --- EOS check ---
+            if eos_token_id is not None:
+                if isinstance(eos_token_id, (list, tuple)):
+                    if token_id in eos_token_id:
+                        if debug:
+                            print(f"   EOS reached at step {step + 1}")
+                        break
+                elif token_id == eos_token_id:
+                    if debug:
+                        print(f"   EOS reached at step {step + 1}")
+                    break
+
+        if debug:
+            print(f"✅ forward_pass complete: {len(generated_tokens)} tokens generated, "
+                  f"{len(self.node_io_trace)} node_io snapshots stored")
+
+        return {
+            "generated_token_ids": generated_tokens,
+            "complete_sequence": generated,
+            "num_steps": len(generated_tokens),
+        }
+
+    def relevance_pass(
+        self,
+        token_indices=None,
+        mode="default",
+        multiplier=100.0,
+        scaler=1.0,
+        thresholding=0.5,
+        debug=False,
+    ):
+        """
+        Compute relevance for tokens generated by a prior forward_pass().
+
+        This is **Step 2** of the two-step API.  It reads from
+        ``self.node_io_trace`` (populated by ``forward_pass()``) and runs
+        relevance propagation for the requested generation steps.
+
+        Args:
+            token_indices (list[int] | None): Which generation steps to
+                explain (0-based).  ``None`` means *all* steps.
+                Example: ``[0, 4]`` → explain the 1st and 5th generated
+                tokens.
+            mode (str): Relevance propagation mode (default: "default").
+            multiplier (float): Starting relevance value (default: 100.0).
+            scaler (float): Relevance scaler (default: 1.0).
+            thresholding (float): Thresholding for seed (default: 0.5).
+            debug (bool): Print diagnostics.
+
+        Returns:
+            list[dict]:  One entry per requested step, each containing:
+                - 'step_index': int — generation step (0-based)
+                - 'token_id': int — the token that was generated
+                - 'relevance': dict — node-name → relevance array (same
+                  format as ``evaluation()`` output / ``self.all_wt``)
+        """
+        if not hasattr(self, "node_io_trace") or not self.node_io_trace:
+            raise RuntimeError(
+                "No node_io_trace found.  Run forward_pass(store_node_io=True) first."
+            )
+
+        total_steps = len(self.node_io_trace)
+
+        # resolve indices
+        if token_indices is None:
+            indices = list(range(total_steps))
+        else:
+            indices = list(token_indices)
+            for idx in indices:
+                if idx < 0 or idx >= total_steps:
+                    raise IndexError(
+                        f"token_index {idx} out of range — forward_pass "
+                        f"stored {total_steps} steps (0..{total_steps - 1})"
+                    )
+
+        if debug:
+            print(f"🔍 relevance_pass: computing relevance for "
+                  f"{len(indices)}/{total_steps} steps")
+
+        results: list[dict] = []
+
+        for idx in indices:
+            snapshot = self.node_io_trace[idx]
+            token_id = self._forward_pass_token_ids[idx]
+
+            if debug:
+                print(f"   Step {idx}: token_id={token_id} …", end=" ")
+
+            # Temporarily set self.node_io so evaluation() can use it
+            self.node_io = snapshot
+
+            rel = self.evaluation(
+                mode=mode,
+                start_wt=[],
+                multiplier=multiplier,
+                scaler=scaler,
+                thresholding=thresholding,
+                task="generation",
+                target_token_ids=[token_id],
+                debug=False,
+            )
+
+            results.append({
+                "step_index": idx,
+                "token_id": token_id,
+                "relevance": copy.deepcopy(rel),
+            })
+
+            if debug:
+                total_rel = sum(
+                    float(np.sum(v)) if isinstance(v, np.ndarray) else 0.0
+                    for v in rel.values()
+                )
+                print(f"total_relevance={total_rel:.4f}")
+
+            # Free memory between steps
+            self.node_io = {}
+            gc.collect()
+
+        if debug:
+            print(f"✅ relevance_pass complete: {len(results)} step(s) explained")
+
+        return results
+
+    def clear_traces(self):
+        """
+        Free all stored node_io snapshots and relevance results.
+        
+        Call this after you are done with relevance_pass() to reclaim memory.
+        """
+        if hasattr(self, "node_io_trace"):
+            del self.node_io_trace
+            self.node_io_trace = []
+        if hasattr(self, "_forward_pass_token_ids"):
+            del self._forward_pass_token_ids
+            self._forward_pass_token_ids = []
+        self.node_io = {}
+        if hasattr(self, "all_wt"):
+            self.all_wt = {}
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     def run_task(
         self,
