@@ -844,13 +844,6 @@ class DLBacktrace:
                 "relevance": copy.deepcopy(rel),
             })
 
-            if debug:
-                total_rel = sum(
-                    float(np.sum(v)) if isinstance(v, np.ndarray) else 0.0
-                    for v in rel.values()
-                )
-                print(f"total_relevance={total_rel:.4f}")
-
             # Free memory between steps
             self.node_io = {}
             gc.collect()
