@@ -46,7 +46,7 @@ Documentation = "https://xai.arya.ai/docs/introduction"
 packages = { find = { where = ["."] } }
 
 [tool.setuptools.package-data]
-"*" = ["*.md", "*.txt"]
+"*" = ["*.md", "*.txt", "*.so"]
 
 [tool.setuptools_scm]
 version_scheme = "guess-next-dev"

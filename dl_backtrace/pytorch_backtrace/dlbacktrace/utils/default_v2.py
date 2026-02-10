@@ -3,7 +3,6 @@ import numpy as np
 
 # Linear Layer
 from .cuda_utils.Linear_v2.original_version import calculate_wt_fc as calculate_wt_fc_original_linear
-from .cuda_utils.Linear_v2.pytorch_version import calculate_wt_fc as calculate_wt_fc_pytorch_linear
 from .cuda_utils.Linear_v3.cuda_v3 import calculate_wt_fc_cuda as calculate_wt_fc_cuda_linear
 
 # Conv2D Layer
@@ -23,13 +22,10 @@ from .cuda_utils.AdaptiveAvgPool2D.pytorch_version import calculate_wt_gavgpool 
 
 # Embedded Layer
 from .cuda_utils.Embedded.original_version import calculate_wt_embedding as calculate_wt_embedding_original
-from .cuda_utils.Embedded.refactored_version import calculate_wt_embedding as calculate_wt_embedding_refactored
-from .cuda_utils.Embedded.pytorch_version import calculate_wt_embedding as calculate_wt_embedding_pytorch
 from .cuda_utils.Embedded.cuda_v2 import calculate_wt_embedding_cuda as calculate_wt_embedding_cuda
 
 # SelfAttention Layer
 from .cuda_utils.SelfAttention.original_version import calculate_wt_self_attention as calculate_wt_self_attention_original
-from .cuda_utils.SelfAttention.pytorch_v2 import calculate_wt_self_attention as calculate_wt_self_attention_pytorch
 from .cuda_utils.SelfAttention.cuda_v3 import calculate_wt_self_attention_cuda as calculate_wt_self_attention_cuda
 
 # Wt_add_equal Layer
@@ -46,17 +42,9 @@ def _prepare_tensors(device, *arrays):
 
 def launch_linear(version, wts, inp, w, b, act):
     if version == 'original':
-        func = calculate_wt_fc_original_linear
-        return func(wts, inp, w, b, act)
-    
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
-    if version == 'pytorch':
-        wts_t, inp_t, w_t, b_t = _prepare_tensors(device, wts, inp, w, b)
-        return calculate_wt_fc_pytorch_linear(wts_t, inp_t, w_t, b_t, act)
+        return calculate_wt_fc_original_linear(wts, inp, w, b, act)
     elif version == 'cuda':
         try:
-            # Try CUDA implementation with error handling
             result = calculate_wt_fc_cuda_linear(wts, inp, w, b, act)
             if result is None:
                 print(f"⚠️  CUDA linear implementation returned None, falling back to original")
@@ -81,17 +69,12 @@ def launch_conv2d(version, wts, inp, w, b, padding, strides, act):
         raise ValueError(f"Unknown version for Conv2D layer: {version}")
 
 def launch_embedding(version, R_out, inp, vocab_size, aggregate):
-    if version in ['original', 'refactored']:
-        func = calculate_wt_embedding_original if version == 'original' else calculate_wt_embedding_refactored
-        return func(R_out, inp, vocab_size, aggregate)
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    R_out_t = torch.tensor(R_out, dtype=torch.float32, device=device)
-    inp_t = torch.tensor(inp, dtype=torch.long, device=device)
-
-    if version == 'pytorch':
-        return calculate_wt_embedding_pytorch(R_out_t, inp_t, vocab_size, aggregate)[0].cpu().numpy()
+    if version == 'original':
+        return calculate_wt_embedding_original(R_out, inp, vocab_size, aggregate)
     elif version == 'cuda':
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        R_out_t = torch.tensor(R_out, dtype=torch.float32, device=device)
+        inp_t = torch.tensor(inp, dtype=torch.long, device=device)
         return calculate_wt_embedding_cuda(R_out_t, inp_t, vocab_size, aggregate)[0].cpu().numpy()
     else:
         raise ValueError(f"Unknown version for Embedding layer: {version}")
@@ -99,16 +82,11 @@ def launch_embedding(version, R_out, inp, vocab_size, aggregate):
 def launch_self_attention(version, R_out, Q, K, V, masked_fill, scale = None, epsilon=1e-9):
     if version == 'original':
         return calculate_wt_self_attention_original(R_out, Q, K, V, masked_fill, scale, epsilon)
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    R_out_t, Q_t, K_t, V_t = _prepare_tensors(device, R_out, Q, K, V)
-    masked_fill_t = torch.tensor(masked_fill, dtype=torch.float32, device=device) if masked_fill is not None else None
-    scale_t = torch.tensor(scale, dtype=torch.float32, device=device) if scale is not None else None
-    
-    if version == 'pytorch':
-        result_torch = calculate_wt_self_attention_pytorch(R_out_t, Q_t, K_t, V_t, masked_fill_t, scale_t, epsilon)
-        return [arr.cpu().numpy() for arr in result_torch]
     elif version == 'cuda':
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        R_out_t, Q_t, K_t, V_t = _prepare_tensors(device, R_out, Q, K, V)
+        masked_fill_t = torch.tensor(masked_fill, dtype=torch.float32, device=device) if masked_fill is not None else None
+        scale_t = torch.tensor(scale, dtype=torch.float32, device=device) if scale is not None else None
         result_cuda = calculate_wt_self_attention_cuda(R_out_t, Q_t, K_t, V_t, masked_fill_t, scale_t)
         return [arr.cpu().numpy() for arr in result_cuda]
     else:
