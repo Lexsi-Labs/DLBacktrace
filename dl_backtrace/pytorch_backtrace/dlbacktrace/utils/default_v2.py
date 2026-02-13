@@ -4,6 +4,7 @@ import numpy as np
 # Linear Layer
 from .cuda_utils.Linear_v2.original_version import calculate_wt_fc as calculate_wt_fc_original_linear
 from .cuda_utils.Linear_v3.cuda_v3 import calculate_wt_fc_cuda as calculate_wt_fc_cuda_linear
+from .cuda_utils.Linear_v3.cuda_v3 import calculate_wt_fc_cuda_tensor as calculate_wt_fc_cuda_tensor_linear
 
 # Conv2D Layer
 from .cuda_utils.Conv2D.original_version import calculate_wt_conv as calculate_wt_conv_original
@@ -31,6 +32,7 @@ from .cuda_utils.SelfAttention.cuda_v3 import calculate_wt_self_attention_cuda a
 # Wt_add_equal Layer
 from .cuda_utils.Wt_add_equal.original_version import calculate_wt_add_equal as calculate_wt_add_original
 from .cuda_utils.Wt_add_equal.refactored_version import calculate_wt_add_equal as calculate_wt_add_refactored
+from .cuda_utils.Wt_add_equal.pytorch_version import calculate_wt_add_equal_vectorized as calculate_wt_add_pytorch
 
 # Wt_mul Layer
 from .cuda_utils.Wt_mul.original_version import calculate_wt_mul as calculate_wt_mul_original
@@ -91,6 +93,36 @@ def launch_self_attention(version, R_out, Q, K, V, masked_fill, scale = None, ep
         return [arr.cpu().numpy() for arr in result_cuda]
     else:
         raise ValueError(f"Unknown version for SelfAttention layer: {version}")
+
+# ─── GPU-native launchers (tensor in → tensor out, no numpy conversion) ───
+
+def launch_linear_gpu(wts, inp, w, b, act):
+    """GPU-native: accepts CUDA tensors, returns CUDA tensor."""
+    try:
+        result = calculate_wt_fc_cuda_tensor_linear(wts, inp, w, b, act)
+        if result is None:
+            raise RuntimeError("CUDA linear kernel returned None")
+        return result
+    except Exception as e:
+        raise RuntimeError(f"GPU linear failed: {e}")
+
+def launch_embedding_gpu(R_out, inp, vocab_size, aggregate):
+    """GPU-native: accepts CUDA tensors, returns CUDA tensor."""
+    # calculate_wt_embedding_cuda already accepts/returns tensors
+    return calculate_wt_embedding_cuda(R_out, inp, vocab_size, aggregate)[0]
+
+def launch_self_attention_gpu(R_out, Q, K, V, masked_fill, scale=None, epsilon=1e-9):
+    """GPU-native: accepts CUDA tensors, returns list of CUDA tensors."""
+    # calculate_wt_self_attention_cuda already accepts/returns tensors
+    return calculate_wt_self_attention_cuda(R_out, Q, K, V, masked_fill, scale)
+
+def launch_wt_add_equal_gpu(R_out, inp):
+    """GPU-native: accepts CUDA tensors, returns list of CUDA tensors."""
+    return calculate_wt_add_pytorch(R_out, inp)
+
+def launch_wt_mul_gpu(R_out):
+    """GPU-native: accepts CUDA tensor, returns tuple of CUDA tensors."""
+    return calculate_wt_mul_pytorch(R_out)
 
 def launch_wt_add_equal(version, R_out, inp):
     if version in ['original', 'refactored']:

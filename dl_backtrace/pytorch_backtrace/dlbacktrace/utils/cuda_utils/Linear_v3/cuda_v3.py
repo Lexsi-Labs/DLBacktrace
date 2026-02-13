@@ -112,3 +112,77 @@ def calculate_wt_fc_cuda(relevance_y, input_array, w, b, act):
     relevance_x_flat = np.array(relevance_x_flat)
     relevance_x = relevance_x_flat.reshape(*batch_dims, feature_dim)
     return relevance_x
+
+
+def _parse_activation(act):
+    """Parse activation dict into kernel parameters. Shared by both numpy and tensor APIs."""
+    act_type = 0 if act["type"] == "mono" else 1
+    act_lower = -float('inf') if act["range"]["l"] is None else float(act["range"]["l"])
+    act_upper = float('inf') if act["range"]["u"] is None else float(act["range"]["u"])
+    
+    act_func_int = 0  # default: identity
+    if act["func"] is not None:
+        act_func_map = {
+            "sigmoid": 1, "swish": 2, "wave": 3, "pulse": 4,
+            "absolute": 5, "hard_sigmoid": 6, "tanh": 7
+        }
+        act_func_int = act_func_map.get(act["func"], 0)
+    
+    return act_type, act_lower, act_upper, act_func_int
+
+
+def calculate_wt_fc_cuda_tensor(relevance_y, input_array, w, b, act):
+    """
+    Tensor-native CUDA version — accepts and returns CUDA tensors directly.
+    No numpy conversion overhead.
+    
+    Args:
+        relevance_y: CUDA tensor, relevance at the output
+        input_array: CUDA tensor, input to the linear layer
+        w: CUDA tensor, weight matrix [out_dim, in_dim]
+        b: CUDA tensor or None, bias vector [out_dim]
+        act: dict with activation info
+    
+    Returns:
+        CUDA tensor, relevance at the input (same shape as input_array)
+    """
+    if relevance_y is None or input_array is None or w is None:
+        return None
+    
+    original_shape = input_array.shape
+    batch_dims = original_shape[:-1]
+    feature_dim = original_shape[-1]
+    
+    input_flat = input_array.reshape(-1, feature_dim)
+    relevance_flat = relevance_y.reshape(-1, relevance_y.shape[-1])
+    
+    # Ensure weights are CUDA tensors (they may come from CPU hyperparams)
+    if not w.is_cuda:
+        w = w.cuda()
+    if b is not None and not b.is_cuda:
+        b = b.cuda()
+    b_torch = b if b is not None else torch.empty(0, device=w.device)
+    
+    act_type, act_lower, act_upper, act_func_int = _parse_activation(act)
+    
+    cuda_function = custom_linear_layer_cuda_ops.launch_calculate_wt_fc_kernel
+    
+    results = []
+    for i in range(input_flat.shape[0]):
+        inp_i = input_flat[i].contiguous()
+        wts_i = relevance_flat[i].contiguous()
+        
+        result = cuda_function(
+            wts_i, inp_i, w, b_torch,
+            act_type, act_lower, act_upper, act_func_int
+        )
+        
+        if result is None:
+            print(f"[CUDA ERROR] Kernel returned None for batch element {i}")
+            return None
+        
+        results.append(result)
+    
+    torch.cuda.synchronize()
+    relevance_x = torch.stack(results).reshape(*batch_dims, feature_dim)
+    return relevance_x
