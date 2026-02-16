@@ -1768,9 +1768,25 @@ def run_evaluation_gpu(
 
                 elif func == "cat":
                     dim_cat = hp.get("dim", 0)
+                    # Resolve the actual cat-input shapes from parent nodes,
+                    # because input_values may be stored as a single tuple.
+                    parent_names = info.get("input_sources", [])
+                    if isinstance(parent_names, str):
+                        try:
+                            parent_names = ast.literal_eval(parent_names)
+                        except Exception:
+                            parent_names = []
+                    cat_inputs = []
+                    for pn in parent_names:
+                        pinfo = node_io.get(pn, {})
+                        pout = pinfo.get("output_values", None)
+                        if pout is not None and isinstance(pout, torch.Tensor):
+                            cat_inputs.append(pout)
+                    # Fallback to tensor_inputs if parent lookup failed
+                    if not cat_inputs:
+                        cat_inputs = tensor_inputs
                     sizes = [
-                        (t.shape[dim_cat] if isinstance(t, torch.Tensor) else t.shape[dim_cat])
-                        for t in tensor_inputs
+                        t.shape[dim_cat] for t in cat_inputs
                     ]
                     parts = torch.split(R, sizes, dim=dim_cat)
                     parts = [torch.clamp(p, min=0) for p in parts]
