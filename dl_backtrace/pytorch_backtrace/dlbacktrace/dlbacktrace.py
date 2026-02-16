@@ -43,7 +43,7 @@ class DLBacktrace:
             strict_cpu (bool): When running on CPU, disable MKL-DNN and pin threads for stricter determinism.
         """
         # 🔧 CRITICAL: Set up deterministic environment for consistent tracing
-        print("Setting up DL-Bactrace", flush=True)
+        print("Setting up DL-Backtrace", flush=True)
         self.verbose = verbose
         self.strict_cpu = strict_cpu
         self._setup_deterministic_environment(seed=42, verbose=self.verbose, strict_cpu=self.strict_cpu)

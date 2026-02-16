@@ -1768,27 +1768,41 @@ def run_evaluation_gpu(
 
                 elif func == "cat":
                     dim_cat = hp.get("dim", 0)
-                    # Resolve the actual cat-input shapes from parent nodes,
-                    # because input_values may be stored as a single tuple.
-                    parent_names = info.get("input_sources", [])
-                    if isinstance(parent_names, str):
-                        try:
-                            parent_names = ast.literal_eval(parent_names)
-                        except Exception:
-                            parent_names = []
-                    cat_inputs = []
-                    for pn in parent_names:
-                        pinfo = node_io.get(pn, {})
-                        pout = pinfo.get("output_values", None)
-                        if pout is not None and isinstance(pout, torch.Tensor):
-                            cat_inputs.append(pout)
-                    # Fallback to tensor_inputs if parent lookup failed
-                    if not cat_inputs:
-                        cat_inputs = tensor_inputs
-                    sizes = [
-                        t.shape[dim_cat] for t in cat_inputs
-                    ]
-                    parts = torch.split(R, sizes, dim=dim_cat)
+                    method_args = info.get("method_args", ())
+
+                    # Strategy 1: resolve from method_args[0] (list of node names)
+                    # — this is how the execution engine builds cat inputs
+                    cat_sizes = []
+                    if method_args and isinstance(method_args[0], (list, tuple)):
+                        for key in method_args[0]:
+                            skey = str(key)
+                            pinfo = node_io.get(skey, {})
+                            pout = pinfo.get("output_values", None)
+                            if pout is not None and isinstance(pout, torch.Tensor):
+                                cat_sizes.append(pout.shape[dim_cat])
+
+                    # Strategy 2: use input_values if it's a tuple of tensors
+                    if not cat_sizes and isinstance(vals, (list, tuple)):
+                        tv = [v for v in vals if isinstance(v, torch.Tensor)]
+                        if len(tv) > 1:
+                            cat_sizes = [t.shape[dim_cat] for t in tv]
+
+                    # Strategy 3: even split as last resort
+                    if not cat_sizes or sum(cat_sizes) != R.shape[dim_cat]:
+                        parent_names = info.get("input_sources", [])
+                        if isinstance(parent_names, str):
+                            try:
+                                parent_names = ast.literal_eval(parent_names)
+                            except Exception:
+                                parent_names = []
+                        n_parents = max(len(parent_names), 1)
+                        r_dim = R.shape[dim_cat]
+                        if r_dim % n_parents == 0:
+                            cat_sizes = [r_dim // n_parents] * n_parents
+                        else:
+                            cat_sizes = [r_dim]  # single chunk fallback
+
+                    parts = torch.split(R, cat_sizes, dim=dim_cat)
                     parts = [torch.clamp(p, min=0) for p in parts]
                     total = R.sum()
                     current_sum = sum(p.sum() for p in parts)
