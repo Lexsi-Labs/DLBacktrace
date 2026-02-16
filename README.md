@@ -84,7 +84,7 @@ pip install dl-backtrace
 
 ### Requirements
 
-- Python 3.8+
+- Python 3.12+
 - PyTorch 2.6+ (with CUDA 12.6 support recommended)
 - Additional dependencies: transformers, matplotlib, seaborn, graphviz, joblib, zstandard
 
