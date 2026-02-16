@@ -24,7 +24,7 @@ find "$LAYERS_DIR" -name "setup.py" -print0 | while IFS= read -r -d $'\0' setup_
         echo "Changing directory to $setup_dir"
         cd "$setup_dir"
         echo "Running 'python setup.py develop'..."
-        python setup.py develop
+        python3 setup.py develop
     )
 
     # Check if the subshell command was successful
