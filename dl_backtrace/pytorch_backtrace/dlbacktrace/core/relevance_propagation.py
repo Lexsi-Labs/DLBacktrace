@@ -14,28 +14,6 @@ def log(*args, **kwargs):
         print("[DEBUG]", *args, **kwargs)
 
 
-def get_input_values(info, node_io):
-    """Reconstruct input_values on demand from parent nodes' output_values.
-
-    This avoids storing a redundant copy of every node's inputs in node_io,
-    saving ~1-2 GB of RAM for large models.  The logic mirrors the
-    normalisation that run_execution_nocache used to apply when building
-    the ``iv`` value (single tensor → unwrapped, list → tuple).
-    """
-    parents = info.get("input_sources", [])
-    if not parents:
-        return ()
-    vals = []
-    for p in parents:
-        pinfo = node_io.get(p)
-        if pinfo is not None:
-            vals.append(pinfo.get("output_values"))
-        # else: parent was skipped / not recorded – leave a None sentinel
-    # Normalise to match original iv semantics
-    if len(vals) == 1:
-        return vals[0]
-    return tuple(vals)
-
 def tensor_to_numpy(x):
     """Convert Tensor, scalar, list/tuple, or ndarray to a NumPy array, preserving dtype when possible."""
     if isinstance(x, np.ndarray):
@@ -354,9 +332,7 @@ def assign_embedding_relevance(node, info, all_wt, node_io):
 
     # 2) Try to extract token_ids from input_values
     token_ids = None
-    _iv = get_input_values(info, node_io)
-    _iv_list = [_iv] if not isinstance(_iv, (list, tuple)) else list(_iv)
-    for val in _iv_list:
+    for val in info.get("input_values", []):
         try:
             log(f"[{node}] 🔍 input type={type(val)}, dtype={val.dtype if isinstance(val, torch.Tensor) else 'N/A'}, shape={val.shape if hasattr(val, 'shape') else 'N/A'}")
         except Exception:
@@ -471,7 +447,7 @@ def run_evaluation(
         get_layer_implementation = lambda x: "original"
     
     # --- Step 1: seed the 'output' node ---
-    raw_out = get_input_values(node_io["output"], node_io)
+    raw_out = node_io["output"]["input_values"]
     if isinstance(raw_out, (list, tuple)):
         raw_out = raw_out[0]
     out_np = tensor_to_numpy(raw_out)
@@ -527,9 +503,7 @@ def run_evaluation(
             activation_dict[name] = "None"
 
         # collect tensor inputs for this node
-        inp_vals = get_input_values(info, node_io)
-        if not isinstance(inp_vals, (list, tuple)):
-            inp_vals = [inp_vals]
+        inp_vals = info.get("input_values", [])
         if not isinstance(inp_vals, (list, tuple)):
             inp_vals = [inp_vals]
         
@@ -642,7 +616,7 @@ def run_evaluation(
             if func == "addmm":
                 hp = info["layer_hyperparams"]
                 print(f"hp: {hp}")
-                bias, mat1, mat2 = get_input_values(info, node_io)
+                bias, mat1, mat2 = info["input_values"]
 
                 # Convert all to numpy
                 X = process_input_for_eval(mat1)
@@ -670,7 +644,7 @@ def run_evaluation(
                 hp = info["layer_hyperparams"]
                 W  = hp["weight"].detach().cpu().numpy()
                 B  = None if isinstance(hp["bias"], bool) else hp["bias"].detach().cpu().numpy()
-                X  = process_input_for_eval(get_input_values(info, node_io))
+                X  = process_input_for_eval(info["input_values"])
                 
                 if DEBUG:
                     log(f"  [MLP] X={X.shape}, W={W.shape}, B={'none' if B is None else B.shape}")
@@ -695,7 +669,7 @@ def run_evaluation(
             W = hp["weight"].detach().cpu().numpy()
             B = None if isinstance(hp["bias"], bool) or hp["bias"] is None else hp["bias"].detach().cpu().numpy()
             stride, pad = hp["stride"], hp["padding"]
-            X = process_input_for_eval(get_input_values(info, node_io))
+            X = process_input_for_eval(info["input_values"])
             
             if DEBUG:
                 log(f"  [Conv2d] X={X.shape}, W={W.shape}, B={None if B is None else B.shape}, pad={pad}, stride={stride}, activation_master: {activation_master[activation_dict[name]]}")
@@ -712,9 +686,7 @@ def run_evaluation(
 
         # — Scaled dot-product attention —
         if layer == "Attention" and func == "scaled_dot_product_attention":
-            vals = get_input_values(info, node_io)
-            if not isinstance(vals, (list, tuple)):
-                vals = [vals]
+            vals = info.get("input_values", [])
             if isinstance(vals, (list, tuple)):
                 if DEBUG:
                     log(f"number of inputs: {len(vals)}")
@@ -723,9 +695,7 @@ def run_evaluation(
                 for idx, item in enumerate(vals):
                     log(f"idx: {idx}, item: {item.shape}")
 
-            vals = get_input_values(info, node_io)
-            if not isinstance(vals, (list, tuple)):
-                vals = [vals]
+            vals = info.get("input_values", [])
             n = len(vals)
             if n == 4:
                 Q, K, V, masked_fill = (tensor_to_numpy(v) for v in vals)
@@ -767,9 +737,7 @@ def run_evaluation(
         
         # — Elementwise multiply —
         if layer == "Mathematical_Operation" and func in ("mul", "mul_"):
-            vals = get_input_values(info, node_io)
-            if not isinstance(vals, (list, tuple)):
-                vals = [vals]
+            vals = info.get("input_values", [])
             if not isinstance(vals, (list, tuple)):
                 vals = [vals]
             if len(vals) < 2:
@@ -851,9 +819,7 @@ def run_evaluation(
 
         # For Residual Connections
         if layer == "Mathematical_Operation" and func == "add":
-            vals = get_input_values(info, node_io)
-            if not isinstance(vals, (list, tuple)):
-                vals = [vals]
+            vals = info.get("input_values", [])
             if not isinstance(vals, (list, tuple)):
                 vals = [vals]
             if len(vals) < 2:
@@ -893,9 +859,7 @@ def run_evaluation(
         # — Vector operations: view/reshape, permute, transpose, squeeze, unsqueeze,
         #    slice, select, expand, mean, cat, contiguous/to, fallback —
         if layer == "Vector_Operation":
-            vals = get_input_values(info, node_io)
-            if not isinstance(vals, (list, tuple)):
-                vals = [vals]
+            vals = info.get("input_values", [])
             # log(f"vals: {vals}")
             if not isinstance(vals, (list, tuple)):
                 vals = [vals]    # Ensures vals is a list of tensors/arrays
@@ -1335,9 +1299,7 @@ def assign_embedding_relevance_gpu(node, info, all_wt, node_io, device):
 
     # Extract token_ids
     token_ids = None
-    _iv = get_input_values(info, node_io)
-    _iv_list = [_iv] if not isinstance(_iv, (list, tuple)) else list(_iv)
-    for val in _iv_list:
+    for val in info.get("input_values", []):
         if isinstance(val, torch.Tensor) and not torch.is_floating_point(val):
             token_ids = val if val.is_cuda else val.to(device)
             break
@@ -1410,7 +1372,7 @@ def run_evaluation_gpu(
         get_layer_implementation = lambda x: "cuda"
 
     # --- Step 1: seed the 'output' node ---
-    raw_out = get_input_values(node_io["output"], node_io)
+    raw_out = node_io["output"]["input_values"]
     if isinstance(raw_out, (list, tuple)):
         raw_out = raw_out[0]
     # calculate_start_wt needs numpy
@@ -1446,9 +1408,7 @@ def run_evaluation_gpu(
         if layer in ("DL_Layer", "MLP_Layer"):
             activation_dict[name] = "None"
 
-        inp_vals = get_input_values(info, node_io)
-        if not isinstance(inp_vals, (list, tuple)):
-            inp_vals = [inp_vals]
+        inp_vals = info.get("input_values", [])
         if not isinstance(inp_vals, (list, tuple)):
             inp_vals = [inp_vals]
 
@@ -1526,7 +1486,7 @@ def run_evaluation_gpu(
         if layer == "MLP_Layer":
             if func == "addmm":
                 hp = info["layer_hyperparams"]
-                bias, mat1, mat2 = get_input_values(info, node_io)
+                bias, mat1, mat2 = info["input_values"]
 
                 X = to_gpu_tensor(mat1, device)
                 W = to_gpu_tensor(mat2, device).T
@@ -1543,7 +1503,7 @@ def run_evaluation_gpu(
                 hp = info["layer_hyperparams"]
                 W = to_gpu_tensor(hp["weight"], device)
                 B = None if isinstance(hp["bias"], bool) else to_gpu_tensor(hp["bias"], device)
-                inp_vals_raw = get_input_values(info, node_io)
+                inp_vals_raw = info["input_values"]
                 if isinstance(inp_vals_raw, (list, tuple)):
                     inp_vals_raw = inp_vals_raw[0]
                 X = to_gpu_tensor(inp_vals_raw, device)
@@ -1561,7 +1521,7 @@ def run_evaluation_gpu(
             W = hp["weight"].detach().cpu().numpy()
             B = None if isinstance(hp["bias"], bool) or hp["bias"] is None else hp["bias"].detach().cpu().numpy()
             stride, pad = hp["stride"], hp["padding"]
-            X = process_input_for_eval(get_input_values(info, node_io))
+            X = process_input_for_eval(info["input_values"])
 
             for c in children:
                 R = get_relevance_from_child_gpu(c, name, all_wt, node_io)
@@ -1575,9 +1535,7 @@ def run_evaluation_gpu(
 
         # — Scaled dot-product attention — kept on GPU
         if layer == "Attention" and func == "scaled_dot_product_attention":
-            vals = get_input_values(info, node_io)
-            if not isinstance(vals, (list, tuple)):
-                vals = [vals]
+            vals = info.get("input_values", [])
             n = len(vals)
 
             if n == 4:
@@ -1604,7 +1562,7 @@ def run_evaluation_gpu(
 
         # — Elementwise multiply —
         if layer == "Mathematical_Operation" and func in ("mul", "mul_"):
-            vals = get_input_values(info, node_io)
+            vals = info.get("input_values", [])
             if not isinstance(vals, (list, tuple)):
                 vals = [vals]
             if len(vals) < 2:
@@ -1649,7 +1607,7 @@ def run_evaluation_gpu(
 
         # — Residual connections (add) —
         if layer == "Mathematical_Operation" and func == "add":
-            vals = get_input_values(info, node_io)
+            vals = info.get("input_values", [])
             if not isinstance(vals, (list, tuple)):
                 vals = [vals]
             if len(vals) < 2:
@@ -1675,7 +1633,7 @@ def run_evaluation_gpu(
 
         # — Vector operations — all using torch ops
         if layer == "Vector_Operation":
-            vals = get_input_values(info, node_io)
+            vals = info.get("input_values", [])
             if not isinstance(vals, (list, tuple)):
                 vals = [vals]
             tensor_inputs = [v for v in vals if isinstance(v, (torch.Tensor, np.ndarray))]
