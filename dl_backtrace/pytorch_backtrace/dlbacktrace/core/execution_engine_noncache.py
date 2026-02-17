@@ -4158,6 +4158,9 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
             "layer_hyperparams":layer_hyperparams,
         }
 
+    # Free tensor_map — node_io already holds all tensor references
+    del tensor_map
+
     return node_io
 
 class ExecutionEngineNoCache:

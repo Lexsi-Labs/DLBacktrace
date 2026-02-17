@@ -1874,7 +1874,7 @@ class RelevancePropagator:
 
         eval_fn = run_evaluation_gpu if self._uses_gpu() else run_evaluation
 
-        return eval_fn(
+        result = eval_fn(
             self.node_io,
             self.activation_master,
             mode=mode,
@@ -1886,4 +1886,12 @@ class RelevancePropagator:
             target_token_ids=target_token_ids,
             get_layer_implementation=self.get_layer_implementation,
         )
+
+        # Free large tensors from node_io — no longer needed after backprop
+        for info in self.node_io.values():
+            info.pop("input_values", None)
+            info.pop("output_values", None)
+            info.pop("layer_hyperparams", None)
+
+        return result
 
