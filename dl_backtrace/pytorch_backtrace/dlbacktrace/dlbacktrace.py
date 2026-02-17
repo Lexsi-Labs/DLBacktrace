@@ -1,4 +1,5 @@
 # DL-Backtrace/dl_backtrace/pytorch_backtrace/dlbacktrace/dlbacktrace.py
+import gc
 
 from .core.graph_builder import build_graph
 from .core.execution_engine_noncache import ExecutionEngineNoCache
@@ -369,7 +370,17 @@ class DLBacktrace:
         """
         if debug is None:
             debug = bool(getattr(self, "verbose", False))
-        
+
+        # ─── RAM cleanup: free previous run's data before allocating new ───
+        if hasattr(self, 'node_io') and self.node_io:
+            self.node_io.clear()
+            self.node_io = {}
+        if hasattr(self, 'all_wt') and self.all_wt:
+            self.all_wt.clear()
+            self.all_wt = {}
+        gc.collect()
+        torch.cuda.empty_cache()
+
         # 🔧 ENHANCED: Better input preprocessing for complex models
         processed_inputs = self._preprocess_inputs(inputs, debug)
         

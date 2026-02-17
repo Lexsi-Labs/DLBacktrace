@@ -1,5 +1,6 @@
 # DL-Backtrace/dl_backtrace/pytorch_backtrace/dlbacktrace/core/execution_engine_noncache.py
 import os
+import gc
 import inspect
 import logging
 import torch
@@ -4174,18 +4175,11 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
             logger.error(f"[{node_name}] ❌ Invalid processed_output type: {type(processed_output)}, value: {processed_output}")
             raise RuntimeError(f"[{node_name}] ❌ No valid tensor found in processed_output. Type: {type(processed_output)}") 
 
-        # normalize input_values to never be a bare list
-        iv = layer_in
-        if isinstance(iv, list):
-            if len(iv) == 1:
-                iv = iv[0]
-            else:
-                iv = tuple(iv)
-
         # record everything in node_io
+        # NOTE: input_values is NOT stored here — propagation reconstructs it
+        # on demand via get_input_values(info, node_io), saving ~1-2 GB RAM.
         node_io[node_name] = {
             "input_sources":    parents,
-            "input_values":     iv,
             "output_values":    processed_output,
             "layer_type":       layer_type,
             "node_type":        node_data["node_type"],
@@ -4197,6 +4191,11 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
             "output_children":  children,
             "layer_hyperparams":layer_hyperparams,
         }
+
+    # ─── RAM cleanup: tensor_map is a full duplicate of all output_values ───
+    del tensor_map
+    gc.collect()
+    torch.cuda.empty_cache()
 
     return node_io
 
