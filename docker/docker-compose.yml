@@ -1,0 +1,66 @@
+# ─────────────────────────────────────────────────────────────
+#  DLBacktrace – Docker Compose (GPU)
+#
+#  Usage:
+#    # Build & run benchmark
+#    docker compose -f docker/docker-compose.yml up --build benchmark
+#
+#    # Run the FastAPI API server
+#    docker compose -f docker/docker-compose.yml up --build api
+#
+#  Requires:
+#    - NVIDIA Container Toolkit (nvidia-docker2)
+#    - Set HUGGING_FACE_HUB_TOKEN in your shell or in docker/.env
+# ─────────────────────────────────────────────────────────────
+
+services:
+  # ── Benchmark runner ──────────────────────────────────────
+  benchmark:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: dlbacktrace:latest
+    container_name: dlbacktrace-benchmark
+    command: >
+      python benchmarks/benchmark.py
+        --device cuda
+        --seq-lengths 8 16 32 64 128 256
+        --output-dir /app/benchmarks/results
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - ../benchmarks/results:/app/benchmarks/results
+    shm_size: "8g"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # ── FastAPI server ────────────────────────────────────────
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: dlbacktrace:latest
+    container_name: dlbacktrace-api
+    command: >
+      python -m uvicorn new_integration.app:app
+        --host 0.0.0.0
+        --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - NVIDIA_VISIBLE_DEVICES=all
+    shm_size: "8g"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

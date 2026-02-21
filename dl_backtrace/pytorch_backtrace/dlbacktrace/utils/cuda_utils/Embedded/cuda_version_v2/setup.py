@@ -20,6 +20,8 @@ nvcc_flags = [
     '-gencode', 'arch=compute_89,code=sm_89',
     # Hopper
     '-gencode', 'arch=compute_90,code=sm_90',
+    #Blackwell
+    '-gencode', 'arch=compute_120,code=sm_120',
 ]
 
 setup(
