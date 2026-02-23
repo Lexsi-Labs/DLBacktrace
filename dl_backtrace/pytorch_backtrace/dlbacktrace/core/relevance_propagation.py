@@ -1222,16 +1222,6 @@ def transfer_node_to_gpu(info, device):
                 hp[k] = v.to(device=device, dtype=torch.float32)
 
 
-def build_ref_counts(node_io):
-    """Count how many backward-pass nodes will read each node's values."""
-    ref_counts = {}
-    for name, info in node_io.items():
-        # Each node's children read its values during backward
-        for child in info.get("output_children", []):
-            ref_counts[name] = ref_counts.get(name, 0) + 1
-    return ref_counts
-
-
 def release_node(name, node_io):
     """Delete tensor data from a node once fully consumed."""
     if name in node_io:
@@ -1476,16 +1466,6 @@ def run_evaluation_gpu(
         all_wt[name] = zeros if len(zeros) > 1 else zeros[0]
 
     # --- Step 3: backpropagate relevance (GPU-native) ---
-    ref_counts = build_ref_counts(node_io)
-
-    # Helper: decrement ref counts for parents and release when fully consumed
-    def _release_parents(parents):
-        for parent in parents:
-            if parent in ref_counts:
-                ref_counts[parent] -= 1
-                if ref_counts[parent] <= 0:
-                    release_node(parent, node_io)
-
     for name in tqdm(list(node_io.keys())[::-1], desc="Backtracing (GPU)"):
         if name == "output":
             continue
@@ -1533,7 +1513,7 @@ def run_evaluation_gpu(
         if layer == "Activation":
             for c in children:
                 add_rel_gpu(get_relevance_from_child_gpu(c, name, all_wt, node_io))
-            _release_parents(parents)
+            release_node(name, node_io)
             continue
 
         # — MLP (linear)
@@ -1551,7 +1531,7 @@ def run_evaluation_gpu(
                     if R is not None:
                         δ = UD2.launch_linear_gpu(R, X, W, B, activation_master[activation_dict[name]])
                         add_rel_gpu(δ)
-                _release_parents(parents)
+                release_node(name, node_io)
                 continue
 
             else:
@@ -1568,7 +1548,7 @@ def run_evaluation_gpu(
                     if R is not None:
                         δ = UD2.launch_linear_gpu(R, X, W, B, activation_master[activation_dict[name]])
                         add_rel_gpu(δ)
-                _release_parents(parents)
+                release_node(name, node_io)
                 continue
 
         # — Conv2d — (still uses existing launcher since not yet tensor-native)
@@ -1587,7 +1567,7 @@ def run_evaluation_gpu(
                     impl = get_layer_implementation("DL_Layer")
                     δ = UD2.launch_conv2d(impl, R_np, X, W, B, pad, stride, activation_master[activation_dict[name]])
                     add_rel_gpu(to_gpu_tensor(δ, device))
-            _release_parents(parents)
+            release_node(name, node_io)
             continue
 
         # — Scaled dot-product attention — kept on GPU
@@ -1610,13 +1590,13 @@ def run_evaluation_gpu(
                     result = UD2.launch_self_attention_gpu(R, Q, K, V, masked_fill)
                     RQ, RK, RV, R_masked_fill = result
                     add_rel_gpu([RQ, RK, RV, R_masked_fill])
-            _release_parents(parents)
+            release_node(name, node_io)
             continue
 
         # — Embedding — kept on GPU
         if layer == "NLP_Embedding" and func == "embedding":
             assign_embedding_relevance_gpu(name, info, all_wt, node_io, device)
-            _release_parents(parents)
+            release_node(name, node_io)
             continue
 
         # — Elementwise multiply —
@@ -1662,7 +1642,7 @@ def run_evaluation_gpu(
                         # Split relevance using GPU-native pytorch implementation
                         Rx, Ry = UD2.launch_wt_mul_gpu(R)
                         add_rel_gpu([Rx, Ry])
-            _release_parents(parents)
+            release_node(name, node_io)
             continue
 
         # — Residual connections (add) —
@@ -1682,7 +1662,7 @@ def run_evaluation_gpu(
                     if R is not None:
                         result = UD2.launch_wt_add_equal_gpu(R, inp_t)
                         add_rel_gpu(result)
-            _release_parents(parents)
+            release_node(name, node_io)
             continue
 
         # — Norm / Indexing — passthrough
@@ -1690,7 +1670,7 @@ def run_evaluation_gpu(
            layer == "Mathematical_Operation" and func not in ("mul", "mul_")):
             for c in children:
                 add_rel_gpu(get_relevance_from_child_gpu(c, name, all_wt, node_io))
-            _release_parents(parents)
+            release_node(name, node_io)
             continue
 
         # — Vector operations — all using torch ops
@@ -1703,7 +1683,7 @@ def run_evaluation_gpu(
             if not tensor_inputs:
                 for c in children:
                     add_rel_gpu(get_relevance_from_child_gpu(c, name, all_wt, node_io))
-                _release_parents(parents)
+                release_node(name, node_io)
                 continue
 
             base = tensor_inputs[0]
@@ -1887,15 +1867,15 @@ def run_evaluation_gpu(
                         R = R.reshape(shape)
 
                 add_rel_gpu(R)
-            _release_parents(parents)
+            release_node(name, node_io)
             continue
 
         # — Fallback pass-through —
         for c in children:
             add_rel_gpu(get_relevance_from_child_gpu(c, name, all_wt, node_io))
 
-        # Always release consumed parents after processing this node
-        _release_parents(parents)
+        # Release current node's data after processing
+        release_node(name, node_io)
 
     # --- Step 4: convert all results to numpy (single bulk GPU→CPU transfer) ---
     result = {}
