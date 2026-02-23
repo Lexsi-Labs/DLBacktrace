@@ -1188,17 +1188,56 @@ def to_gpu_tensor(x, device=None):
     raise TypeError(f"Cannot convert type {type(x)} to GPU tensor")
 
 
-def to_gpu_long(x, device=None):
-    """Convert to a CUDA int64 tensor (for token IDs)."""
-    if device is None:
-        device = torch.device("cuda")
-    if isinstance(x, torch.Tensor):
-        if x.device.type != 'cuda' or x.dtype != torch.long:
-            return x.to(device=device, dtype=torch.long)
-        return x
-    if isinstance(x, np.ndarray):
-        return torch.tensor(x, dtype=torch.long, device=device)
-    raise TypeError(f"Cannot convert type {type(x)} to GPU long tensor")
+def transfer_node_to_gpu(info, device):
+    """Transfer a node's tensor values to GPU in-place, freeing CPU copies."""
+    # Transfer input_values
+    vals = info.get("input_values", [])
+    if isinstance(vals, (list, tuple)):
+        vals = list(vals)
+        for i, v in enumerate(vals):
+            if isinstance(v, np.ndarray):
+                vals[i] = torch.tensor(v, dtype=torch.float32, device=device)
+            elif isinstance(v, torch.Tensor) and v.device.type != 'cuda':
+                vals[i] = v.to(device=device, dtype=torch.float32)
+        info["input_values"] = vals
+    elif isinstance(vals, np.ndarray):
+        info["input_values"] = torch.tensor(vals, dtype=torch.float32, device=device)
+    elif isinstance(vals, torch.Tensor) and vals.device.type != 'cuda':
+        info["input_values"] = vals.to(device=device, dtype=torch.float32)
+
+    # Transfer output_values
+    out = info.get("output_values")
+    if isinstance(out, np.ndarray):
+        info["output_values"] = torch.tensor(out, dtype=torch.float32, device=device)
+    elif isinstance(out, torch.Tensor) and out.device.type != 'cuda':
+        info["output_values"] = out.to(device=device, dtype=torch.float32)
+
+    # Transfer tensor values in layer_hyperparams
+    hp = info.get("layer_hyperparams", {})
+    if isinstance(hp, dict):
+        for k, v in hp.items():
+            if isinstance(v, np.ndarray):
+                hp[k] = torch.tensor(v, dtype=torch.float32, device=device)
+            elif isinstance(v, torch.Tensor) and v.device.type != 'cuda':
+                hp[k] = v.to(device=device, dtype=torch.float32)
+
+
+def build_ref_counts(node_io):
+    """Count how many backward-pass nodes will read each node's values."""
+    ref_counts = {}
+    for name, info in node_io.items():
+        # Each node's children read its values during backward
+        for child in info.get("output_children", []):
+            ref_counts[name] = ref_counts.get(name, 0) + 1
+    return ref_counts
+
+
+def release_node(name, node_io):
+    """Delete tensor data from a node once fully consumed."""
+    if name in node_io:
+        node_io[name].pop("input_values", None)
+        node_io[name].pop("output_values", None)
+        node_io[name].pop("layer_hyperparams", None)
 
 
 def align_relevance_gpu(r, target_shape):
@@ -1437,6 +1476,16 @@ def run_evaluation_gpu(
         all_wt[name] = zeros if len(zeros) > 1 else zeros[0]
 
     # --- Step 3: backpropagate relevance (GPU-native) ---
+    ref_counts = build_ref_counts(node_io)
+
+    # Helper: decrement ref counts for parents and release when fully consumed
+    def _release_parents(parents):
+        for parent in parents:
+            if parent in ref_counts:
+                ref_counts[parent] -= 1
+                if ref_counts[parent] <= 0:
+                    release_node(parent, node_io)
+
     for name in tqdm(list(node_io.keys())[::-1], desc="Backtracing (GPU)"):
         if name == "output":
             continue
@@ -1446,6 +1495,10 @@ def run_evaluation_gpu(
             continue
 
         info = node_io[name]
+
+        # Transfer this node's values to GPU in-place (frees CPU copies)
+        transfer_node_to_gpu(info, device)
+
         layer = info["layer_name"]
         func = info.get("func_name", "")
         parents = info.get("input_sources", [])
@@ -1480,6 +1533,7 @@ def run_evaluation_gpu(
         if layer == "Activation":
             for c in children:
                 add_rel_gpu(get_relevance_from_child_gpu(c, name, all_wt, node_io))
+            _release_parents(parents)
             continue
 
         # — MLP (linear)
@@ -1497,6 +1551,7 @@ def run_evaluation_gpu(
                     if R is not None:
                         δ = UD2.launch_linear_gpu(R, X, W, B, activation_master[activation_dict[name]])
                         add_rel_gpu(δ)
+                _release_parents(parents)
                 continue
 
             else:
@@ -1513,6 +1568,7 @@ def run_evaluation_gpu(
                     if R is not None:
                         δ = UD2.launch_linear_gpu(R, X, W, B, activation_master[activation_dict[name]])
                         add_rel_gpu(δ)
+                _release_parents(parents)
                 continue
 
         # — Conv2d — (still uses existing launcher since not yet tensor-native)
@@ -1531,6 +1587,7 @@ def run_evaluation_gpu(
                     impl = get_layer_implementation("DL_Layer")
                     δ = UD2.launch_conv2d(impl, R_np, X, W, B, pad, stride, activation_master[activation_dict[name]])
                     add_rel_gpu(to_gpu_tensor(δ, device))
+            _release_parents(parents)
             continue
 
         # — Scaled dot-product attention — kept on GPU
@@ -1553,11 +1610,13 @@ def run_evaluation_gpu(
                     result = UD2.launch_self_attention_gpu(R, Q, K, V, masked_fill)
                     RQ, RK, RV, R_masked_fill = result
                     add_rel_gpu([RQ, RK, RV, R_masked_fill])
+            _release_parents(parents)
             continue
 
         # — Embedding — kept on GPU
         if layer == "NLP_Embedding" and func == "embedding":
             assign_embedding_relevance_gpu(name, info, all_wt, node_io, device)
+            _release_parents(parents)
             continue
 
         # — Elementwise multiply —
@@ -1603,6 +1662,7 @@ def run_evaluation_gpu(
                         # Split relevance using GPU-native pytorch implementation
                         Rx, Ry = UD2.launch_wt_mul_gpu(R)
                         add_rel_gpu([Rx, Ry])
+            _release_parents(parents)
             continue
 
         # — Residual connections (add) —
@@ -1622,6 +1682,7 @@ def run_evaluation_gpu(
                     if R is not None:
                         result = UD2.launch_wt_add_equal_gpu(R, inp_t)
                         add_rel_gpu(result)
+            _release_parents(parents)
             continue
 
         # — Norm / Indexing — passthrough
@@ -1629,6 +1690,7 @@ def run_evaluation_gpu(
            layer == "Mathematical_Operation" and func not in ("mul", "mul_")):
             for c in children:
                 add_rel_gpu(get_relevance_from_child_gpu(c, name, all_wt, node_io))
+            _release_parents(parents)
             continue
 
         # — Vector operations — all using torch ops
@@ -1641,6 +1703,7 @@ def run_evaluation_gpu(
             if not tensor_inputs:
                 for c in children:
                     add_rel_gpu(get_relevance_from_child_gpu(c, name, all_wt, node_io))
+                _release_parents(parents)
                 continue
 
             base = tensor_inputs[0]
@@ -1824,11 +1887,15 @@ def run_evaluation_gpu(
                         R = R.reshape(shape)
 
                 add_rel_gpu(R)
+            _release_parents(parents)
             continue
 
         # — Fallback pass-through —
         for c in children:
             add_rel_gpu(get_relevance_from_child_gpu(c, name, all_wt, node_io))
+
+        # Always release consumed parents after processing this node
+        _release_parents(parents)
 
     # --- Step 4: convert all results to numpy (single bulk GPU→CPU transfer) ---
     result = {}
@@ -1887,7 +1954,7 @@ class RelevancePropagator:
             get_layer_implementation=self.get_layer_implementation,
         )
 
-        # Free large tensors from node_io — no longer needed after backprop
+        # Clean up any remaining node_io entries not freed during propagation
         for info in self.node_io.values():
             info.pop("input_values", None)
             info.pop("output_values", None)
