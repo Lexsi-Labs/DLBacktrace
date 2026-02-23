@@ -32,7 +32,7 @@ import sys
 import time
 from datetime import datetime
 from typing import Any, Dict, List
-
+from dl_backtrace.pytorch_backtrace import DLBacktrace
 import numpy as np
 import psutil
 import torch
@@ -130,7 +130,6 @@ def benchmark_single(
     run_idx: int = 0,
 ) -> Dict[str, Any]:
     """Run the full DLBacktrace pipeline for one sequence length and return metrics."""
-    from dl_backtrace.pytorch_backtrace import DLBacktrace
 
     sentence = generate_sentence(seq_len)
     tokens = tokenizer(
