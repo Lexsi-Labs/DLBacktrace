@@ -342,7 +342,7 @@ def gather_system_info(device: str, model_id: str) -> Dict[str, Any]:
         info["gpu_name"] = torch.cuda.get_device_name()
         info["gpu_count"] = torch.cuda.device_count()
         info["gpu_vram_total_mb"] = bytes_to_mb(
-            torch.cuda.get_device_properties(0).total_mem
+            torch.cuda.get_device_properties(0).total_memory
         )
         info["cuda_version"] = torch.version.cuda
     return info
