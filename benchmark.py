@@ -1,43 +1,37 @@
 #!/usr/bin/env python3
 """
-DLBacktrace — Sequence-Scaling Benchmark
-=========================================
+DLBacktrace — Benchmark Suite
+===============================
 
-Measures time and memory at each pipeline stage as input sequence length grows.
-Outputs a human-readable table to stdout and a JSON report to disk.
+Two benchmark modes:
+  1. Sequence-Scaling   — Fixed 1-token output, vary input sequence length
+  2. Generation-Scaling — Fixed input, vary max_new_tokens (multi-token output)
 
-Stages measured per sequence length:
-  1. DLBacktrace Init  (torch.export + graph build)
-  2. Forward Pass       (ExecutionEngineNoCache)
-  3. Backward Pass      (RelevancePropagator — GPU)
-  4. Total              (aggregate)
-
-Memory tracked:
-  - GPU VRAM via torch.cuda.max_memory_allocated()
-  - System RAM via psutil.Process().memory_info().rss
+Each mode measures time and memory (GPU VRAM + system RAM) per pipeline stage.
 
 Usage:
-  python benchmarks/benchmark.py                             # defaults
-  python benchmarks/benchmark.py --seq-lengths 8 32 128 512  # custom
-  python benchmarks/benchmark.py --model meta-llama/Llama-3.2-1B --runs 3
+  python benchmark.py                                           # both modes, defaults
+  python benchmark.py --mode seq                                # sequence scaling only
+  python benchmark.py --mode gen --gen-tokens 1 5 10 20         # generation scaling only
+  python benchmark.py --seq-lengths 8 32 128 --gen-tokens 1 5   # custom
 """
 
 import argparse
 import gc
 import json
 import os
-import random
-import string
 import sys
 import time
 from datetime import datetime
 from typing import Any, Dict, List
-from dl_backtrace.pytorch_backtrace import DLBacktrace
+
 import numpy as np
 import psutil
 import torch
 import torch.nn as nn
 from torch.export import Dim
+
+from dl_backtrace.pytorch_backtrace import DLBacktrace
 
 # ── Deterministic setup ─────────────────────────────────────────────────────
 if "CUBLAS_WORKSPACE_CONFIG" not in os.environ:
@@ -55,16 +49,82 @@ if num_cores:
     torch.set_num_threads(num_cores)
 
 
+# ── Curated question prompts (real sentences, varying token counts) ─────────
+
+PROMPTS = {
+    # ~8 tokens
+    8:   "What is gravity?",
+    # ~16 tokens
+    16:  "Can you explain how photosynthesis works in simple terms?",
+    # ~32 tokens
+    32:  "What are the main differences between machine learning and deep learning, and when should you use one over the other in practice?",
+    # ~64 tokens
+    64:  ("Explain the concept of transformer architecture in neural networks. "
+          "How does self-attention work, and why has it become the dominant approach "
+          "for natural language processing tasks? Include a brief comparison with "
+          "recurrent neural networks and their limitations."),
+    # ~128 tokens
+    128: ("You are a computer science professor teaching an advanced course on "
+          "artificial intelligence. A student asks you to explain the complete "
+          "pipeline of training a large language model from scratch, including "
+          "data collection, tokenization, model architecture design, pre-training "
+          "objectives, optimization strategies, and fine-tuning techniques. "
+          "The student also wants to understand the computational requirements "
+          "and the environmental impact of training such models. Please provide "
+          "a comprehensive overview covering all these aspects."),
+    # ~256 tokens
+    256: ("Write a detailed technical analysis of the evolution of neural network "
+          "architectures from the early perceptron model to modern transformer-based "
+          "large language models. Your analysis should cover the following key "
+          "milestones and innovations: the original perceptron and its limitations "
+          "with the XOR problem, the development of backpropagation and multi-layer "
+          "perceptrons, the introduction of convolutional neural networks for image "
+          "recognition tasks, the rise of recurrent neural networks and long short-term "
+          "memory networks for sequential data processing, the attention mechanism "
+          "and its revolutionary impact on sequence-to-sequence models, the transformer "
+          "architecture introduced in the landmark 'Attention Is All You Need' paper, "
+          "the scaling laws that govern modern large language models, and the emergence "
+          "of techniques like reinforcement learning from human feedback. For each "
+          "milestone, explain the key technical innovation, why it was important, "
+          "and how it addressed limitations of previous approaches. Also discuss "
+          "the computational and data requirements at each stage of this evolution."),
+    # ~512 tokens
+    512: ("You are an expert in explainable artificial intelligence and interpretability "
+          "methods for deep neural networks. Write a comprehensive survey covering the "
+          "entire landscape of XAI methods, organized by category. Begin with gradient-based "
+          "methods including vanilla gradients, integrated gradients, and gradient-weighted "
+          "class activation mapping. Then cover perturbation-based methods such as LIME, "
+          "SHAP, and occlusion sensitivity analysis. Discuss attention-based interpretability "
+          "including attention rollout, attention flow, and the debate about whether attention "
+          "weights provide meaningful explanations. Cover concept-based explanations like "
+          "TCAV and network dissection. Examine layer-wise relevance propagation and its "
+          "variants including deep Taylor decomposition and the alpha-beta rule. Discuss "
+          "counterfactual explanations and their relationship to causal inference. Address "
+          "the evaluation of explanation methods, including faithfulness metrics, human "
+          "evaluation studies, and the axioms that good explanations should satisfy such "
+          "as sensitivity and implementation invariance. Compare the computational costs "
+          "and scalability of different methods when applied to modern large language models "
+          "with billions of parameters. Discuss the unique challenges of explaining "
+          "autoregressive language models compared to classification models, including "
+          "the need to explain token-level predictions and the compounding effects of "
+          "sequential generation. Address recent advances in mechanistic interpretability, "
+          "including circuit discovery, probing classifiers, and sparse autoencoders for "
+          "understanding internal representations. Finally, discuss the regulatory landscape "
+          "including the EU AI Act requirements for transparency and how current XAI methods "
+          "do or do not meet these requirements. For each method or category, provide the "
+          "mathematical formulation, key assumptions, known limitations, and practical "
+          "recommendations for when to use each approach."),
+}
+
+
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
-def generate_sentence(approx_tokens: int) -> str:
-    """Generate a random sentence with approximately *approx_tokens* tokens."""
-    words = []
-    word_count = int(approx_tokens * 0.75)
-    for _ in range(word_count):
-        length = random.randint(3, 8)
-        words.append("".join(random.choices(string.ascii_lowercase, k=length)))
-    return " ".join(words)
+def get_prompt_for_seq_len(target_len: int) -> str:
+    """Return the best-matching curated prompt for the target sequence length."""
+    # Find closest available prompt
+    available = sorted(PROMPTS.keys())
+    best = min(available, key=lambda k: abs(k - target_len))
+    return PROMPTS[best]
 
 
 def bytes_to_mb(b: int) -> float:
@@ -120,20 +180,23 @@ class ModelWrapper(nn.Module):
         ).logits
 
 
-# ── Benchmark Core ──────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════
+#  MODE 1: Sequence-Scaling Benchmark
+#  Fixed output (1 token), vary input sequence length
+# ═══════════════════════════════════════════════════════════════════════════
 
-def benchmark_single(
+def benchmark_seq_scaling(
     model,
     tokenizer,
     seq_len: int,
     device: str,
     run_idx: int = 0,
 ) -> Dict[str, Any]:
-    """Run the full DLBacktrace pipeline for one sequence length and return metrics."""
+    """Run the full DLBacktrace pipeline for one sequence length (1-token output)."""
 
-    sentence = generate_sentence(seq_len)
+    prompt = get_prompt_for_seq_len(seq_len)
     tokens = tokenizer(
-        [sentence],
+        [prompt],
         return_tensors="pt",
         padding="max_length",
         max_length=seq_len,
@@ -150,11 +213,13 @@ def benchmark_single(
     }
 
     result: Dict[str, Any] = {
+        "mode": "seq_scaling",
+        "prompt": prompt[:80] + ("..." if len(prompt) > 80 else ""),
         "sequence_length": actual_seq_len,
         "run_idx": run_idx,
     }
 
-    # ─── Stage 1: DLBacktrace Init (export + graph build) ───
+    # ─── Stage 1: DLBacktrace Init ──────────────────────────
     with MemTracker(device) as mem:
         t0 = time.perf_counter()
         ir = DLBacktrace(
@@ -184,7 +249,7 @@ def benchmark_single(
     result["forward_vram_mb"] = mem.vram_peak_mb
     result["forward_ram_delta_mb"] = mem.ram_delta_mb
 
-    # ─── Stage 3: Backward Pass (GPU relevance propagation) ─
+    # ─── Stage 3: Backward Pass (relevance propagation) ─────
     with MemTracker(device) as mem:
         t0 = time.perf_counter()
         ir.evaluation(task="generation", multiplier=100.0, debug=False)
@@ -206,7 +271,6 @@ def benchmark_single(
         else 0.0
     )
 
-    # Clean up to free memory for next run
     del ir
     gc.collect()
     if device == "cuda":
@@ -215,38 +279,146 @@ def benchmark_single(
     return result
 
 
-# ── Reporting ───────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════
+#  MODE 2: Generation-Scaling Benchmark
+#  Fixed input, vary max_new_tokens (multi-token output via run_task)
+# ═══════════════════════════════════════════════════════════════════════════
 
-def print_table(records: List[Dict[str, Any]]):
-    """Print a human-readable table of benchmark results."""
+def benchmark_gen_scaling(
+    model,
+    tokenizer,
+    max_new_tokens: int,
+    device: str,
+    input_prompt: str = "What is the capital of France?",
+    run_idx: int = 0,
+) -> Dict[str, Any]:
+    """Benchmark multi-token generation using run_task(task='generation')."""
+
+    tokens = tokenizer(
+        [input_prompt],
+        return_tensors="pt",
+        padding=True,
+        truncation=True,
+    )
+    input_ids = tokens["input_ids"]
+    attention_mask = tokens["attention_mask"]
+    input_seq_len = input_ids.shape[1]
+
+    seq_dim = Dim("seq", min=1, max=input_seq_len)
+    dynamic_shapes = {
+        "input_ids":      {0: 1, 1: seq_dim},
+        "attention_mask": {0: 1, 1: seq_dim},
+    }
+
+    result: Dict[str, Any] = {
+        "mode": "gen_scaling",
+        "prompt": input_prompt[:80] + ("..." if len(input_prompt) > 80 else ""),
+        "input_seq_len": input_seq_len,
+        "max_new_tokens": max_new_tokens,
+        "run_idx": run_idx,
+    }
+
+    # ─── Stage 1: DLBacktrace Init ──────────────────────────
+    with MemTracker(device) as mem:
+        t0 = time.perf_counter()
+        ir = DLBacktrace(
+            model,
+            (input_ids, attention_mask),
+            dynamic_shapes=dynamic_shapes,
+            device=device,
+            verbose=False,
+        )
+        if device == "cuda":
+            torch.cuda.synchronize()
+        t1 = time.perf_counter()
+
+    result["init_time_s"] = t1 - t0
+    result["init_vram_mb"] = mem.vram_peak_mb
+    result["init_ram_delta_mb"] = mem.ram_delta_mb
+
+    # ─── Stage 2+3: Generation (forward + backward per token) ─
+    with MemTracker(device) as mem:
+        t0 = time.perf_counter()
+        gen_results = ir.run_task(
+            task="generation",
+            inputs={"input_ids": input_ids, "attention_mask": attention_mask},
+            tokenizer=tokenizer,
+            max_new_tokens=max_new_tokens,
+            return_relevance=True,
+            return_scores=True,
+            debug=False,
+        )
+        if device == "cuda":
+            torch.cuda.synchronize()
+        t1 = time.perf_counter()
+
+    result["generation_time_s"] = t1 - t0
+    result["generation_vram_mb"] = mem.vram_peak_mb
+    result["generation_ram_delta_mb"] = mem.ram_delta_mb
+
+    # ─── Extract generation stats ───────────────────────────
+    generated_ids = gen_results.get("generated_ids")
+    if generated_ids is not None:
+        output_seq_len = generated_ids.shape[1]
+        actual_new_tokens = output_seq_len - input_seq_len
+        generated_text = tokenizer.decode(
+            generated_ids[0, input_seq_len:], skip_special_tokens=True
+        )
+    else:
+        actual_new_tokens = 0
+        generated_text = ""
+
+    num_steps = len(gen_results.get("relevance_trace", []))
+
+    result["actual_new_tokens"] = actual_new_tokens
+    result["generation_steps"] = num_steps
+    result["generated_text"] = generated_text[:200]
+
+    # ─── Aggregates ─────────────────────────────────────────
+    result["total_time_s"] = result["init_time_s"] + result["generation_time_s"]
+    result["time_per_token_s"] = (
+        result["generation_time_s"] / actual_new_tokens
+        if actual_new_tokens > 0
+        else 0.0
+    )
+    result["throughput_tok_per_s"] = (
+        actual_new_tokens / result["generation_time_s"]
+        if result["generation_time_s"] > 0
+        else 0.0
+    )
+
+    del ir
+    gc.collect()
+    if device == "cuda":
+        torch.cuda.empty_cache()
+
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Reporting
+# ═══════════════════════════════════════════════════════════════════════════
+
+def print_seq_table(records: List[Dict[str, Any]]):
+    """Print sequence-scaling results."""
     try:
         from tabulate import tabulate
     except ImportError:
-        # Fallback: plain print
         for r in records:
             print(r)
         return
 
     headers = [
-        "Seq Len",
-        "Run",
-        "Init (s)",
-        "Forward (s)",
-        "Backward (s)",
-        "Total (s)",
+        "Seq Len", "Run",
+        "Init (s)", "Forward (s)", "Backward (s)", "Total (s)",
         "Throughput\n(tok/s)",
-        "Init\nVRAM (MB)",
-        "Fwd\nVRAM (MB)",
-        "Bwd\nVRAM (MB)",
-        "Init\nΔRAM (MB)",
-        "Fwd\nΔRAM (MB)",
-        "Bwd\nΔRAM (MB)",
+        "Init\nVRAM (MB)", "Fwd\nVRAM (MB)", "Bwd\nVRAM (MB)",
+        "Init\nΔRAM (MB)", "Fwd\nΔRAM (MB)", "Bwd\nΔRAM (MB)",
     ]
     rows = []
     for r in records:
         rows.append([
-            r["sequence_length"],
-            r["run_idx"],
+            r["sequence_length"], r["run_idx"],
             f"{r['init_time_s']:.3f}",
             f"{r['forward_time_s']:.3f}",
             f"{r['backward_time_s']:.3f}",
@@ -260,57 +432,62 @@ def print_table(records: List[Dict[str, Any]]):
             f"{r['backward_ram_delta_mb']:.1f}",
         ])
 
-    print("\n" + tabulate(rows, headers=headers, tablefmt="grid"))
-
-
-def print_summary(records: List[Dict[str, Any]]):
-    """Print an averaged summary grouped by sequence length."""
-    try:
-        from tabulate import tabulate
-    except ImportError:
-        return
-
-    # Group by sequence length
-    from collections import defaultdict
-    grouped = defaultdict(list)
-    for r in records:
-        grouped[r["sequence_length"]].append(r)
-
-    headers = [
-        "Seq Len",
-        "Runs",
-        "Avg Init (s)",
-        "Avg Forward (s)",
-        "Avg Backward (s)",
-        "Avg Total (s)",
-        "Avg Throughput\n(tok/s)",
-        "Peak Fwd\nVRAM (MB)",
-        "Peak Bwd\nVRAM (MB)",
-    ]
-    rows = []
-    for seq_len in sorted(grouped.keys()):
-        runs = grouped[seq_len]
-        n = len(runs)
-        rows.append([
-            seq_len,
-            n,
-            f"{np.mean([r['init_time_s'] for r in runs]):.3f}",
-            f"{np.mean([r['forward_time_s'] for r in runs]):.3f}",
-            f"{np.mean([r['backward_time_s'] for r in runs]):.3f}",
-            f"{np.mean([r['total_time_s'] for r in runs]):.3f}",
-            f"{np.mean([r['throughput_tok_per_s'] for r in runs]):.1f}",
-            f"{max(r['forward_vram_mb'] for r in runs):.1f}",
-            f"{max(r['backward_vram_mb'] for r in runs):.1f}",
-        ])
-
     print("\n" + "=" * 70)
-    print("  SUMMARY (averaged across runs)")
+    print("  SEQUENCE SCALING (vary input length, 1-token output)")
     print("=" * 70)
     print(tabulate(rows, headers=headers, tablefmt="grid"))
 
 
-def save_report(records: List[Dict[str, Any]], system_info: Dict[str, Any], output_dir: str):
-    """Save a JSON report to *output_dir* with a timestamped filename."""
+def print_gen_table(records: List[Dict[str, Any]]):
+    """Print generation-scaling results."""
+    try:
+        from tabulate import tabulate
+    except ImportError:
+        for r in records:
+            print(r)
+        return
+
+    headers = [
+        "Max New\nTokens", "Actual\nTokens", "Steps", "Run",
+        "Init (s)", "Gen (s)", "Total (s)",
+        "Per Token\n(s)", "Throughput\n(tok/s)",
+        "Init\nVRAM (MB)", "Gen\nVRAM (MB)",
+        "Init\nΔRAM (MB)", "Gen\nΔRAM (MB)",
+    ]
+    rows = []
+    for r in records:
+        rows.append([
+            r["max_new_tokens"], r["actual_new_tokens"], r["generation_steps"],
+            r["run_idx"],
+            f"{r['init_time_s']:.3f}",
+            f"{r['generation_time_s']:.3f}",
+            f"{r['total_time_s']:.3f}",
+            f"{r['time_per_token_s']:.3f}",
+            f"{r['throughput_tok_per_s']:.2f}",
+            f"{r['init_vram_mb']:.1f}",
+            f"{r['generation_vram_mb']:.1f}",
+            f"{r['init_ram_delta_mb']:.1f}",
+            f"{r['generation_ram_delta_mb']:.1f}",
+        ])
+
+    print("\n" + "=" * 70)
+    print("  GENERATION SCALING (fixed input, vary max_new_tokens)")
+    print("=" * 70)
+    print(tabulate(rows, headers=headers, tablefmt="grid"))
+
+    # Print generated text for each run
+    print("\n  Generated text samples:")
+    for r in records:
+        print(f"    [{r['max_new_tokens']} tokens] → \"{r.get('generated_text', '')}\"")
+
+
+def save_report(
+    seq_records: List[Dict[str, Any]],
+    gen_records: List[Dict[str, Any]],
+    system_info: Dict[str, Any],
+    output_dir: str,
+):
+    """Save a JSON report."""
     os.makedirs(output_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = os.path.join(output_dir, f"benchmark_{timestamp}.json")
@@ -318,7 +495,8 @@ def save_report(records: List[Dict[str, Any]], system_info: Dict[str, Any], outp
     report = {
         "timestamp": timestamp,
         "system_info": system_info,
-        "results": records,
+        "seq_scaling_results": seq_records,
+        "gen_scaling_results": gen_records,
     }
     with open(path, "w") as f:
         json.dump(report, f, indent=2)
@@ -351,43 +529,45 @@ def gather_system_info(device: str, model_id: str) -> Dict[str, Any]:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="DLBacktrace sequence-scaling benchmark"
+        description="DLBacktrace benchmark suite (sequence + generation scaling)"
     )
     parser.add_argument(
-        "--model",
-        type=str,
-        default="meta-llama/Llama-3.2-1B",
+        "--model", type=str, default="meta-llama/Llama-3.2-1B",
         help="HuggingFace model ID (default: Llama-3.2-1B)",
     )
     parser.add_argument(
-        "--seq-lengths",
-        type=int,
-        nargs="+",
-        default=[8, 16, 32, 64, 128, 256, 512],
-        help="Sequence lengths to benchmark (default: 8 16 32 64 128 256 512)",
+        "--mode", type=str, default="both", choices=["seq", "gen", "both"],
+        help="Benchmark mode: seq (sequence scaling), gen (generation scaling), both",
     )
     parser.add_argument(
-        "--device",
-        type=str,
-        default="cuda",
-        choices=["cuda", "cpu"],
+        "--seq-lengths", type=int, nargs="+",
+        default=[8, 16, 32, 64, 128, 256, 512],
+        help="Input sequence lengths for seq-scaling mode",
+    )
+    parser.add_argument(
+        "--gen-tokens", type=int, nargs="+",
+        default=[1, 3, 5, 10, 20],
+        help="max_new_tokens values for gen-scaling mode",
+    )
+    parser.add_argument(
+        "--gen-prompt", type=str,
+        default="What is the capital of France?",
+        help="Input prompt for generation-scaling benchmark",
+    )
+    parser.add_argument(
+        "--device", type=str, default="cuda", choices=["cuda", "cpu"],
         help="Device for layer implementations (default: cuda)",
     )
     parser.add_argument(
-        "--runs",
-        type=int,
-        default=1,
-        help="Repeat count per sequence length for averaging (default: 1)",
+        "--runs", type=int, default=1,
+        help="Repeat count per configuration for averaging (default: 1)",
     )
     parser.add_argument(
-        "--output-dir",
-        type=str,
-        default="benchmarks/results",
+        "--output-dir", type=str, default="benchmarks/results",
         help="Directory for JSON report output (default: benchmarks/results)",
     )
     args = parser.parse_args()
 
-    # Validate
     if args.device == "cuda" and not torch.cuda.is_available():
         print("⚠️  CUDA not available, falling back to CPU")
         args.device = "cpu"
@@ -406,58 +586,120 @@ def main():
 
     # ── Print header ────────────────────────────────────────
     print("=" * 70)
-    print("  DLBacktrace — Sequence-Scaling Benchmark")
+    print("  DLBacktrace — Benchmark Suite")
     print("=" * 70)
     print(f"  Model         : {args.model}")
     print(f"  Device        : {args.device}")
     if torch.cuda.is_available():
         print(f"  GPU           : {torch.cuda.get_device_name()}")
-    print(f"  Seq lengths   : {args.seq_lengths}")
-    print(f"  Runs per len  : {args.runs}")
+    print(f"  Mode          : {args.mode}")
+    if args.mode in ("seq", "both"):
+        print(f"  Seq lengths   : {args.seq_lengths}")
+    if args.mode in ("gen", "both"):
+        print(f"  Gen tokens    : {args.gen_tokens}")
+        print(f"  Gen prompt    : {args.gen_prompt[:60]}...")
+    print(f"  Runs per cfg  : {args.runs}")
     print(f"  Output dir    : {args.output_dir}")
     print("=" * 70)
 
-    # ── Run benchmarks ──────────────────────────────────────
-    all_records: List[Dict[str, Any]] = []
+    seq_records: List[Dict[str, Any]] = []
+    gen_records: List[Dict[str, Any]] = []
 
-    for seq_len in args.seq_lengths:
-        for run_idx in range(args.runs):
-            tag = f"seq={seq_len}, run={run_idx + 1}/{args.runs}"
-            print(f"\n▶ {tag}")
+    # ═══════════════════════════════════════════════════════════
+    #  Sequence-Scaling Benchmark
+    # ═══════════════════════════════════════════════════════════
+    if args.mode in ("seq", "both"):
+        print("\n" + "─" * 70)
+        print("  📐 SEQUENCE SCALING BENCHMARK")
+        print("─" * 70)
 
-            try:
-                record = benchmark_single(
-                    model=model,
-                    tokenizer=tokenizer,
-                    seq_len=seq_len,
-                    device=args.device,
-                    run_idx=run_idx,
-                )
-                record["success"] = True
-                all_records.append(record)
+        for seq_len in args.seq_lengths:
+            for run_idx in range(args.runs):
+                tag = f"seq={seq_len}, run={run_idx + 1}/{args.runs}"
+                print(f"\n▶ {tag}")
 
-                print(
-                    f"  ✅ Init: {record['init_time_s']:.3f}s | "
-                    f"Fwd: {record['forward_time_s']:.3f}s | "
-                    f"Bwd: {record['backward_time_s']:.3f}s | "
-                    f"Throughput: {record['throughput_tok_per_s']:.1f} tok/s"
-                )
-            except Exception as e:
-                print(f"  ❌ Error: {e}")
-                all_records.append({
-                    "sequence_length": seq_len,
-                    "run_idx": run_idx,
-                    "success": False,
-                    "error": str(e),
-                })
+                try:
+                    record = benchmark_seq_scaling(
+                        model=model,
+                        tokenizer=tokenizer,
+                        seq_len=seq_len,
+                        device=args.device,
+                        run_idx=run_idx,
+                    )
+                    record["success"] = True
+                    seq_records.append(record)
 
-    # ── Report ──────────────────────────────────────────────
-    successful = [r for r in all_records if r.get("success")]
-    if successful:
-        print_table(successful)
-        if args.runs > 1:
-            print_summary(successful)
-        save_report(all_records, system_info, args.output_dir)
+                    print(
+                        f"  ✅ Init: {record['init_time_s']:.3f}s | "
+                        f"Fwd: {record['forward_time_s']:.3f}s | "
+                        f"Bwd: {record['backward_time_s']:.3f}s | "
+                        f"Throughput: {record['throughput_tok_per_s']:.1f} tok/s"
+                    )
+                except Exception as e:
+                    print(f"  ❌ Error: {e}")
+                    seq_records.append({
+                        "mode": "seq_scaling",
+                        "sequence_length": seq_len,
+                        "run_idx": run_idx,
+                        "success": False,
+                        "error": str(e),
+                    })
+
+    # ═══════════════════════════════════════════════════════════
+    #  Generation-Scaling Benchmark
+    # ═══════════════════════════════════════════════════════════
+    if args.mode in ("gen", "both"):
+        print("\n" + "─" * 70)
+        print("  🔄 GENERATION SCALING BENCHMARK")
+        print("─" * 70)
+
+        for num_tokens in args.gen_tokens:
+            for run_idx in range(args.runs):
+                tag = f"max_new_tokens={num_tokens}, run={run_idx + 1}/{args.runs}"
+                print(f"\n▶ {tag}")
+
+                try:
+                    record = benchmark_gen_scaling(
+                        model=model,
+                        tokenizer=tokenizer,
+                        max_new_tokens=num_tokens,
+                        device=args.device,
+                        input_prompt=args.gen_prompt,
+                        run_idx=run_idx,
+                    )
+                    record["success"] = True
+                    gen_records.append(record)
+
+                    print(
+                        f"  ✅ Init: {record['init_time_s']:.3f}s | "
+                        f"Gen: {record['generation_time_s']:.3f}s | "
+                        f"Tokens: {record['actual_new_tokens']} | "
+                        f"Per-tok: {record['time_per_token_s']:.3f}s | "
+                        f"→ \"{record['generated_text'][:50]}\""
+                    )
+                except Exception as e:
+                    print(f"  ❌ Error: {e}")
+                    gen_records.append({
+                        "mode": "gen_scaling",
+                        "max_new_tokens": num_tokens,
+                        "run_idx": run_idx,
+                        "success": False,
+                        "error": str(e),
+                    })
+
+    # ═══════════════════════════════════════════════════════════
+    #  Report
+    # ═══════════════════════════════════════════════════════════
+    successful_seq = [r for r in seq_records if r.get("success")]
+    successful_gen = [r for r in gen_records if r.get("success")]
+
+    if successful_seq:
+        print_seq_table(successful_seq)
+    if successful_gen:
+        print_gen_table(successful_gen)
+
+    if successful_seq or successful_gen:
+        save_report(seq_records, gen_records, system_info, args.output_dir)
     else:
         print("\n⚠️  No successful benchmark runs.")
 
