@@ -98,6 +98,57 @@ class DLBAutoSampler:
             torch.cuda.empty_cache()
         gc.collect()
 
+    def _save_to_disk(
+        self,
+        data,
+        *,
+        cache_dir: Path,
+        filename: str,
+        use_compression: bool = True,
+        compression_method: str = "gzip",
+        pickle_protocol: int = 4,
+    ) -> str:
+        """Save arbitrary tensor/dict data to disk with optional compression.
+        
+        Returns the file path as a string.
+        """
+        base_path = cache_dir / filename
+
+        # Move tensors to CPU before saving
+        def _to_cpu(obj):
+            if torch.is_tensor(obj):
+                return obj.detach().cpu()
+            if isinstance(obj, np.ndarray):
+                return torch.from_numpy(obj).cpu()
+            if isinstance(obj, dict):
+                return {k: _to_cpu(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [_to_cpu(v) for v in obj]
+            if isinstance(obj, tuple):
+                return tuple(_to_cpu(v) for v in obj)
+            return obj
+
+        cpu_data = _to_cpu(data)
+
+        if not use_compression or compression_method == "none":
+            file_path = base_path
+            torch.save(cpu_data, file_path, pickle_protocol=pickle_protocol)
+        elif compression_method == "gzip":
+            file_path = Path(str(base_path) + '.gz')
+            with gzip.open(file_path, 'wb', compresslevel=6) as f:
+                torch.save(cpu_data, f, pickle_protocol=pickle_protocol)
+        elif compression_method == "lzma":
+            file_path = Path(str(base_path) + '.xz')
+            with lzma.open(file_path, 'wb', preset=6) as f:
+                torch.save(cpu_data, f, pickle_protocol=pickle_protocol)
+        else:
+            file_path = base_path
+            torch.save(cpu_data, file_path, pickle_protocol=pickle_protocol)
+
+        del cpu_data
+        gc.collect()
+        return str(file_path)
+
     def _print_generated_sequence(self, generated: torch.Tensor, prefix: str = ""):
         """Print decoded sequence using self.tokenizer."""
         text = self.tokenizer.decode(generated[0], skip_special_tokens=False)
@@ -697,9 +748,16 @@ class DLBAutoSampler:
             scores_trace = [] if return_scores else None
             relevance_trace = [] if return_relevance else None
             io_data_trace = [] if return_layerwise_output else None
+            disk_streaming = (cache_policy == "disk" and cache_dir_path is not None)
 
             stopped_by = None
             for _ in range(max_new_tokens if max_new_tokens is not None else 10_000_000):
+                step_idx = len(relevance_trace) if relevance_trace is not None else (
+                    len(scores_trace) if scores_trace is not None else (
+                        len(io_data_trace) if io_data_trace is not None else 0
+                    )
+                )
+
                 # Ask DLB for logits (B=1)
                 io_data = self.dlb.predict(generated, attn, debug=False, temperature=1.0)
                 logits = self._extract_last_logits(io_data)        # [1, T_cur, V]
@@ -728,13 +786,38 @@ class DLBAutoSampler:
                 next_tokens = self._as_long(next_tokens).to(device)
 
                 if return_scores:
-                    scores_trace.append(scores.detach().to("cpu"))
+                    scores_cpu = scores.detach().to("cpu")
+                    if disk_streaming:
+                        path = self._save_to_disk(
+                            scores_cpu,
+                            cache_dir=cache_dir_path,
+                            filename=f"step_{step_idx:05d}_scores.pt",
+                            use_compression=relevance_use_compression,
+                            compression_method=relevance_compression_method,
+                            pickle_protocol=relevance_pickle_protocol,
+                        )
+                        scores_trace.append({"path": path})
+                        del scores_cpu
+                    else:
+                        scores_trace.append(scores_cpu)
 
                 if return_layerwise_output:
-                    io_data_trace.append(io_data)
+                    if disk_streaming:
+                        path = self._save_to_disk(
+                            io_data,
+                            cache_dir=cache_dir_path,
+                            filename=f"step_{step_idx:05d}_io.pt",
+                            use_compression=relevance_use_compression,
+                            compression_method=relevance_compression_method,
+                            pickle_protocol=relevance_pickle_protocol,
+                        )
+                        io_data_trace.append({"path": path})
+                        del io_data
+                        gc.collect()
+                    else:
+                        io_data_trace.append(io_data)
 
                 if return_relevance:
-                    step_idx = len(relevance_trace)
                     if dlb_tokens_count is None or step_idx < dlb_tokens_count:
                         rel_dict = self._compute_relevance(
                             target_token_ids=next_tokens.view(-1),
@@ -804,6 +887,8 @@ class DLBAutoSampler:
                     info["relevance_cache_dir"] = str(cache_dir_path)
             if return_layerwise_output:
                 info["layerwise_output_trace"] = io_data_trace
+            if disk_streaming and cache_dir_path is not None:
+                info["cache_dir"] = str(cache_dir_path)
             return generated, info  # ([1, T], dict)
 
 
@@ -845,7 +930,8 @@ class DLBAutoSampler:
 
         scores_trace_beam = [] if return_scores else None
         relevance_trace_beam = [] if return_relevance else None
-        io_data_trace_beam = [] if return_layerwise_output else None 
+        io_data_trace_beam = [] if return_layerwise_output else None
+        disk_streaming_beam = (cache_policy == "disk" and cache_dir_path is not None)
 
         stopped_by = None
         for _ in range(max_new_tokens if max_new_tokens is not None else 10_000_000):
@@ -878,8 +964,22 @@ class DLBAutoSampler:
                 if vocab_size is None:
                     vocab_size = nl_b.size(-1)
 
+            beam_step_idx = cur_len - start_len
             if return_layerwise_output:
-                io_data_trace_beam.append(io_data_step)              # per-step, per-beam
+                if disk_streaming_beam:
+                    path = self._save_to_disk(
+                        io_data_step,
+                        cache_dir=cache_dir_path,
+                        filename=f"beam_step_{beam_step_idx:05d}_io.pt",
+                        use_compression=relevance_use_compression,
+                        compression_method=relevance_compression_method,
+                        pickle_protocol=relevance_pickle_protocol,
+                    )
+                    io_data_trace_beam.append({"path": path})
+                    del io_data_step
+                    gc.collect()
+                else:
+                    io_data_trace_beam.append(io_data_step)              # per-step, per-beam
 
             next_logits = torch.cat(next_logits_list, dim=0)         # [beams, V] on device
 
@@ -923,7 +1023,20 @@ class DLBAutoSampler:
             )
 
             if return_scores:
-                scores_trace_beam.append(next_scores.detach().to("cpu"))
+                scores_cpu = next_scores.detach().to("cpu")
+                if disk_streaming_beam:
+                    path = self._save_to_disk(
+                        scores_cpu,
+                        cache_dir=cache_dir_path,
+                        filename=f"beam_step_{beam_step_idx:05d}_scores.pt",
+                        use_compression=relevance_use_compression,
+                        compression_method=relevance_compression_method,
+                        pickle_protocol=relevance_pickle_protocol,
+                    )
+                    scores_trace_beam.append({"path": path})
+                    del scores_cpu
+                else:
+                    scores_trace_beam.append(scores_cpu)
 
             # Rebuild the new beam batch using public keys
             next_beam_scores = beam_outputs["next_beam_scores"].to(device)   # [beams]
@@ -1057,4 +1170,6 @@ class DLBAutoSampler:
                 for step_ios in io_data_trace_beam
             ]
             info_beam["layerwise_output_trace"] = flat_io_trace
+        if disk_streaming_beam and cache_dir_path is not None:
+            info_beam["cache_dir"] = str(cache_dir_path)
         return out_top1, info_beam

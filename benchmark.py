@@ -291,8 +291,13 @@ def benchmark_gen_scaling(
     device: str,
     input_prompt: str = "What is the capital of France?",
     run_idx: int = 0,
+    cache_dir: str = "benchmarks/cache",
 ) -> Dict[str, Any]:
-    """Benchmark multi-token generation using run_task(task='generation')."""
+    """Benchmark multi-token generation using run_task(task='generation').
+    
+    Uses disk cache policy: all per-step data (relevance, scores, IO)
+    is streamed to disk instead of accumulating in RAM.
+    """
 
     tokens = tokenizer(
         [input_prompt],
@@ -337,6 +342,8 @@ def benchmark_gen_scaling(
     result["init_ram_delta_mb"] = mem.ram_delta_mb
 
     # ─── Stage 2+3: Generation (forward + backward per token) ─
+    #     Disk cache policy: streams relevance, scores, IO to disk per step
+    os.makedirs(cache_dir, exist_ok=True)
     with MemTracker(device) as mem:
         t0 = time.perf_counter()
         gen_results = ir.run_task(
@@ -347,6 +354,8 @@ def benchmark_gen_scaling(
             return_relevance=True,
             return_scores=True,
             debug=False,
+            relevance_cache_policy="disk",
+            relevance_cache_dir=cache_dir,
         )
         if device == "cuda":
             torch.cuda.synchronize()
@@ -566,6 +575,10 @@ def main():
         "--output-dir", type=str, default="benchmarks/results",
         help="Directory for JSON report output (default: benchmarks/results)",
     )
+    parser.add_argument(
+        "--cache-dir", type=str, default="benchmarks/cache",
+        help="Directory for disk-streamed relevance/scores/IO data (default: benchmarks/cache)",
+    )
     args = parser.parse_args()
 
     if args.device == "cuda" and not torch.cuda.is_available():
@@ -666,6 +679,7 @@ def main():
                         device=args.device,
                         input_prompt=args.gen_prompt,
                         run_idx=run_idx,
+                        cache_dir=args.cache_dir,
                     )
                     record["success"] = True
                     gen_records.append(record)
