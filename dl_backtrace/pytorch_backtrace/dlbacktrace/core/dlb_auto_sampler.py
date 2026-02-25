@@ -92,8 +92,10 @@ class DLBAutoSampler:
         self.tokenizer = tokenizer
 
     def _clear_dlb_memory(self):
-        """Clear DLB intermediate storage and CUDA cache."""
+        """Clear DLB intermediate storage (node_io + all_wt) and CUDA cache."""
         self.dlb.node_io = {}
+        if hasattr(self.dlb, 'all_wt'):
+            self.dlb.all_wt = {}
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         gc.collect()
@@ -422,14 +424,14 @@ class DLBAutoSampler:
         raise ValueError(f"Unsupported relevance dtype hint: {dtype_hint}")
 
     def _compress_relevance_tree(self, data, *, target_dtype=None, move_to_cpu=True):
+        """Move tensors to CPU (in-place, no clone) and optionally cast dtype."""
         if torch.is_tensor(data):
             tensor = data.detach()
             if move_to_cpu:
                 tensor = tensor.to("cpu")
             if target_dtype is not None:
                 tensor = tensor.to(dtype=target_dtype)
-            return tensor.clone()
-        # Handle numpy arrays by converting to torch tensor with target dtype
+            return tensor  # no .clone() — transfer, not copy
         if isinstance(data, np.ndarray):
             tensor = torch.from_numpy(data)
             if move_to_cpu:
@@ -504,45 +506,39 @@ class DLBAutoSampler:
             if cache_dir is None:
                 raise ValueError("relevance_cache_dir must be provided when relevance_cache_policy='disk'")
             
+            # Compute summary BEFORE saving (so we can delete processed immediately after)
+            summary_val = self._summarize_relevance(processed)
+            
             base_file_path = cache_dir / f"step_{step_idx:05d}.pt"
             
             # Determine compression method and file extension
             if not use_compression or compression_method == "none":
-                # No compression
                 file_path = base_file_path
                 torch.save(processed, file_path, pickle_protocol=pickle_protocol)
             
             elif compression_method == "gzip":
-                # Gzip compression (fast, good ratio)
                 file_path = Path(str(base_file_path) + '.gz')
                 with gzip.open(file_path, 'wb', compresslevel=6) as f:
                     torch.save(processed, f, pickle_protocol=pickle_protocol)
             
             elif compression_method == "lzma":
-                # LZMA/xz compression (better ratio, slower)
                 file_path = Path(str(base_file_path) + '.xz')
                 with lzma.open(file_path, 'wb', preset=6) as f:
                     torch.save(processed, f, pickle_protocol=pickle_protocol)
             
             elif compression_method == "7z":
-                # 7z compression (best ratio, slowest)
                 if not HAS_7Z:
                     raise ImportError(
                         "py7zr library required for 7z compression. "
                         "Install with: pip install py7zr"
                     )
                 file_path = Path(str(base_file_path) + '.7z')
-                # Save to temporary .pt file first
                 import tempfile
                 with tempfile.NamedTemporaryFile(suffix='.pt', delete=False) as tmp:
                     tmp_path = Path(tmp.name)
                     torch.save(processed, tmp_path, pickle_protocol=pickle_protocol)
-                
-                # Compress with 7z
                 with py7zr.SevenZipFile(file_path, 'w') as archive:
                     archive.write(tmp_path, arcname=f'step_{step_idx:05d}.pt')
-                
-                # Clean up temp file
                 tmp_path.unlink()
             
             else:
@@ -551,8 +547,12 @@ class DLBAutoSampler:
                     f"Must be one of: 'gzip', 'lzma', '7z', 'none'"
                 )
             
+            # Free the processed data immediately after writing to disk
+            del processed
+            gc.collect()
+            
             return {
-                "summary": self._summarize_relevance(processed),
+                "summary": summary_val,
                 "path": str(file_path),
                 "compression": compression_method,
             }
