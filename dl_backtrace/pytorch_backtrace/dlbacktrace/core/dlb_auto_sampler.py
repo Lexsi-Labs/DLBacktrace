@@ -759,7 +759,9 @@ class DLBAutoSampler:
                 )
 
                 # Ask DLB for logits (B=1)
-                io_data = self.dlb.predict(generated, attn, debug=False, temperature=1.0)
+                # First step: full weight sync; subsequent steps: skip (weights unchanged)
+                io_data = self.dlb.predict(generated, attn, debug=False, temperature=1.0,
+                                           skip_weight_sync=(step_idx > 0))
                 logits = self._extract_last_logits(io_data)        # [1, T_cur, V]
                 if logits.device != device:
                     logits = logits.to(device)
@@ -951,7 +953,8 @@ class DLBAutoSampler:
                     generated[b:b+1], 
                     attn[b:b+1], 
                     debug=False, 
-                    temperature=1.0
+                    temperature=1.0,
+                    skip_weight_sync=(cur_len > start_len or b > 0),
                 )
                 if return_layerwise_output:
                     io_data_step.append(io_b)
@@ -1071,6 +1074,7 @@ class DLBAutoSampler:
                             old_attn[b:b+1],
                             debug=False,
                             temperature=1.0,
+                            skip_weight_sync=True,  # always after first step
                         )
 
                         chosen_tok_b = next_beam_tokens[b:b+1]
