@@ -750,6 +750,9 @@ class DLBAutoSampler:
             io_data_trace = [] if return_layerwise_output else None
             disk_streaming = (cache_policy == "disk" and cache_dir_path is not None)
 
+            # ── Per-step timing accumulator ──
+            _step_timings = []
+
             stopped_by = None
             for _ in range(max_new_tokens if max_new_tokens is not None else 10_000_000):
                 step_idx = len(relevance_trace) if relevance_trace is not None else (
@@ -758,8 +761,21 @@ class DLBAutoSampler:
                     )
                 )
 
-                # Ask DLB for logits (B=1)
+                _t = {}  # timing dict for this step
+                _t["step"] = step_idx
+                _t["seq_len"] = generated.shape[1]
+
+                # ── Stage A: Forward pass (predict) ──
+                if device == "cuda":
+                    torch.cuda.synchronize()
+                _ts = time.perf_counter()
                 io_data = self.dlb.predict(generated, attn, debug=False, temperature=1.0)
+                if device == "cuda":
+                    torch.cuda.synchronize()
+                _t["predict"] = time.perf_counter() - _ts
+
+                # ── Stage B: Logits extraction + sampling ──
+                _ts = time.perf_counter()
                 logits = self._extract_last_logits(io_data)        # [1, T_cur, V]
                 if logits.device != device:
                     logits = logits.to(device)
@@ -784,7 +800,12 @@ class DLBAutoSampler:
 
                 # 🔑 force to same device as `generated`
                 next_tokens = self._as_long(next_tokens).to(device)
+                if device == "cuda":
+                    torch.cuda.synchronize()
+                _t["sampling"] = time.perf_counter() - _ts
 
+                # ── Stage C: Save scores to disk ──
+                _ts = time.perf_counter()
                 if return_scores:
                     scores_cpu = scores.detach().to("cpu")
                     if disk_streaming:
@@ -800,7 +821,10 @@ class DLBAutoSampler:
                         del scores_cpu
                     else:
                         scores_trace.append(scores_cpu)
+                _t["scores_save"] = time.perf_counter() - _ts
 
+                # ── Stage D: Save IO data to disk ──
+                _ts = time.perf_counter()
                 if return_layerwise_output:
                     if disk_streaming:
                         path = self._save_to_disk(
@@ -816,7 +840,10 @@ class DLBAutoSampler:
                         gc.collect()
                     else:
                         io_data_trace.append(io_data)
+                _t["io_save"] = time.perf_counter() - _ts
 
+                # ── Stage E: Backtracing (relevance propagation) ──
+                _ts = time.perf_counter()
                 if return_relevance:
                     if dlb_tokens_count is None or step_idx < dlb_tokens_count:
                         rel_dict = self._compute_relevance(
@@ -828,6 +855,14 @@ class DLBAutoSampler:
                             task="generation",
                             debug=False,
                         )
+                if device == "cuda":
+                    torch.cuda.synchronize()
+                _t["backtrace"] = time.perf_counter() - _ts
+
+                # ── Stage F: Save relevance to disk ──
+                _ts = time.perf_counter()
+                if return_relevance:
+                    if dlb_tokens_count is None or step_idx < dlb_tokens_count:
                         entry = self._store_relevance_entry(
                             rel_dict,
                             policy=cache_policy,
@@ -840,7 +875,30 @@ class DLBAutoSampler:
                             pickle_protocol=relevance_pickle_protocol,
                         )
                         relevance_trace.append(entry)
+                _t["relevance_save"] = time.perf_counter() - _ts
+
+                # ── Stage G: Memory cleanup ──
+                _ts = time.perf_counter()
+                if return_relevance:
+                    if dlb_tokens_count is None or step_idx < dlb_tokens_count:
                         self._clear_dlb_memory()
+                _t["cleanup"] = time.perf_counter() - _ts
+
+                _t["total"] = _t["predict"] + _t["sampling"] + _t["scores_save"] + _t["io_save"] + _t["backtrace"] + _t["relevance_save"] + _t["cleanup"]
+
+                # Print per-token line
+                print(
+                    f"  ⏱ Token {step_idx:3d} (seq={_t['seq_len']:4d}) │ "
+                    f"predict={_t['predict']:6.2f}s │ "
+                    f"sample={_t['sampling']:5.3f}s │ "
+                    f"backtrace={_t['backtrace']:5.2f}s │ "
+                    f"rel_save={_t['relevance_save']:5.2f}s │ "
+                    f"scores_save={_t['scores_save']:5.3f}s │ "
+                    f"io_save={_t['io_save']:5.2f}s │ "
+                    f"cleanup={_t['cleanup']:5.2f}s │ "
+                    f"TOTAL={_t['total']:6.2f}s"
+                )
+                _step_timings.append(_t)
 
                 generated = torch.cat([generated, next_tokens], dim=1) 
                 attn = torch.cat(
@@ -862,6 +920,20 @@ class DLBAutoSampler:
                     break
             else:
                 stopped_by = "loop_exhausted"
+
+            # ── Print timing summary ──
+            if _step_timings:
+                stages = ["predict", "sampling", "backtrace", "relevance_save", "scores_save", "io_save", "cleanup", "total"]
+                print("\n" + "=" * 90)
+                print("  ⏱ GENERATION TIMING SUMMARY")
+                print("=" * 90)
+                for stage in stages:
+                    vals = [t[stage] for t in _step_timings]
+                    total_s = sum(vals)
+                    avg_s = total_s / len(vals) if vals else 0
+                    pct = (total_s / sum(t["total"] for t in _step_timings) * 100) if stage != "total" else 100.0
+                    print(f"  {stage:>16s}:  total={total_s:7.2f}s  avg={avg_s:6.2f}s  ({pct:5.1f}%)")
+                print("=" * 90)
 
             if debug:
                 print(f"[greedy/sampling] stopped_by={stopped_by}")
