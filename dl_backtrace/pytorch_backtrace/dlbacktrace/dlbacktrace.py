@@ -356,16 +356,13 @@ class DLBacktrace:
 
         return self.node_io 
 
-    def predict(self, *inputs, temperature: float = 1.0, debug=None, skip_weight_sync=False):
+    def predict(self, *inputs, temperature: float = 1.0, debug=None):
         """
         Execute the model with the given inputs and return node I/O data.
         
         Args:
             *inputs: Input tensors for the model
             debug (bool | None): Enable debug logs. If None, defaults to self.verbose.
-            skip_weight_sync (bool): If True, skip weight synchronization with model
-                state_dict. Safe during autoregressive generation where weights
-                don't change between tokens.
             
         Returns:
             dict: Node I/O data containing execution results
@@ -405,7 +402,7 @@ class DLBacktrace:
             print(f"🔧 Starting execution with {type(executor).__name__}")
         
         try:
-            self.node_io = executor.run(processed_inputs, debug=debug, skip_weight_sync=skip_weight_sync)
+            self.node_io = executor.run(processed_inputs, debug=debug)
         except Exception as e:
             if debug:
                 print(f"❌ Execution failed: {e}")

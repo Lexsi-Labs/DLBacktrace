@@ -3786,9 +3786,9 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
         logger.error(f"[Execution Error] Node `{node_name}` failed in `{func_name}`: {e}")
         #return layer_in
 
-def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, tracer, exported_program=None, skip_weight_sync=False):
+def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, tracer, exported_program=None):
     logger = get_logger()
-    logger.info(f"Executing `run_execution_nocache` (skip_weight_sync={skip_weight_sync}) ...!")
+    logger.info(f"Executing `run_execution_nocache` ...!")
     
     # 🔧 CONSISTENCY FIX: Set up consistent environment
     setup_consistent_environment(model)
@@ -3799,28 +3799,24 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
     model.requires_grad_(False)
     
     # 🔧 CRITICAL FIX: Synchronize extracted weights with current model state
-    # Skip during autoregressive generation — weights don't change between tokens
-    if skip_weight_sync:
-        logger.debug("⏩ Skipping weight synchronization (skip_weight_sync=True)")
+    logger.debug("🔧 Synchronizing extracted weights with model state...")
+    if exported_program is not None:
+        for placeholder_name, extracted_weight in extracted_weights.items():
+            if extracted_weight is not None and isinstance(extracted_weight, torch.Tensor):
+                # Get the real parameter name from exported_program
+                real_key = None
+                for spec in exported_program.graph_signature.input_specs:
+                    if hasattr(spec.arg, 'name') and spec.arg.name == placeholder_name:
+                        real_key = spec.target
+                        break
+                
+                if real_key and real_key in model.state_dict():
+                    current_weight = model.state_dict()[real_key]
+                    # Reference weight directly — read-only during forward pass
+                    extracted_weights[placeholder_name] = current_weight
+                    logger.debug(f"✅ Synchronized {placeholder_name} -> {real_key}")
     else:
-        logger.debug("🔧 Synchronizing extracted weights with model state...")
-        if exported_program is not None:
-            for placeholder_name, extracted_weight in extracted_weights.items():
-                if extracted_weight is not None and isinstance(extracted_weight, torch.Tensor):
-                    # Get the real parameter name from exported_program
-                    real_key = None
-                    for spec in exported_program.graph_signature.input_specs:
-                        if hasattr(spec.arg, 'name') and spec.arg.name == placeholder_name:
-                            real_key = spec.target
-                            break
-                    
-                    if real_key and real_key in model.state_dict():
-                        current_weight = model.state_dict()[real_key]
-                        # Reference weight directly — read-only during forward pass
-                        extracted_weights[placeholder_name] = current_weight
-                        logger.debug(f"✅ Synchronized {placeholder_name} -> {real_key}")
-        else:
-            logger.warning("⚠️ No exported_program provided, skipping weight synchronization")
+        logger.warning("⚠️ No exported_program provided, skipping weight synchronization")
     
     logger.debug("✅ Weight synchronization complete")
     
@@ -4182,7 +4178,7 @@ class ExecutionEngineNoCache:
         self.logger = setup_logging(debug=debug, log_level=log_level, force_reconfigure=True)
         self.logger.info(f"ExecutionEngineNoCache initialized with debug={debug}, log_level={log_level}")
 
-    def run(self, inputs, debug=None, log_level=None, skip_weight_sync=False):
+    def run(self, inputs, debug=None, log_level=None):
         """Run the execution engine with optional debug and log level overrides"""
         # Use instance defaults if not provided
         if debug is None:
@@ -4207,7 +4203,6 @@ class ExecutionEngineNoCache:
             inputs=inputs,
             tracer=self.tracer,
             exported_program=self.exported_program,
-            skip_weight_sync=skip_weight_sync,
         )
         
         # Flush logs at the end of execution to ensure all debug statements are captured
