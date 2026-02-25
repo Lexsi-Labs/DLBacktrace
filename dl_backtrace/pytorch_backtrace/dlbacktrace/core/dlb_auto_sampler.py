@@ -750,6 +750,9 @@ class DLBAutoSampler:
             io_data_trace = [] if return_layerwise_output else None
             disk_streaming = (cache_policy == "disk" and cache_dir_path is not None)
 
+            # Per-step timing
+            step_timings = []
+
             stopped_by = None
             for _ in range(max_new_tokens if max_new_tokens is not None else 10_000_000):
                 step_idx = len(relevance_trace) if relevance_trace is not None else (
@@ -758,35 +761,43 @@ class DLBAutoSampler:
                     )
                 )
 
-                # Ask DLB for logits (B=1)
-                # First step: full weight sync; subsequent steps: skip (weights unchanged)
+                t_step_start = time.perf_counter()
+                step_timing = {"step": step_idx}
+
+                # ── Forward pass (predict) ──────────────────────
+                t0 = time.perf_counter()
                 io_data = self.dlb.predict(generated, attn, debug=False, temperature=1.0,
                                            skip_weight_sync=(step_idx > 0))
-                logits = self._extract_last_logits(io_data)        # [1, T_cur, V]
+                if torch.cuda.is_available():
+                    torch.cuda.synchronize()
+                step_timing["predict_s"] = time.perf_counter() - t0
+
+                logits = self._extract_last_logits(io_data)
                 if logits.device != device:
                     logits = logits.to(device)
-                next_logits = self._as_float(logits[:, -1, :])     # Float for processors
+                next_logits = self._as_float(logits[:, -1, :])
 
-                # processors
+                # ── Sampling / greedy ───────────────────────────
+                t0 = time.perf_counter()
                 scores = logits_processor(self._as_long(generated), next_logits)
                 if scores.device != device:
                     scores = scores.to(device)
 
-                # enforce min_new_tokens by masking EOS until allowed
                 if min_new_tokens is not None and (generated.shape[1] - start_len) < min_new_tokens and eos_list:
                     scores[:, eos_list] = -1e9
 
-                # sampling vs greedy
                 if do_sample and logits_warper is not None:
                     scores = logits_warper(self._as_long(generated), scores)
                     probs = F.softmax(scores, dim=-1)
-                    next_tokens = torch.multinomial(probs, num_samples=1)  # LongTensor
+                    next_tokens = torch.multinomial(probs, num_samples=1)
                 else:
-                    next_tokens = scores.argmax(dim=-1, keepdim=True)      # LongTensor
+                    next_tokens = scores.argmax(dim=-1, keepdim=True)
 
-                # 🔑 force to same device as `generated`
                 next_tokens = self._as_long(next_tokens).to(device)
+                step_timing["sampling_s"] = time.perf_counter() - t0
 
+                # ── Disk save: scores ───────────────────────────
+                t0 = time.perf_counter()
                 if return_scores:
                     scores_cpu = scores.detach().to("cpu")
                     if disk_streaming:
@@ -818,7 +829,10 @@ class DLBAutoSampler:
                         gc.collect()
                     else:
                         io_data_trace.append(io_data)
+                step_timing["disk_save_s"] = time.perf_counter() - t0
 
+                # ── Backtracing (relevance propagation) ─────────
+                t0 = time.perf_counter()
                 if return_relevance:
                     if dlb_tokens_count is None or step_idx < dlb_tokens_count:
                         rel_dict = self._compute_relevance(
@@ -842,12 +856,35 @@ class DLBAutoSampler:
                             pickle_protocol=relevance_pickle_protocol,
                         )
                         relevance_trace.append(entry)
-                        self._clear_dlb_memory()
+                if torch.cuda.is_available():
+                    torch.cuda.synchronize()
+                step_timing["backtrace_s"] = time.perf_counter() - t0
 
+                # ── Cleanup ─────────────────────────────────────
+                t0 = time.perf_counter()
+                if return_relevance:
+                    self._clear_dlb_memory()
+                step_timing["cleanup_s"] = time.perf_counter() - t0
+
+                # ── Append token + update attention ─────────────
                 generated = torch.cat([generated, next_tokens], dim=1) 
                 attn = torch.cat(
                     [attn, torch.ones((1, 1), dtype=attn.dtype, device=attn.device)],
                     dim=1,
+                )
+
+                step_timing["total_s"] = time.perf_counter() - t_step_start
+                step_timings.append(step_timing)
+
+                # Print per-step timing
+                print(
+                    f"  ⏱  Step {step_idx:3d} │ "
+                    f"predict: {step_timing['predict_s']:6.2f}s │ "
+                    f"sample: {step_timing['sampling_s']:5.3f}s │ "
+                    f"backtrace: {step_timing['backtrace_s']:6.2f}s │ "
+                    f"disk: {step_timing['disk_save_s']:5.2f}s │ "
+                    f"cleanup: {step_timing['cleanup_s']:5.2f}s │ "
+                    f"total: {step_timing['total_s']:6.2f}s"
                 )
 
                 # early stop if EOS produced
@@ -858,12 +895,36 @@ class DLBAutoSampler:
                         break
 
                 # HF-native stopping criteria (max_new_tokens / max_time)
-                crit = stopping_criteria(self._as_long(generated[:1, :]), None)  # slice to [1, T]
+                crit = stopping_criteria(self._as_long(generated[:1, :]), None)
                 if self._criteria_true(crit):
                     stopped_by = "stopping_criteria"
                     break
             else:
                 stopped_by = "loop_exhausted"
+
+            # ── Timing summary ──────────────────────────────
+            if step_timings:
+                n = len(step_timings)
+                avg = lambda key: sum(t[key] for t in step_timings) / n
+                print(f"\n{'─' * 80}")
+                print(f"  ⏱  TIMING SUMMARY ({n} steps, stopped_by={stopped_by})")
+                print(f"{'─' * 80}")
+                print(f"  {'Stage':<16} {'Total (s)':>10} {'Avg/step (s)':>14} {'% of total':>12}")
+                print(f"  {'─'*16} {'─'*10} {'─'*14} {'─'*12}")
+                total_all = sum(t["total_s"] for t in step_timings)
+                for key, label in [
+                    ("predict_s",   "Forward pass"),
+                    ("sampling_s",  "Sampling"),
+                    ("backtrace_s", "Backtracing"),
+                    ("disk_save_s", "Disk save"),
+                    ("cleanup_s",   "Cleanup"),
+                ]:
+                    total_key = sum(t[key] for t in step_timings)
+                    pct = (total_key / total_all * 100) if total_all > 0 else 0
+                    print(f"  {label:<16} {total_key:>10.2f} {avg(key):>14.3f} {pct:>11.1f}%")
+                print(f"  {'─'*16} {'─'*10} {'─'*14} {'─'*12}")
+                print(f"  {'TOTAL':<16} {total_all:>10.2f} {total_all/n:>14.3f} {'100.0':>11}%")
+                print(f"{'─' * 80}\n")
 
             if debug:
                 print(f"[greedy/sampling] stopped_by={stopped_by}")
@@ -891,6 +952,8 @@ class DLBAutoSampler:
                 info["layerwise_output_trace"] = io_data_trace
             if disk_streaming and cache_dir_path is not None:
                 info["cache_dir"] = str(cache_dir_path)
+            if step_timings:
+                info["step_timings"] = step_timings
             return generated, info  # ([1, T], dict)
 
 
