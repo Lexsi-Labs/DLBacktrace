@@ -16,6 +16,7 @@ import torch
 if "CUBLAS_WORKSPACE_CONFIG" not in os.environ:
     os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+hf_token = os.getenv("HUGGING_FACE_HUB_TOKEN")
 torch.backends.cuda.enable_flash_sdp(False)
 torch.backends.cuda.enable_mem_efficient_sdp(False)
 torch.backends.cuda.enable_math_sdp(True)
@@ -40,9 +41,9 @@ print("Loading model...")
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 MODEL_ID = "meta-llama/Llama-3.2-1B"
-tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, token=hf_token)
 model = AutoModelForCausalLM.from_pretrained(
-    MODEL_ID, torch_dtype=torch.float32, device_map=DEVICE
+    MODEL_ID, torch_dtype=torch.float32, device_map=DEVICE, token=hf_token
 )
 model.eval()
 
@@ -67,7 +68,13 @@ ep = export(
 print("✅ Export done")
 
 # ── Setup DLBacktrace ────────────────────────────────────────────────────
-dlbt = DLBacktrace()
+dlbt = DLBacktrace(
+            model,
+            (input_ids, attention_mask),
+            dynamic_shapes=dynamic_shapes,
+            device=device,
+            verbose=False,
+        )
 dlbt.build_graph(ep)
 node_io = dlbt.predict(input_ids, attn_mask, debug=False)
 print(f"✅ Predict done, {len(node_io)} nodes")
