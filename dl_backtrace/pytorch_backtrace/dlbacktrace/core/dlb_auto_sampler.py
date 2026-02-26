@@ -494,6 +494,7 @@ class DLBAutoSampler:
         move_to_cpu: bool,
         use_compression: bool = True,
         compression_method: str = "none",
+        async_write: bool = False,
         pickle_protocol: int = 4,
     ):
         """
