@@ -361,6 +361,8 @@ def benchmark_gen_scaling(
             torch.cuda.synchronize()
         t1 = time.perf_counter()
 
+    ir.print_all_relevance_info()
+
     result["generation_time_s"] = t1 - t0
     result["generation_vram_mb"] = mem.vram_peak_mb
     result["generation_ram_delta_mb"] = mem.ram_delta_mb
