@@ -33,8 +33,8 @@ from dl_backtrace.pytorch_backtrace.dlbacktrace.core.compiled_propagation import
     run_propagation_compiled,
 )
 
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-print(f"Device: {DEVICE}")
+device = "cuda" if torch.cuda.is_available() else "cpu"
+print(f"Device: {device}")
 
 # ── Load model ────────────────────────────────────────────────────────────
 print("Loading model...")
@@ -43,15 +43,15 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 MODEL_ID = "meta-llama/Llama-3.2-1B"
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, token=hf_token)
 model = AutoModelForCausalLM.from_pretrained(
-    MODEL_ID, torch_dtype=torch.float32, device_map=DEVICE, token=hf_token
+    MODEL_ID, torch_dtype=torch.float32, device_map=device, token=hf_token
 )
 model.eval()
 
 # ── Tokenize ──────────────────────────────────────────────────────────────
 PROMPT = "Explain the difference between O+ and O- blood type."
-tokens = tokenizer(PROMPT, return_tensors="pt").to(DEVICE)
+tokens = tokenizer(PROMPT, return_tensors="pt").to(device)
 input_ids = tokens["input_ids"]
-attn_mask = tokens["attention_mask"]
+attention_mask = tokens["attention_mask"]
 print(f"Prompt: {PROMPT!r}  →  {input_ids.shape[1]} tokens")
 
 # ── Export model ──────────────────────────────────────────────────────────
@@ -59,24 +59,24 @@ print("Exporting model...")
 from torch.export import Dim, export
 
 seq_dim = Dim("seq", min=1, max=model.config.max_position_embeddings)
+dynamic_shapes = {"input_ids": {1: seq_dim}, "attention_mask": {1: seq_dim}}
 ep = export(
     model,
-    (input_ids, attn_mask),
-    dynamic_shapes={"input_ids": {1: seq_dim}, "attention_mask": {1: seq_dim}},
+    (input_ids, attention_mask),
+    dynamic_shapes=dynamic_shapes,
     strict=False,
 )
 print("✅ Export done")
 
 # ── Setup DLBacktrace ────────────────────────────────────────────────────
 dlbt = DLBacktrace(
-            model,
-            (input_ids, attention_mask),
-            dynamic_shapes=dynamic_shapes,
-            device=device,
-            verbose=False,
-        )
-dlbt.build_graph(ep)
-node_io = dlbt.predict(input_ids, attn_mask, debug=False)
+    model,
+    (input_ids, attention_mask),
+    dynamic_shapes=dynamic_shapes,
+    device=device,
+    verbose=False,
+)
+node_io = dlbt.predict(input_ids, attention_mask)
 print(f"✅ Predict done, {len(node_io)} nodes")
 
 # ── Deep-copy node_io so we can run both paths ────────────────────────────
