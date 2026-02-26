@@ -344,161 +344,170 @@ def run_propagation_compiled(
         slots = child_slots[idx]
         is_wt = wt_flags[idx]  # skip accumulation for weight/param nodes
 
-        # ── PASSTHROUGH ──
-        if op == OP_PASSTHROUGH:
-            for ci, slot in slots:
-                R = _get_child_rel(buffers, ci, slot, is_list[ci])
-                if R is not None:
-                    _accum(buffers, idx, R, is_list[idx], device, is_wt)
-            continue
-
-        info = node_io[name]
-
-        # ── LINEAR (addmm) ──
-        if op == OP_LINEAR_ADDMM:
-            bias_v, mat1, mat2 = info["input_values"]
-            X = to_gpu_tensor(mat1, device)
-            W = to_gpu_tensor(mat2, device).T
-            B = None if isinstance(bias_v, bool) else to_gpu_tensor(bias_v, device)
-            act_key = schedule.act_dict.get(name, "None")
-            act = activation_master[act_key]
-            for ci, slot in slots:
-                R = _get_child_rel(buffers, ci, slot, is_list[ci])
-                if R is not None:
-                    delta = UD2.launch_linear_gpu(R, X, W, B, act)
-                    _accum(buffers, idx, delta, is_list[idx], device, is_wt)
-            continue
-
-        # ── LINEAR (other) ──
-        if op == OP_LINEAR_OTHER:
-            hp = info["layer_hyperparams"]
-            W = to_gpu_tensor(hp["weight"], device)
-            B = None if isinstance(hp["bias"], bool) else to_gpu_tensor(hp["bias"], device)
-            inp_raw = info["input_values"]
-            if isinstance(inp_raw, (list, tuple)):
-                inp_raw = inp_raw[0]
-            X = to_gpu_tensor(inp_raw, device)
-            act_key = schedule.act_dict.get(name, "None")
-            act = activation_master[act_key]
-            for ci, slot in slots:
-                R = _get_child_rel(buffers, ci, slot, is_list[ci])
-                if R is not None:
-                    delta = UD2.launch_linear_gpu(R, X, W, B, act)
-                    _accum(buffers, idx, delta, is_list[idx], device, is_wt)
-            continue
-
-        # ── ATTENTION ──
-        if op == OP_ATTENTION:
-            vals = info.get("input_values", [])
-            nv = len(vals)
-            if nv == 4:
-                Q, K, V, mf = (to_gpu_tensor(v, device) for v in vals)
-            elif nv == 3:
-                Q, K, V = (to_gpu_tensor(v, device) for v in vals)
-                raw_mask = info.get("layer_hyperparams", {}).get("attn_mask", None)
-                mf = None if raw_mask is None else to_gpu_tensor(raw_mask, device)
-            else:
-                raise RuntimeError(f"[{name}] expected 3 or 4 inputs for attention, got {nv}")
-            for ci, slot in slots:
-                R = _get_child_rel(buffers, ci, slot, is_list[ci])
-                if R is not None:
-                    RQ, RK, RV, Rmf = UD2.launch_self_attention_gpu(R, Q, K, V, mf)
-                    _accum(buffers, idx, [RQ, RK, RV, Rmf], is_list[idx], device, is_wt)
-            continue
-
-        # ── EMBEDDING ──
-        if op == OP_EMBEDDING:
-            assign_embedding_relevance_gpu(name, info, buf_view, node_io, device)
-            continue
-
-        # ── MUL ──
-        if op == OP_MUL:
-            vals = info.get("input_values", [])
-            if not isinstance(vals, (list, tuple)):
-                vals = [vals]
-            if len(vals) < 2:
+        try:
+            # ── PASSTHROUGH ──
+            if op == OP_PASSTHROUGH:
                 for ci, slot in slots:
-                    _accum(buffers, idx,
-                           _get_child_rel(buffers, ci, slot, is_list[ci]),
-                           is_list[idx], device, is_wt)
-            else:
-                X = to_gpu_tensor(vals[0], device)
-                Y = to_gpu_tensor(vals[1], device)
-                wt_flags = schedule.mul_wt_flags[idx]
+                    R = _get_child_rel(buffers, ci, slot, is_list[ci])
+                    if R is not None:
+                        _accum(buffers, idx, R, is_list[idx], device, is_wt)
+                continue
+
+            info = node_io[name]
+
+            # ── LINEAR (addmm) ──
+            if op == OP_LINEAR_ADDMM:
+                bias_v, mat1, mat2 = info["input_values"]
+                X = to_gpu_tensor(mat1, device)
+                W = to_gpu_tensor(mat2, device).T
+                B = None if isinstance(bias_v, bool) else to_gpu_tensor(bias_v, device)
+                act_key = schedule.act_dict.get(name, "None")
+                act = activation_master[act_key]
+                for ci, slot in slots:
+                    R = _get_child_rel(buffers, ci, slot, is_list[ci])
+                    if R is not None:
+                        delta = UD2.launch_linear_gpu(R, X, W, B, act)
+                        _accum(buffers, idx, delta, is_list[idx], device, is_wt)
+                continue
+
+            # ── LINEAR (other) ──
+            if op == OP_LINEAR_OTHER:
+                hp = info["layer_hyperparams"]
+                W = to_gpu_tensor(hp["weight"], device)
+                B = None if isinstance(hp["bias"], bool) else to_gpu_tensor(hp["bias"], device)
+                inp_raw = info["input_values"]
+                if isinstance(inp_raw, (list, tuple)):
+                    inp_raw = inp_raw[0]
+                X = to_gpu_tensor(inp_raw, device)
+                act_key = schedule.act_dict.get(name, "None")
+                act = activation_master[act_key]
+                for ci, slot in slots:
+                    R = _get_child_rel(buffers, ci, slot, is_list[ci])
+                    if R is not None:
+                        delta = UD2.launch_linear_gpu(R, X, W, B, act)
+                        _accum(buffers, idx, delta, is_list[idx], device, is_wt)
+                continue
+
+            # ── ATTENTION ──
+            if op == OP_ATTENTION:
+                vals = info.get("input_values", [])
+                nv = len(vals)
+                if nv == 4:
+                    Q, K, V, mf = (to_gpu_tensor(v, device) for v in vals)
+                elif nv == 3:
+                    Q, K, V = (to_gpu_tensor(v, device) for v in vals)
+                    raw_mask = info.get("layer_hyperparams", {}).get("attn_mask", None)
+                    mf = None if raw_mask is None else to_gpu_tensor(raw_mask, device)
+                else:
+                    raise RuntimeError(f"[{name}] expected 3 or 4 inputs for attention, got {nv}")
+                for ci, slot in slots:
+                    R = _get_child_rel(buffers, ci, slot, is_list[ci])
+                    if R is not None:
+                        RQ, RK, RV, Rmf = UD2.launch_self_attention_gpu(R, Q, K, V, mf)
+                        _accum(buffers, idx, [RQ, RK, RV, Rmf], is_list[idx], device, is_wt)
+                continue
+
+            # ── EMBEDDING ──
+            if op == OP_EMBEDDING:
+                assign_embedding_relevance_gpu(name, info, buf_view, node_io, device)
+                continue
+
+            # ── MUL ──
+            if op == OP_MUL:
+                vals = info.get("input_values", [])
+                if not isinstance(vals, (list, tuple)):
+                    vals = [vals]
+                if len(vals) < 2:
+                    for ci, slot in slots:
+                        _accum(buffers, idx,
+                               _get_child_rel(buffers, ci, slot, is_list[ci]),
+                               is_list[idx], device, is_wt)
+                else:
+                    X = to_gpu_tensor(vals[0], device)
+                    Y = to_gpu_tensor(vals[1], device)
+                    wt_flags_mul = schedule.mul_wt_flags[idx]
+                    for ci, slot in slots:
+                        R = _get_child_rel(buffers, ci, slot, is_list[ci])
+                        if R is None:
+                            continue
+                        if wt_flags_mul is not None:
+                            is_Xw, is_Yw = wt_flags_mul
+                            if is_Xw and not is_Yw:
+                                _accum(buffers, idx, [torch.zeros_like(X), R], is_list[idx], device, is_wt)
+                            elif is_Yw and not is_Xw:
+                                _accum(buffers, idx, [R, torch.zeros_like(Y)], is_list[idx], device, is_wt)
+                            else:
+                                Rx, Ry = UD2.launch_wt_mul_gpu(R)
+                                _accum(buffers, idx, [Rx, Ry], is_list[idx], device, is_wt)
+                        else:
+                            Rx, Ry = UD2.launch_wt_mul_gpu(R)
+                            _accum(buffers, idx, [Rx, Ry], is_list[idx], device, is_wt)
+                continue
+
+            # ── ADD ──
+            if op == OP_ADD:
+                vals = info.get("input_values", [])
+                if not isinstance(vals, (list, tuple)):
+                    vals = [vals]
+                if len(vals) < 2:
+                    for ci, slot in slots:
+                        _accum(buffers, idx,
+                               _get_child_rel(buffers, ci, slot, is_list[ci]),
+                               is_list[idx], device, is_wt)
+                else:
+                    X_t = to_gpu_tensor(vals[0], device)
+                    Y_t = to_gpu_tensor(vals[1], device)
+                    for ci, slot in slots:
+                        R = _get_child_rel(buffers, ci, slot, is_list[ci])
+                        if R is not None:
+                            result = UD2.launch_wt_add_equal_gpu(R, [X_t, Y_t])
+                            _accum(buffers, idx, result, is_list[idx], device, is_wt)
+                continue
+
+            # ── VECTOR ──
+            if op == OP_VECTOR:
+                func = func_names[idx]
+                vals = info.get("input_values", [])
+                if not isinstance(vals, (list, tuple)):
+                    vals = [vals]
+                tensor_inputs = [v for v in vals if isinstance(v, (torch.Tensor, np.ndarray))]
+
+                if not tensor_inputs:
+                    for ci, slot in slots:
+                        _accum(buffers, idx,
+                               _get_child_rel(buffers, ci, slot, is_list[ci]),
+                               is_list[idx], device, is_wt)
+                    continue
+
+                base = tensor_inputs[0]
+                shape = base.shape
+                hp = info.get("layer_hyperparams", {})
+
                 for ci, slot in slots:
                     R = _get_child_rel(buffers, ci, slot, is_list[ci])
                     if R is None:
                         continue
-                    if wt_flags is not None:
-                        is_Xw, is_Yw = wt_flags
-                        if is_Xw and not is_Yw:
-                            _accum(buffers, idx, [torch.zeros_like(X), R], is_list[idx], device, is_wt)
-                        elif is_Yw and not is_Xw:
-                            _accum(buffers, idx, [R, torch.zeros_like(Y)], is_list[idx], device, is_wt)
-                        else:
-                            Rx, Ry = UD2.launch_wt_mul_gpu(R)
-                            _accum(buffers, idx, [Rx, Ry], is_list[idx], device, is_wt)
-                    else:
-                        Rx, Ry = UD2.launch_wt_mul_gpu(R)
-                        _accum(buffers, idx, [Rx, Ry], is_list[idx], device, is_wt)
-            continue
+                    if not isinstance(R, torch.Tensor):
+                        R = to_gpu_tensor(R, device)
 
-        # ── ADD ──
-        if op == OP_ADD:
-            vals = info.get("input_values", [])
-            if not isinstance(vals, (list, tuple)):
-                vals = [vals]
-            if len(vals) < 2:
-                for ci, slot in slots:
-                    _accum(buffers, idx,
-                           _get_child_rel(buffers, ci, slot, is_list[ci]),
-                           is_list[idx], device, is_wt)
-            else:
-                X_t = to_gpu_tensor(vals[0], device)
-                Y_t = to_gpu_tensor(vals[1], device)
-                for ci, slot in slots:
-                    R = _get_child_rel(buffers, ci, slot, is_list[ci])
+                    R = _apply_vector_op(R, func, shape, hp, info, idx, names, node_io, buffers, is_list, device)
                     if R is not None:
-                        result = UD2.launch_wt_add_equal_gpu(R, [X_t, Y_t])
-                        _accum(buffers, idx, result, is_list[idx], device, is_wt)
-            continue
-
-        # ── VECTOR ──
-        if op == OP_VECTOR:
-            func = func_names[idx]
-            vals = info.get("input_values", [])
-            if not isinstance(vals, (list, tuple)):
-                vals = [vals]
-            tensor_inputs = [v for v in vals if isinstance(v, (torch.Tensor, np.ndarray))]
-
-            if not tensor_inputs:
-                for ci, slot in slots:
-                    _accum(buffers, idx,
-                           _get_child_rel(buffers, ci, slot, is_list[ci]),
-                           is_list[idx], device, is_wt)
+                        _accum(buffers, idx, R, is_list[idx], device, is_wt)
                 continue
 
-            base = tensor_inputs[0]
-            shape = base.shape
-            hp = info.get("layer_hyperparams", {})
-
+            # ── Fallback ──
             for ci, slot in slots:
-                R = _get_child_rel(buffers, ci, slot, is_list[ci])
-                if R is None:
-                    continue
-                if not isinstance(R, torch.Tensor):
-                    R = to_gpu_tensor(R, device)
+                _accum(buffers, idx,
+                       _get_child_rel(buffers, ci, slot, is_list[ci]),
+                       is_list[idx], device, is_wt)
 
-                R = _apply_vector_op(R, func, shape, hp, info, idx, names, node_io, buffers, is_list, device)
-                if R is not None:
-                    _accum(buffers, idx, R, is_list[idx], device, is_wt)
-            continue
-
-        # ── Fallback ──
-        for ci, slot in slots:
-            _accum(buffers, idx,
-                   _get_child_rel(buffers, ci, slot, is_list[ci]),
-                   is_list[idx], device, is_wt)
+        except Exception as e:
+            import traceback
+            raise RuntimeError(
+                f"[compiled_propagation] Error at node '{name}' "
+                f"(idx={idx}, op={op}, func='{func_names[idx]}'): {e}\n"
+                f"{traceback.format_exc()}"
+            ) from e
 
     # ── Step 4: return results ──
     result = {}
