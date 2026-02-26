@@ -1831,15 +1831,16 @@ def run_evaluation_gpu(
 
 class RelevancePropagator:
     """Encapsulates relevance propagation logic with memory optimization."""
-    def __init__(self, graph, node_io, activation_master, get_layer_implementation=None):
+    def __init__(self, graph, node_io, activation_master,
+                 get_layer_implementation=None, propagation_schedule=None):
         self.graph = graph
         self.node_io = node_io
         self.activation_master = activation_master
         self.get_layer_implementation = get_layer_implementation or (lambda x: "original")
+        self.propagation_schedule = propagation_schedule
 
     def _uses_gpu(self):
         """Check if any layer is configured to use CUDA."""
-        # Test a representative set of layer types
         for layer_type in ["MLP_Layer", "Attention", "NLP_Embedding", "DL_Layer"]:
             if self.get_layer_implementation(layer_type) == "cuda":
                 return True
@@ -1859,20 +1860,39 @@ class RelevancePropagator:
         global DEBUG
         DEBUG = debug
 
-        eval_fn = run_evaluation_gpu if self._uses_gpu() else run_evaluation
+        use_gpu = self._uses_gpu()
 
-        result = eval_fn(
-            self.node_io,
-            self.activation_master,
-            mode=mode,
-            start_wt=start_wt,
-            multiplier=multiplier,
-            scaler=scaler,
-            thresholding=thresholding,
-            task=task,
-            target_token_ids=target_token_ids,
-            get_layer_implementation=self.get_layer_implementation,
-        )
+        # Use compiled path if schedule is available and GPU is enabled
+        if use_gpu and self.propagation_schedule is not None:
+            from .compiled_propagation import run_propagation_compiled
+            result = run_propagation_compiled(
+                self.propagation_schedule,
+                self.node_io,
+                self.activation_master,
+                mode=mode,
+                start_wt=start_wt,
+                multiplier=multiplier,
+                scaler=scaler,
+                thresholding=thresholding,
+                task=task,
+                target_token_ids=target_token_ids,
+                get_layer_implementation=self.get_layer_implementation,
+                return_gpu=True,
+            )
+        else:
+            eval_fn = run_evaluation_gpu if use_gpu else run_evaluation
+            result = eval_fn(
+                self.node_io,
+                self.activation_master,
+                mode=mode,
+                start_wt=start_wt,
+                multiplier=multiplier,
+                scaler=scaler,
+                thresholding=thresholding,
+                task=task,
+                target_token_ids=target_token_ids,
+                get_layer_implementation=self.get_layer_implementation,
+            )
 
         # Free large tensors from node_io — no longer needed after backprop
         for info in self.node_io.values():
@@ -1881,4 +1901,5 @@ class RelevancePropagator:
             info.pop("layer_hyperparams", None)
 
         return result
+
 

@@ -10,6 +10,7 @@ from .core.trace_utils import (
 from .core.config import activation_master
 from .core.dlb_auto_sampler import DLBAutoSampler
 from .core.relevance_propagation import RelevancePropagator
+from .core.compiled_propagation import PropagationSchedule
 from .core.visualization import visualize_graph, visualize_relevance, visualize_relevance_auto 
 from .core.token_relevance_visuals import (
     plot_tokenwise_relevance_map_swapped,
@@ -507,11 +508,20 @@ class DLBacktrace:
         raise original_error
 
     def evaluation(self, mode="default", start_wt=[], multiplier=100.0, scaler=1.0, thresholding=0.5, task="binary-classification", target_token_ids=None, debug=False):
+        # Build propagation schedule once and cache it
+        if not hasattr(self, '_prop_schedule') or self._prop_schedule is None:
+            try:
+                self._prop_schedule = PropagationSchedule(self.node_io, activation_master)
+            except Exception as e:
+                print(f"⚠️ Failed to build PropagationSchedule, using fallback: {e}")
+                self._prop_schedule = None
+
         evaluator = RelevancePropagator(
             graph=self.graph,
             node_io=self.node_io,
             activation_master=activation_master,
-            get_layer_implementation=self.get_layer_implementation  # Pass the function instead of a static value
+            get_layer_implementation=self.get_layer_implementation,
+            propagation_schedule=self._prop_schedule,
         )
         self.all_wt = evaluator.propagate(
             start_wt=start_wt,
