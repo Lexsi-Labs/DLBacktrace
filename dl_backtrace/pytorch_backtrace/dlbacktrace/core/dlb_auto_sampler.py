@@ -7,6 +7,7 @@ from __future__ import annotations
 import gc
 import time
 import gzip
+import io
 import lzma
 import numpy as np
 from pathlib import Path
@@ -14,6 +15,13 @@ from typing import Optional, List, Tuple, cast, Any, Dict
 
 import torch
 import torch.nn.functional as F
+
+# Optional: lz4 support (requires lz4)
+try:
+    import lz4.frame
+    HAS_LZ4 = True
+except ImportError:
+    HAS_LZ4 = False
 
 # Optional: 7z support (requires py7zr)
 try:
@@ -107,7 +115,7 @@ class DLBAutoSampler:
         cache_dir: Path,
         filename: str,
         use_compression: bool = True,
-        compression_method: str = "gzip",
+        compression_method: str = "lz4",
         pickle_protocol: int = 4,
     ) -> str:
         """Save arbitrary tensor/dict data to disk with optional compression.
@@ -135,6 +143,19 @@ class DLBAutoSampler:
         if not use_compression or compression_method == "none":
             file_path = base_path
             torch.save(cpu_data, file_path, pickle_protocol=pickle_protocol)
+        elif compression_method == "lz4":
+            if not HAS_LZ4:
+                raise ImportError(
+                    "lz4 library required for lz4 compression. "
+                    "Install with: pip install lz4"
+                )
+            file_path = Path(str(base_path) + '.lz4')
+            buf = io.BytesIO()
+            torch.save(cpu_data, buf, pickle_protocol=pickle_protocol)
+            compressed = lz4.frame.compress(buf.getvalue())
+            with open(file_path, 'wb') as f:
+                f.write(compressed)
+            del buf, compressed
         elif compression_method == "gzip":
             file_path = Path(str(base_path) + '.gz')
             with gzip.open(file_path, 'wb', compresslevel=6) as f:
@@ -468,7 +489,7 @@ class DLBAutoSampler:
         target_dtype,
         move_to_cpu: bool,
         use_compression: bool = True,
-        compression_method: str = "gzip",
+        compression_method: str = "lz4",
         pickle_protocol: int = 4,
     ):
         """
@@ -482,7 +503,7 @@ class DLBAutoSampler:
             target_dtype: Target dtype for compression
             move_to_cpu: Whether to move tensors to CPU
             use_compression: If True, use compression (default: True)
-            compression_method: Compression method - "gzip", "lzma", "7z", or "none"
+            compression_method: Compression method - "lz4" (default), "gzip", "lzma", "7z", or "none"
                               - "gzip": Fast, good compression (default)
                               - "lzma": Better compression, slower
                               - "7z": Best compression, slowest (requires py7zr)
@@ -516,6 +537,20 @@ class DLBAutoSampler:
                 file_path = base_file_path
                 torch.save(processed, file_path, pickle_protocol=pickle_protocol)
             
+            elif compression_method == "lz4":
+                if not HAS_LZ4:
+                    raise ImportError(
+                        "lz4 library required for lz4 compression. "
+                        "Install with: pip install lz4"
+                    )
+                file_path = Path(str(base_file_path) + '.lz4')
+                buf = io.BytesIO()
+                torch.save(processed, buf, pickle_protocol=pickle_protocol)
+                compressed = lz4.frame.compress(buf.getvalue())
+                with open(file_path, 'wb') as f:
+                    f.write(compressed)
+                del buf, compressed
+            
             elif compression_method == "gzip":
                 file_path = Path(str(base_file_path) + '.gz')
                 with gzip.open(file_path, 'wb', compresslevel=6) as f:
@@ -544,7 +579,7 @@ class DLBAutoSampler:
             else:
                 raise ValueError(
                     f"Unknown compression_method: {compression_method}. "
-                    f"Must be one of: 'gzip', 'lzma', '7z', 'none'"
+                    f"Must be one of: 'lz4', 'gzip', 'lzma', '7z', 'none'"
                 )
             
             # Free the processed data immediately after writing to disk
@@ -604,7 +639,7 @@ class DLBAutoSampler:
         relevance_compress_dtype: Optional[Any] = "float16",
         relevance_move_to_cpu: bool = True,
         relevance_use_compression: bool = True,
-        relevance_compression_method: str = "gzip",
+        relevance_compression_method: str = "lz4",
         relevance_pickle_protocol: int = 4,
     ):
         """
@@ -623,7 +658,7 @@ class DLBAutoSampler:
             relevance_cache_dir: base directory for on-disk caching (policy="disk").
             relevance_compress_dtype: dtype hint (str or torch.dtype) for stored tensors.
             relevance_use_compression: If True, use compression for disk storage (default: True).
-            relevance_compression_method: Compression method - "gzip" (default), "lzma", "7z", or "none".
+            relevance_compression_method: Compression method - "lz4" (default), "gzip", "lzma", "7z", or "none".
                                         - "gzip": Fast, good compression (~75% reduction)
                                         - "lzma": Better compression (~80% reduction), slower
                                         - "7z": Best compression (~82% reduction), slowest
