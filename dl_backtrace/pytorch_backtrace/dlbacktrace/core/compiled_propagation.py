@@ -97,6 +97,9 @@ class PropagationSchedule:
         # For MUL nodes: (is_X_weight, is_Y_weight) pre-computed
         self.mul_wt_flags: List[Optional[Tuple[bool, bool]]] = [None] * n
 
+        # Weight/parameter nodes: skip accumulation (matches original add_rel_gpu guard)
+        self.is_weight_node = [False] * n
+
         # Activation dict for MLP/DL nodes
         self.act_dict: Dict[str, str] = {}
 
@@ -119,6 +122,11 @@ class PropagationSchedule:
                 continue
 
             self.skip_mask[idx] = False
+
+            # Mark weight/parameter nodes (matches original add_rel_gpu guard)
+            if name.startswith("p_model_") or "weight" in name.lower():
+                self.is_weight_node[idx] = True
+
             info = node_io[name]
             layer = info["layer_name"]
             func  = info.get("func_name", "")
@@ -222,9 +230,12 @@ def _get_child_rel(buffers, ci, slot, ci_is_list):
     return val
 
 
-def _accum(buffers, idx, r, is_list, device):
+def _accum(buffers, idx, r, is_list, device, is_wt=False):
     """Accumulate relevance r into buffers[idx]. Inlined for speed."""
     if r is None:
+        return
+    # Skip weight/parameter nodes (matches original add_rel_gpu guard)
+    if is_wt:
         return
     buf = buffers[idx]
     if is_list and isinstance(buf, list):
@@ -322,6 +333,7 @@ def run_propagation_compiled(
 
     # ── Step 3: propagation loop (integer dispatch, no tqdm) ──
     buf_view = _BufferView(buffers, n2i)  # for embedding handler
+    wt_flags = schedule.is_weight_node
 
     for idx in range(n):
         if skip_mask[idx]:
@@ -330,13 +342,14 @@ def run_propagation_compiled(
         op = op_codes[idx]
         name = names[idx]
         slots = child_slots[idx]
+        is_wt = wt_flags[idx]  # skip accumulation for weight/param nodes
 
         # ── PASSTHROUGH ──
         if op == OP_PASSTHROUGH:
             for ci, slot in slots:
                 R = _get_child_rel(buffers, ci, slot, is_list[ci])
                 if R is not None:
-                    _accum(buffers, idx, R, is_list[idx], device)
+                    _accum(buffers, idx, R, is_list[idx], device, is_wt)
             continue
 
         info = node_io[name]
@@ -353,7 +366,7 @@ def run_propagation_compiled(
                 R = _get_child_rel(buffers, ci, slot, is_list[ci])
                 if R is not None:
                     delta = UD2.launch_linear_gpu(R, X, W, B, act)
-                    _accum(buffers, idx, delta, is_list[idx], device)
+                    _accum(buffers, idx, delta, is_list[idx], device, is_wt)
             continue
 
         # ── LINEAR (other) ──
@@ -371,7 +384,7 @@ def run_propagation_compiled(
                 R = _get_child_rel(buffers, ci, slot, is_list[ci])
                 if R is not None:
                     delta = UD2.launch_linear_gpu(R, X, W, B, act)
-                    _accum(buffers, idx, delta, is_list[idx], device)
+                    _accum(buffers, idx, delta, is_list[idx], device, is_wt)
             continue
 
         # ── ATTENTION ──
@@ -390,7 +403,7 @@ def run_propagation_compiled(
                 R = _get_child_rel(buffers, ci, slot, is_list[ci])
                 if R is not None:
                     RQ, RK, RV, Rmf = UD2.launch_self_attention_gpu(R, Q, K, V, mf)
-                    _accum(buffers, idx, [RQ, RK, RV, Rmf], is_list[idx], device)
+                    _accum(buffers, idx, [RQ, RK, RV, Rmf], is_list[idx], device, is_wt)
             continue
 
         # ── EMBEDDING ──
@@ -407,7 +420,7 @@ def run_propagation_compiled(
                 for ci, slot in slots:
                     _accum(buffers, idx,
                            _get_child_rel(buffers, ci, slot, is_list[ci]),
-                           is_list[idx], device)
+                           is_list[idx], device, is_wt)
             else:
                 X = to_gpu_tensor(vals[0], device)
                 Y = to_gpu_tensor(vals[1], device)
@@ -419,15 +432,15 @@ def run_propagation_compiled(
                     if wt_flags is not None:
                         is_Xw, is_Yw = wt_flags
                         if is_Xw and not is_Yw:
-                            _accum(buffers, idx, [torch.zeros_like(X), R], is_list[idx], device)
+                            _accum(buffers, idx, [torch.zeros_like(X), R], is_list[idx], device, is_wt)
                         elif is_Yw and not is_Xw:
-                            _accum(buffers, idx, [R, torch.zeros_like(Y)], is_list[idx], device)
+                            _accum(buffers, idx, [R, torch.zeros_like(Y)], is_list[idx], device, is_wt)
                         else:
                             Rx, Ry = UD2.launch_wt_mul_gpu(R)
-                            _accum(buffers, idx, [Rx, Ry], is_list[idx], device)
+                            _accum(buffers, idx, [Rx, Ry], is_list[idx], device, is_wt)
                     else:
                         Rx, Ry = UD2.launch_wt_mul_gpu(R)
-                        _accum(buffers, idx, [Rx, Ry], is_list[idx], device)
+                        _accum(buffers, idx, [Rx, Ry], is_list[idx], device, is_wt)
             continue
 
         # ── ADD ──
@@ -439,7 +452,7 @@ def run_propagation_compiled(
                 for ci, slot in slots:
                     _accum(buffers, idx,
                            _get_child_rel(buffers, ci, slot, is_list[ci]),
-                           is_list[idx], device)
+                           is_list[idx], device, is_wt)
             else:
                 X_t = to_gpu_tensor(vals[0], device)
                 Y_t = to_gpu_tensor(vals[1], device)
@@ -447,7 +460,7 @@ def run_propagation_compiled(
                     R = _get_child_rel(buffers, ci, slot, is_list[ci])
                     if R is not None:
                         result = UD2.launch_wt_add_equal_gpu(R, [X_t, Y_t])
-                        _accum(buffers, idx, result, is_list[idx], device)
+                        _accum(buffers, idx, result, is_list[idx], device, is_wt)
             continue
 
         # ── VECTOR ──
@@ -462,7 +475,7 @@ def run_propagation_compiled(
                 for ci, slot in slots:
                     _accum(buffers, idx,
                            _get_child_rel(buffers, ci, slot, is_list[ci]),
-                           is_list[idx], device)
+                           is_list[idx], device, is_wt)
                 continue
 
             base = tensor_inputs[0]
@@ -478,14 +491,14 @@ def run_propagation_compiled(
 
                 R = _apply_vector_op(R, func, shape, hp, info, idx, names, node_io, buffers, is_list, device)
                 if R is not None:
-                    _accum(buffers, idx, R, is_list[idx], device)
+                    _accum(buffers, idx, R, is_list[idx], device, is_wt)
             continue
 
         # ── Fallback ──
         for ci, slot in slots:
             _accum(buffers, idx,
                    _get_child_rel(buffers, ci, slot, is_list[ci]),
-                   is_list[idx], device)
+                   is_list[idx], device, is_wt)
 
     # ── Step 4: return results ──
     result = {}
