@@ -7,7 +7,6 @@ from __future__ import annotations
 import gc
 import time
 import gzip
-import concurrent.futures
 import io
 import lzma
 import numpy as np
@@ -99,9 +98,6 @@ class DLBAutoSampler:
     def __init__(self, dlb, tokenizer):
         self.dlb = dlb
         self.tokenizer = tokenizer
-        # Background disk writer (1 thread to avoid contention)
-        self._disk_write_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-        self._pending_futures: list[concurrent.futures.Future] = []
 
     def _clear_dlb_memory(self):
         """Clear DLB intermediate storage (node_io + all_wt) and CUDA cache."""
@@ -119,7 +115,7 @@ class DLBAutoSampler:
         cache_dir: Path,
         filename: str,
         use_compression: bool = True,
-        compression_method: str = "none",
+        compression_method: str = "lz4",
         pickle_protocol: int = 4,
     ) -> str:
         """Save arbitrary tensor/dict data to disk with optional compression.
@@ -493,8 +489,7 @@ class DLBAutoSampler:
         target_dtype,
         move_to_cpu: bool,
         use_compression: bool = True,
-        compression_method: str = "none",
-        async_write: bool = False,
+        compression_method: str = "lz4",
         pickle_protocol: int = 4,
     ):
         """
@@ -508,8 +503,7 @@ class DLBAutoSampler:
             target_dtype: Target dtype for compression
             move_to_cpu: Whether to move tensors to CPU
             use_compression: If True, use compression (default: True)
-            compression_method: Compression method - "none" (default), "lz4", "gzip", "lzma", "7z"
-            async_write: If True, submit disk write to background thread (non-blocking)
+            compression_method: Compression method - "lz4" (default), "gzip", "lzma", "7z", or "none"
                               - "gzip": Fast, good compression (default)
                               - "lzma": Better compression, slower
                               - "7z": Best compression, slowest (requires py7zr)
@@ -538,83 +532,65 @@ class DLBAutoSampler:
             
             base_file_path = cache_dir / f"step_{step_idx:05d}.pt"
             
-            # Determine file path based on compression method
+            # Determine compression method and file extension
             if not use_compression or compression_method == "none":
                 file_path = base_file_path
+                torch.save(processed, file_path, pickle_protocol=pickle_protocol)
+            
             elif compression_method == "lz4":
+                if not HAS_LZ4:
+                    raise ImportError(
+                        "lz4 library required for lz4 compression. "
+                        "Install with: pip install lz4"
+                    )
                 file_path = Path(str(base_file_path) + '.lz4')
+                buf = io.BytesIO()
+                torch.save(processed, buf, pickle_protocol=pickle_protocol)
+                compressed = lz4.frame.compress(buf.getvalue())
+                with open(file_path, 'wb') as f:
+                    f.write(compressed)
+                del buf, compressed
+            
             elif compression_method == "gzip":
                 file_path = Path(str(base_file_path) + '.gz')
+                with gzip.open(file_path, 'wb', compresslevel=6) as f:
+                    torch.save(processed, f, pickle_protocol=pickle_protocol)
+            
             elif compression_method == "lzma":
                 file_path = Path(str(base_file_path) + '.xz')
+                with lzma.open(file_path, 'wb', preset=6) as f:
+                    torch.save(processed, f, pickle_protocol=pickle_protocol)
+            
             elif compression_method == "7z":
+                if not HAS_7Z:
+                    raise ImportError(
+                        "py7zr library required for 7z compression. "
+                        "Install with: pip install py7zr"
+                    )
                 file_path = Path(str(base_file_path) + '.7z')
+                import tempfile
+                with tempfile.NamedTemporaryFile(suffix='.pt', delete=False) as tmp:
+                    tmp_path = Path(tmp.name)
+                    torch.save(processed, tmp_path, pickle_protocol=pickle_protocol)
+                with py7zr.SevenZipFile(file_path, 'w') as archive:
+                    archive.write(tmp_path, arcname=f'step_{step_idx:05d}.pt')
+                tmp_path.unlink()
+            
             else:
                 raise ValueError(
                     f"Unknown compression_method: {compression_method}. "
-                    f"Must be one of: 'none', 'lz4', 'gzip', 'lzma', '7z'"
+                    f"Must be one of: 'lz4', 'gzip', 'lzma', '7z', 'none'"
                 )
-
-            result = {
+            
+            # Free the processed data immediately after writing to disk
+            del processed
+            gc.collect()
+            
+            return {
                 "summary": summary_val,
                 "path": str(file_path),
                 "compression": compression_method,
             }
-
-            # --- actual write (sync or async) ---
-            def _do_write(data, fpath, comp_method, use_comp, pkl_proto, step):
-                """Perform the actual disk write. Runs in a thread when async."""
-                if not use_comp or comp_method == "none":
-                    torch.save(data, fpath, pickle_protocol=pkl_proto)
-                elif comp_method == "lz4":
-                    if not HAS_LZ4:
-                        raise ImportError(
-                            "lz4 library required for lz4 compression. "
-                            "Install with: pip install lz4"
-                        )
-                    buf = io.BytesIO()
-                    torch.save(data, buf, pickle_protocol=pkl_proto)
-                    compressed = lz4.frame.compress(buf.getvalue())
-                    with open(fpath, 'wb') as f:
-                        f.write(compressed)
-                    del buf, compressed
-                elif comp_method == "gzip":
-                    with gzip.open(fpath, 'wb', compresslevel=6) as f:
-                        torch.save(data, f, pickle_protocol=pkl_proto)
-                elif comp_method == "lzma":
-                    with lzma.open(fpath, 'wb', preset=6) as f:
-                        torch.save(data, f, pickle_protocol=pkl_proto)
-                elif comp_method == "7z":
-                    if not HAS_7Z:
-                        raise ImportError(
-                            "py7zr library required for 7z compression. "
-                            "Install with: pip install py7zr"
-                        )
-                    import tempfile as _tf
-                    with _tf.NamedTemporaryFile(suffix='.pt', delete=False) as tmp:
-                        tmp_path = Path(tmp.name)
-                        torch.save(data, tmp_path, pickle_protocol=pkl_proto)
-                    with py7zr.SevenZipFile(fpath, 'w') as archive:
-                        archive.write(tmp_path, arcname=f'step_{step:05d}.pt')
-                    tmp_path.unlink()
-                # Free the data after writing
-                del data
-
-            if async_write:
-                # Submit to background thread — main thread returns immediately
-                future = self._disk_write_executor.submit(
-                    _do_write, processed, file_path, compression_method,
-                    use_compression, pickle_protocol, step_idx,
-                )
-                self._pending_futures.append(future)
-            else:
-                # Synchronous write
-                _do_write(processed, file_path, compression_method,
-                          use_compression, pickle_protocol, step_idx)
-                del processed
-                gc.collect()
-
-            return result
 
 
         if normalized_policy != "full":
@@ -622,20 +598,6 @@ class DLBAutoSampler:
                 "relevance_cache_policy must be one of {'full', 'summary', 'disk', 'none'}"
             )
         return processed
-
-    def _flush_pending_writes(self):
-        """Block until all background disk writes finish. Raise any exceptions."""
-        errors = []
-        for future in self._pending_futures:
-            try:
-                future.result()  # blocks until done
-            except Exception as e:
-                errors.append(e)
-        self._pending_futures.clear()
-        if errors:
-            raise RuntimeError(
-                f"{len(errors)} background write(s) failed. First error: {errors[0]}"
-            ) from errors[0]
 
     # ---------- public API ----------
 
@@ -677,7 +639,7 @@ class DLBAutoSampler:
         relevance_compress_dtype: Optional[Any] = "float16",
         relevance_move_to_cpu: bool = True,
         relevance_use_compression: bool = True,
-        relevance_compression_method: str = "none",
+        relevance_compression_method: str = "lz4",
         relevance_pickle_protocol: int = 4,
     ):
         """
@@ -696,7 +658,7 @@ class DLBAutoSampler:
             relevance_cache_dir: base directory for on-disk caching (policy="disk").
             relevance_compress_dtype: dtype hint (str or torch.dtype) for stored tensors.
             relevance_use_compression: If True, use compression for disk storage (default: True).
-            relevance_compression_method: Compression method - "none" (default), "lz4", "gzip", "lzma", "7z".
+            relevance_compression_method: Compression method - "lz4" (default), "gzip", "lzma", "7z", or "none".
                                         - "gzip": Fast, good compression (~75% reduction)
                                         - "lzma": Better compression (~80% reduction), slower
                                         - "7z": Best compression (~82% reduction), slowest
@@ -946,7 +908,6 @@ class DLBAutoSampler:
                             use_compression=relevance_use_compression,
                             compression_method=relevance_compression_method,
                             pickle_protocol=relevance_pickle_protocol,
-                            async_write=disk_streaming,
                         )
                         relevance_trace.append(entry)
                 _t["relevance_save"] = time.perf_counter() - _ts
@@ -1011,13 +972,6 @@ class DLBAutoSampler:
 
             if debug:
                 print(f"[greedy/sampling] stopped_by={stopped_by}")
-
-            # Flush any pending async writes before returning
-            if disk_streaming and self._pending_futures:
-                print("  ⏱ Flushing pending background writes...")
-                _ts = time.perf_counter()
-                self._flush_pending_writes()
-                print(f"  ⏱ Flush done in {time.perf_counter() - _ts:.2f}s")
 
             if return_relevance:
                 print("\n" + "=" * 60)
