@@ -262,7 +262,6 @@ def run_propagation_compiled(
     task: str = "binary-classification",
     target_token_ids=None,
     get_layer_implementation=None,
-    return_gpu: bool = True,
 ) -> dict:
     """
     Fast LRP propagation using pre-computed schedule.
@@ -509,27 +508,26 @@ def run_propagation_compiled(
                 f"{traceback.format_exc()}"
             ) from e
 
-    # ── Step 4: return results ──
+    # ── Step 4: bulk GPU→CPU transfer + numpy conversion ──
+    # Issue all .cpu() calls first, then synchronize once, then convert to numpy.
+    # This avoids the per-tensor sync that makes torch.save(GPU tensor) slow.
+    torch.cuda.synchronize()
+
     result = {}
-    if return_gpu:
-        for idx in range(n):
-            val = buffers[idx]
-            if val is not None:
-                result[names[idx]] = val
-    else:
-        for idx in range(n):
-            val = buffers[idx]
-            if val is None:
-                continue
-            if isinstance(val, torch.Tensor):
-                result[names[idx]] = val.detach().cpu().numpy()
-            elif isinstance(val, list):
-                result[names[idx]] = [
-                    v.detach().cpu().numpy() if isinstance(v, torch.Tensor) else v
-                    for v in val
-                ]
-            else:
-                result[names[idx]] = val
+    for idx in range(n):
+        val = buffers[idx]
+        if val is None:
+            continue
+        name_out = names[idx]
+        if isinstance(val, torch.Tensor):
+            result[name_out] = val.detach().cpu().numpy()
+        elif isinstance(val, list):
+            result[name_out] = [
+                v.detach().cpu().numpy() if isinstance(v, torch.Tensor) else v
+                for v in val
+            ]
+        else:
+            result[name_out] = val
 
     # Free buffer array
     del buffers

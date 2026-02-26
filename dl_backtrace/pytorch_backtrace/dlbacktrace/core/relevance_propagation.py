@@ -1877,7 +1877,6 @@ class RelevancePropagator:
                 task=task,
                 target_token_ids=target_token_ids,
                 get_layer_implementation=self.get_layer_implementation,
-                return_gpu=True,
             )
         else:
             eval_fn = run_evaluation_gpu if use_gpu else run_evaluation
