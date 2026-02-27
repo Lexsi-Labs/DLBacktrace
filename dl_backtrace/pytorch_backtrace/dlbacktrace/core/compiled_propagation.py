@@ -1,6 +1,6 @@
 """
 Compiled relevance propagation — pre-analyzes graph structure once,
-then executes LRP backpropagation with minimal Python overhead.
+then executes DLB backpropagation with minimal Python overhead.
 
 Key optimizations vs run_evaluation_gpu():
   1. Integer-indexed buffers instead of dict (all_wt[name] → buffers[idx])
@@ -265,7 +265,7 @@ def run_propagation_compiled(
     return_gpu: bool = True,
 ) -> dict:
     """
-    Fast LRP propagation using pre-computed schedule.
+    Fast DLB propagation using pre-computed schedule.
     Returns GPU tensors by default (no numpy conversion).
     """
     device = torch.device("cuda")
