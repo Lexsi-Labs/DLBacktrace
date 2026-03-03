@@ -561,13 +561,34 @@ class DLBAutoSampler:
             purged_mb = (original_bytes - kept_bytes) / (1024 ** 2)
             kept_pct = (len(filtered) / original_count * 100) if original_count else 100
             print(
-                f"  🧹 Relevance filter: kept {len(filtered)}/{original_count} nodes "
+                f"Relevance filter: kept {len(filtered)}/{original_count} nodes "
                 f"({kept_pct:.1f}%) | purged {purged} zero-relevance nodes "
                 f"({purged_mb:.0f} MB)"
             )
             rel_dict = filtered
 
         processed = self._compress_relevance_tree(rel_dict, target_dtype=target_dtype, move_to_cpu=move_to_cpu)
+
+        # ── Free GPU tensors NOW ──
+        # rel_dict holds references to GPU tensors from self.dlb.all_wt.
+        # After _compress_relevance_tree, `processed` has CPU copies; we no
+        # longer need the GPU-side data.  Clearing them here prevents ~4.7 GB
+        # of GPU memory from staying alive during the subsequent torch.save +
+        # LZ4 serialisation, which would otherwise exhaust VRAM by token 3-4.
+        def _free_gpu(obj):
+            if torch.is_tensor(obj) and obj.is_cuda:
+                obj.data = torch.empty(0, device=obj.device)
+            elif isinstance(obj, dict):
+                for v in obj.values():
+                    _free_gpu(v)
+            elif isinstance(obj, (list, tuple)):
+                for v in obj:
+                    _free_gpu(v)
+        _free_gpu(rel_dict)
+        del rel_dict
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
         if processed is None:
             return None
 
@@ -961,6 +982,8 @@ class DLBAutoSampler:
                             pickle_protocol=relevance_pickle_protocol,
                         )
                         relevance_trace.append(entry)
+                        # Free the caller-side GPU reference immediately
+                        del rel_dict
                 _t["relevance_save"] = time.perf_counter() - _ts
 
                 # ── Stage G: Memory cleanup ──
