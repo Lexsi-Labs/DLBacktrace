@@ -17,13 +17,24 @@ import gc
 import numpy as np
 import torch
 import os
+import torch.nn as nn
+from torch.export import Dim
+from transformers import AutoTokenizer, AutoModelForCausalLM
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+from collections import defaultdict
+import random
+import string
+import json
+from typing import Dict, Any, Tuple, List
+from datasets import load_dataset
+
 
 # ── Setup DLBacktrace and run one predict + backtrace ──
 print("=" * 70)
 print("  Relevance Output Analysis")
 print("=" * 70)
-
-from transformers import AutoTokenizer, AutoModelForCausalLM
 
 MODEL = "meta-llama/Llama-3.2-1B"
 PROMPT = "Explain the difference between O+ and O- blood type."
