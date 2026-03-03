@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import gc
+import json
 import time
 import gzip
 import io
@@ -499,178 +500,244 @@ class DLBAutoSampler:
         compression_method: str = "lz4",
         pickle_protocol: int = 4,
     ):
-        """Store relevance entry: filter → GPU→CPU → free GPU → serialize.
+        """Store relevance: filter → GPU concat → ONE DMA → free GPU → raw-bytes save.
 
-        IMPORTANT: rel_dict is typically the SAME object as self.dlb.all_wt.
-        This method clears it in-place after copying to CPU, which also
-        empties self.dlb.all_wt.  This is intentional — it releases ~4.8 GB
-        of GPU memory BEFORE the serialisation step, preventing VRAM
-        exhaustion that would otherwise slow subsequent tokens by 10×.
+        Key optimisations vs. the old per-tensor pipeline:
+          • 1243 individual .cpu() calls → 1  (eliminates CUDA sync overhead)
+          • torch.save pickle of 1243 objects → raw bytes + JSON header
+          • GPU memory freed *before* serialisation starts
+
+        File format (.dlbr):
+          [8-byte header_len LE] [JSON metadata] [LZ4-compressed raw float32 bytes]
+
+        Use DLBAutoSampler.load_relevance_step() to reload.
         """
         normalized_policy = (policy or "full").lower()
         if normalized_policy == "none":
             return None
 
-        # ── Step 1: Filter weight / buffer nodes (instant, name-based) ──
-        # torch.export names params as p_model_* and buffers as b_model_*;
-        # these are always zero (never accumulated during relevance propagation).
         _t0 = time.perf_counter()
+
+        # ── Step 1: Filter weight / buffer nodes (instant, name-based) ──
         original_count = 0
         original_bytes = 0
         kept_keys = []
         if isinstance(rel_dict, dict):
-            def _entry_bytes(v):
-                if torch.is_tensor(v):
-                    return v.nelement() * v.element_size()
-                if isinstance(v, (list, tuple)):
-                    return sum(_entry_bytes(x) for x in v)
-                return 0
-
             original_count = len(rel_dict)
             for k, v in rel_dict.items():
-                original_bytes += _entry_bytes(v)
+                if torch.is_tensor(v):
+                    original_bytes += v.nelement() * v.element_size()
             kept_keys = [k for k in rel_dict
                          if not (k.startswith("p_model_") or k.startswith("b_model_"))]
+
         _t1 = time.perf_counter()
 
-        # ── Step 2: GPU → CPU transfer (only kept entries) ──
-        cpu_data = {}
-        kept_bytes = 0
+        # ── Step 2: Flatten + concatenate on GPU → ONE DMA transfer ──
+        meta_entries = []   # [(key, shape_list, dtype_str, n_elements), ...]
+        flat_parts = []     # list of 1-D GPU tensors (all cast to float32)
+        offset = 0
+        cast_dtype = self._resolve_torch_dtype(target_dtype) if target_dtype else torch.float32
+
         for k in kept_keys:
             v = rel_dict[k]
-            cpu_data[k] = self._compress_relevance_tree(
-                v, target_dtype=target_dtype, move_to_cpu=move_to_cpu)
-            kept_bytes += _entry_bytes(cpu_data[k])
+            if torch.is_tensor(v):
+                t = v.detach()
+                orig_dtype = str(t.dtype)
+                flat = t.to(dtype=cast_dtype).reshape(-1)   # flatten on GPU (cheap)
+                n = flat.numel()
+                meta_entries.append((k, list(t.shape), orig_dtype, n))
+                flat_parts.append(flat)
+                offset += n
+            elif isinstance(v, (list, tuple)):
+                # Handle list-of-tensors (rare but possible)
+                for i, sub in enumerate(v):
+                    if torch.is_tensor(sub):
+                        t = sub.detach()
+                        orig_dtype = str(t.dtype)
+                        flat = t.to(dtype=cast_dtype).reshape(-1)
+                        n = flat.numel()
+                        meta_entries.append((f"{k}[{i}]", list(t.shape), orig_dtype, n))
+                        flat_parts.append(flat)
+                        offset += n
+
+        if not flat_parts:
+            rel_dict.clear()
+            return None
+
+        # Single GPU concatenation — one allocation, no per-tensor overhead
+        flat_gpu = torch.cat(flat_parts)
+        del flat_parts
+
+        # ONE synchronous DMA transfer (replaces 1243 individual .cpu() calls)
+        flat_cpu = flat_gpu.cpu()
+        del flat_gpu
         _t2 = time.perf_counter()
 
         # ── Step 3: Free ALL GPU memory NOW ──
-        # rel_dict IS self.dlb.all_wt — clearing in-place releases every
-        # GPU tensor (all 1390 entries / ~4.8 GB) before serialisation.
-        rel_dict.clear()               # in-place clear → also empties self.dlb.all_wt
+        rel_dict.clear()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         _t3 = time.perf_counter()
 
         # ── Print filter statistics ──
+        kept_bytes = flat_cpu.nelement() * flat_cpu.element_size()
+        kept_mb = kept_bytes / (1024 ** 2)
         purged = original_count - len(kept_keys)
         purged_mb = (original_bytes - kept_bytes) / (1024 ** 2)
         kept_pct = (len(kept_keys) / original_count * 100) if original_count else 100
-        kept_mb = kept_bytes / (1024 ** 2)
         print(
             f"Relevance filter: kept {len(kept_keys)}/{original_count} nodes "
             f"({kept_pct:.1f}%) | purged {purged} zero-relevance nodes "
             f"({purged_mb:.0f} MB) | kept {kept_mb:.1f} MB"
         )
 
-        if not cpu_data:
-            return None
-
-        # ── Step 4: Serialise (pure CPU — no GPU memory held) ──
+        # ── For non-disk policies, rebuild dict on CPU ──
         if normalized_policy == "summary":
-            return {"summary": self._summarize_relevance(cpu_data)}
+            cpu_dict = self._flat_to_dict(flat_cpu, meta_entries)
+            return {"summary": self._summarize_relevance(cpu_dict)}
 
-        if normalized_policy == "disk":
-            if cache_dir is None:
-                raise ValueError(
-                    "relevance_cache_dir must be provided when "
-                    "relevance_cache_policy='disk'"
-                )
-            summary_val = self._summarize_relevance(cpu_data)
-            base_file_path = cache_dir / f"step_{step_idx:05d}.pt"
+        if normalized_policy == "full":
+            return self._flat_to_dict(flat_cpu, meta_entries)
 
-            if not use_compression or compression_method == "none":
-                file_path = base_file_path
-                torch.save(cpu_data, file_path, pickle_protocol=pickle_protocol)
-                _t4 = time.perf_counter()
-                _t5 = _t4  # no separate compress step
-
-            elif compression_method == "lz4":
-                if not HAS_LZ4:
-                    raise ImportError(
-                        "lz4 library required for lz4 compression. "
-                        "Install with: pip install lz4"
-                    )
-                file_path = Path(str(base_file_path) + '.lz4')
-                buf = io.BytesIO()
-                torch.save(cpu_data, buf, pickle_protocol=pickle_protocol)
-                _t4 = time.perf_counter()
-                raw_bytes = buf.getvalue()
-                compressed = lz4.frame.compress(raw_bytes)
-                with open(file_path, 'wb') as f:
-                    f.write(compressed)
-                _t5 = time.perf_counter()
-                raw_mb = len(raw_bytes) / (1024 ** 2)
-                comp_mb = len(compressed) / (1024 ** 2)
-                del buf, raw_bytes, compressed
-
-            elif compression_method == "gzip":
-                file_path = Path(str(base_file_path) + '.gz')
-                with gzip.open(file_path, 'wb', compresslevel=6) as f:
-                    torch.save(cpu_data, f, pickle_protocol=pickle_protocol)
-                _t4 = time.perf_counter()
-                _t5 = _t4
-
-            elif compression_method == "lzma":
-                file_path = Path(str(base_file_path) + '.xz')
-                with lzma.open(file_path, 'wb', preset=6) as f:
-                    torch.save(cpu_data, f, pickle_protocol=pickle_protocol)
-                _t4 = time.perf_counter()
-                _t5 = _t4
-
-            elif compression_method == "7z":
-                if not HAS_7Z:
-                    raise ImportError(
-                        "py7zr library required for 7z compression. "
-                        "Install with: pip install py7zr"
-                    )
-                file_path = Path(str(base_file_path) + '.7z')
-                import tempfile
-                with tempfile.NamedTemporaryFile(suffix='.pt', delete=False) as tmp:
-                    tmp_path = Path(tmp.name)
-                    torch.save(cpu_data, tmp_path, pickle_protocol=pickle_protocol)
-                with py7zr.SevenZipFile(file_path, 'w') as archive:
-                    archive.write(tmp_path, arcname=f'step_{step_idx:05d}.pt')
-                tmp_path.unlink()
-                _t4 = time.perf_counter()
-                _t5 = _t4
-
-            else:
-                raise ValueError(
-                    f"Unknown compression_method: {compression_method}. "
-                    f"Must be one of: 'lz4', 'gzip', 'lzma', '7z', 'none'"
-                )
-
-            # ── Print sub-step timing breakdown ──
-            print(
-                f"    rel_save breakdown: "
-                f"filter={_t1-_t0:.3f}s | "
-                f"gpu2cpu={_t2-_t1:.3f}s | "
-                f"gpu_free={_t3-_t2:.3f}s | "
-                f"torch.save={_t4-_t3:.3f}s | "
-                f"lz4+write={_t5-_t4:.3f}s | "
-                f"total={_t5-_t0:.3f}s"
-            )
-            if compression_method == "lz4":
-                print(
-                    f"    serialised: raw={raw_mb:.1f} MB → "
-                    f"compressed={comp_mb:.1f} MB "
-                    f"(ratio={comp_mb/raw_mb:.2f})"
-                )
-
-            del cpu_data
-            gc.collect()
-            return {
-                "summary": summary_val,
-                "path": str(file_path),
-                "compression": compression_method,
-            }
-
-        if normalized_policy != "full":
+        # ── Step 4: Disk serialisation (pure CPU — no GPU memory held) ──
+        if normalized_policy != "disk":
             raise ValueError(
                 "relevance_cache_policy must be one of "
                 "{'full', 'summary', 'disk', 'none'}"
             )
-        return cpu_data
+
+        if cache_dir is None:
+            raise ValueError(
+                "relevance_cache_dir must be provided when "
+                "relevance_cache_policy='disk'"
+            )
+
+        # Build summary from the flat buffer before saving
+        cpu_dict = self._flat_to_dict(flat_cpu, meta_entries)
+        summary_val = self._summarize_relevance(cpu_dict)
+        del cpu_dict
+
+        # Metadata header (JSON, tiny)
+        header = {
+            "format": "dlbr_v1",
+            "dtype": str(cast_dtype),
+            "total_elements": int(flat_cpu.numel()),
+            "entries": [
+                {"key": k, "shape": s, "orig_dtype": d, "count": n}
+                for k, s, d, n in meta_entries
+            ],
+        }
+        header_bytes = json.dumps(header, separators=(',', ':')).encode('utf-8')
+        header_len = len(header_bytes)
+
+        # Raw tensor bytes (contiguous, one memcpy)
+        raw_bytes = flat_cpu.numpy().tobytes()
+        del flat_cpu
+        _t4 = time.perf_counter()
+
+        # LZ4 compress + write
+        file_path = cache_dir / f"step_{step_idx:05d}.dlbr"
+        if use_compression and compression_method == "lz4" and HAS_LZ4:
+            compressed = lz4.frame.compress(raw_bytes)
+            with open(file_path, 'wb') as f:
+                f.write(header_len.to_bytes(8, 'little'))
+                f.write(header_bytes)
+                f.write(compressed)
+            comp_mb = len(compressed) / (1024 ** 2)
+            del compressed
+        else:
+            # Uncompressed fallback
+            file_path = cache_dir / f"step_{step_idx:05d}.dlbr"
+            with open(file_path, 'wb') as f:
+                f.write(header_len.to_bytes(8, 'little'))
+                f.write(header_bytes)
+                f.write(raw_bytes)
+            comp_mb = len(raw_bytes) / (1024 ** 2)
+        raw_mb = len(raw_bytes) / (1024 ** 2)
+        del raw_bytes
+        _t5 = time.perf_counter()
+
+        # ── Print sub-step timing breakdown ──
+        print(
+            f"    rel_save breakdown: "
+            f"filter={_t1-_t0:.3f}s | "
+            f"concat+dma={_t2-_t1:.3f}s | "
+            f"gpu_free={_t3-_t2:.3f}s | "
+            f"tobytes={_t4-_t3:.3f}s | "
+            f"lz4+write={_t5-_t4:.3f}s | "
+            f"total={_t5-_t0:.3f}s"
+        )
+        print(
+            f"    serialised: raw={raw_mb:.1f} MB → "
+            f"compressed={comp_mb:.1f} MB "
+            f"(ratio={comp_mb/raw_mb:.2f})"
+        )
+
+        gc.collect()
+        return {
+            "summary": summary_val,
+            "path": str(file_path),
+            "compression": compression_method if use_compression else "none",
+        }
+
+    @staticmethod
+    def _flat_to_dict(flat_cpu, meta_entries):
+        """Reconstruct a {key: tensor} dict from a flat buffer + metadata."""
+        result = {}
+        offset = 0
+        for key, shape, orig_dtype, count in meta_entries:
+            t = flat_cpu[offset:offset + count].reshape(shape)
+            result[key] = t
+            offset += count
+        return result
+
+    @staticmethod
+    def load_relevance_step(file_path: str, device: str = "cpu"):
+        """Load a .dlbr relevance file produced by the flat-buffer pipeline.
+
+        Args:
+            file_path: Path to .dlbr file
+            device: Target device for the loaded tensors (default: "cpu")
+
+        Returns:
+            dict mapping node keys to tensors
+        """
+        path = Path(file_path)
+        with open(path, 'rb') as f:
+            header_len = int.from_bytes(f.read(8), 'little')
+            header = json.loads(f.read(header_len).decode('utf-8'))
+            payload = f.read()
+
+        # Determine dtype
+        dtype_str = header.get("dtype", "torch.float32")
+        dtype_map = {
+            "torch.float32": (torch.float32, np.float32),
+            "torch.float16": (torch.float16, np.float16),
+            "torch.bfloat16": (torch.float32, np.float32),  # bfloat16 has no numpy equiv
+        }
+        torch_dtype, np_dtype = dtype_map.get(dtype_str, (torch.float32, np.float32))
+
+        # Decompress if needed
+        if HAS_LZ4:
+            try:
+                payload = lz4.frame.decompress(payload)
+            except Exception:
+                pass  # might be uncompressed
+
+        # Rebuild tensors
+        flat = torch.frombuffer(bytearray(payload), dtype=torch_dtype)
+        result = {}
+        offset = 0
+        for entry in header["entries"]:
+            key = entry["key"]
+            shape = entry["shape"]
+            count = entry["count"]
+            t = flat[offset:offset + count].reshape(shape).clone()
+            if device != "cpu":
+                t = t.to(device)
+            result[key] = t
+            offset += count
+        return result
 
     # ---------- public API ----------
 
