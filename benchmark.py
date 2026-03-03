@@ -708,7 +708,7 @@ def main():
         from pathlib import Path
 
         cache_path = Path(args.cache_dir)
-        dlbr_files = sorted(cache_path.glob("*.dlbr"))
+        dlbr_files = sorted(cache_path.rglob("*.dlbr"))
         if dlbr_files:
             print("\n" + "─" * 70)
             print("  📋 RELEVANCE OUTPUT VERIFICATION (.dlbr)")
