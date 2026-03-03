@@ -701,6 +701,50 @@ def main():
                         "error": str(e),
                     })
 
+        # ═══════════════════════════════════════════════════════════
+        #  Verify .dlbr Relevance Output
+        # ═══════════════════════════════════════════════════════════
+        from dl_backtrace.pytorch_backtrace.dlbacktrace.core.dlb_auto_sampler import DLBAutoSampler
+        from pathlib import Path
+
+        cache_path = Path(args.cache_dir)
+        dlbr_files = sorted(cache_path.glob("*.dlbr"))
+        if dlbr_files:
+            print("\n" + "─" * 70)
+            print("  📋 RELEVANCE OUTPUT VERIFICATION (.dlbr)")
+            print("─" * 70)
+            print(f"  Cache dir: {cache_path}")
+            print(f"  Found {len(dlbr_files)} .dlbr file(s)\n")
+
+            for dlbr_file in dlbr_files:
+                file_size_mb = dlbr_file.stat().st_size / (1024 ** 2)
+                t0 = time.perf_counter()
+                rel_data = DLBAutoSampler.load_relevance_step(str(dlbr_file))
+                load_time = time.perf_counter() - t0
+
+                print(f"  ── {dlbr_file.name} ({file_size_mb:.1f} MB, loaded in {load_time:.3f}s) ──")
+                print(f"     Entries: {len(rel_data)}")
+
+                # Print like ir.print_all_relevance_info()
+                for key, val in rel_data.items():
+                    if isinstance(val, (list, tuple)):
+                        for i, v in enumerate(val):
+                            if hasattr(v, "shape") and hasattr(v, "sum"):
+                                s = float(v.sum())
+                                print(f"     [{key}][{i}] shape: {v.shape}, sum: {s:.4f}")
+                    elif hasattr(val, "shape") and hasattr(val, "sum"):
+                        s = float(val.sum())
+                        print(f"     [{key}] shape: {val.shape}, sum: {s:.4f}")
+                    else:
+                        print(f"     [{key}] is not a tensor")
+
+                del rel_data
+                print()
+
+            print(f"  ✅ All {len(dlbr_files)} .dlbr files loaded and verified successfully")
+        else:
+            print(f"\n  ⚠️  No .dlbr files found in {cache_path}")
+
     # ═══════════════════════════════════════════════════════════
     #  Report
     # ═══════════════════════════════════════════════════════════
