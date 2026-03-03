@@ -451,33 +451,28 @@ class DLBAutoSampler:
         raise ValueError(f"Unsupported relevance dtype hint: {dtype_hint}")
 
     def _compress_relevance_tree(self, data, *, target_dtype=None, move_to_cpu=True):
-        """Move tensors to CPU using pinned memory + non_blocking DMA pipeline.
-        
-        Queues all GPU→CPU copies asynchronously, then synchronizes once.
-        """
-        result = self._compress_relevance_tree_async(data, target_dtype=target_dtype, move_to_cpu=move_to_cpu)
-        # Single sync point after all non-blocking copies are queued
-        if move_to_cpu and torch.cuda.is_available():
-            torch.cuda.synchronize()
-        return result
+        """Recursively move tensors to CPU and optionally cast dtype.
 
-    def _compress_relevance_tree_async(self, data, *, target_dtype=None, move_to_cpu=True):
-        """Inner recursive walk — queues non-blocking copies, caller must sync."""
+        Uses simple blocking .cpu() — reliable and fast for the ~120 MB of
+        data remaining after weight-node filtering.
+        """
         if torch.is_tensor(data):
-            tensor = data.detach()
-            if move_to_cpu and tensor.is_cuda:
-                tensor = tensor.to('cpu', non_blocking=True)
+            t = data.detach()
+            if move_to_cpu and t.is_cuda:
+                t = t.cpu()
             if target_dtype is not None:
-                tensor = tensor.to(dtype=target_dtype)
-            return tensor
+                t = t.to(dtype=target_dtype)
+            return t
         if isinstance(data, np.ndarray):
             return torch.from_numpy(data)
         if isinstance(data, dict):
-            return {k: self._compress_relevance_tree_async(v, target_dtype=target_dtype, move_to_cpu=move_to_cpu) for k, v in data.items()}
-        if isinstance(data, list):
-            return [self._compress_relevance_tree_async(v, target_dtype=target_dtype, move_to_cpu=move_to_cpu) for v in data]
-        if isinstance(data, tuple):
-            return tuple(self._compress_relevance_tree_async(v, target_dtype=target_dtype, move_to_cpu=move_to_cpu) for v in data)
+            return {k: self._compress_relevance_tree(v, target_dtype=target_dtype,
+                                                      move_to_cpu=move_to_cpu)
+                    for k, v in data.items()}
+        if isinstance(data, (list, tuple)):
+            return type(data)(self._compress_relevance_tree(v, target_dtype=target_dtype,
+                                                             move_to_cpu=move_to_cpu)
+                              for v in data)
         return data
 
     def _prepare_cache_dir(self, base_dir: Optional[str], policy: str):
@@ -504,111 +499,84 @@ class DLBAutoSampler:
         compression_method: str = "lz4",
         pickle_protocol: int = 4,
     ):
-        """
-        Store relevance entry according to specified policy.
-        
-        Args:
-            rel_dict: Relevance dictionary to store
-            policy: Cache policy ("full", "summary", "disk", "none")
-            step_idx: Generation step index
-            cache_dir: Directory for disk caching
-            target_dtype: Target dtype for compression
-            move_to_cpu: Whether to move tensors to CPU
-            use_compression: If True, use compression (default: True)
-            compression_method: Compression method - "lz4" (default), "gzip", "lzma", "7z", or "none"
-                              - "gzip": Fast, good compression (default)
-                              - "lzma": Better compression, slower
-                              - "7z": Best compression, slowest (requires py7zr)
-                              - "none": No compression
-            pickle_protocol: Pickle protocol version (2-5). Higher = better compression.
-                            Protocol 4 (default): Python 3.4+, good compression
-                            Protocol 5: Best compression, Python 3.8+
+        """Store relevance entry: filter → GPU→CPU → free GPU → serialize.
+
+        IMPORTANT: rel_dict is typically the SAME object as self.dlb.all_wt.
+        This method clears it in-place after copying to CPU, which also
+        empties self.dlb.all_wt.  This is intentional — it releases ~4.8 GB
+        of GPU memory BEFORE the serialisation step, preventing VRAM
+        exhaustion that would otherwise slow subsequent tokens by 10×.
         """
         normalized_policy = (policy or "full").lower()
         if normalized_policy == "none":
             return None
 
-        # Filter out weight/parameter/buffer nodes — they are always zero.
+        # ── Step 1: Filter weight / buffer nodes (instant, name-based) ──
         # torch.export names params as p_model_* and buffers as b_model_*;
-        # this convention holds for ALL models (Llama, Qwen, Mistral, GPT-2, …).
-        # Using name-based filtering is instant (no GPU ops) unlike .abs().sum()
-        # which would allocate massive temporaries on GPU for large weight tensors.
+        # these are always zero (never accumulated during relevance propagation).
+        original_count = 0
+        original_bytes = 0
+        kept_keys = []
         if isinstance(rel_dict, dict):
-            original_count = len(rel_dict)
-            original_bytes = 0
-            kept_bytes = 0
-
             def _entry_bytes(v):
                 if torch.is_tensor(v):
                     return v.nelement() * v.element_size()
-                if isinstance(v, np.ndarray):
-                    return v.nbytes
                 if isinstance(v, (list, tuple)):
                     return sum(_entry_bytes(x) for x in v)
                 return 0
 
-            def _is_weight_or_buffer(key):
-                return key.startswith("p_model_") or key.startswith("b_model_")
-
-            for v in rel_dict.values():
+            original_count = len(rel_dict)
+            for k, v in rel_dict.items():
                 original_bytes += _entry_bytes(v)
+            kept_keys = [k for k in rel_dict
+                         if not (k.startswith("p_model_") or k.startswith("b_model_"))]
 
-            filtered = {k: v for k, v in rel_dict.items() if not _is_weight_or_buffer(k)}
-            for v in filtered.values():
-                kept_bytes += _entry_bytes(v)
+        # ── Step 2: GPU → CPU transfer (only kept entries) ──
+        cpu_data = {}
+        kept_bytes = 0
+        for k in kept_keys:
+            v = rel_dict[k]
+            cpu_data[k] = self._compress_relevance_tree(
+                v, target_dtype=target_dtype, move_to_cpu=move_to_cpu)
+            kept_bytes += _entry_bytes(cpu_data[k])
 
-            purged = original_count - len(filtered)
-            purged_mb = (original_bytes - kept_bytes) / (1024 ** 2)
-            kept_pct = (len(filtered) / original_count * 100) if original_count else 100
-            print(
-                f"Relevance filter: kept {len(filtered)}/{original_count} nodes "
-                f"({kept_pct:.1f}%) | purged {purged} zero-relevance nodes "
-                f"({purged_mb:.0f} MB)"
-            )
-            rel_dict = filtered
-
-        processed = self._compress_relevance_tree(rel_dict, target_dtype=target_dtype, move_to_cpu=move_to_cpu)
-
-        # ── Free GPU tensors NOW ──
-        # rel_dict holds references to GPU tensors from self.dlb.all_wt.
-        # After _compress_relevance_tree, `processed` has CPU copies; we no
-        # longer need the GPU-side data.  Clearing them here prevents ~4.7 GB
-        # of GPU memory from staying alive during the subsequent torch.save +
-        # LZ4 serialisation, which would otherwise exhaust VRAM by token 3-4.
-        def _free_gpu(obj):
-            if torch.is_tensor(obj) and obj.is_cuda:
-                obj.data = torch.empty(0, device=obj.device)
-            elif isinstance(obj, dict):
-                for v in obj.values():
-                    _free_gpu(v)
-            elif isinstance(obj, (list, tuple)):
-                for v in obj:
-                    _free_gpu(v)
-        _free_gpu(rel_dict)
-        del rel_dict
+        # ── Step 3: Free ALL GPU memory NOW ──
+        # rel_dict IS self.dlb.all_wt — clearing in-place releases every
+        # GPU tensor (all 1390 entries / ~4.8 GB) before serialisation.
+        rel_dict.clear()               # in-place clear → also empties self.dlb.all_wt
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        if processed is None:
+        # ── Print filter statistics ──
+        purged = original_count - len(kept_keys)
+        purged_mb = (original_bytes - kept_bytes) / (1024 ** 2)
+        kept_pct = (len(kept_keys) / original_count * 100) if original_count else 100
+        print(
+            f"Relevance filter: kept {len(kept_keys)}/{original_count} nodes "
+            f"({kept_pct:.1f}%) | purged {purged} zero-relevance nodes "
+            f"({purged_mb:.0f} MB)"
+        )
+
+        if not cpu_data:
             return None
 
+        # ── Step 4: Serialise (pure CPU — no GPU memory held) ──
         if normalized_policy == "summary":
-            return {"summary": self._summarize_relevance(processed)}
+            return {"summary": self._summarize_relevance(cpu_data)}
 
         if normalized_policy == "disk":
             if cache_dir is None:
-                raise ValueError("relevance_cache_dir must be provided when relevance_cache_policy='disk'")
-            
-            # Compute summary BEFORE saving (so we can delete processed immediately after)
-            summary_val = self._summarize_relevance(processed)
-            
+                raise ValueError(
+                    "relevance_cache_dir must be provided when "
+                    "relevance_cache_policy='disk'"
+                )
+            summary_val = self._summarize_relevance(cpu_data)
             base_file_path = cache_dir / f"step_{step_idx:05d}.pt"
-            
-            # Determine compression method and file extension
+
             if not use_compression or compression_method == "none":
                 file_path = base_file_path
-                torch.save(processed, file_path, pickle_protocol=pickle_protocol)
-            
+                torch.save(cpu_data, file_path, pickle_protocol=pickle_protocol)
+
             elif compression_method == "lz4":
                 if not HAS_LZ4:
                     raise ImportError(
@@ -617,22 +585,22 @@ class DLBAutoSampler:
                     )
                 file_path = Path(str(base_file_path) + '.lz4')
                 buf = io.BytesIO()
-                torch.save(processed, buf, pickle_protocol=pickle_protocol)
+                torch.save(cpu_data, buf, pickle_protocol=pickle_protocol)
                 compressed = lz4.frame.compress(buf.getvalue())
                 with open(file_path, 'wb') as f:
                     f.write(compressed)
                 del buf, compressed
-            
+
             elif compression_method == "gzip":
                 file_path = Path(str(base_file_path) + '.gz')
                 with gzip.open(file_path, 'wb', compresslevel=6) as f:
-                    torch.save(processed, f, pickle_protocol=pickle_protocol)
-            
+                    torch.save(cpu_data, f, pickle_protocol=pickle_protocol)
+
             elif compression_method == "lzma":
                 file_path = Path(str(base_file_path) + '.xz')
                 with lzma.open(file_path, 'wb', preset=6) as f:
-                    torch.save(processed, f, pickle_protocol=pickle_protocol)
-            
+                    torch.save(cpu_data, f, pickle_protocol=pickle_protocol)
+
             elif compression_method == "7z":
                 if not HAS_7Z:
                     raise ImportError(
@@ -643,33 +611,31 @@ class DLBAutoSampler:
                 import tempfile
                 with tempfile.NamedTemporaryFile(suffix='.pt', delete=False) as tmp:
                     tmp_path = Path(tmp.name)
-                    torch.save(processed, tmp_path, pickle_protocol=pickle_protocol)
+                    torch.save(cpu_data, tmp_path, pickle_protocol=pickle_protocol)
                 with py7zr.SevenZipFile(file_path, 'w') as archive:
                     archive.write(tmp_path, arcname=f'step_{step_idx:05d}.pt')
                 tmp_path.unlink()
-            
+
             else:
                 raise ValueError(
                     f"Unknown compression_method: {compression_method}. "
                     f"Must be one of: 'lz4', 'gzip', 'lzma', '7z', 'none'"
                 )
-            
-            # Free the processed data immediately after writing to disk
-            del processed
+
+            del cpu_data
             gc.collect()
-            
             return {
                 "summary": summary_val,
                 "path": str(file_path),
                 "compression": compression_method,
             }
 
-
         if normalized_policy != "full":
             raise ValueError(
-                "relevance_cache_policy must be one of {'full', 'summary', 'disk', 'none'}"
+                "relevance_cache_policy must be one of "
+                "{'full', 'summary', 'disk', 'none'}"
             )
-        return processed
+        return cpu_data
 
     # ---------- public API ----------
 
