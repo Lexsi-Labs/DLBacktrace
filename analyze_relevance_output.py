@@ -42,8 +42,8 @@ input_ids = tokens["input_ids"]
 attention_mask = tokens["attention_mask"]
 
 # Dynamic shapes
-if len(sentences) > 1:
-    batch_dim = Dim("batch", min=1, max=len(sentences))
+if len(PROMPT) > 1:
+    batch_dim = Dim("batch", min=1, max=len(PROMPT))
 else:
     batch_dim = 1  # Static dimension
 
@@ -53,7 +53,7 @@ dynamic_shapes = {
     "attention_mask": {0: batch_dim, 1: seq_dim},
 }
 
-print(f"Input prompt: {sentences[0]}")
+print(f"Input prompt: {PROMPT}")
 print(f"Input IDs shape: {input_ids.shape}")
 
 from dl_backtrace.pytorch_backtrace import DLBacktrace
@@ -68,7 +68,7 @@ ir = DLBacktrace(
 )
 
 print("Running predict...")
-io_data = ir.predict(input_ids, attn_mask, debug=False)
+io_data = ir.predict(input_ids, attention_mask, debug=False)
 
 # Extract logits and get target token
 from dl_backtrace.pytorch_backtrace.dlbacktrace.core.dlb_auto_sampler import DLBAutoSampler
