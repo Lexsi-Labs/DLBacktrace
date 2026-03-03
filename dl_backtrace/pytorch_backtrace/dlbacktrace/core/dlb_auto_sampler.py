@@ -528,9 +528,11 @@ class DLBAutoSampler:
         if normalized_policy == "none":
             return None
 
-        # Filter out zero-relevance nodes (model-agnostic)
-        # Weight/parameter nodes are zero-initialized and never accumulated,
-        # typically accounting for ~97% of data. This check works for any model.
+        # Filter out weight/parameter/buffer nodes — they are always zero.
+        # torch.export names params as p_model_* and buffers as b_model_*;
+        # this convention holds for ALL models (Llama, Qwen, Mistral, GPT-2, …).
+        # Using name-based filtering is instant (no GPU ops) unlike .abs().sum()
+        # which would allocate massive temporaries on GPU for large weight tensors.
         if isinstance(rel_dict, dict):
             original_count = len(rel_dict)
             original_bytes = 0
@@ -545,19 +547,13 @@ class DLBAutoSampler:
                     return sum(_entry_bytes(x) for x in v)
                 return 0
 
-            def _is_nonzero(v):
-                if torch.is_tensor(v):
-                    return v.abs().sum().item() != 0
-                if isinstance(v, np.ndarray):
-                    return np.abs(v).sum() != 0
-                if isinstance(v, (list, tuple)):
-                    return any(_is_nonzero(x) for x in v)
-                return True  # keep non-tensor entries
+            def _is_weight_or_buffer(key):
+                return key.startswith("p_model_") or key.startswith("b_model_")
 
             for v in rel_dict.values():
                 original_bytes += _entry_bytes(v)
 
-            filtered = {k: v for k, v in rel_dict.items() if _is_nonzero(v)}
+            filtered = {k: v for k, v in rel_dict.items() if not _is_weight_or_buffer(k)}
             for v in filtered.values():
                 kept_bytes += _entry_bytes(v)
 
