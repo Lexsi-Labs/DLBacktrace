@@ -38,6 +38,7 @@ MODEL = "meta-llama/Llama-3.2-1B"
 PROMPT = "Explain the difference between O+ and O- blood type."
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 hf_token = os.getenv("HUGGING_FACE_HUB_TOKEN")
+
 print(f"\nLoading model: {MODEL}")
 tokenizer = AutoTokenizer.from_pretrained(MODEL, token=hf_token)
 tokenizer.pad_token = tokenizer.eos_token
@@ -50,16 +51,11 @@ tokens = tokenizer(PROMPT, return_tensors="pt", padding=True, truncation=True)
 input_ids = tokens["input_ids"]
 attention_mask = tokens["attention_mask"]
 
-# Dynamic shapes
-if len(PROMPT) > 1:
-    batch_dim = Dim("batch", min=1, max=len(PROMPT))
-else:
-    batch_dim = 1  # Static dimension
-
-seq_dim = Dim("seq", min=1, max=input_ids.shape[1])
+seq_len = input_ids.shape[1]
+seq_dim = Dim("seq", min=1, max=seq_len)
 dynamic_shapes = {
-    "input_ids": {0: batch_dim, 1: seq_dim},
-    "attention_mask": {0: batch_dim, 1: seq_dim},
+    "input_ids": {0: 1, 1: seq_dim},
+    "attention_mask": {0: 1, 1: seq_dim},
 }
 
 print(f"Input prompt: {PROMPT}")
@@ -90,8 +86,7 @@ print("Running backtrace...")
 t0 = time.perf_counter()
 rel_dict = ir.evaluation(
     mode="default", start_wt=[], multiplier=100.0,
-    scaler=1.0, thresholding=0.5, task="generation",
-    target_token_ids=target_ids, debug=False,
+    scaler=1.0, thresholding=0.5, task="generation", debug=False,
 )
 if DEVICE == "cuda":
     torch.cuda.synchronize()
