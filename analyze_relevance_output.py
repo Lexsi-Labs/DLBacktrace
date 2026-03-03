@@ -28,8 +28,6 @@ import random
 import string
 import json
 from typing import Dict, Any, Tuple, List
-from datasets import load_dataset
-
 
 # ── Setup DLBacktrace and run one predict + backtrace ──
 print("=" * 70)
