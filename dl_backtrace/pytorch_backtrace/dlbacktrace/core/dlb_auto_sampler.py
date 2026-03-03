@@ -514,6 +514,7 @@ class DLBAutoSampler:
         # ── Step 1: Filter weight / buffer nodes (instant, name-based) ──
         # torch.export names params as p_model_* and buffers as b_model_*;
         # these are always zero (never accumulated during relevance propagation).
+        _t0 = time.perf_counter()
         original_count = 0
         original_bytes = 0
         kept_keys = []
@@ -530,6 +531,7 @@ class DLBAutoSampler:
                 original_bytes += _entry_bytes(v)
             kept_keys = [k for k in rel_dict
                          if not (k.startswith("p_model_") or k.startswith("b_model_"))]
+        _t1 = time.perf_counter()
 
         # ── Step 2: GPU → CPU transfer (only kept entries) ──
         cpu_data = {}
@@ -539,6 +541,7 @@ class DLBAutoSampler:
             cpu_data[k] = self._compress_relevance_tree(
                 v, target_dtype=target_dtype, move_to_cpu=move_to_cpu)
             kept_bytes += _entry_bytes(cpu_data[k])
+        _t2 = time.perf_counter()
 
         # ── Step 3: Free ALL GPU memory NOW ──
         # rel_dict IS self.dlb.all_wt — clearing in-place releases every
@@ -546,15 +549,17 @@ class DLBAutoSampler:
         rel_dict.clear()               # in-place clear → also empties self.dlb.all_wt
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+        _t3 = time.perf_counter()
 
         # ── Print filter statistics ──
         purged = original_count - len(kept_keys)
         purged_mb = (original_bytes - kept_bytes) / (1024 ** 2)
         kept_pct = (len(kept_keys) / original_count * 100) if original_count else 100
+        kept_mb = kept_bytes / (1024 ** 2)
         print(
             f"Relevance filter: kept {len(kept_keys)}/{original_count} nodes "
             f"({kept_pct:.1f}%) | purged {purged} zero-relevance nodes "
-            f"({purged_mb:.0f} MB)"
+            f"({purged_mb:.0f} MB) | kept {kept_mb:.1f} MB"
         )
 
         if not cpu_data:
@@ -576,6 +581,8 @@ class DLBAutoSampler:
             if not use_compression or compression_method == "none":
                 file_path = base_file_path
                 torch.save(cpu_data, file_path, pickle_protocol=pickle_protocol)
+                _t4 = time.perf_counter()
+                _t5 = _t4  # no separate compress step
 
             elif compression_method == "lz4":
                 if not HAS_LZ4:
@@ -586,20 +593,29 @@ class DLBAutoSampler:
                 file_path = Path(str(base_file_path) + '.lz4')
                 buf = io.BytesIO()
                 torch.save(cpu_data, buf, pickle_protocol=pickle_protocol)
-                compressed = lz4.frame.compress(buf.getvalue())
+                _t4 = time.perf_counter()
+                raw_bytes = buf.getvalue()
+                compressed = lz4.frame.compress(raw_bytes)
                 with open(file_path, 'wb') as f:
                     f.write(compressed)
-                del buf, compressed
+                _t5 = time.perf_counter()
+                raw_mb = len(raw_bytes) / (1024 ** 2)
+                comp_mb = len(compressed) / (1024 ** 2)
+                del buf, raw_bytes, compressed
 
             elif compression_method == "gzip":
                 file_path = Path(str(base_file_path) + '.gz')
                 with gzip.open(file_path, 'wb', compresslevel=6) as f:
                     torch.save(cpu_data, f, pickle_protocol=pickle_protocol)
+                _t4 = time.perf_counter()
+                _t5 = _t4
 
             elif compression_method == "lzma":
                 file_path = Path(str(base_file_path) + '.xz')
                 with lzma.open(file_path, 'wb', preset=6) as f:
                     torch.save(cpu_data, f, pickle_protocol=pickle_protocol)
+                _t4 = time.perf_counter()
+                _t5 = _t4
 
             elif compression_method == "7z":
                 if not HAS_7Z:
@@ -615,11 +631,30 @@ class DLBAutoSampler:
                 with py7zr.SevenZipFile(file_path, 'w') as archive:
                     archive.write(tmp_path, arcname=f'step_{step_idx:05d}.pt')
                 tmp_path.unlink()
+                _t4 = time.perf_counter()
+                _t5 = _t4
 
             else:
                 raise ValueError(
                     f"Unknown compression_method: {compression_method}. "
                     f"Must be one of: 'lz4', 'gzip', 'lzma', '7z', 'none'"
+                )
+
+            # ── Print sub-step timing breakdown ──
+            print(
+                f"    rel_save breakdown: "
+                f"filter={_t1-_t0:.3f}s | "
+                f"gpu2cpu={_t2-_t1:.3f}s | "
+                f"gpu_free={_t3-_t2:.3f}s | "
+                f"torch.save={_t4-_t3:.3f}s | "
+                f"lz4+write={_t5-_t4:.3f}s | "
+                f"total={_t5-_t0:.3f}s"
+            )
+            if compression_method == "lz4":
+                print(
+                    f"    serialised: raw={raw_mb:.1f} MB → "
+                    f"compressed={comp_mb:.1f} MB "
+                    f"(ratio={comp_mb/raw_mb:.2f})"
                 )
 
             del cpu_data
