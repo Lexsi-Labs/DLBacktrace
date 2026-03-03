@@ -1046,11 +1046,13 @@ class DLBacktrace:
             if isinstance(val, (list, tuple)):
                 for i, v in enumerate(val):
                     if hasattr(v, "shape") and hasattr(v, "sum"):
-                        print(f"[{key}][{i}] shape: {v.shape}, sum: {np.sum(v):.4f}")
+                        s = float(v.sum()) if hasattr(v, 'sum') else 0.0
+                        print(f"[{key}][{i}] shape: {v.shape}, sum: {s:.4f}")
                     else:
                         print(f"[{key}][{i}] is not a NumPy array or tensor.")
             elif hasattr(val, "shape") and hasattr(val, "sum"):
-                print(f"[{key}] shape: {val.shape}, sum: {np.sum(val):.4f}")
+                s = float(val.sum()) if hasattr(val, 'sum') else 0.0
+                print(f"[{key}] shape: {val.shape}, sum: {s:.4f}")
             else:
                 print(f"[{key}] is not a NumPy array or tensor.")
 
