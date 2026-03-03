@@ -528,6 +528,49 @@ class DLBAutoSampler:
         if normalized_policy == "none":
             return None
 
+        # Filter out zero-relevance nodes (model-agnostic)
+        # Weight/parameter nodes are zero-initialized and never accumulated,
+        # typically accounting for ~97% of data. This check works for any model.
+        if isinstance(rel_dict, dict):
+            original_count = len(rel_dict)
+            original_bytes = 0
+            kept_bytes = 0
+
+            def _entry_bytes(v):
+                if torch.is_tensor(v):
+                    return v.nelement() * v.element_size()
+                if isinstance(v, np.ndarray):
+                    return v.nbytes
+                if isinstance(v, (list, tuple)):
+                    return sum(_entry_bytes(x) for x in v)
+                return 0
+
+            def _is_nonzero(v):
+                if torch.is_tensor(v):
+                    return v.abs().sum().item() != 0
+                if isinstance(v, np.ndarray):
+                    return np.abs(v).sum() != 0
+                if isinstance(v, (list, tuple)):
+                    return any(_is_nonzero(x) for x in v)
+                return True  # keep non-tensor entries
+
+            for v in rel_dict.values():
+                original_bytes += _entry_bytes(v)
+
+            filtered = {k: v for k, v in rel_dict.items() if _is_nonzero(v)}
+            for v in filtered.values():
+                kept_bytes += _entry_bytes(v)
+
+            purged = original_count - len(filtered)
+            purged_mb = (original_bytes - kept_bytes) / (1024 ** 2)
+            kept_pct = (len(filtered) / original_count * 100) if original_count else 100
+            print(
+                f"  🧹 Relevance filter: kept {len(filtered)}/{original_count} nodes "
+                f"({kept_pct:.1f}%) | purged {purged} zero-relevance nodes "
+                f"({purged_mb:.0f} MB)"
+            )
+            rel_dict = filtered
+
         processed = self._compress_relevance_tree(rel_dict, target_dtype=target_dtype, move_to_cpu=move_to_cpu)
         if processed is None:
             return None
