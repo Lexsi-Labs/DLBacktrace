@@ -103,6 +103,8 @@ if DEVICE == "cuda":
 bt_time = time.perf_counter() - t0
 print(f"Backtrace time: {bt_time:.2f}s")
 
+ir.print_all_relevance_info()
+
 # ── Analyze the output ──
 print("\n" + "=" * 70)
 print("  1. STRUCTURE ANALYSIS")
