@@ -124,21 +124,27 @@ class DLBAutoSampler:
         """
         base_path = cache_dir / filename
 
-        # Move tensors to CPU before saving
-        def _to_cpu(obj):
+        # Move tensors to CPU using pinned memory + non_blocking DMA
+        def _to_cpu_async(obj):
             if torch.is_tensor(obj):
-                return obj.detach().cpu()
+                t = obj.detach()
+                if t.is_cuda:
+                    return t.to('cpu', non_blocking=True)
+                return t
             if isinstance(obj, np.ndarray):
-                return torch.from_numpy(obj).cpu()
+                return torch.from_numpy(obj)
             if isinstance(obj, dict):
-                return {k: _to_cpu(v) for k, v in obj.items()}
+                return {k: _to_cpu_async(v) for k, v in obj.items()}
             if isinstance(obj, list):
-                return [_to_cpu(v) for v in obj]
+                return [_to_cpu_async(v) for v in obj]
             if isinstance(obj, tuple):
-                return tuple(_to_cpu(v) for v in obj)
+                return tuple(_to_cpu_async(v) for v in obj)
             return obj
 
-        cpu_data = _to_cpu(data)
+        cpu_data = _to_cpu_async(data)
+        # Single sync after all async copies are queued
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
 
         if not use_compression or compression_method == "none":
             file_path = base_path
@@ -445,27 +451,33 @@ class DLBAutoSampler:
         raise ValueError(f"Unsupported relevance dtype hint: {dtype_hint}")
 
     def _compress_relevance_tree(self, data, *, target_dtype=None, move_to_cpu=True):
-        """Move tensors to CPU (in-place, no clone) and optionally cast dtype."""
+        """Move tensors to CPU using pinned memory + non_blocking DMA pipeline.
+        
+        Queues all GPU→CPU copies asynchronously, then synchronizes once.
+        """
+        result = self._compress_relevance_tree_async(data, target_dtype=target_dtype, move_to_cpu=move_to_cpu)
+        # Single sync point after all non-blocking copies are queued
+        if move_to_cpu and torch.cuda.is_available():
+            torch.cuda.synchronize()
+        return result
+
+    def _compress_relevance_tree_async(self, data, *, target_dtype=None, move_to_cpu=True):
+        """Inner recursive walk — queues non-blocking copies, caller must sync."""
         if torch.is_tensor(data):
             tensor = data.detach()
-            if move_to_cpu:
-                tensor = tensor.to("cpu")
-            if target_dtype is not None:
-                tensor = tensor.to(dtype=target_dtype)
-            return tensor  # no .clone() — transfer, not copy
-        if isinstance(data, np.ndarray):
-            tensor = torch.from_numpy(data)
-            if move_to_cpu:
-                tensor = tensor.to("cpu")
+            if move_to_cpu and tensor.is_cuda:
+                tensor = tensor.to('cpu', non_blocking=True)
             if target_dtype is not None:
                 tensor = tensor.to(dtype=target_dtype)
             return tensor
+        if isinstance(data, np.ndarray):
+            return torch.from_numpy(data)
         if isinstance(data, dict):
-            return {k: self._compress_relevance_tree(v, target_dtype=target_dtype, move_to_cpu=move_to_cpu) for k, v in data.items()}
+            return {k: self._compress_relevance_tree_async(v, target_dtype=target_dtype, move_to_cpu=move_to_cpu) for k, v in data.items()}
         if isinstance(data, list):
-            return [self._compress_relevance_tree(v, target_dtype=target_dtype, move_to_cpu=move_to_cpu) for v in data]
+            return [self._compress_relevance_tree_async(v, target_dtype=target_dtype, move_to_cpu=move_to_cpu) for v in data]
         if isinstance(data, tuple):
-            return tuple(self._compress_relevance_tree(v, target_dtype=target_dtype, move_to_cpu=move_to_cpu) for v in data)
+            return tuple(self._compress_relevance_tree_async(v, target_dtype=target_dtype, move_to_cpu=move_to_cpu) for v in data)
         return data
 
     def _prepare_cache_dir(self, base_dir: Optional[str], policy: str):
