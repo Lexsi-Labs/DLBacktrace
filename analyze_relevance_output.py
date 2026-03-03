@@ -43,9 +43,19 @@ print(f"\nLoading model: {MODEL}")
 tokenizer = AutoTokenizer.from_pretrained(MODEL, token=hf_token)
 tokenizer.pad_token = tokenizer.eos_token
 
-model = AutoModelForCausalLM.from_pretrained(
-    MODEL, torch_dtype=torch.float32, device_map=DEVICE, token=hf_token
-)
+class LlamaWrapper(nn.Module):
+    def __init__(self, model_id, token):
+        super().__init__()
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            torch_dtype=torch.float32,
+            token=token
+        ).eval()
+
+    def forward(self, input_ids, attention_mask):
+        return self.model(input_ids=input_ids, attention_mask=attention_mask, use_cache=False).logits
+
+model = LlamaWrapper(MODEL, hf_token)
 
 tokens = tokenizer(PROMPT, return_tensors="pt", padding=True, truncation=True)
 input_ids = tokens["input_ids"]
