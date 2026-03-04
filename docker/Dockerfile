@@ -57,6 +57,8 @@ RUN rm -rf /tmp/* /var/tmp/* /root/.cache
 ENV TOKENIZERS_PARALLELISM=false
 ENV TORCH_LOGS="+dynamic"
 ENV CUBLAS_WORKSPACE_CONFIG=":4096:8"
+ENV PYTHONWARNINGS="ignore"
+ENV TRANSFORMERS_VERBOSITY="error"
 
 # Default: run the DLB engine
 CMD ["python", "engine.py", "--mode", "gen", "--device", "cuda"]
