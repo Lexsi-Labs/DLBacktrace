@@ -23,6 +23,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-dev \
         graphviz \
         git \
+        build-essential \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -45,9 +46,9 @@ RUN uv pip install --no-cache --system --break-system-packages \
 RUN uv pip install --no-cache --system --break-system-packages \
         -e .
 
-# Install benchmark-specific dependencies
+# Install DLB engine dependencies
 RUN uv pip install --no-cache --system --break-system-packages \
-        psutil tabulate
+        psutil tabulate lz4
 
 # ── Cleanup ─────────────────────────────────────────────────
 RUN rm -rf /tmp/* /var/tmp/* /root/.cache
@@ -57,5 +58,5 @@ ENV TOKENIZERS_PARALLELISM=false
 ENV TORCH_LOGS="+dynamic"
 ENV CUBLAS_WORKSPACE_CONFIG=":4096:8"
 
-# Default: run the benchmark
-CMD ["python", "benchmarks/benchmark.py"]
+# Default: run the DLB engine
+CMD ["python", "engine.py", "--mode", "gen", "--device", "cuda"]

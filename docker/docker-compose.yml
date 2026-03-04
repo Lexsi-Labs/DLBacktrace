@@ -2,8 +2,8 @@
 #  DLBacktrace – Docker Compose (GPU)
 #
 #  Usage:
-#    # Build & run benchmark
-#    docker compose -f docker/docker-compose.yml up --build benchmark
+#    # Build & run DLB engine
+#    docker compose -f docker/docker-compose.yml up --build engine
 #
 #    # Run the FastAPI API server
 #    docker compose -f docker/docker-compose.yml up --build api
@@ -14,23 +14,26 @@
 # ─────────────────────────────────────────────────────────────
 
 services:
-  # ── Benchmark runner ──────────────────────────────────────
-  benchmark:
+  # ── DLB Engine ─────────────────────────────────────────────
+  engine:
     build:
       context: ..
       dockerfile: docker/Dockerfile
     image: dlbacktrace:latest
-    container_name: dlbacktrace-benchmark
+    container_name: dlbacktrace-engine
     command: >
-      python benchmarks/benchmark.py
+      python engine.py
+        --mode gen
         --device cuda
-        --seq-lengths 8 16 32 64 128 256
-        --output-dir /app/benchmarks/results
+        --gen-tokens 25
+        --cache-dir engine_results
+        --model "meta-llama/Llama-3.2-1B"
+        --gen-prompt "What are stock market fluctuations?"
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - NVIDIA_VISIBLE_DEVICES=all
     volumes:
-      - ../benchmarks/results:/app/benchmarks/results
+      - ../engine_results:/app/engine_results
     shm_size: "8g"
     deploy:
       resources:
