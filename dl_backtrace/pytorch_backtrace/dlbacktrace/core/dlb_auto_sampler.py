@@ -1015,7 +1015,7 @@ class DLBAutoSampler:
                         path = self._save_to_disk(
                             scores_cpu,
                             cache_dir=cache_dir_path,
-                            filename=f"step_{step_idx:05d}_scores.pt",
+                            filename=f"step_{_gen_step_idx:05d}_scores.pt",
                             use_compression=relevance_use_compression,
                             compression_method=relevance_compression_method,
                             pickle_protocol=relevance_pickle_protocol,
@@ -1033,7 +1033,7 @@ class DLBAutoSampler:
                         path = self._save_to_disk(
                             io_data,
                             cache_dir=cache_dir_path,
-                            filename=f"step_{step_idx:05d}_io.pt",
+                            filename=f"step_{_gen_step_idx:05d}_io.pt",
                             use_compression=relevance_use_compression,
                             compression_method=relevance_compression_method,
                             pickle_protocol=relevance_pickle_protocol,
@@ -1093,7 +1093,7 @@ class DLBAutoSampler:
 
                 # Print per-token line
                 print(
-                    f"  ⏱ Token {step_idx:3d} (seq={_t['seq_len']:4d}) │ "
+                    f"  ⏱ Token {_gen_step_idx:3d} (seq={_t['seq_len']:4d}) │ "
                     f"predict={_t['predict']:6.2f}s │ "
                     f"sample={_t['sampling']:5.3f}s │ "
                     f"backtrace={_t['backtrace']:5.2f}s │ "
