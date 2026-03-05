@@ -960,12 +960,9 @@ class DLBAutoSampler:
             _step_timings = []
 
             stopped_by = None
+            _gen_step = 0  # always-incrementing generation step counter
             for _ in range(max_new_tokens if max_new_tokens is not None else 10_000_000):
-                step_idx = len(relevance_trace) if relevance_trace is not None else (
-                    len(scores_trace) if scores_trace is not None else (
-                        len(io_data_trace) if io_data_trace is not None else 0
-                    )
-                )
+                step_idx = _gen_step
 
                 _t = {}  # timing dict for this step
                 _t["step"] = step_idx
@@ -1116,6 +1113,8 @@ class DLBAutoSampler:
                     [attn, torch.ones((1, 1), dtype=attn.dtype, device=attn.device)],
                     dim=1,
                 )
+
+                _gen_step += 1  # always advance step counter
 
                 # early stop if EOS produced
                 if eos_list:
