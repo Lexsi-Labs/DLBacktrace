@@ -553,8 +553,6 @@ class DLBacktrace:
         relevance_compress_dtype="float16",
         relevance_move_to_cpu=True,
         debug=False,
-        # Selective token explanation
-        explain_tokens="all",
         # Save relevance parameters
         save_relevance=False,
         save_path="./relevance_output",
@@ -597,12 +595,6 @@ class DLBacktrace:
             relevance_compress_dtype (str | torch.dtype): Target dtype for cached tensors (default: float16).
             relevance_move_to_cpu (bool): Move cached relevance tensors to CPU memory (default: True).
             debug (bool): Enable debug logging (default: False)
-            explain_tokens: Which generated tokens to compute DLB relevance for.
-                - "all" (default): Compute relevance for every generated token
-                - "none" or []: Skip backtrace entirely (fast generation)
-                - int N: Compute relevance for the first N tokens only
-                - List[int]: Specific token step indices to explain (e.g. [0, 4, 9])
-                Only applies when return_relevance=True, ignored for classification tasks.
             
             save_relevance (bool): Save relevance trace to disk (default: False)
             save_path (str): Output directory for saved files (default: "./relevance_output")
@@ -710,9 +702,6 @@ class DLBacktrace:
             }
             for key, value in cache_kwargs.items():
                 generation_kwargs.setdefault(key, value)
-
-            # Pass explain_tokens through
-            generation_kwargs.setdefault("explain_tokens", explain_tokens)
 
             # Call sample_auto with generation kwargs and trace flags
             generated_output = self.sample_auto(
