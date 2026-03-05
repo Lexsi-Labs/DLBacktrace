@@ -1009,7 +1009,7 @@ class DLBAutoSampler:
 
                 # ── Stage C: Save scores to disk ──
                 _ts = time.perf_counter()
-                if return_scores:
+                if return_scores and _should_run_dlb(_gen_step_idx):
                     scores_cpu = scores.detach().to("cpu")
                     if disk_streaming:
                         path = self._save_to_disk(
