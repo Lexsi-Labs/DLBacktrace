@@ -957,7 +957,7 @@ class DLBAutoSampler:
             else:
                 _should_run_dlb = lambda idx: True  # default: run for all
 
-            for _ in range(max_new_tokens if max_new_tokens is not None else 10_000_000):
+            for _gen_step_idx in range(max_new_tokens if max_new_tokens is not None else 10_000_000):
                 step_idx = len(relevance_trace) if relevance_trace is not None else (
                     len(scores_trace) if scores_trace is not None else (
                         len(io_data_trace) if io_data_trace is not None else 0
@@ -965,7 +965,7 @@ class DLBAutoSampler:
                 )
 
                 _t = {}  # timing dict for this step
-                _t["step"] = step_idx
+                _t["step"] = _gen_step_idx
                 _t["seq_len"] = generated.shape[1]
 
                 # ── Stage A: Forward pass (predict) ──
@@ -1048,7 +1048,7 @@ class DLBAutoSampler:
                 # ── Stage E: Backtracing (relevance propagation) ──
                 _ts = time.perf_counter()
                 if return_relevance:
-                    if _should_run_dlb(step_idx):
+                    if _should_run_dlb(_gen_step_idx):
                         rel_dict = self._compute_relevance(
                             target_token_ids=next_tokens.view(-1),
                             mode="default",
@@ -1065,11 +1065,11 @@ class DLBAutoSampler:
                 # ── Stage F: Save relevance to disk ──
                 _ts = time.perf_counter()
                 if return_relevance:
-                    if _should_run_dlb(step_idx):
+                    if _should_run_dlb(_gen_step_idx):
                         entry = self._store_relevance_entry(
                             rel_dict,
                             policy=cache_policy,
-                            step_idx=step_idx,
+                            step_idx=_gen_step_idx,
                             cache_dir=cache_dir_path,
                             target_dtype=cache_dtype,
                             move_to_cpu=relevance_move_to_cpu,
@@ -1085,7 +1085,7 @@ class DLBAutoSampler:
                 # ── Stage G: Memory cleanup ──
                 _ts = time.perf_counter()
                 if return_relevance:
-                    if _should_run_dlb(step_idx):
+                    if _should_run_dlb(_gen_step_idx):
                         self._clear_dlb_memory()
                 _t["cleanup"] = time.perf_counter() - _ts
 
