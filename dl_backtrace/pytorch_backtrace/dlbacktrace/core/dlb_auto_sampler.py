@@ -739,6 +739,32 @@ class DLBAutoSampler:
             offset += count
         return result
 
+    # ---------- helpers ----------
+
+    @staticmethod
+    def _resolve_explain_set(explain_tokens) -> Optional[set]:
+        """
+        Normalize the ``explain_tokens`` parameter into an internal form.
+
+        Returns:
+            None  – explain EVERY token (default / "all")
+            set() – explain NO tokens ("none" / [])
+            {0, 4, 9} – explain only these step indices
+        """
+        if explain_tokens is None or (isinstance(explain_tokens, str) and explain_tokens.lower() == "all"):
+            return None  # sentinel: explain all
+        if isinstance(explain_tokens, str) and explain_tokens.lower() == "none":
+            return set()
+        if isinstance(explain_tokens, int):
+            if explain_tokens <= 0:
+                return set()
+            return set(range(explain_tokens))  # first-N
+        if isinstance(explain_tokens, (list, tuple, set)):
+            return set(int(i) for i in explain_tokens)
+        raise TypeError(
+            f"explain_tokens must be 'all', 'none', int, or List[int]; got {type(explain_tokens).__name__}"
+        )
+
     # ---------- public API ----------
 
     @torch.no_grad()
@@ -772,7 +798,7 @@ class DLBAutoSampler:
         return_scores: bool = False,
         return_layerwise_output: bool = False,
         return_relevance: bool = False,
-        dlb_tokens_count: Optional[int] = None,
+        explain_tokens: Optional[Any] = "all",
         debug: bool = False,
         relevance_cache_policy: str = "full",
         relevance_cache_dir: Optional[str] = None,
@@ -788,9 +814,11 @@ class DLBAutoSampler:
             - Or (sequence, scores_trace) for sampling when return_scores=True
 
         Args:
-            dlb_tokens_count: How many generated tokens to compute DLB relevance for.
-                - None (default): Compute relevance for all generated tokens
-                - int: Compute relevance for first N generated tokens only
+            explain_tokens: Which generated tokens to compute DLB relevance for.
+                - "all" or None (default): Compute relevance for every token
+                - "none" or []: Skip backtrace entirely (fast generation)
+                - int N: Compute relevance for the first N tokens only
+                - List[int]: Compute relevance for specific token indices (e.g. [0, 4, 9])
                 Only applies when return_relevance=True.
 
         Relevance caching knobs:
@@ -805,7 +833,10 @@ class DLBAutoSampler:
                                         - "none": No compression (only dtype compression)
             relevance_pickle_protocol: Pickle protocol (2-5). Higher = better compression. Default=4.
             relevance_move_to_cpu: move tensors to CPU before caching to reduce VRAM.
-        """ 
+        """
+        # Resolve explain_tokens into a set (or None for "all")
+        explain_set = self._resolve_explain_set(explain_tokens)
+
         model = self._get_causallm(self.dlb.model)
         device = input_ids.device
         B = input_ids.size(0)
@@ -1017,53 +1048,56 @@ class DLBAutoSampler:
                         io_data_trace.append(io_data)
                 _t["io_save"] = time.perf_counter() - _ts
 
+                # ── Decide whether to explain this token ──
+                _should_explain = return_relevance and (
+                    explain_set is None or step_idx in explain_set
+                )
+
                 # ── Stage E: Backtracing (relevance propagation) ──
                 _ts = time.perf_counter()
-                if return_relevance:
-                    if dlb_tokens_count is None or step_idx < dlb_tokens_count:
-                        rel_dict = self._compute_relevance(
-                            target_token_ids=next_tokens.view(-1),
-                            mode="default",
-                            multiplier=100.0,
-                            scaler=1.0,
-                            thresholding=0.5,
-                            task="generation",
-                            debug=False,
-                        )
+                if _should_explain:
+                    rel_dict = self._compute_relevance(
+                        target_token_ids=next_tokens.view(-1),
+                        mode="default",
+                        multiplier=100.0,
+                        scaler=1.0,
+                        thresholding=0.5,
+                        task="generation",
+                        debug=False,
+                    )
                 if device == "cuda":
                     torch.cuda.synchronize()
                 _t["backtrace"] = time.perf_counter() - _ts
 
                 # ── Stage F: Save relevance to disk ──
                 _ts = time.perf_counter()
-                if return_relevance:
-                    if dlb_tokens_count is None or step_idx < dlb_tokens_count:
-                        entry = self._store_relevance_entry(
-                            rel_dict,
-                            policy=cache_policy,
-                            step_idx=step_idx,
-                            cache_dir=cache_dir_path,
-                            target_dtype=cache_dtype,
-                            move_to_cpu=relevance_move_to_cpu,
-                            use_compression=relevance_use_compression,
-                            compression_method=relevance_compression_method,
-                            pickle_protocol=relevance_pickle_protocol,
-                        )
-                        relevance_trace.append(entry)
-                        # Free the caller-side GPU reference immediately
-                        del rel_dict
+                if _should_explain:
+                    entry = self._store_relevance_entry(
+                        rel_dict,
+                        policy=cache_policy,
+                        step_idx=step_idx,
+                        cache_dir=cache_dir_path,
+                        target_dtype=cache_dtype,
+                        move_to_cpu=relevance_move_to_cpu,
+                        use_compression=relevance_use_compression,
+                        compression_method=relevance_compression_method,
+                        pickle_protocol=relevance_pickle_protocol,
+                    )
+                    relevance_trace.append(entry)
+                    # Free the caller-side GPU reference immediately
+                    del rel_dict
                 _t["relevance_save"] = time.perf_counter() - _ts
 
                 # ── Stage G: Memory cleanup ──
                 _ts = time.perf_counter()
-                if return_relevance:
-                    if dlb_tokens_count is None or step_idx < dlb_tokens_count:
-                        self._clear_dlb_memory()
+                if _should_explain:
+                    self._clear_dlb_memory()
                 _t["cleanup"] = time.perf_counter() - _ts
 
                 _t["total"] = _t["predict"] + _t["sampling"] + _t["scores_save"] + _t["io_save"] + _t["backtrace"] + _t["relevance_save"] + _t["cleanup"]
 
                 # Print per-token line
+                _skip_tag = "" if _should_explain else " [SKIP-DLB]"
                 print(
                     f"  ⏱ Token {step_idx:3d} (seq={_t['seq_len']:4d}) │ "
                     f"predict={_t['predict']:6.2f}s │ "
@@ -1073,7 +1107,7 @@ class DLBAutoSampler:
                     f"scores_save={_t['scores_save']:5.3f}s │ "
                     f"io_save={_t['io_save']:5.2f}s │ "
                     f"cleanup={_t['cleanup']:5.2f}s │ "
-                    f"TOTAL={_t['total']:6.2f}s"
+                    f"TOTAL={_t['total']:6.2f}s{_skip_tag}"
                 )
                 _step_timings.append(_t)
 
@@ -1312,7 +1346,7 @@ class DLBAutoSampler:
 
             if return_relevance:
                 step_offset = len(relevance_trace_beam)
-                if dlb_tokens_count is None or step_offset < dlb_tokens_count:
+                if explain_set is None or step_offset in explain_set:
                     step_rel_scores = []
                     for b in range(beams):
                         self.dlb.predict(

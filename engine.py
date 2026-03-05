@@ -292,6 +292,7 @@ def benchmark_gen_scaling(
     input_prompt: str = "What is the capital of France?",
     run_idx: int = 0,
     cache_dir: str = "benchmarks/cache",
+    explain_tokens = "all",
 ) -> Dict[str, Any]:
     """Benchmark multi-token generation using run_task(task='generation').
     
@@ -354,6 +355,7 @@ def benchmark_gen_scaling(
             return_relevance=True,
             return_scores=True,
             debug=False,
+            explain_tokens=explain_tokens,
             relevance_cache_policy="disk",
             relevance_cache_dir=cache_dir,
         )
@@ -583,7 +585,22 @@ def main():
         "--view-output", action="store_true", default=False,
         help="Load and print saved .dlbr relevance output after generation (default: off)",
     )
+    parser.add_argument(
+        "--explain-tokens", nargs="+", default=["all"],
+        help='Which tokens to compute DLB relevance for. '
+             '"all" (default), "none", an int N (first N), '
+             'or specific indices like "0 4 9" (default: all)',
+    )
     args = parser.parse_args()
+
+    # Resolve --explain-tokens into the right type for run_task
+    et = args.explain_tokens
+    if len(et) == 1 and et[0].lower() in ("all", "none"):
+        args.explain_tokens_resolved = et[0].lower()
+    elif len(et) == 1 and et[0].isdigit():
+        args.explain_tokens_resolved = int(et[0])  # first-N
+    else:
+        args.explain_tokens_resolved = [int(x) for x in et]  # specific indices
 
     if args.device == "cuda" and not torch.cuda.is_available():
         print("⚠️  CUDA not available, falling back to CPU")
@@ -684,6 +701,7 @@ def main():
                         input_prompt=args.gen_prompt,
                         run_idx=run_idx,
                         cache_dir=args.cache_dir,
+                        explain_tokens=args.explain_tokens_resolved,
                     )
                     record["success"] = True
                     gen_records.append(record)
