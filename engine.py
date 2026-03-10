@@ -174,9 +174,15 @@ class ModelWrapper(nn.Module):
         ).eval()
 
     def forward(self, input_ids, attention_mask):
-        return self.model(
-            input_ids=input_ids, attention_mask=attention_mask, use_cache=False
-        ).logits
+        # transformers 5.x uses func.__code__.co_varnames introspection inside its
+        # @auto_docstring decorator wrapper, which torch.dynamo cannot trace.
+        # Disabling dynamo for the inner model call is the minimal fix.
+        @torch._dynamo.disable
+        def _call(ids, mask):
+            return self.model(
+                input_ids=ids, attention_mask=mask, use_cache=False
+            ).logits
+        return _call(input_ids, attention_mask)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

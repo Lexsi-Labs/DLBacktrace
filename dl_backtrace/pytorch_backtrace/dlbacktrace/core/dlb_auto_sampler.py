@@ -32,6 +32,7 @@ from ._compat import (
     StoppingCriteriaList,
     MaxTimeCriteria,
     MaxNewTokensCriteria,
+    EosTokenCriteria,
     HAS_EOS_CRITERIA,
 )
 
