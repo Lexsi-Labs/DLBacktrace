@@ -11,16 +11,35 @@ from typing import Optional, List, Tuple, cast
 import torch
 import torch.nn.functional as F
 
-from ._compat import (
+from transformers.generation.logits_process import (
     LogitsProcessorList,
     TemperatureLogitsWarper,
     TopKLogitsWarper,
     TopPLogitsWarper,
-    BeamSearchScorer,
-    StoppingCriteriaList,
-    MaxTimeCriteria,
-    MaxNewTokensCriteria,
 )
+from transformers.generation.beam_search import BeamSearchScorer
+
+# ---- Stopping criteria (with fallback for older Transformers) ----
+try:
+    from transformers.generation.stopping_criteria import (
+        StoppingCriteriaList,
+        MaxTimeCriteria,
+        MaxNewTokensCriteria,  # newer HF
+    )
+except ImportError:  # older HF
+    from transformers.generation.stopping_criteria import (
+        StoppingCriteriaList,
+        MaxTimeCriteria,
+        StoppingCriteria,
+    )
+
+    class MaxNewTokensCriteria(StoppingCriteria):
+        def __init__(self, start_length: int, max_new_tokens: int):
+            self.start_length = int(start_length)
+            self.max_new_tokens = int(max_new_tokens)
+        def __call__(self, input_ids, scores, **kwargs) -> bool:
+            cur = input_ids.shape[1]
+            return (cur - self.start_length) >= self.max_new_tokens
 
 
 # Optional: steadier math (helps parity on CUDA)

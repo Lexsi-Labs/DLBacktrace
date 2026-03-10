@@ -23,18 +23,46 @@ try:
 except ImportError:
     HAS_LZ4 = False
 
-from ._compat import (
+from transformers.generation.logits_process import (
     LogitsProcessorList,
     TemperatureLogitsWarper,
     TopKLogitsWarper,
     TopPLogitsWarper,
-    BeamSearchScorer,
-    StoppingCriteriaList,
-    MaxTimeCriteria,
-    MaxNewTokensCriteria,
-    EosTokenCriteria,
-    HAS_EOS_CRITERIA,
 )
+from transformers.generation.beam_search import BeamSearchScorer
+
+# Stopping criteria with fallback for older Transformers versions
+try:
+    from transformers.generation.stopping_criteria import (
+        StoppingCriteriaList,
+        MaxTimeCriteria,
+        MaxNewTokensCriteria,
+        EosTokenCriteria,
+    )
+    HAS_EOS_CRITERIA = True
+except ImportError:
+    try:
+        from transformers.generation.stopping_criteria import (
+            StoppingCriteriaList,
+            MaxTimeCriteria,
+            MaxNewTokensCriteria,
+        )
+        HAS_EOS_CRITERIA = False
+    except ImportError:
+        from transformers.generation.stopping_criteria import (
+            StoppingCriteriaList,
+            MaxTimeCriteria,
+            StoppingCriteria,
+        )
+        HAS_EOS_CRITERIA = False
+
+        class MaxNewTokensCriteria(StoppingCriteria):
+            def __init__(self, start_length: int, max_new_tokens: int):
+                self.start_length = int(start_length)
+                self.max_new_tokens = int(max_new_tokens)
+            def __call__(self, input_ids, scores, **kwargs) -> bool:
+                cur = input_ids.shape[1]
+                return (cur - self.start_length) >= self.max_new_tokens
 
 
 # Deterministic math for reproducibility across CUDA runs

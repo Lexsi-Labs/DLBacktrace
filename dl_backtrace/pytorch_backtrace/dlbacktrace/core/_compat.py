@@ -72,16 +72,6 @@ try:
 except ImportError:
     HAS_EOS_CRITERIA = False
 
-    class EosTokenCriteria:  # type: ignore[no-redef]
-        """Stub for older transformers that lack EosTokenCriteria."""
-        def __init__(self, eos_token_id):
-            if isinstance(eos_token_id, int):
-                eos_token_id = [eos_token_id]
-            self._eos = set(eos_token_id)
-
-        def __call__(self, input_ids, scores, **kwargs) -> bool:
-            return bool(input_ids[0, -1].item() in self._eos)
-
 # ---------------------------------------------------------------------------
 # BeamHypotheses + BeamSearchScorer
 # Adapted from the original HuggingFace implementation (transformers ≤ 4.48).
