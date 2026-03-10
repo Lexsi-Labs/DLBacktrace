@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import copy
 import time
 from typing import Optional, List, Tuple, cast
 
@@ -258,7 +259,6 @@ class MoEAutoSampler:
         )
         
         # Return both token relevance and expert relevance separately
-        import copy
         expert_relevance = copy.deepcopy(self.moe_bt.all_layer_expert_relevance)
         
         return all_wt, expert_relevance
@@ -290,7 +290,7 @@ class MoEAutoSampler:
         pad_token_id: Optional[int] = None,
         # beams
         num_beams: int = 1,
-        num_return_sequences: Optional[int] = None,  # ignored on return; always top-1
+        num_return_sequences: Optional[int] = None,
         length_penalty: float = 1.0,
         # misc
         return_scores: bool = False,

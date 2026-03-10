@@ -222,10 +222,7 @@ class Backtrace(object):
         thresholding=0.5,
         task="binary-classification",
     ):
-        # Parse device configuration to determine implementation
-        device = self.device
-        impl = self._parse_device_to_implementation(device)
-        print(f"device: {device}, implementation: {impl}")
+        impl = self.impl
         
         # ---- helpers for device-aware I/O ----
         def arr_from_key(key_or_val):
@@ -279,19 +276,21 @@ class Backtrace(object):
         layer_stack = self.layer_stack
         all_wts = self.model_weights
         all_wt = {}
-        
+
         # Reset expert relevance for this step
         self.all_layer_expert_relevance = {}
 
+        # Cache loop-invariant values
+        model_config = get_model_config(self.model)
+        attn_plan = build_attention_plan(layer_stack, model_config)
+
         # ---- seed relevance from model output ----
         out_layer = model_resource["outputs"][0]
-        out_arr = arr_from_key(out_layer)  # torch or numpy, depending on impl
+        out_arr = arr_from_key(out_layer)
         if len(start_wt) == 0:
-            # UD2.calculate_start_wt expects numpy
             sw_src = out_arr if isinstance(out_arr, np.ndarray) else t2np32(out_arr)
             start_wt = UD2.calculate_start_wt(sw_src, scaler=scaler, task="generation")
         all_wt[out_layer] = start_wt * multiplier
-        print(f"all_wt[{[out_layer]}] start_wt: {np.sum(all_wt[out_layer])}")
 
         # ---- propagate relevance ----
         for start_layer in tqdm(layer_stack):
@@ -361,7 +360,6 @@ class Backtrace(object):
                 elif node_class == "Self_Attention":
                     weights = all_wts[start_layer]
                     sa_w = helper.rename_self_attention_keys(weights)
-                    config = get_model_config(self.model)
                     x = arr_from_key(all_in[child_nodes[0]])
                     temp_wt = UD2.launch_olmoe_self_attention(
                         impl, all_wt[start_layer], x, sa_w, self.model
@@ -372,10 +370,9 @@ class Backtrace(object):
                 elif node_class == "Qwen_Feed_Forward":
                     weights = all_wts[start_layer]
                     ff_w = helper.rename_qwenmoe_feed_forward_keys(weights)
-                    config = get_model_config(self.model)
                     x = arr_from_key(child_nodes[0])
                     temp_wt, ff_expert = UD2.launch_qwen3_moe_feed_forward(
-                        impl, all_wt[start_layer], x, ff_w, config
+                        impl, all_wt[start_layer], x, ff_w, model_config
                     )
                     all_wt[child_nodes[0]] += to_np64(temp_wt)
                     self.all_layer_expert_relevance[f"{start_layer}_ff_expert"] = ff_expert
@@ -383,10 +380,9 @@ class Backtrace(object):
                 elif node_class == "Grouped_Query_Attention":
                     weights = all_wts[start_layer]
                     sa_w = helper.rename_self_attention_keys(weights)
-                    config = get_model_config(self.model)
                     x = arr_from_key(child_nodes[0])
                     temp_wt = UD2.launch_qwen3_moe_self_attention(
-                        impl, all_wt[start_layer], x, sa_w, config
+                        impl, all_wt[start_layer], x, sa_w, model_config
                     )
                     all_wt[child_nodes[0]] += to_np64(temp_wt)
 
@@ -394,10 +390,9 @@ class Backtrace(object):
                 elif node_class == "GPT_OSS_Feed_Forward":
                     weights = all_wts[start_layer]
                     ff_w = helper.rename_gptoss_feed_forward_keys(weights)
-                    config = get_model_config(self.model)
                     x = arr_from_key(child_nodes[0])
                     temp_wt, ff_expert = UD2.launch_gpt_oss_feed_forward(
-                        impl, all_wt[start_layer], x, ff_w, config
+                        impl, all_wt[start_layer], x, ff_w, model_config
                     )
                     all_wt[child_nodes[0]] += to_np64(temp_wt)
                     self.all_layer_expert_relevance[f"{start_layer}_ff_expert"] = ff_expert
@@ -405,16 +400,14 @@ class Backtrace(object):
                 elif node_class == "GPT_OSS_Self_Attention":
                     weights = all_wts[start_layer]
                     sa_w = helper.rename_self_attention_keys(weights)
-                    config = get_model_config(self.model)
-                    ATTN_PLAN = build_attention_plan(layer_stack, config)
-                    attn_info = ATTN_PLAN.get(start_layer, {"attn_type": "full", "window": None})
+                    attn_info = attn_plan.get(start_layer, {"attn_type": "full", "window": None})
                     x = arr_from_key(child_nodes[0])
                     temp_wt = UD2.launch_gpt_oss_self_attention(
                         impl,
                         all_wt[start_layer],
                         x,
                         sa_w,
-                        config,
+                        model_config,
                         attn_type=attn_info["attn_type"],
                         sliding_window=attn_info["window"],
                     )
@@ -424,17 +417,6 @@ class Backtrace(object):
                 else:
                     all_wt[child_nodes[0]] += all_wt[start_layer]
 
-        # # ---- post-scale/normalize (works on numpy) ----
-        # if max_unit > 0 and scaler == 0:
-        #     temp_dict = {}
-        #     for k in all_wt.keys():
-        #         temp_dict[k] = UD2.weight_normalize(all_wt[k], max_val=max_unit)
-        #     all_wt = temp_dict
-        # elif scaler > 0:
-        #     temp_dict = {}
-        #     for k in all_wt.keys():
-        #         temp_dict[k] = UD2.weight_scaler(all_wt[k], scaler=scaler)
-        #     all_wt = temp_dict
 
         # Store in instance variable (like PyTorch Backtrace)
         self.all_wt = all_wt

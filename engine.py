@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 DLBacktrace — Benchmark Suite
-===============================
 
 Two benchmark modes:
   1. Sequence-Scaling   — Fixed 1-token output, vary input sequence length
@@ -10,10 +9,10 @@ Two benchmark modes:
 Each mode measures time and memory (GPU VRAM + system RAM) per pipeline stage.
 
 Usage:
-  python benchmark.py                                           # both modes, defaults
-  python benchmark.py --mode seq                                # sequence scaling only
-  python benchmark.py --mode gen --gen-tokens 1 5 10 20         # generation scaling only
-  python benchmark.py --seq-lengths 8 32 128 --gen-tokens 1 5   # custom
+  python engine.py                                           # both modes, defaults
+  python engine.py --mode seq                                # sequence scaling only
+  python engine.py --mode gen --gen-tokens 1 5 10 20        # generation scaling only
+  python engine.py --seq-lengths 8 32 128 --gen-tokens 1 5  # custom lengths
 """
 
 import argparse
