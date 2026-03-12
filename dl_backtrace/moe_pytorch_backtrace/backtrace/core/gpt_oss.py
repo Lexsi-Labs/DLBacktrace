@@ -16,13 +16,20 @@ def build_gpt_oss_tree(model, root='gpt_oss'):
     )
 
 
+def _to_torch(t):
+    """Detach and cast to float32 CPU tensor. Zero-copy when already fp32 CPU."""
+    if not isinstance(t, torch.Tensor):
+        return torch.as_tensor(t, dtype=torch.float32)
+    return t.detach().to(dtype=torch.float32, device='cpu')
+
+
 def extract_gpt_oss_weights(model):
-    """Extract weights from a GPT-OSS model (supports wrapped models)."""
+    """Extract weights from a GPT-OSS model (supports wrapped models).
+    
+    Returns weight dicts containing torch.Tensor (fp32, CPU) instead of numpy.
+    """
     core, lm_head = unwrap_model(model)
     config = core.config if hasattr(core, 'config') else model.config
-
-    def _to_numpy(t):
-        return t.detach().to(torch.float32).cpu().numpy() if isinstance(t, torch.Tensor) else t
 
     weights_dict = {
         'decoder_embeddings': {},
@@ -36,24 +43,24 @@ def extract_gpt_oss_weights(model):
         weights_dict[f'decoder_feed_forward_{i}'] = {}
 
     for name, param in model.named_parameters():
-        param_np = _to_numpy(param)
+        param_t = _to_torch(param)
         if 'embed_tokens' in name:
-            weights_dict['decoder_embeddings'][name] = param_np
+            weights_dict['decoder_embeddings'][name] = param_t
         elif 'layers' in name:
             layer = name.split('.')[2]
             if 'input_layernorm' in name:
-                weights_dict[f'decoder_layer_norm_{layer}_0'][name] = param_np
+                weights_dict[f'decoder_layer_norm_{layer}_0'][name] = param_t
             elif 'post_attention_layernorm' in name:
-                weights_dict[f'decoder_layer_norm_{layer}_1'][name] = param_np
+                weights_dict[f'decoder_layer_norm_{layer}_1'][name] = param_t
             elif any(p in name for p in ['q_proj', 'k_proj', 'v_proj', 'o_proj', 'sinks']):
-                weights_dict[f'decoder_self_attention_{layer}'][name] = param_np
+                weights_dict[f'decoder_self_attention_{layer}'][name] = param_t
             elif 'router' in name or 'gate_up_proj' in name or 'down_proj' in name:
-                weights_dict[f'decoder_feed_forward_{layer}'][name] = param_np
+                weights_dict[f'decoder_feed_forward_{layer}'][name] = param_t
         elif 'norm.weight' in name:
-            weights_dict['decoder_layer_norm'][name] = param_np
+            weights_dict['decoder_layer_norm'][name] = param_t
 
     if lm_head is not None and hasattr(lm_head, 'weight'):
-        weights_dict['decoder_lm_head']['lm_head.weight'] = _to_numpy(lm_head.weight)
+        weights_dict['decoder_lm_head']['lm_head.weight'] = _to_torch(lm_head.weight)
 
     return weights_dict
 

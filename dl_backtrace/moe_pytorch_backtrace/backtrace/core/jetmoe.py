@@ -18,8 +18,18 @@ def build_jetmoe_tree(model, root='jet_moe'):
     )
 
 
+def _to_torch(t):
+    """Detach and cast to float32 CPU tensor. Zero-copy when already fp32 CPU."""
+    if not isinstance(t, torch.Tensor):
+        return torch.as_tensor(t, dtype=torch.float32)
+    return t.detach().to(dtype=torch.float32, device='cpu')
+
+
 def extract_jetmoe_weights(model):
-    """Extract weights from a JetMoE model (supports wrapped models)."""
+    """Extract weights from a JetMoE model (supports wrapped models).
+    
+    Returns weight dicts containing torch.Tensor (fp32, CPU) instead of numpy.
+    """
     core, lm_head = unwrap_model(model)
     config = core.config if hasattr(core, 'config') else model.config
 
@@ -34,28 +44,25 @@ def extract_jetmoe_weights(model):
         weights_dict[f'decoder_layer_norm_{i}_1'] = {}
         weights_dict[f'decoder_feed_forward_{i}'] = {}
 
-    def to_np(x):
-        return x.detach().cpu().numpy() if torch.is_tensor(x) else x
-
     for name, param in model.named_parameters():
-        param_np = to_np(param)
+        param_t = _to_torch(param)
         if 'embed_tokens' in name:
-            weights_dict['decoder_embeddings'][name] = param_np
+            weights_dict['decoder_embeddings'][name] = param_t
         elif 'layers' in name:
             layer = name.split('.')[2]
             if 'input_layernorm' in name:
-                weights_dict[f'decoder_layer_norm_{layer}_0'][name] = param_np
+                weights_dict[f'decoder_layer_norm_{layer}_0'][name] = param_t
             elif 'self_attention' in name:
-                weights_dict[f'decoder_self_attention_{layer}'][name] = param_np
+                weights_dict[f'decoder_self_attention_{layer}'][name] = param_t
             elif 'post_attention_layernorm' in name:
-                weights_dict[f'decoder_layer_norm_{layer}_1'][name] = param_np
+                weights_dict[f'decoder_layer_norm_{layer}_1'][name] = param_t
             elif 'mlp' in name:
-                weights_dict[f'decoder_feed_forward_{layer}'][name] = param_np
+                weights_dict[f'decoder_feed_forward_{layer}'][name] = param_t
         elif 'norm.weight' in name:
-            weights_dict['decoder_layer_norm']['norm.weight'] = param_np
+            weights_dict['decoder_layer_norm']['norm.weight'] = param_t
 
     if lm_head is not None and hasattr(lm_head, 'weight'):
-        weights_dict['decoder_lm_head']['lm_head.weight'] = to_np(lm_head.weight.data)
+        weights_dict['decoder_lm_head']['lm_head.weight'] = _to_torch(lm_head.weight.data)
 
     return weights_dict
 
