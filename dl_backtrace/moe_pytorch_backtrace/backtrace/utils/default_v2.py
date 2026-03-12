@@ -2,14 +2,6 @@ import torch
 import numpy as np
 from numpy.lib.stride_tricks import as_strided
 
-# ------------- Add `import` and `launching function` for all 4 MoEs ----------------
-# MoE Utils Layers
-from .cuda_utils.MoE_utils.cuda_version.nonneg_conserve import nonneg_conserve_ops as dlb_style_signed_conserve_ops
-from .cuda_utils.MoE_utils.cuda_version.relevance_gated_proj import relevance_gated_proj_ops as calculate_relevance_gated_proj_ops
-from .cuda_utils.MoE_utils.cuda_version.relevance_proj import relevance_proj_ops as calculate_relevance_proj_ops
-from .cuda_utils.MoE_utils.cuda_version.relevance_single import relevance_single_ops as calculate_relevance_ops
-from .cuda_utils.MoE_utils.cuda_version.wt_router_logits import wt_router_logits_ops as calculate_wt_router_logits_ops
-
 # JetMoE Layer
 from .cuda_utils.JetMoE.original_version import calculate_wt_jetmoe_feed_forward as calculate_wt_jetmoe_feed_forward_original, calculate_wt_jetmoe_self_attention_parallel as calculate_wt_jetmoe_self_attention_parallel_original
 from .cuda_utils.JetMoE.refactored_version import calculate_wt_jetmoe_feed_forward as calculate_wt_jetmoe_feed_forward_refactored, calculate_wt_jetmoe_self_attention_parallel as calculate_wt_jetmoe_self_attention_parallel_refactored
