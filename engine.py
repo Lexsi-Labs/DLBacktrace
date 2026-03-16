@@ -179,6 +179,19 @@ class ModelWrapper(nn.Module):
         ).logits
 
 
+class MoEBacktraceWrapper(nn.Module):
+    def __init__(self, model_id: str, token: str):
+        super().__init__()
+        from transformers import AutoModelForCausalLM
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_id, torch_dtype=torch.bfloat16, token=token
+        ).eval()
+
+    def forward(self, input_ids, attention_mask):
+        return self.model(
+            input_ids=input_ids, attention_mask=attention_mask
+        ).logits
+
 # ═══════════════════════════════════════════════════════════════════════════
 #  MODE 1: Sequence-Scaling Benchmark
 #  Fixed output (1 token), vary input sequence length
@@ -406,6 +419,51 @@ def benchmark_gen_scaling(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+#  MODE 3: MoE Backtrace
+# ═══════════════════════════════════════════════════════════════════════════
+
+def moe_backtrace(
+    model,
+    tokenizer,
+    device: str,
+    moe_type: str,
+    prompt: str,
+    max_new_tokens: int,
+) -> Dict[str, Any]:
+    
+    from dl_backtrace.moe_pytorch_backtrace import Backtrace
+
+    backtrace = Backtrace(
+                        model= model, 
+                        model_type = moe_type, 
+                        device = device,
+    )
+
+    tokens = tokenizer(
+        prompt,
+        return_tensors="pt",
+    )
+    input_ids = tokens["input_ids"].to(device)
+    attention_mask = tokens["attention_mask"].to(device)
+
+    results = backtrace.run_task(
+        task="generation",
+        inputs={"input_ids": input_ids, "attention_mask": attention_mask},
+        tokenizer=tokenizer,
+        max_new_tokens=max_new_tokens,
+        return_relevance=True,
+        return_scores=True,
+        debug=False,
+    )
+    
+    # Decode output
+    generated_text = tokenizer.decode(results['generated_ids'][0], skip_special_tokens=True)
+    print(f"\n✅ Generated text: {generated_text}")
+
+    return results
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 #  Reporting
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -546,7 +604,7 @@ def main():
         help="HuggingFace model ID (default: Llama-3.2-1B)",
     )
     parser.add_argument(
-        "--mode", type=str, default="both", choices=["seq", "gen", "both"],
+        "--mode", type=str, default="both", choices=["seq", "gen", "both", "moe"],
         help="Benchmark mode: seq (sequence scaling), gen (generation scaling), both",
     )
     parser.add_argument(
@@ -609,12 +667,6 @@ def main():
     hf_token = os.getenv("HUGGING_FACE_HUB_TOKEN")
     from transformers import AutoTokenizer
 
-    print(f"📦 Loading model: {args.model}")
-    model = ModelWrapper(args.model, hf_token)
-    tokenizer = AutoTokenizer.from_pretrained(args.model, token=hf_token)
-    tokenizer.pad_token = tokenizer.eos_token
-    print(f"✅ Model loaded\n")
-
     system_info = gather_system_info(args.device, args.model)
 
     # ── Print header ────────────────────────────────────────
@@ -645,6 +697,12 @@ def main():
         print("\n" + "─" * 70)
         print("  📐 SEQUENCE SCALING BENCHMARK")
         print("─" * 70)
+
+        print(f"📦 Loading model: {args.model}")
+        model = ModelWrapper(args.model, hf_token)
+        tokenizer = AutoTokenizer.from_pretrained(args.model, token=hf_token)
+        tokenizer.pad_token = tokenizer.eos_token
+        print(f"✅ Model loaded\n")
 
         for seq_len in args.seq_lengths:
             for run_idx in range(args.runs):
@@ -685,6 +743,12 @@ def main():
         print("\n" + "─" * 70)
         print("  🔄 GENERATION SCALING BENCHMARK")
         print("─" * 70)
+
+        print(f"📦 Loading model: {args.model}")
+        model = ModelWrapper(args.model, hf_token)
+        tokenizer = AutoTokenizer.from_pretrained(args.model, token=hf_token)
+        tokenizer.pad_token = tokenizer.eos_token
+        print(f"✅ Model loaded\n")
 
         for num_tokens in args.gen_tokens:
             for run_idx in range(args.runs):
@@ -767,19 +831,73 @@ def main():
             else:
                 print(f"\n  ⚠️  No .dlbr files found in {cache_path}")
 
+    if args.mode == "moe":
+        
+        if args.model == "openai/gpt-oss-20b":
+            moe_type = "gpt_oss"
+        elif args.model == "Qwen/Qwen3-30B-A3B":
+            moe_type = "qwen3_moe"    
+        elif args.model == "jetmoe/jetmoe-8b":
+            moe_type = "jetmoe"
+        elif args.model == "allenai/OLMoE-1B-7B-0125-Instruct":
+            moe_type = "olmoe"
+        else:
+            raise ValueError(f"Model not supported: {args.model}, supported models: gpt_oss, qwen3_moe, jetmoe, olmoe")    
+        
+        model = MoEBacktraceWrapper(args.model, hf_token)
+        tokenizer = AutoTokenizer.from_pretrained(args.model, token=hf_token)
+        tokenizer.pad_token = tokenizer.eos_token
+        print(f"✅ Model loaded\n")
+
+        moe_records = []
+        for num_tokens in args.gen_tokens:
+            tag = f"max_new_tokens={num_tokens}"
+            print(f"\n▶ {tag}")
+
+            try:
+                record = moe_backtrace(
+                    model=model,
+                    tokenizer=tokenizer,
+                    max_new_tokens=num_tokens,
+                    device=args.device,
+                    moe_type=moe_type,
+                    prompt=args.gen_prompt,
+                )
+                record["success"] = True
+                moe_records.append(record)
+
+                print(
+                    f"Init: {record['init_time_s']:.3f}s | "
+                    f"Gen: {record['generation_time_s']:.3f}s | "
+                    f"Tokens: {record['actual_new_tokens']} | "
+                    f"Per-tok: {record['time_per_token_s']:.3f}s | "
+                    f"→ \"{record['generated_text'][:50]}\""
+                )
+            except Exception as e:
+                print(f"Error: {e}")
+                moe_records.append({
+                    "mode": "moe_backtrace",
+                    "max_new_tokens": num_tokens,
+                    "success": False,
+                    "error": str(e),
+                })
+    
     # ═══════════════════════════════════════════════════════════
     #  Report
     # ═══════════════════════════════════════════════════════════
     successful_seq = [r for r in seq_records if r.get("success")]
     successful_gen = [r for r in gen_records if r.get("success")]
+    successful_moe = [r for r in moe_records if r.get("success")]
 
     if successful_seq:
         print_seq_table(successful_seq)
     if successful_gen:
         print_gen_table(successful_gen)
+    if successful_moe:
+        print_moe_table(successful_moe)
 
-    if successful_seq or successful_gen:
-        save_report(seq_records, gen_records, system_info, args.output_dir)
+    if successful_seq or successful_gen or successful_moe:
+        save_report(seq_records, gen_records, moe_records, system_info, args.output_dir)
     else:
         print("\n⚠️  No successful benchmark runs.")
 
