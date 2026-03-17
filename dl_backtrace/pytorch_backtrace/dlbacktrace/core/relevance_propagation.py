@@ -1226,6 +1226,97 @@ def align_relevance_gpu(r, target_shape):
             factor = dt // dr
             r = r.repeat_interleave(factor, dim=ax)
 
+    # 3-4) Approximate reduction or tiling for mismatches BEFORE trying broadcast
+    if r.shape != target_shape:
+        # 4a) approx reduce last dim for 2D
+        if r.ndim == 2 and r.shape[1] > target_shape[-1] and r.shape[0] == target_shape[0]:
+            try:
+                factor = r.shape[1] // target_shape[-1]
+                if factor >= 1:
+                    trimmed = r[:, :factor * target_shape[-1]]
+                    r = trimmed.reshape(r.shape[0], target_shape[-1], factor).mean(dim=-1)
+            except:
+                pass
+
+        # 4b) block-mean reduce last dim
+        if r.ndim == len(target_shape) and r.shape[:-1] == target_shape[:-1]:
+            try:
+                factor = r.shape[-1] // target_shape[-1]
+                if factor >= 1:
+                    trimmed = r[..., :factor * target_shape[-1]]
+                    r = trimmed.reshape(*r.shape[:-1], target_shape[-1], factor).mean(dim=-1)
+            except:
+                pass
+
+        # 4c) repeat last dim if clean factor
+        if r.ndim == len(target_shape) and r.shape[:-1] == target_shape[:-1]:
+            dr, dt = r.shape[-1], target_shape[-1]
+            if dt > dr and dt % dr == 0:
+                factor = dt // dr
+                try:
+                    r = r.repeat_interleave(factor, dim=-1)
+                except:
+                    pass
+
+        # 4d) approximate tiling of last dim
+        if r.ndim == len(target_shape) and r.shape[:-1] == target_shape[:-1]:
+            dr, dt = r.shape[-1], target_shape[-1]
+            if dt > dr:
+                try:
+                    reps = (dt + dr - 1) // dr
+                    rep_list = [1] * r.ndim
+                    rep_list[-1] = reps
+                    r = r.repeat(*rep_list)[..., :dt]
+                except:
+                    pass
+
+        # 4e) approx reduction for last two dims
+        if r.ndim == len(target_shape) and r.ndim >= 2 and (r.shape[-2] * r.shape[-1]) > (target_shape[-2] * target_shape[-1]):
+            try:
+                flat_r = r.reshape(*r.shape[:-2], -1)
+                tgt_flat = target_shape[-2] * target_shape[-1]
+                factor = flat_r.shape[-1] // tgt_flat
+                if factor >= 1:
+                    trimmed = flat_r[..., :factor * tgt_flat]
+                    r = trimmed.reshape(*flat_r.shape[:-1], tgt_flat, factor).mean(dim=-1)
+                    r = r.reshape(*r.shape[:-1], target_shape[-2], target_shape[-1])
+            except:
+                pass
+
+        # 4f) tile last two dims if both smaller than target
+        if (
+            r.ndim == len(target_shape)
+            and r.ndim >= 2
+            and target_shape[-2] > 1
+            and target_shape[-1] > 1
+            and r.shape[-2] < target_shape[-2]
+            and r.shape[-1] < target_shape[-1]
+        ):
+            try:
+                reps_0 = (target_shape[-2] + r.shape[-2] - 1) // r.shape[-2]
+                reps_1 = (target_shape[-1] + r.shape[-1] - 1) // r.shape[-1]
+                rep_list =[1] * (r.ndim - 2) + [reps_0, reps_1]
+                r = r.repeat(*rep_list)[..., :target_shape[-2], :target_shape[-1]]
+            except:
+                pass
+
+        # 4g) Final soft reduction of last dim
+        if r.ndim == len(target_shape) and r.shape[:-1] == target_shape[:-1]:
+            dr, dt = r.shape[-1], target_shape[-1]
+            if dr != dt:
+                try:
+                    new_idx = torch.linspace(0, dr, dt + 1, dtype=torch.long, device=r.device)
+                    chunks =[]
+                    for i in range(dt):
+                        start, end = new_idx[i].item(), new_idx[i+1].item()
+                        if end > start:
+                            chunks.append(r[..., start:end].mean(dim=-1))
+                        else:
+                            chunks.append(torch.zeros(*r.shape[:-1], dtype=r.dtype, device=r.device))
+                    r = torch.stack(chunks, dim=-1)
+                except:
+                    pass
+
     # Final broadcast
     if r.shape != target_shape:
         try:
@@ -1234,11 +1325,60 @@ def align_relevance_gpu(r, target_shape):
                 r = r.reshape(r.shape + (1,) * missing)
             r = r.expand(target_shape).contiguous()
         except Exception as e:
-            raise ValueError(
-                f"Cannot align relevance: incompatible shape {r.shape} → {target_shape}: {e}"
-            )
+            try:
+                # 6) handle 1D to 1D
+                if r.ndim == 1 and len(target_shape) == 1:
+                    if r.shape[0] > target_shape[0]:
+                        r = r[:target_shape[0]]
+                    else:
+                        r = torch.nn.functional.pad(r, (0, target_shape[0] - r.shape[0]))
+                
+                # 7) handle (B, S) style mismatch
+                elif r.ndim == 1 and len(target_shape) == 2:
+                    B, S = target_shape
+                    if r.shape[0] == S:
+                        r = r.unsqueeze(0).repeat(B, 1)
+                    elif r.shape[0] == B:
+                        r = r.unsqueeze(1).repeat(1, S)
+                
+                # 8) final fallback for 2D
+                elif r.ndim == 2 and len(target_shape) == 2:
+                    B, S = target_shape
+                    if r.shape[1] != S:
+                        if r.shape[1] > S:
+                            r = r[:, :S]
+                        else:
+                            r = torch.nn.functional.pad(r, (0, S - r.shape[1]))
+                    if r.shape[0] != B:
+                        if r.shape[0] > B:
+                            r = r[:B]
+                        else:
+                            reps = (B + r.shape[0] - 1) // r.shape[0]
+                            r = r.repeat(reps, 1)[:B]
+                
+                else:
+                    _tgt_numel = 1
+                    for s in target_shape:
+                        _tgt_numel *= s
+                    if r.numel() == _tgt_numel:
+                        r = r.reshape(target_shape)
+                    else:
+                        # Hard fallback
+                        r = r.reshape(-1)
+                        if r.shape[0] > _tgt_numel:
+                            r = r[:_tgt_numel]
+                        else:
+                            r = torch.nn.functional.pad(r, (0, _tgt_numel - r.shape[0]))
+                        r = r.reshape(target_shape)
+            except Exception as inner_e:
+                raise ValueError(
+                    f"Cannot align relevance: incompatible shape {r.shape} → {target_shape}: {e} (inner: {inner_e})"
+                )
 
-    # Normalize relevance total
+    if r.shape != target_shape:
+        raise ValueError(f"Cannot align relevance from shape {r.shape} to {target_shape}")
+
+    # Normalize relevance total if changed
     final_total = r.sum()
     if not torch.isclose(final_total, original_total, rtol=1e-3) and final_total > 0:
         scale = original_total / (final_total + 1e-8)
