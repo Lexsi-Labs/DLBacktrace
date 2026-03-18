@@ -2,7 +2,7 @@ import re
 import torch
 import numpy as np  # kept only for original-CPU fallback compatibility
 from tqdm import tqdm
-from dl_backtrace.moe_pytorch_backtrace.backtrace.core import (
+from dl_backtrace.moe_pytorch_backtrace.moe_backtrace.core import (
     jetmoe as jetmoe,
     olmoe as olmoe,
     qwen3_moe as qwen3_moe,
