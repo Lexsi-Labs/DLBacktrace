@@ -1,4 +1,4 @@
-from dl_backtrace.moe_pytorch_backtrace.backtrace.utils.default_v2 import np_swish 
+from dl_backtrace.moe_pytorch_backtrace.moe_backtrace.utils.default_v2 import np_swish 
 
 activation_master = {
     "None": {
