@@ -179,7 +179,7 @@ def build_decoder_tree(core, lm_head, *, attn_class: str, ff_class: str):
     outputs = []
     layer_stack = []
 
-    def add_component(name, component, child=None):
+    def add_component(ltree, name, component, child=None):
         ltree[name] = {
             "name": name,
             "class": component if isinstance(component, str) else type(component).__name__,
@@ -207,43 +207,50 @@ def build_decoder_tree(core, lm_head, *, attn_class: str, ff_class: str):
             if child in ltree:
                 ltree[child]["parent"] = [name]
 
-    add_component("decoder_embeddings", "Embeddings", child=None)
+    decoder_embeddings = add_component(ltree, 'decoder_embeddings', 'Embeddings', child=None)
 
-    current_child = "decoder_embeddings"
-    for i in range(len(core.layers)):
-        add_component(f"decoder_layer_norm_{i}_0", "Layer_Norm", child=current_child)
-        add_component(f"decoder_self_attention_{i}", attn_class, child=f"decoder_layer_norm_{i}_0")
-        add_component(f"decoder_residual_self_attention_{i}", "Residual",
-                      child=[current_child, f"decoder_self_attention_{i}"])
-        add_component(f"decoder_layer_norm_{i}_1", "Layer_Norm",
-                      child=f"decoder_self_attention_{i}")
-        add_component(f"decoder_feed_forward_{i}", ff_class,
-                      child=f"decoder_layer_norm_{i}_1")
-        add_component(f"decoder_residual_feed_forward_{i}", "Residual",
-                      child=[f"decoder_residual_self_attention_{i}", f"decoder_feed_forward_{i}"])
-        current_child = f"decoder_residual_feed_forward_{i}"
+    # Add jet_moe layers dynamically
+    current_child = 'decoder_embeddings'
+    for i, layer in enumerate(core.layers):
+        decoder_layer_norm_0 = add_component(ltree, f'decoder_layer_norm_{i}_0', 'Layer_Norm', child=current_child)
+        decoder_self_attention = add_component(ltree, f'decoder_self_attention_{i}', 'Self_Attention', child=f'decoder_layer_norm_{i}_0')
+        decoder_residual_self_attention = add_component(ltree, f'decoder_residual_self_attention_{i}', 'Residual', child=[current_child, f'decoder_self_attention_{i}'])
 
-    if hasattr(core, "norm"):
-        add_component("decoder_layer_norm", "Layer_Norm", child=current_child)
-        current_child = "decoder_layer_norm"
+        decoder_layer_norm_1 = add_component(ltree, f'decoder_layer_norm_{i}_1', 'Layer_Norm', child=f'decoder_self_attention_{i}')
+        decoder_feed_forward = add_component(ltree, f'decoder_feed_forward_{i}', 'OLMoE_Feed_Forward', child=f'decoder_layer_norm_{i}_1')
+        decoder_residual_feed_forward = add_component(ltree, f'decoder_residual_feed_forward_{i}', 'Residual', child=[f'decoder_residual_self_attention_{i}', f'decoder_feed_forward_{i}'])
 
+        current_child = f'decoder_residual_feed_forward_{i}'
+
+    if hasattr(core, 'norm'):
+        decoder_final_layer_norm = add_component(ltree, 'decoder_layer_norm', 'Layer_Norm', child=current_child)
+        current_child = 'decoder_layer_norm'
+
+    # Decoder LM-Head
     if lm_head is not None:
-        add_component("decoder_lm_head", "LM_Head", child=current_child)
+        decoder_lm_head = add_component(ltree, 'decoder_lm_head', 'LM_Head', child=current_child)
+        current_child = 'decoder_lm_head'
 
+    # Classify components
     for name, component in ltree.items():
-        if component["parent"] is None:
-            outputs.append(name)
-        elif component["child"] is None:
-            inputs.append(name)
+        if component['parent'] is None:
+            outputs.append(component['name'])
+        elif component['child'] is None:
+            inputs.append(component['name'])
+        else:
+            intermediates.append(component['name'])
 
+    # reverse the layer_stack
     layer_stack = list(reversed(layer_stack))
 
+    # model_resource = (layer_tree, ltree, outputs, inputs)
     model_resource = {
         "layers": layer_tree,
         "graph": ltree,
         "outputs": outputs,
-        "inputs": inputs,
-    }
+        "inputs": inputs
+    } 
+
     return model_resource, layer_stack
 
 

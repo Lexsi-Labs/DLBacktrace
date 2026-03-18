@@ -41,6 +41,7 @@ def extract_olmoe_weights(model):
         weights_dict[f'decoder_self_attention_{i}'] = {}
         weights_dict[f'decoder_layer_norm_{i}_1'] = {}
         weights_dict[f'decoder_feed_forward_{i}'] = {}
+        
     for layer in range(config.num_hidden_layers):
         for expert_id in range(config.num_experts):
             weights_dict[f'decoder_feed_forward_{layer}'][f'{expert_id}'] = {}
