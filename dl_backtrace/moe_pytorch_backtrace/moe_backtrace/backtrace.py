@@ -9,7 +9,7 @@ from dl_backtrace.moe_pytorch_backtrace.backtrace.core import (
     gpt_oss as gpt_oss,
     helper as helper,
 )
-from dl_backtrace.moe_pytorch_backtrace.backtrace.utils import default_v2 as UD2
+from dl_backtrace.moe_pytorch_backtrace.moe_backtrace.utils import default_v2 as UD2
 
 
 # ---------------------------------------------------------------------------
@@ -88,7 +88,7 @@ def get_tensor_or_raise(all_in, all_out, key, where="all_out"):
     return x
 
 
-class Backtrace(object):
+class MoE_Backtrace(object):
     """
     Build graph + extract weights in __init__. Compute outputs only when asked.
     Device is set at construction and used everywhere (no device arg in eval()).
