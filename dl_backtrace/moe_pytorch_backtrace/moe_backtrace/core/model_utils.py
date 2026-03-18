@@ -177,6 +177,7 @@ def build_decoder_tree(core, lm_head, *, attn_class: str, ff_class: str):
     layer_tree = {}
     inputs = []
     outputs = []
+    intermediates = []
     layer_stack = []
 
     def add_component(ltree, name, component, child=None):
