@@ -94,10 +94,17 @@ class MoEAutoSampler:
 
     def _get_causallm(self, model_like):
         """Walk `.model` chain until we find a GenerationMixin-style CausalLM."""
+        from transformers.generation.utils import GenerationMixin
+
         obj = model_like
         seen = set()
         for _ in range(8):
+            if isinstance(obj, GenerationMixin):
+                return obj
             if hasattr(obj, "_prepare_generation_config") and hasattr(obj, "_get_logits_processor"):
+                return obj
+            # Fallback: some HF versions expose 'generate' directly
+            if hasattr(obj, "generate") and hasattr(obj, "config"):
                 return obj
             i = id(obj)
             if i in seen:
@@ -109,7 +116,7 @@ class MoEAutoSampler:
                 break
         raise TypeError(
             f"{type(model_like).__name__} isn't a GenerationMixin model. "
-            "Pass AutoModelForCausalLM (not base model)."
+            "Pass AutoModelForCausalLM / OlmoeForCausalLM (not base OlmoeModel)."
         )
 
     @staticmethod
