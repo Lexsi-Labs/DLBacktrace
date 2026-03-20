@@ -667,7 +667,7 @@ class MoE_Backtrace(object):
             kwargs["bad_words_ids"] = norm
 
         # --- create engine & dispatch ---
-        from dl_backtrace.moe_pytorch_backtrace.backtrace.core.moe_auto_sampler import MoEAutoSampler
+        from dl_backtrace.moe_pytorch_backtrace.moe_backtrace.core.moe_auto_sampler import MoEAutoSampler
         eng = MoEAutoSampler(self, tokenizer)  # `self` is the MoE Backtrace engine
 
         return eng.generate(
