@@ -1,5 +1,6 @@
 from collections import defaultdict
 import torch
+import re
 from .model_utils import (
     unwrap_model, build_decoder_tree, run_hook_generation,
     clear_all_hooks, first_tensor, clone, get_tensor, to_torch_like,
@@ -24,10 +25,6 @@ def _to_torch(t):
 
 
 def extract_olmoe_weights(model):
-    """Extract weights from an OLMoE model (supports wrapped models).
-    
-    Returns weight dicts containing torch.Tensor (fp32, CPU) instead of numpy.
-    """
     core, lm_head = unwrap_model(model)
     config = core.config if hasattr(core, 'config') else model.config
 
@@ -41,17 +38,24 @@ def extract_olmoe_weights(model):
         weights_dict[f'decoder_self_attention_{i}'] = {}
         weights_dict[f'decoder_layer_norm_{i}_1'] = {}
         weights_dict[f'decoder_feed_forward_{i}'] = {}
-        
+
     for layer in range(config.num_hidden_layers):
         for expert_id in range(config.num_experts):
             weights_dict[f'decoder_feed_forward_{layer}'][f'{expert_id}'] = {}
 
     for name, param in model.named_parameters():
         param_t = _to_torch(param)
+
         if 'embed_tokens' in name:
             weights_dict['decoder_embeddings'][name] = param_t
+
         elif 'layers' in name:
-            layer = name.split('.')[2]
+            # ✅ Robust: works regardless of how many prefixes wrap the name
+            m = re.search(r'layers\.(\d+)\.', name)
+            if m is None:
+                continue
+            layer = m.group(1)
+
             if 'input_layernorm' in name:
                 weights_dict[f'decoder_layer_norm_{layer}_0'][name] = param_t
             elif 'post_attention_layernorm' in name:
@@ -61,8 +65,12 @@ def extract_olmoe_weights(model):
             elif 'gate' in name and 'gate_proj' not in name:
                 weights_dict[f'decoder_feed_forward_{layer}'][name] = param_t
             elif 'gate_proj' in name or 'up_proj' in name or 'down_proj' in name:
-                expert_id = name.split('.')[5]
-                weights_dict[f'decoder_feed_forward_{layer}'][f'{expert_id}'][name] = param_t
+                # ✅ Also fix expert_id extraction with regex
+                em = re.search(r'experts\.(\d+)\.', name)
+                if em:
+                    expert_id = em.group(1)
+                    weights_dict[f'decoder_feed_forward_{layer}'][expert_id][name] = param_t
+
         elif 'norm.weight' in name:
             weights_dict['decoder_layer_norm'][name] = param_t
 
