@@ -50,7 +50,7 @@ def extract_olmoe_weights(model):
             weights_dict['decoder_embeddings'][name] = param_t
 
         elif 'layers' in name:
-            # ✅ Robust: works regardless of how many prefixes wrap the name
+            # Robust: works regardless of how many prefixes wrap the name
             m = re.search(r'layers\.(\d+)\.', name)
             if m is None:
                 continue
@@ -65,7 +65,7 @@ def extract_olmoe_weights(model):
             elif 'gate' in name and 'gate_proj' not in name:
                 weights_dict[f'decoder_feed_forward_{layer}'][name] = param_t
             elif 'gate_proj' in name or 'up_proj' in name or 'down_proj' in name:
-                # ✅ Also fix expert_id extraction with regex
+                # Also fix expert_id extraction with regex
                 em = re.search(r'experts\.(\d+)\.', name)
                 if em:
                     expert_id = em.group(1)
