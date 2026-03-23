@@ -1,38 +1,23 @@
+import numpy as np
 import re
 import torch
-import numpy as np  # kept only for original-CPU fallback compatibility
 from tqdm import tqdm
-from dl_backtrace.moe_pytorch_backtrace.moe_backtrace.core import (
+from dl_backtrace.moe_pytorch_backtrace.backtrace.config import activation_master
+from dl_backtrace.moe_pytorch_backtrace.backtrace.core import (
     jetmoe as jetmoe,
     olmoe as olmoe,
     qwen3_moe as qwen3_moe,
     gpt_oss as gpt_oss,
     helper as helper,
 )
-from dl_backtrace.moe_pytorch_backtrace.moe_backtrace.utils import default_v2 as UD2
+from dl_backtrace.moe_pytorch_backtrace.backtrace.utils import default_v2 as UD2
 
 
-# ---------------------------------------------------------------------------
-# Torch-native utility helpers (replaces numpy-based t2np32 / tensor_to_numpy / to_np64)
-# ---------------------------------------------------------------------------
-
-def _to_f32_tensor(x, device='cpu'):
-    """Normalise *any* value to a float32 torch.Tensor on `device`.
-    Handles torch.Tensor, np.ndarray, scalars, and nested lists/tuples.
-    """
-    if isinstance(x, torch.Tensor):
-        return x.detach().to(dtype=torch.float32, device=device)
-    if isinstance(x, np.ndarray):
-        return torch.from_numpy(x.astype(np.float32, copy=False)).to(device)
-    if isinstance(x, (int, float)):
-        return torch.tensor(x, dtype=torch.float32, device=device)
-    if isinstance(x, (list, tuple)):
-        parts = [_to_f32_tensor(xi, device) for xi in x]
-        try:
-            return torch.stack(parts)
-        except Exception:
-            return parts  # heterogeneous shapes – return list
-    raise TypeError(f"Cannot convert type {type(x)} to torch.Tensor")
+def t2np32(t):
+    # Cast any torch tensor to float32 on CPU before numpy() to avoid bf16 errors
+    if isinstance(t, torch.Tensor):
+        return t.detach().to(torch.float32).cpu().numpy()
+    return t
 
 
 def _layer_idx(name: str):
@@ -88,7 +73,29 @@ def get_tensor_or_raise(all_in, all_out, key, where="all_out"):
     return x
 
 
-class MoE_Backtrace(object):
+def tensor_to_numpy(x):
+    """Convert Tensor, scalar, list/tuple, or ndarray to a NumPy array with memory-efficient float32."""
+    if isinstance(x, np.ndarray):
+        return x.astype(np.float32) if x.dtype == np.float64 else x
+    if isinstance(x, torch.Tensor):
+        return x.detach().to(torch.float32).cpu().numpy()
+    if isinstance(x, (int, float)):
+        return np.array(x, dtype=np.float32)
+    if isinstance(x, (list, tuple)):
+        arrs = []
+        for xi in x:
+            converted = tensor_to_numpy(xi) if not isinstance(xi, np.ndarray) else xi
+            if hasattr(converted, "dtype") and converted.dtype == np.float64:
+                converted = converted.astype(np.float32)
+            arrs.append(converted)
+        try:
+            return np.stack(arrs)
+        except Exception:
+            return np.array(arrs, dtype=object)
+    raise TypeError(f"Cannot convert type {type(x)} to numpy")
+
+
+class Backtrace(object):
     """
     Build graph + extract weights in __init__. Compute outputs only when asked.
     Device is set at construction and used everywhere (no device arg in eval()).
@@ -215,60 +222,76 @@ class MoE_Backtrace(object):
         thresholding=0.5,
         task="binary-classification",
     ):
-        impl = self.impl
-        dev = self.device  # target device for tensors
-
-        # ---- helper: resolve any key/value to a float32 torch.Tensor on dev ----
+        # Parse device configuration to determine implementation
+        device = self.device
+        impl = self._parse_device_to_implementation(device)
+        print(f"device: {device}, implementation: {impl}")
+        
+        # ---- helpers for device-aware I/O ----
         def arr_from_key(key_or_val):
-            """Resolve a string key (→ look up in all_in/all_out) or a raw
-            value to a float32 torch.Tensor on `dev`.
             """
+            Accepts:
+            • str key  -> looks up in (all_in/all_out)
+            • tensor/ndarray/value -> uses directly
+            Returns:
+            • impl=='cuda'     -> torch.Tensor on self.device
+            • impl=='original' -> CPU float32 numpy array
+            """
+            # Resolve value
             if isinstance(key_or_val, str):
                 x = get_tensor_or_raise(all_in, all_out, key_or_val)
             else:
-                x = key_or_val
+                x = key_or_val  # already an activation/value
+
+            # Unwrap hooks that return tuples/lists
             if isinstance(x, (tuple, list)):
                 x = x[0]
-            return _to_f32_tensor(x, dev)
+
+            # Normalize by implementation
+            if impl == "cuda":
+                if torch.is_tensor(x):
+                    return x.to(self.device)
+                return torch.tensor(t2np32(x), dtype=torch.float32, device=self.device)
+            else:  # original/CPU
+                if torch.is_tensor(x):
+                    return t2np32(x)
+                if isinstance(x, np.ndarray):
+                    return x.astype(np.float32, copy=False)
+                return np.asarray(x, dtype=np.float32)
 
         def arr_list_from_keys(keys):
             return [arr_from_key(k) for k in keys]
 
-        def _ensure_tensor(x):
-            """Coerce a launch_* result (possibly numpy from original backend)
-            back to a float32 torch.Tensor on `dev` for accumulation."""
-            if isinstance(x, torch.Tensor):
-                return x.to(dtype=torch.float32, device=dev)
+        def to_np64(x):
+            """
+            Ensure value is a NumPy float64 array for accumulation into all_wt[].
+            Accepts torch, numpy, lists/tuples of arrays.
+            """
+            if torch.is_tensor(x):
+                return x.detach().to(torch.float64).cpu().numpy()
             if isinstance(x, np.ndarray):
-                return torch.from_numpy(x.astype(np.float32, copy=False)).to(dev)
+                return x.astype(np.float64, copy=False)
             if isinstance(x, (list, tuple)):
-                return [_ensure_tensor(xi) for xi in x]
-            return torch.tensor(x, dtype=torch.float32, device=dev)
+                return [to_np64(xx) for xx in x]
+            return np.array(x, dtype=np.float64)
 
         model_resource = self.model_resource
         layer_stack = self.layer_stack
         all_wts = self.model_weights
-        all_wt = {}  # float32 torch tensors on `dev`
-
+        all_wt = {}
+        
         # Reset expert relevance for this step
         self.all_layer_expert_relevance = {}
 
-        # Cache loop-invariant values
-        model_config = get_model_config(self.model)
-        attn_plan = build_attention_plan(layer_stack, model_config)
-
         # ---- seed relevance from model output ----
         out_layer = model_resource["outputs"][0]
-        out_arr = arr_from_key(out_layer)
+        out_arr = arr_from_key(out_layer)  # torch or numpy, depending on impl
         if len(start_wt) == 0:
-            # calculate_start_wt now accepts/returns torch tensors
-            start_wt = UD2.calculate_start_wt(out_arr, scaler=scaler, task="generation")
-            start_wt = start_wt.to(dtype=torch.float32, device=dev)
-        elif isinstance(start_wt, np.ndarray):
-            start_wt = torch.from_numpy(start_wt.astype(np.float32, copy=False)).to(dev)
-        elif not isinstance(start_wt, torch.Tensor):
-            start_wt = _to_f32_tensor(start_wt, dev)
+            # UD2.calculate_start_wt expects numpy
+            sw_src = out_arr if isinstance(out_arr, np.ndarray) else t2np32(out_arr)
+            start_wt = UD2.calculate_start_wt(sw_src, scaler=scaler, task="generation")
         all_wt[out_layer] = start_wt * multiplier
+        print(f"all_wt[{[out_layer]}] start_wt: {np.sum(all_wt[out_layer])}")
 
         # ---- propagate relevance ----
         for start_layer in tqdm(layer_stack):
@@ -277,9 +300,7 @@ class MoE_Backtrace(object):
                 for ch in child_nodes:
                     if ch not in all_wt:
                         x = get_tensor_or_raise(all_in, all_out, ch)
-                        all_wt[ch] = torch.zeros_like(
-                            _to_f32_tensor(x, dev), dtype=torch.float32, device=dev
-                        )
+                        all_wt[ch] = np.zeros_like(t2np32(x), dtype=np.float64)
 
                 node_class = model_resource["graph"][start_layer]["class"]
 
@@ -290,7 +311,7 @@ class MoE_Backtrace(object):
                     temp_wt = UD2.launch_lm_head(
                         impl, all_wt[start_layer], x, lm_head_weights
                     )
-                    all_wt[child_nodes[0]] += _ensure_tensor(temp_wt)
+                    all_wt[child_nodes[0]] += to_np64(temp_wt)
 
                 elif node_class == "Layer_Norm":
                     all_wt[child_nodes[0]] += all_wt[start_layer]
@@ -300,10 +321,10 @@ class MoE_Backtrace(object):
                     if impl == "cuda" and hasattr(UD2, "calculate_wt_residual_cuda"):
                         temp_wt = UD2.calculate_wt_residual_cuda(all_wt[start_layer], xs)
                     else:
-                        # calculate_wt_residual now accepts torch tensors directly
-                        temp_wt = UD2.calculate_wt_residual(all_wt[start_layer], xs)
+                        xs_np = [t2np32(xx) if torch.is_tensor(xx) else xx for xx in xs]
+                        temp_wt = UD2.calculate_wt_residual(all_wt[start_layer], xs_np)
                     for ind, ch in enumerate(child_nodes):
-                        all_wt[ch] += _ensure_tensor(temp_wt[ind])
+                        all_wt[ch] += to_np64(temp_wt[ind])
 
                 # -------------------- For JetMoE ---------------------
                 elif node_class == "JetMoE_Feed_Forward":
@@ -313,7 +334,7 @@ class MoE_Backtrace(object):
                     temp_wt, ff_expert = UD2.launch_jetmoe_feed_forward(
                         impl, all_wt[start_layer], x, ff_w, self.model
                     )
-                    all_wt[child_nodes[0]] += _ensure_tensor(temp_wt)
+                    all_wt[child_nodes[0]] += to_np64(temp_wt)
                     self.all_layer_expert_relevance[f"{start_layer}_ff_expert"] = ff_expert
 
                 elif node_class == "JetMoE_Self_Attention":
@@ -323,7 +344,7 @@ class MoE_Backtrace(object):
                     temp_wt, attn_expert = UD2.launch_jetmoe_self_attention(
                         impl, all_wt[start_layer], x, sa_w, self.model
                     )
-                    all_wt[child_nodes[0]] += _ensure_tensor(temp_wt)
+                    all_wt[child_nodes[0]] += to_np64(temp_wt)
                     self.all_layer_expert_relevance[f"{start_layer}_attention_expert"] = attn_expert
 
                 # -------------------- For OLMoE ---------------------
@@ -334,69 +355,86 @@ class MoE_Backtrace(object):
                     temp_wt, ff_expert = UD2.launch_olmoe_feed_forward(
                         impl, all_wt[start_layer], x, ff_w, self.model
                     )
-                    all_wt[child_nodes[0]] += _ensure_tensor(temp_wt)
+                    all_wt[child_nodes[0]] += to_np64(temp_wt)
                     self.all_layer_expert_relevance[f"{start_layer}_ff_expert"] = ff_expert
 
                 elif node_class == "Self_Attention":
                     weights = all_wts[start_layer]
                     sa_w = helper.rename_self_attention_keys(weights)
+                    config = get_model_config(self.model)
                     x = arr_from_key(all_in[child_nodes[0]])
                     temp_wt = UD2.launch_olmoe_self_attention(
                         impl, all_wt[start_layer], x, sa_w, self.model
                     )
-                    all_wt[child_nodes[0]] += _ensure_tensor(temp_wt)
+                    all_wt[child_nodes[0]] += to_np64(temp_wt)
 
                 # -------------------- For Qwen3-MoE ---------------------
                 elif node_class == "Qwen_Feed_Forward":
                     weights = all_wts[start_layer]
                     ff_w = helper.rename_qwenmoe_feed_forward_keys(weights)
+                    config = get_model_config(self.model)
                     x = arr_from_key(child_nodes[0])
                     temp_wt, ff_expert = UD2.launch_qwen3_moe_feed_forward(
-                        impl, all_wt[start_layer], x, ff_w, model_config
+                        impl, all_wt[start_layer], x, ff_w, config
                     )
-                    all_wt[child_nodes[0]] += _ensure_tensor(temp_wt)
+                    all_wt[child_nodes[0]] += to_np64(temp_wt)
                     self.all_layer_expert_relevance[f"{start_layer}_ff_expert"] = ff_expert
 
                 elif node_class == "Grouped_Query_Attention":
                     weights = all_wts[start_layer]
                     sa_w = helper.rename_self_attention_keys(weights)
+                    config = get_model_config(self.model)
                     x = arr_from_key(child_nodes[0])
                     temp_wt = UD2.launch_qwen3_moe_self_attention(
-                        impl, all_wt[start_layer], x, sa_w, model_config
+                        impl, all_wt[start_layer], x, sa_w, config
                     )
-                    all_wt[child_nodes[0]] += _ensure_tensor(temp_wt)
+                    all_wt[child_nodes[0]] += to_np64(temp_wt)
 
                 # -------------------- For GPT-OSS MoE ---------------------
                 elif node_class == "GPT_OSS_Feed_Forward":
                     weights = all_wts[start_layer]
                     ff_w = helper.rename_gptoss_feed_forward_keys(weights)
+                    config = get_model_config(self.model)
                     x = arr_from_key(child_nodes[0])
                     temp_wt, ff_expert = UD2.launch_gpt_oss_feed_forward(
-                        impl, all_wt[start_layer], x, ff_w, model_config
+                        impl, all_wt[start_layer], x, ff_w, config
                     )
-                    all_wt[child_nodes[0]] += _ensure_tensor(temp_wt)
+                    all_wt[child_nodes[0]] += to_np64(temp_wt)
                     self.all_layer_expert_relevance[f"{start_layer}_ff_expert"] = ff_expert
 
                 elif node_class == "GPT_OSS_Self_Attention":
                     weights = all_wts[start_layer]
                     sa_w = helper.rename_self_attention_keys(weights)
-                    attn_info = attn_plan.get(start_layer, {"attn_type": "full", "window": None})
+                    config = get_model_config(self.model)
+                    ATTN_PLAN = build_attention_plan(layer_stack, config)
+                    attn_info = ATTN_PLAN.get(start_layer, {"attn_type": "full", "window": None})
                     x = arr_from_key(child_nodes[0])
                     temp_wt = UD2.launch_gpt_oss_self_attention(
                         impl,
                         all_wt[start_layer],
                         x,
                         sa_w,
-                        model_config,
+                        config,
                         attn_type=attn_info["attn_type"],
                         sliding_window=attn_info["window"],
                     )
-                    all_wt[child_nodes[0]] += _ensure_tensor(temp_wt)
+                    all_wt[child_nodes[0]] += to_np64(temp_wt)
 
                 # Default passthrough
                 else:
                     all_wt[child_nodes[0]] += all_wt[start_layer]
 
+        # # ---- post-scale/normalize (works on numpy) ----
+        # if max_unit > 0 and scaler == 0:
+        #     temp_dict = {}
+        #     for k in all_wt.keys():
+        #         temp_dict[k] = UD2.weight_normalize(all_wt[k], max_val=max_unit)
+        #     all_wt = temp_dict
+        # elif scaler > 0:
+        #     temp_dict = {}
+        #     for k in all_wt.keys():
+        #         temp_dict[k] = UD2.weight_scaler(all_wt[k], scaler=scaler)
+        #     all_wt = temp_dict
 
         # Store in instance variable (like PyTorch Backtrace)
         self.all_wt = all_wt
@@ -667,7 +705,7 @@ class MoE_Backtrace(object):
             kwargs["bad_words_ids"] = norm
 
         # --- create engine & dispatch ---
-        from dl_backtrace.moe_pytorch_backtrace.moe_backtrace.core.moe_auto_sampler import MoEAutoSampler
+        from dl_backtrace.moe_pytorch_backtrace.backtrace.core.moe_auto_sampler import MoEAutoSampler
         eng = MoEAutoSampler(self, tokenizer)  # `self` is the MoE Backtrace engine
 
         return eng.generate(

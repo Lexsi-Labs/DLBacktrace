@@ -431,9 +431,9 @@ def moe_backtrace(
     max_new_tokens: int,
 ) -> Dict[str, Any]:
     
-    from dl_backtrace.moe_pytorch_backtrace.moe_backtrace import MoE_Backtrace
+    from dl_backtrace.moe_pytorch_backtrace import Backtrace
 
-    backtrace = MoE_Backtrace(
+    backtrace = Backtrace(
                         model= model, 
                         model_type = moe_type, 
                         device = device,

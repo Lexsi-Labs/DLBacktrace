@@ -1,4 +1,4 @@
-from .backtrace import MoE_Backtrace
+from .backtrace import Backtrace
 
 from .utils import *
 from .config import *

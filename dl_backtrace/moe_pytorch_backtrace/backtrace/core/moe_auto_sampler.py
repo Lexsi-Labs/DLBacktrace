@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import copy
 import time
 from typing import Optional, List, Tuple, cast
 
@@ -94,17 +93,10 @@ class MoEAutoSampler:
 
     def _get_causallm(self, model_like):
         """Walk `.model` chain until we find a GenerationMixin-style CausalLM."""
-        from transformers.generation.utils import GenerationMixin
-
         obj = model_like
         seen = set()
         for _ in range(8):
-            if isinstance(obj, GenerationMixin):
-                return obj
             if hasattr(obj, "_prepare_generation_config") and hasattr(obj, "_get_logits_processor"):
-                return obj
-            # Fallback: some HF versions expose 'generate' directly
-            if hasattr(obj, "generate") and hasattr(obj, "config"):
                 return obj
             i = id(obj)
             if i in seen:
@@ -116,7 +108,7 @@ class MoEAutoSampler:
                 break
         raise TypeError(
             f"{type(model_like).__name__} isn't a GenerationMixin model. "
-            "Pass AutoModelForCausalLM / OlmoeForCausalLM (not base OlmoeModel)."
+            "Pass AutoModelForCausalLM (not base model)."
         )
 
     @staticmethod
@@ -266,6 +258,7 @@ class MoEAutoSampler:
         )
         
         # Return both token relevance and expert relevance separately
+        import copy
         expert_relevance = copy.deepcopy(self.moe_bt.all_layer_expert_relevance)
         
         return all_wt, expert_relevance
@@ -297,7 +290,7 @@ class MoEAutoSampler:
         pad_token_id: Optional[int] = None,
         # beams
         num_beams: int = 1,
-        num_return_sequences: Optional[int] = None,
+        num_return_sequences: Optional[int] = None,  # ignored on return; always top-1
         length_penalty: float = 1.0,
         # misc
         return_scores: bool = False,
