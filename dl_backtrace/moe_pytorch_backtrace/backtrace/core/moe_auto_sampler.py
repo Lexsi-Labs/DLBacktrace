@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import time
+import gc
 from typing import Optional, List, Tuple, cast
 
 import torch
@@ -257,9 +258,9 @@ class MoEAutoSampler:
             task="generation",
         )
         
-        # Return both token relevance and expert relevance separately
-        import copy
-        expert_relevance = copy.deepcopy(self.moe_bt.all_layer_expert_relevance)
+        # Swap expert relevance instead of deep-copying (Issue 5: memory)
+        expert_relevance = self.moe_bt.all_layer_expert_relevance
+        self.moe_bt.all_layer_expert_relevance = {}
         
         return all_wt, expert_relevance
 
@@ -422,7 +423,6 @@ class MoEAutoSampler:
                     tokenizer=self.tokenizer,
                     max_length=1  # Generate one token at a time
                 )
-
                 
                 # Extract logits from the last step
                 last_step_key = str(len(all_out) - 1)
@@ -467,6 +467,9 @@ class MoEAutoSampler:
                 
                 if return_layerwise_output:
                     io_data_trace.append({'all_in': all_in, 'all_out': all_out})
+                else:
+                    # Free activations when not storing them for traces
+                    del all_out, all_in
                 
                 if return_relevance:
                     # Compute relevance for this step
@@ -494,6 +497,7 @@ class MoEAutoSampler:
                 # Early stop if EOS produced
                 if eos_list and next_token_id in eos_set:
                     stopped_by = "eos"
+                    del all_out, all_in
                     break
                 
                 # HF-native stopping criteria (max_new_tokens / max_time)
@@ -504,6 +508,7 @@ class MoEAutoSampler:
                 crit = stopping_criteria(self._as_long(final_ids[:1, :]), None)
                 if self._criteria_true(crit):
                     stopped_by = "stopping_criteria"
+                    del all_out, all_in
                     break
             else:
                 stopped_by = "loop_exhausted"

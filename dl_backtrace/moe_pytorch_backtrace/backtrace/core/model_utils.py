@@ -144,8 +144,12 @@ def first_tensor(args, kwargs, prefer_key=None):
 
 
 def clone(x):
-    """Detach-clone a tensor, or pass through non-tensors."""
-    return x.detach().clone() if torch.is_tensor(x) else x
+    """Detach a tensor without copying (zero-copy view).
+    
+    Under torch.no_grad() generation, in-place modifications don't happen,
+    so a full clone is unnecessary. detach() is sufficient and saves memory.
+    """
+    return x.detach() if torch.is_tensor(x) else x
 
 
 def get_tensor(d, key):
@@ -170,9 +174,14 @@ def to_torch_like(x, ref):
 
 
 def to_numpy(param):
-    """Detach and convert a tensor to float32 numpy array. No-op for non-tensors."""
+    """Return a lightweight detached reference to the parameter tensor.
+    
+    Previously converted to float32 numpy eagerly, duplicating the entire model.
+    Now returns a detached tensor view (no memory copy). Downstream consumers
+    call t2np32() or .numpy() only when they actually need the data.
+    """
     if isinstance(param, torch.Tensor):
-        return param.detach().to(torch.float32).cpu().numpy()
+        return param.detach()
     return param
 
 
@@ -485,16 +494,19 @@ def create_decoder_output(input_text, model, tokenizer, max_length, device,
     eos_id = getattr(model.config, "eos_token_id", None)
 
     try:
-        for _ in range(max_length):
-            outputs = model(input_ids=input_ids)
-            next_token_logits = outputs.logits[:, -1, :]
-            next_token_id = next_token_logits.argmax(dim=-1, keepdim=True)
-            for b in range(B):
-                generated_tokens[b].append(next_token_id[b].item())
-                if eos_id is not None and next_token_id[b].item() == eos_id:
-                    break
-            input_ids = torch.cat([input_ids, next_token_id], dim=-1)
-            tick()
+        with torch.no_grad():
+            for _ in range(max_length):
+                outputs = model(input_ids=input_ids)
+                next_token_logits = outputs.logits[:, -1, :]
+                next_token_id = next_token_logits.argmax(dim=-1, keepdim=True)
+                # Free model intermediates immediately
+                del outputs
+                for b in range(B):
+                    generated_tokens[b].append(next_token_id[b].item())
+                    if eos_id is not None and next_token_id[b].item() == eos_id:
+                        break
+                input_ids = torch.cat([input_ids, next_token_id], dim=-1)
+                tick()
     finally:
         for h in decoder_hooks:
             try:
