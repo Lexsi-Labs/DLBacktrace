@@ -9,21 +9,46 @@ from collections import defaultdict
 from IPython.display import display, SVG, Image as IPyImage
 from typing import Optional, Sequence
 
-# Semantically meaningful layer types for compact visualization
+# Semantically meaningful layer categories for compact visualization
+# These match the ATEN_LAYER_MAP categories in graph_builder.py
 SEMANTIC_LAYER_TYPES: tuple[str, ...] = (
-    "MLP_Layer",      # Linear/FC layers
-    "DL_Layer",       # Conv layers (Conv1d, Conv2d, Conv3d)
+    "MLP_Layer",      # Linear/FC layers (linear, addmm)
+    "DL_Layer",       # Conv layers (conv2d, max_pool2d, etc.)
     "Activation",     # ReLU, GELU, SiLU, etc.
     "Normalization",  # BatchNorm, LayerNorm, GroupNorm
     "Attention",      # Self/Cross attention (scaled_dot_product_attention)
-    "Output",         # Final output node
-    "Placeholder",    # Input nodes (x, input_ids, etc.) - CRITICAL for graph connectivity
-    "Model_Input",    # Legacy input type (kept for compatibility)
+    "Output",         # Final output node (layer_type)
+    "Placeholder",    # Input nodes (layer_type) - CRITICAL for graph connectivity
+    "Model_Input",    # Legacy input type (layer_type)
     "NLP_Embedding",  # Embedding layers (embedding, embedding_bag)
 )
 
 # Default types to always force-include (for graph connectivity)
 DEFAULT_FORCE_INCLUDE_TYPES: tuple[str, ...] = ("Placeholder", "Model_Input", "Output")
+
+
+def _get_node_category(node_attrs: dict) -> str:
+    """Get the semantic category for a node by checking both layer_type and layer_name.
+    
+    The graph stores:
+    - layer_type: 'ATen_Operation', 'Placeholder', 'Output', 'Operation', etc.
+    - layer_name: 'DL_Layer', 'MLP_Layer', 'Activation', 'Normalization', etc.
+    
+    For filtering, we need to check layer_name first (for ATen ops), then layer_type.
+    """
+    layer_name = node_attrs.get("layer_name", "")
+    layer_type = node_attrs.get("layer_type", "Unknown")
+    
+    # For ATen operations, layer_name contains the semantic category
+    if layer_name in SEMANTIC_LAYER_TYPES:
+        return layer_name
+    
+    # For Placeholder, Output, etc., layer_type is the category
+    if layer_type in ("Placeholder", "Output", "Model_Input"):
+        return layer_type
+    
+    # Return layer_type as fallback
+    return layer_type
 
 
 def visualize_graph(graph, save_path="graph.png", *, show=True, dpi=600):
@@ -112,16 +137,16 @@ def visualize_relevance(graph, all_wt, output_path="backtrace_graph",
     force_include = {
         node.replace("/", " ").replace(":", " ")
         for node in graph.nodes
-        if graph.nodes[node].get("layer_type") in DEFAULT_FORCE_INCLUDE_TYPES
+        if _get_node_category(graph.nodes[node]) in DEFAULT_FORCE_INCLUDE_TYPES
     }
 
     if layer_types is not None:
-        # Layer-type filtering mode
+        # Layer-type filtering mode - use _get_node_category for proper semantic matching
         layer_types_set = set(layer_types)
         top_node_names = {
             node.replace("/", " ").replace(":", " ")
             for node in graph.nodes
-            if graph.nodes[node].get("layer_type") in layer_types_set
+            if _get_node_category(graph.nodes[node]) in layer_types_set
         } | force_include
     elif top_k:
         top_keys = sorted(flat_scores.items(), key=lambda x: abs(x[1]), reverse=True)[:top_k]
@@ -131,7 +156,30 @@ def visualize_relevance(graph, all_wt, output_path="backtrace_graph",
     else:
         top_node_names = set(relevance_data.keys()) | force_include
 
-    # --- Color map for node types ---
+    # --- Build raw->normalized name mapping for ancestor lookup ---
+    raw_to_norm = {node: node.replace("/", " ").replace(":", " ") for node in graph.nodes}
+    norm_to_raw = {v: k for k, v in raw_to_norm.items()}
+    
+    # --- Helper to find transitive ancestors in filtered set ---
+    def find_filtered_ancestors(node_raw, visited=None):
+        """BFS to find all ancestors that are in the filtered set."""
+        if visited is None:
+            visited = set()
+        ancestors = set()
+        parents = graph.nodes[node_raw].get("parents", [])
+        for parent_raw in parents:
+            if parent_raw in visited:
+                continue
+            visited.add(parent_raw)
+            parent_norm = raw_to_norm.get(parent_raw, parent_raw.replace("/", " ").replace(":", " "))
+            if parent_norm in top_node_names:
+                ancestors.add(parent_norm)
+            elif parent_raw in graph.nodes:
+                # Recursively search this parent's ancestors
+                ancestors.update(find_filtered_ancestors(parent_raw, visited))
+        return ancestors
+
+    # --- Color map for node types (uses layer_name for ATen ops, layer_type for others) ---
     color_map = {
         "MLP_Layer": "lightblue",
         "DL_Layer": "lightgreen",
@@ -161,7 +209,9 @@ def visualize_relevance(graph, all_wt, output_path="backtrace_graph",
         if name not in top_node_names:
             continue
         rel = relevance_data.get(name, (0.0, 0.0, 0.0))
-        fill = color_map.get(graph.nodes[node].get("layer_type", "Unknown"), "white")
+        # Use layer_name first (for semantic category), then layer_type as fallback
+        node_category = _get_node_category(graph.nodes[node])
+        fill = color_map.get(node_category, color_map.get(graph.nodes[node].get("layer_type", "Unknown"), "white"))
         g.node(
             name,
             label=f"{name}\nMean: {rel[0]:.3f}\nMax: {rel[1]:.3f}\nMin: {rel[2]:.3f}",
@@ -169,15 +219,30 @@ def visualize_relevance(graph, all_wt, output_path="backtrace_graph",
             fillcolor=fill,
         )
 
-    # --- Add edges ---
+    # --- Add edges (with transitive connections when layer_types filtering) ---
+    added_edges = set()
     for node in graph.nodes:
         name = node.replace("/", " ").replace(":", " ")
         if name not in top_node_names:
             continue
-        for parent in graph.nodes[node].get("parents", []):
-            parent_fmt = parent.replace("/", " ").replace(":", " ")
-            if parent_fmt in top_node_names:
-                g.edge(parent_fmt, name)
+        
+        if layer_types is not None:
+            # Use transitive ancestor search for filtered graphs
+            ancestors = find_filtered_ancestors(node)
+            for ancestor in ancestors:
+                edge = (ancestor, name)
+                if edge not in added_edges:
+                    added_edges.add(edge)
+                    g.edge(ancestor, name)
+        else:
+            # Original direct parent logic
+            for parent in graph.nodes[node].get("parents", []):
+                parent_fmt = parent.replace("/", " ").replace(":", " ")
+                if parent_fmt in top_node_names:
+                    edge = (parent_fmt, name)
+                    if edge not in added_edges:
+                        added_edges.add(edge)
+                        g.edge(parent_fmt, name)
 
     out = g.render(output_path, format="svg", cleanup=True)
 
@@ -315,19 +380,40 @@ def visualize_relevance_fast(
     def _norm(s):
         return s.replace("/", " ").replace(":", " ")
 
-    # present nodes
-    present_raw = list(graph.nodes.keys())
+    # present nodes - keep all for transitive edge computation
+    all_raw = list(graph.nodes.keys())
     
-    # Apply layer_types filter if specified
+    # Determine filtered set using _get_node_category for proper semantic matching
     if layer_types is not None:
         layer_types_set = set(layer_types) | set(DEFAULT_FORCE_INCLUDE_TYPES)
         present_raw = [
-            raw for raw in present_raw
-            if graph.nodes[raw].get("layer_type") in layer_types_set
+            raw for raw in all_raw
+            if _get_node_category(graph.nodes[raw]) in layer_types_set
         ]
+    else:
+        present_raw = all_raw
     
-    norm_by_raw = {raw: _norm(raw) for raw in present_raw}
-    present_norm = set(norm_by_raw.values())
+    norm_by_raw = {raw: _norm(raw) for raw in all_raw}  # All nodes for lookup
+    present_norm = {_norm(raw) for raw in present_raw}  # Filtered set
+    
+    # Helper to find transitive ancestors in filtered set
+    def find_filtered_ancestors(node_raw, visited=None):
+        """BFS to find all ancestors that are in the filtered set."""
+        if visited is None:
+            visited = set()
+        ancestors = set()
+        parents = graph.nodes[node_raw].get("parents", []) or []
+        for parent_raw in parents:
+            if parent_raw in visited:
+                continue
+            visited.add(parent_raw)
+            parent_norm = norm_by_raw.get(parent_raw, _norm(parent_raw))
+            if parent_norm in present_norm:
+                ancestors.add(parent_norm)
+            elif parent_raw in graph.nodes:
+                # Recursively search this parent's ancestors
+                ancestors.update(find_filtered_ancestors(parent_raw, visited))
+        return ancestors
 
     # relevance only for present
     rel_map = {}
@@ -420,8 +506,9 @@ def visualize_relevance_fast(
     for raw in present_raw:
         nk = norm_by_raw[raw]
         mean, mx, mn = rel_map.get(nk, (0.0, 0.0, 0.0))
-        lt = graph.nodes[raw].get("layer_type", "Unknown")
-        fill = color_map.get(lt, "white")
+        # Use _get_node_category for proper semantic coloring
+        node_category = _get_node_category(graph.nodes[raw])
+        fill = color_map.get(node_category, color_map.get(graph.nodes[raw].get("layer_type", "Unknown"), "white"))
         collapsed = graph.nodes[raw].get("collapsed_count", 0)
         collapsed_line = f"\n[collapsed {collapsed}]" if collapsed else ""
 
@@ -438,25 +525,35 @@ def visualize_relevance_fast(
             fillcolor=fill,
         )
 
-    # edges
+    # edges - use transitive ancestors when layer_types filtering
     added = set()
     for raw in present_raw:
         child = norm_by_raw[raw]
-        parents = graph.nodes[raw].get("parents", []) or []
-        if max_parents_per_node is not None and len(parents) > max_parents_per_node:
-            parents = sorted(
-                parents,
-                key=lambda p: abs(rel_map.get(_norm(p), (0.0, 0.0, 0.0))[0]),
-                reverse=True,
-            )[:max_parents_per_node]
+        
+        if layer_types is not None:
+            # Use transitive ancestor search for filtered graphs
+            ancestors = find_filtered_ancestors(raw)
+            for ancestor in ancestors:
+                e = (ancestor, child)
+                if e not in added:
+                    added.add(e)
+                    g.edge(ancestor, child)
+        else:
+            # Original direct parent logic
+            parents = graph.nodes[raw].get("parents", []) or []
+            if max_parents_per_node is not None and len(parents) > max_parents_per_node:
+                parents = sorted(
+                    parents,
+                    key=lambda p: abs(rel_map.get(_norm(p), (0.0, 0.0, 0.0))[0]),
+                    reverse=True,
+                )[:max_parents_per_node]
 
-        for p_raw in parents:
-            pn = norm_by_raw.get(p_raw, _norm(p_raw))
-            e = (pn, child)
-            if e in added:
-                continue
-            added.add(e)
-            g.edge(pn, child)
+            for p_raw in parents:
+                pn = norm_by_raw.get(p_raw, _norm(p_raw))
+                e = (pn, child)
+                if e not in added:
+                    added.add(e)
+                    g.edge(pn, child)
 
     out = g.render(output_path, cleanup=True)
 
@@ -499,7 +596,7 @@ def visualize_relevance_auto(
         layer_types_set = set(layer_types) | set(DEFAULT_FORCE_INCLUDE_TYPES)
         filtered_count = sum(
             1 for n in graph.nodes 
-            if graph.nodes[n].get("layer_type") in layer_types_set
+            if _get_node_category(graph.nodes[n]) in layer_types_set
         )
         num_nodes = filtered_count
         print(f"num_nodes after layer_types filter: {num_nodes} (from {len(graph.nodes)} total)")
