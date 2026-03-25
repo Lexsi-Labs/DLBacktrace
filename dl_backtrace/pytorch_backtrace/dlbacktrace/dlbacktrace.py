@@ -10,7 +10,12 @@ from .core.trace_utils import (
 from .core.config import activation_master
 from .core.dlb_auto_sampler import DLBAutoSampler
 from .core.relevance_propagation import RelevancePropagator
-from .core.visualization import visualize_graph, visualize_relevance, visualize_relevance_auto 
+from .core.visualization import (
+    visualize_graph, 
+    visualize_relevance, 
+    visualize_relevance_auto,
+    SEMANTIC_LAYER_TYPES,
+)
 from .core.token_relevance_visuals import (
     plot_tokenwise_relevance_map_swapped,
     plot_input_heatmap_for_token,
@@ -1527,16 +1532,61 @@ class DLBacktrace:
     def visualize(self, save_path="graph.png"):
         visualize_graph(self.graph, save_path)
 
-    def visualize_dlbacktrace(self, output_path="backtrace_graph", top_k=None, relevance_threshold=None, engine_auto_threshold=1500, show=True, inline_format="svg"):
+    def visualize_dlbacktrace(
+        self, 
+        output_path="backtrace_graph", 
+        top_k=None, 
+        relevance_threshold=None, 
+        engine_auto_threshold=1500, 
+        layer_types=None,
+        compact=False,
+        show=True, 
+        inline_format="svg"
+    ):
+        """Visualize DL-Backtrace relevance graph.
+        
+        Parameters
+        ----------
+        output_path : str
+            Output file path (without extension)
+        top_k : int, optional
+            Show only top-k nodes by relevance
+        relevance_threshold : float, optional
+            Show nodes with |relevance| >= threshold
+        engine_auto_threshold : int
+            Node count threshold for switching rendering engines
+        layer_types : list[str], optional
+            List of layer types to include. Options:
+            - "MLP_Layer" (Linear/FC)
+            - "DL_Layer" (Conv)
+            - "Activation" (ReLU, GELU, etc.)
+            - "Normalization" (BatchNorm, LayerNorm)
+            - "Attention"
+            - "Output"
+            - "Placeholder" / "Model_Input"
+            - "NLP_Embedding"
+        compact : bool
+            If True, uses SEMANTIC_LAYER_TYPES for a paper-ready compact graph.
+            Equivalent to layer_types=SEMANTIC_LAYER_TYPES.
+        show : bool
+            Whether to display inline in Jupyter/Colab
+        inline_format : str
+            Format for inline display ("svg" or "png")
+        """
+        # compact=True is a shortcut for semantic layer types
+        if compact and layer_types is None:
+            layer_types = list(SEMANTIC_LAYER_TYPES)
+        
         visualize_relevance_auto(
             self.graph,
             self.all_wt,
-            output_path=output_path,          # pretty path for small graphs
+            output_path=output_path,
             node_threshold=500,
             engine_auto_threshold=engine_auto_threshold,
-            fast_output_path=output_path,  # path for large graphs
-            show=show,                        # ⬅️ show in Colab
-            inline_format=inline_format,              # or "png" if SVG too heavy
+            fast_output_path=output_path,
+            layer_types=layer_types,
+            show=show,
+            inline_format=inline_format,
         )
 
     def visualize_dlbacktrace_with_modules(

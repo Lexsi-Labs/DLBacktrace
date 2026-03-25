@@ -7,6 +7,23 @@ import graphviz
 from networkx.drawing.nx_pydot import graphviz_layout
 from collections import defaultdict
 from IPython.display import display, SVG, Image as IPyImage
+from typing import Optional, Sequence
+
+# Semantically meaningful layer types for compact visualization
+SEMANTIC_LAYER_TYPES: tuple[str, ...] = (
+    "MLP_Layer",      # Linear/FC layers
+    "DL_Layer",       # Conv layers (Conv1d, Conv2d, Conv3d)
+    "Activation",     # ReLU, GELU, SiLU, etc.
+    "Normalization",  # BatchNorm, LayerNorm, GroupNorm
+    "Attention",      # Self/Cross attention (scaled_dot_product_attention)
+    "Output",         # Final output node
+    "Placeholder",    # Input nodes (x, input_ids, etc.) - CRITICAL for graph connectivity
+    "Model_Input",    # Legacy input type (kept for compatibility)
+    "NLP_Embedding",  # Embedding layers (embedding, embedding_bag)
+)
+
+# Default types to always force-include (for graph connectivity)
+DEFAULT_FORCE_INCLUDE_TYPES: tuple[str, ...] = ("Placeholder", "Model_Input", "Output")
 
 
 def visualize_graph(graph, save_path="graph.png", *, show=True, dpi=600):
@@ -47,8 +64,30 @@ def visualize_graph(graph, save_path="graph.png", *, show=True, dpi=600):
 
 def visualize_relevance(graph, all_wt, output_path="backtrace_graph",
                         *, top_k=None, relevance_threshold=None,
+                        layer_types: Optional[Sequence[str]] = None,
                         show=True, inline_format="svg"):
-    """🎯 Visualize relevance backtrace using Graphviz (shows inline + saves)"""
+    """🎯 Visualize relevance backtrace using Graphviz (shows inline + saves)
+    
+    Parameters
+    ----------
+    graph : networkx.DiGraph
+        The computation graph with layer_type attributes on nodes
+    all_wt : dict
+        Relevance weights for each node
+    output_path : str
+        Output file path (without extension)
+    top_k : int, optional
+        Show only top-k nodes by relevance
+    relevance_threshold : float, optional
+        Show nodes with |relevance| >= threshold
+    layer_types : list[str], optional
+        Filter to only these layer types. If None, shows all nodes.
+        Use SEMANTIC_LAYER_TYPES for a compact paper-ready graph.
+    show : bool
+        Whether to display inline in Jupyter/Colab
+    inline_format : str
+        Format for inline display ("svg" or "png")
+    """
     relevance_data = {}
 
     # --- Extract relevance stats from all_wt ---
@@ -67,16 +106,24 @@ def visualize_relevance(graph, all_wt, output_path="backtrace_graph",
                 stats = (0.0, 0.0, 0.0)
         relevance_data[node_key] = stats
 
-    # --- Filter based on top_k or threshold ---
+    # --- Filter based on top_k, threshold, or layer_types ---
     flat_scores = {k: v[0] for k, v in relevance_data.items()}
 
     force_include = {
         node.replace("/", " ").replace(":", " ")
         for node in graph.nodes
-        if graph.nodes[node].get("layer_type") in ("Placeholder", "Model_Input")
+        if graph.nodes[node].get("layer_type") in DEFAULT_FORCE_INCLUDE_TYPES
     }
 
-    if top_k:
+    if layer_types is not None:
+        # Layer-type filtering mode
+        layer_types_set = set(layer_types)
+        top_node_names = {
+            node.replace("/", " ").replace(":", " ")
+            for node in graph.nodes
+            if graph.nodes[node].get("layer_type") in layer_types_set
+        } | force_include
+    elif top_k:
         top_keys = sorted(flat_scores.items(), key=lambda x: abs(x[1]), reverse=True)[:top_k]
         top_node_names = {k for k, _ in top_keys} | force_include
     elif relevance_threshold is not None:
@@ -254,14 +301,31 @@ def visualize_relevance_fast(
     max_parents_per_node=None,
     engine_auto_threshold=1200,
     disable_concentrate_for_sfdp=True,
+    layer_types: Optional[Sequence[str]] = None,
     show=True,
     inline_format="svg",
 ):
+    """Fast visualization for large/collapsed graphs.
+    
+    Parameters
+    ----------
+    layer_types : list[str], optional
+        Filter to only these layer types. If None, shows all nodes.
+    """
     def _norm(s):
         return s.replace("/", " ").replace(":", " ")
 
     # present nodes
     present_raw = list(graph.nodes.keys())
+    
+    # Apply layer_types filter if specified
+    if layer_types is not None:
+        layer_types_set = set(layer_types) | set(DEFAULT_FORCE_INCLUDE_TYPES)
+        present_raw = [
+            raw for raw in present_raw
+            if graph.nodes[raw].get("layer_type") in layer_types_set
+        ]
+    
     norm_by_raw = {raw: _norm(raw) for raw in present_raw}
     present_norm = set(norm_by_raw.values())
 
@@ -417,12 +481,31 @@ def visualize_relevance_auto(
     node_threshold=500,
     engine_auto_threshold=1500,
     fast_output_path="backtrace_collapsed_fast",
+    layer_types: Optional[Sequence[str]] = None,
     show=True,
     inline_format="svg",
 ):
-    """Auto-choose pretty vs fast; always show inline and save."""
-    num_nodes = len(graph.nodes)
-    print(f"num_nodes: {num_nodes}")
+    """Auto-choose pretty vs fast visualization; always show inline and save.
+    
+    Parameters
+    ----------
+    layer_types : list[str], optional
+        Filter to only these layer types. If specified, layer_types filtering
+        takes precedence over automatic collapsing for large graphs.
+        Use SEMANTIC_LAYER_TYPES for a compact paper-ready graph.
+    """
+    # If layer_types specified, count only matching nodes for threshold decision
+    if layer_types is not None:
+        layer_types_set = set(layer_types) | set(DEFAULT_FORCE_INCLUDE_TYPES)
+        filtered_count = sum(
+            1 for n in graph.nodes 
+            if graph.nodes[n].get("layer_type") in layer_types_set
+        )
+        num_nodes = filtered_count
+        print(f"num_nodes after layer_types filter: {num_nodes} (from {len(graph.nodes)} total)")
+    else:
+        num_nodes = len(graph.nodes)
+        print(f"num_nodes: {num_nodes}")
 
     if num_nodes < node_threshold:
         # small graph → original pretty version
@@ -430,6 +513,7 @@ def visualize_relevance_auto(
             graph,
             all_wt,
             output_path=output_path,
+            layer_types=layer_types,
             show=show,
             inline_format=inline_format,
         )
@@ -448,6 +532,7 @@ def visualize_relevance_auto(
             collapsed_map=collapsed_map,
             max_parents_per_node=2,
             engine_auto_threshold=engine_auto_threshold,
+            layer_types=layer_types,
             show=show,
             inline_format=inline_format,
         )
