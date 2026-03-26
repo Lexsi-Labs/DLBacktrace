@@ -24,7 +24,8 @@ SEMANTIC_LAYER_TYPES: tuple[str, ...] = (
 )
 
 # Default types to always force-include (for graph connectivity)
-DEFAULT_FORCE_INCLUDE_TYPES: tuple[str, ...] = ("Placeholder", "Model_Input", "Output")
+# Note: Placeholder excluded to keep compact graphs clean
+DEFAULT_FORCE_INCLUDE_TYPES: tuple[str, ...] = ("Model_Input", "Output")
 
 
 def _get_node_category(node_attrs: dict) -> str:
@@ -43,8 +44,9 @@ def _get_node_category(node_attrs: dict) -> str:
     if layer_name in SEMANTIC_LAYER_TYPES:
         return layer_name
     
-    # For Placeholder, Output, etc., layer_type is the category
-    if layer_type in ("Placeholder", "Output", "Model_Input"):
+    # For Output, Model_Input, etc., layer_type is the category
+    # Note: Placeholder excluded to keep compact graphs clean
+    if layer_type in ("Output", "Model_Input"):
         return layer_type
     
     # Return layer_type as fallback
