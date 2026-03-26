@@ -133,6 +133,7 @@ def visualize_relevance(graph, all_wt, output_path="backtrace_graph",
 
     # --- Filter based on top_k, threshold, or layer_types ---
     flat_scores = {k: v[0] for k, v in relevance_data.items()}
+    total_nodes = len(graph.nodes)
 
     force_include = {
         node.replace("/", " ").replace(":", " ")
@@ -148,13 +149,17 @@ def visualize_relevance(graph, all_wt, output_path="backtrace_graph",
             for node in graph.nodes
             if _get_node_category(graph.nodes[node]) in layer_types_set
         } | force_include
+        print(f"📊 Layer-type filtering: {total_nodes} nodes → {len(top_node_names)} nodes (filter: {list(layer_types_set)[:5]}{'...' if len(layer_types_set) > 5 else ''})")
     elif top_k:
         top_keys = sorted(flat_scores.items(), key=lambda x: abs(x[1]), reverse=True)[:top_k]
         top_node_names = {k for k, _ in top_keys} | force_include
+        print(f"📊 Top-k filtering: {total_nodes} nodes → {len(top_node_names)} nodes (top_k={top_k})")
     elif relevance_threshold is not None:
         top_node_names = {k for k, v in flat_scores.items() if abs(v) >= relevance_threshold} | force_include
+        print(f"📊 Threshold filtering: {total_nodes} nodes → {len(top_node_names)} nodes (threshold={relevance_threshold})")
     else:
         top_node_names = set(relevance_data.keys()) | force_include
+        print(f"📊 No filtering: {total_nodes} nodes")
 
     # --- Build raw->normalized name mapping for ancestor lookup ---
     raw_to_norm = {node: node.replace("/", " ").replace(":", " ") for node in graph.nodes}
@@ -382,6 +387,7 @@ def visualize_relevance_fast(
 
     # present nodes - keep all for transitive edge computation
     all_raw = list(graph.nodes.keys())
+    total_nodes = len(all_raw)
     
     # Determine filtered set using _get_node_category for proper semantic matching
     if layer_types is not None:
@@ -390,8 +396,10 @@ def visualize_relevance_fast(
             raw for raw in all_raw
             if _get_node_category(graph.nodes[raw]) in layer_types_set
         ]
+        print(f"📊 Layer-type filtering (fast): {total_nodes} nodes → {len(present_raw)} nodes (filter: {list(layer_types)[:5]}{'...' if len(layer_types) > 5 else ''})")
     else:
         present_raw = all_raw
+        print(f"📊 No filtering (fast): {total_nodes} nodes")
     
     norm_by_raw = {raw: _norm(raw) for raw in all_raw}  # All nodes for lookup
     present_norm = {_norm(raw) for raw in present_raw}  # Filtered set
