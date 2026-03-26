@@ -27,6 +27,14 @@ SEMANTIC_LAYER_TYPES: tuple[str, ...] = (
 # Note: Placeholder excluded to keep compact graphs clean
 DEFAULT_FORCE_INCLUDE_TYPES: tuple[str, ...] = ("Model_Input", "Output")
 
+# Prefixes for parameter/bias nodes to exclude from compact graphs
+EXCLUDED_NODE_PREFIXES: tuple[str, ...] = ("p_model_", "b_model_")
+
+
+def _is_excluded_node(node_name: str) -> bool:
+    """Check if node should be excluded (parameter/bias weights)."""
+    return any(node_name.startswith(prefix) for prefix in EXCLUDED_NODE_PREFIXES)
+
 
 def _get_node_category(node_attrs: dict) -> str:
     """Get the semantic category for a node by checking both layer_type and layer_name.
@@ -141,6 +149,7 @@ def visualize_relevance(graph, all_wt, output_path="backtrace_graph",
         node.replace("/", " ").replace(":", " ")
         for node in graph.nodes
         if _get_node_category(graph.nodes[node]) in DEFAULT_FORCE_INCLUDE_TYPES
+        and not _is_excluded_node(node)
     }
 
     if layer_types is not None:
@@ -150,17 +159,18 @@ def visualize_relevance(graph, all_wt, output_path="backtrace_graph",
             node.replace("/", " ").replace(":", " ")
             for node in graph.nodes
             if _get_node_category(graph.nodes[node]) in layer_types_set
+            and not _is_excluded_node(node)
         } | force_include
         print(f"📊 Layer-type filtering: {total_nodes} nodes → {len(top_node_names)} nodes (filter: {list(layer_types_set)[:5]}{'...' if len(layer_types_set) > 5 else ''})")
     elif top_k:
         top_keys = sorted(flat_scores.items(), key=lambda x: abs(x[1]), reverse=True)[:top_k]
-        top_node_names = {k for k, _ in top_keys} | force_include
+        top_node_names = {k for k, _ in top_keys if not _is_excluded_node(k)} | force_include
         print(f"📊 Top-k filtering: {total_nodes} nodes → {len(top_node_names)} nodes (top_k={top_k})")
     elif relevance_threshold is not None:
-        top_node_names = {k for k, v in flat_scores.items() if abs(v) >= relevance_threshold} | force_include
+        top_node_names = {k for k, v in flat_scores.items() if abs(v) >= relevance_threshold and not _is_excluded_node(k)} | force_include
         print(f"📊 Threshold filtering: {total_nodes} nodes → {len(top_node_names)} nodes (threshold={relevance_threshold})")
     else:
-        top_node_names = set(relevance_data.keys()) | force_include
+        top_node_names = {k for k in relevance_data.keys() if not _is_excluded_node(k)} | force_include
         print(f"📊 No filtering: {total_nodes} nodes")
 
     # --- Build raw->normalized name mapping for ancestor lookup ---
@@ -397,11 +407,12 @@ def visualize_relevance_fast(
         present_raw = [
             raw for raw in all_raw
             if _get_node_category(graph.nodes[raw]) in layer_types_set
+            and not _is_excluded_node(raw)
         ]
         print(f"📊 Layer-type filtering (fast): {total_nodes} nodes → {len(present_raw)} nodes (filter: {list(layer_types)[:5]}{'...' if len(layer_types) > 5 else ''})")
     else:
-        present_raw = all_raw
-        print(f"📊 No filtering (fast): {total_nodes} nodes")
+        present_raw = [raw for raw in all_raw if not _is_excluded_node(raw)]
+        print(f"📊 No filtering (fast): {total_nodes} nodes → {len(present_raw)} nodes (excluded p_model_*/b_model_*)")
     
     norm_by_raw = {raw: _norm(raw) for raw in all_raw}  # All nodes for lookup
     present_norm = {_norm(raw) for raw in present_raw}  # Filtered set
@@ -607,12 +618,13 @@ def visualize_relevance_auto(
         filtered_count = sum(
             1 for n in graph.nodes 
             if _get_node_category(graph.nodes[n]) in layer_types_set
+            and not _is_excluded_node(n)
         )
         num_nodes = filtered_count
         print(f"num_nodes after layer_types filter: {num_nodes} (from {len(graph.nodes)} total)")
     else:
-        num_nodes = len(graph.nodes)
-        print(f"num_nodes: {num_nodes}")
+        num_nodes = sum(1 for n in graph.nodes if not _is_excluded_node(n))
+        print(f"num_nodes: {num_nodes} (from {len(graph.nodes)} total, excluded p_model_*/b_model_*)")
 
     if num_nodes < node_threshold:
         # small graph → original pretty version
