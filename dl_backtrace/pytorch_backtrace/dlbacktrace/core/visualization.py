@@ -693,6 +693,8 @@ def visualize_relevance_paginated(
     *,
     max_nodes_per_page: int = 30,
     layer_types: Optional[Sequence[str]] = None,
+    rankdir: str = "TB",
+    pages_per_row: int = 1,
     show=True,
     inline_format="svg",
 ):
@@ -711,10 +713,18 @@ def visualize_relevance_paginated(
     output_path : str
         Base output file path (without extension). Pages will be named
         {output_path}_page1.svg, {output_path}_page2.svg, etc.
+        When pages_per_row > 1, also creates {output_path}_combined.svg
     max_nodes_per_page : int
         Maximum number of nodes per page/sub-graph (default: 30)
     layer_types : list[str], optional
         Filter to only these layer types. Use SEMANTIC_LAYER_TYPES for compact graphs.
+    rankdir : str
+        Graph direction: "TB" (top-to-bottom, default for paginated), 
+        "LR" (left-to-right). Default "TB" for vertical flow.
+    pages_per_row : int
+        Number of pages to display side-by-side in a combined view (default: 1).
+        When > 1, creates an additional combined SVG with pages arranged 
+        left-to-right. Useful for fitting multiple pages on one LaTeX page.
     show : bool
         Whether to display inline in Jupyter/Colab
     inline_format : str
@@ -864,7 +874,7 @@ def visualize_relevance_paginated(
             name=f"DLBacktrace_Page{page_num}",
             format="svg",
             graph_attr={
-                "rankdir": "TB",  # Top-to-bottom for vertical flow
+                "rankdir": rankdir,
                 "label": f"DLBacktrace Graph - Page {page_num}/{len(pages)}",
                 "labelloc": "t",
                 "fontsize": "14",
@@ -913,7 +923,7 @@ def visualize_relevance_paginated(
         results.append((g, out))
         
         # Show inline
-        if show:
+        if show and pages_per_row == 1:
             print(f"\n{'='*50}")
             print(f"📄 Page {page_num}/{len(pages)} ({len(page_nodes)} nodes)")
             print(f"{'='*50}")
@@ -925,6 +935,101 @@ def visualize_relevance_paginated(
                 display(IPyImage(data=png_bytes))
         
         print(f"✅ Page {page_num} saved → {out}")
+    
+    # --- Create combined side-by-side view when pages_per_row > 1 ---
+    if pages_per_row > 1 and len(pages) > 1:
+        print(f"\n📊 Creating combined view with {pages_per_row} pages per row...")
+        
+        # Create a master graph that uses subgraphs for side-by-side layout
+        combined = graphviz.Digraph(
+            name="DLBacktrace_Combined",
+            format="svg",
+            graph_attr={
+                "rankdir": "LR",  # Left-to-right for side-by-side pages
+                "label": f"DLBacktrace Graph - Combined View ({len(pages)} pages)",
+                "labelloc": "t",
+                "fontsize": "16",
+                "compound": "true",
+                "newrank": "true",
+            },
+        )
+        
+        # Add each page as a cluster subgraph
+        for page_idx, page_nodes in enumerate(pages):
+            page_num = page_idx + 1
+            page_node_set = set(page_nodes)
+            
+            # Determine connector nodes from previous page
+            connector_nodes = set()
+            if page_idx > 0:
+                prev_page_nodes = set(pages[page_idx - 1])
+                for node in page_nodes:
+                    for parent in filtered_edges.get(node, set()):
+                        if parent in prev_page_nodes:
+                            connector_nodes.add(parent)
+            
+            with combined.subgraph(name=f"cluster_page{page_num}") as subg:
+                subg.attr(
+                    label=f"Page {page_num}",
+                    style="rounded,filled",
+                    color="lightgray",
+                    fillcolor="white",
+                    fontsize="12",
+                )
+                subg.attr("graph", rankdir=rankdir)  # Each page flows vertically
+                
+                # Prefix node names with page number to avoid conflicts
+                prefix = f"p{page_num}_"
+                
+                # Add connector nodes (grayed out)
+                for node in connector_nodes:
+                    stats = relevance_data.get(node, (0.0, 0.0, 0.0))
+                    label = f"{node}\n(prev)"
+                    subg.node(prefix + node, label=label, fillcolor="lightgray", 
+                             style="filled,rounded,dashed", shape="box", fontsize="9")
+                
+                # Add page nodes
+                for node in page_nodes:
+                    stats = relevance_data.get(node, (0.0, 0.0, 0.0))
+                    mean, mx, mn = stats
+                    label = f"{node}\nM={mean:.3f}\n↑{mx:.3f} ↓{mn:.3f}"
+                    color = get_color(mean)
+                    subg.node(prefix + node, label=label, fillcolor=color,
+                             style="filled,rounded", shape="box", fontsize="9")
+                
+                # Add edges within page
+                for node in page_nodes:
+                    for parent in filtered_edges.get(node, set()):
+                        if parent in page_node_set or parent in connector_nodes:
+                            child_mean = relevance_data.get(node, (0.0, 0.0, 0.0))[0]
+                            subg.edge(prefix + parent, prefix + node, 
+                                     label=f"{child_mean:.2f}", fontsize="7")
+        
+        # Add invisible edges between clusters to maintain left-to-right order
+        for i in range(len(pages) - 1):
+            if pages[i] and pages[i + 1]:
+                # Connect last node of page i to first node of page i+1 (invisible)
+                src = f"p{i+1}_{pages[i][-1]}"
+                dst = f"p{i+2}_{pages[i+1][0]}"
+                combined.edge(src, dst, style="invis", constraint="true")
+        
+        # Render combined
+        combined_output = f"{output_path}_combined"
+        combined_out = combined.render(combined_output, cleanup=True)
+        results.append((combined, combined_out))
+        
+        if show:
+            print(f"\n{'='*60}")
+            print(f"📄 Combined View ({len(pages)} pages side-by-side)")
+            print(f"{'='*60}")
+            if inline_format.lower() == "svg":
+                svg_bytes = combined.pipe(format="svg")
+                display(SVG(svg_bytes))
+            else:
+                png_bytes = combined.pipe(format="png")
+                display(IPyImage(data=png_bytes))
+        
+        print(f"✅ Combined graph saved → {combined_out}")
     
     print(f"\n📊 Total: {len(pages)} pages saved with base path '{output_path}_pageN.svg'")
     return results

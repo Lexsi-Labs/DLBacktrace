@@ -1543,6 +1543,7 @@ class DLBacktrace:
         compact=False,
         paginated=False,
         max_nodes_per_page=30,
+        pages_per_row=1,
         rankdir="LR",
         show=True, 
         inline_format="svg"
@@ -1577,10 +1578,14 @@ class DLBacktrace:
             Each page contains max_nodes_per_page nodes in topological order.
         max_nodes_per_page : int
             Maximum nodes per page when paginated=True (default: 30)
+        pages_per_row : int
+            Number of pages to display side-by-side when paginated=True (default: 1).
+            When > 1, creates an additional combined SVG with pages arranged
+            left-to-right. E.g., pages_per_row=3 puts 3 pages side-by-side.
         rankdir : str
             Graph direction: "LR" (left-to-right, wide), "TB" (top-to-bottom, tall).
-            Default "LR". Use "TB" for LaTeX/paper-friendly vertical layout that
-            fits on a single page.
+            Default "LR". Use "TB" for LaTeX/paper-friendly vertical layout.
+            For paginated mode, "TB" is recommended for each page.
         show : bool
             Whether to display inline in Jupyter/Colab
         inline_format : str
@@ -1598,6 +1603,8 @@ class DLBacktrace:
                 output_path=output_path,
                 max_nodes_per_page=max_nodes_per_page,
                 layer_types=layer_types,
+                rankdir=rankdir,
+                pages_per_row=pages_per_row,
                 show=show,
                 inline_format=inline_format,
             )
