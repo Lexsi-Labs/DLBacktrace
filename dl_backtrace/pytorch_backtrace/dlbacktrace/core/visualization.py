@@ -936,100 +936,129 @@ def visualize_relevance_paginated(
         
         print(f"✅ Page {page_num} saved → {out}")
     
-    # --- Create combined side-by-side view when pages_per_row > 1 ---
+    # --- Create combined side-by-side views when pages_per_row > 1 ---
     if pages_per_row > 1 and len(pages) > 1:
-        print(f"\n📊 Creating combined view with {pages_per_row} pages per row...")
+        # Split pages into rows (each row has at most pages_per_row pages)
+        page_rows = []
+        for i in range(0, len(pages), pages_per_row):
+            page_rows.append(list(enumerate(pages[i:i + pages_per_row], start=i)))
         
-        # Create a master graph that uses subgraphs for side-by-side layout
-        combined = graphviz.Digraph(
-            name="DLBacktrace_Combined",
-            format="svg",
-            graph_attr={
-                "rankdir": "LR",  # Left-to-right for side-by-side pages
-                "label": f"DLBacktrace Graph - Combined View ({len(pages)} pages)",
-                "labelloc": "t",
-                "fontsize": "16",
-                "compound": "true",
-                "newrank": "true",
-            },
-        )
+        print(f"\n📊 Creating {len(page_rows)} combined view(s) with {pages_per_row} pages per row...")
         
-        # Add each page as a cluster subgraph
-        for page_idx, page_nodes in enumerate(pages):
-            page_num = page_idx + 1
-            page_node_set = set(page_nodes)
+        for row_idx, row_pages in enumerate(page_rows):
+            row_num = row_idx + 1
             
-            # Determine connector nodes from previous page
-            connector_nodes = set()
-            if page_idx > 0:
-                prev_page_nodes = set(pages[page_idx - 1])
-                for node in page_nodes:
-                    for parent in filtered_edges.get(node, set()):
-                        if parent in prev_page_nodes:
-                            connector_nodes.add(parent)
+            # Create a master graph using HTML-like table for true side-by-side
+            combined = graphviz.Digraph(
+                name=f"DLBacktrace_Combined_Row{row_num}",
+                format="svg",
+                engine="dot",
+                graph_attr={
+                    "rankdir": "LR",  # Main graph is LR for side-by-side clusters
+                    "label": f"DLBacktrace Graph - Row {row_num}/{len(page_rows)} (Pages {row_pages[0][0]+1}-{row_pages[-1][0]+1})",
+                    "labelloc": "t",
+                    "fontsize": "14",
+                    "splines": "spline",
+                    "compound": "true",
+                    "nodesep": "0.2",
+                    "ranksep": "0.3",
+                },
+            )
             
-            with combined.subgraph(name=f"cluster_page{page_num}") as subg:
-                subg.attr(
-                    label=f"Page {page_num}",
-                    style="rounded,filled",
-                    color="lightgray",
-                    fillcolor="white",
-                    fontsize="12",
-                )
-                subg.attr("graph", rankdir=rankdir)  # Each page flows vertically
+            # Add each page in this row as a cluster subgraph
+            for local_idx, (global_page_idx, page_nodes) in enumerate(row_pages):
+                page_num = global_page_idx + 1
+                page_node_set = set(page_nodes)
                 
-                # Prefix node names with page number to avoid conflicts
-                prefix = f"p{page_num}_"
+                # Determine connector nodes from previous page (if in this row)
+                connector_nodes = set()
+                if global_page_idx > 0 and local_idx > 0:
+                    prev_page_nodes = set(pages[global_page_idx - 1])
+                    for node in page_nodes:
+                        for parent in filtered_edges.get(node, set()):
+                            if parent in prev_page_nodes:
+                                connector_nodes.add(parent)
                 
-                # Add connector nodes (grayed out)
-                for node in connector_nodes:
-                    stats = relevance_data.get(node, (0.0, 0.0, 0.0))
-                    label = f"{node}\n(prev)"
-                    subg.node(prefix + node, label=label, fillcolor="lightgray", 
-                             style="filled,rounded,dashed", shape="box", fontsize="9")
+                with combined.subgraph(name=f"cluster_page{page_num}") as subg:
+                    subg.attr(
+                        label=f"Page {page_num}",
+                        style="rounded",
+                        color="black",
+                        fontsize="11",
+                        margin="10",
+                    )
+                    # Force TB direction inside each cluster
+                    subg.attr("graph", rankdir="TB", nodesep="0.15", ranksep="0.25")
+                    
+                    # Prefix node names with page number to avoid conflicts
+                    prefix = f"p{page_num}_"
+                    
+                    # Add connector nodes (grayed out)
+                    for node in connector_nodes:
+                        stats = relevance_data.get(node, (0.0, 0.0, 0.0))
+                        short_node = node[:20] + "..." if len(node) > 20 else node
+                        label = f"{short_node}\n(prev)"
+                        subg.node(prefix + node, label=label, fillcolor="lightgray", 
+                                 style="filled,rounded,dashed", shape="box", fontsize="8")
+                    
+                    # Add page nodes
+                    for node in page_nodes:
+                        stats = relevance_data.get(node, (0.0, 0.0, 0.0))
+                        mean, mx, mn = stats
+                        short_node = node[:20] + "..." if len(node) > 20 else node
+                        label = f"{short_node}\nM={mean:.3f}\n↑{mx:.3f} ↓{mn:.3f}"
+                        color = get_color(mean)
+                        subg.node(prefix + node, label=label, fillcolor=color,
+                                 style="filled,rounded", shape="box", fontsize="8")
+                    
+                    # Add edges within page
+                    for node in page_nodes:
+                        for parent in filtered_edges.get(node, set()):
+                            if parent in page_node_set or parent in connector_nodes:
+                                child_mean = relevance_data.get(node, (0.0, 0.0, 0.0))[0]
+                                subg.edge(prefix + parent, prefix + node, 
+                                         label=f"{child_mean:.2f}", fontsize="7")
+            
+            # Add invisible edges between clusters to force left-to-right ordering
+            # Use rank=same to align first nodes of each cluster
+            if len(row_pages) > 1:
+                with combined.subgraph() as s:
+                    s.attr(rank="same")
+                    for local_idx, (global_page_idx, page_nodes) in enumerate(row_pages):
+                        if page_nodes:
+                            prefix = f"p{global_page_idx + 1}_"
+                            s.node(prefix + page_nodes[0])
                 
-                # Add page nodes
-                for node in page_nodes:
-                    stats = relevance_data.get(node, (0.0, 0.0, 0.0))
-                    mean, mx, mn = stats
-                    label = f"{node}\nM={mean:.3f}\n↑{mx:.3f} ↓{mn:.3f}"
-                    color = get_color(mean)
-                    subg.node(prefix + node, label=label, fillcolor=color,
-                             style="filled,rounded", shape="box", fontsize="9")
-                
-                # Add edges within page
-                for node in page_nodes:
-                    for parent in filtered_edges.get(node, set()):
-                        if parent in page_node_set or parent in connector_nodes:
-                            child_mean = relevance_data.get(node, (0.0, 0.0, 0.0))[0]
-                            subg.edge(prefix + parent, prefix + node, 
-                                     label=f"{child_mean:.2f}", fontsize="7")
-        
-        # Add invisible edges between clusters to maintain left-to-right order
-        for i in range(len(pages) - 1):
-            if pages[i] and pages[i + 1]:
-                # Connect last node of page i to first node of page i+1 (invisible)
-                src = f"p{i+1}_{pages[i][-1]}"
-                dst = f"p{i+2}_{pages[i+1][0]}"
-                combined.edge(src, dst, style="invis", constraint="true")
-        
-        # Render combined
-        combined_output = f"{output_path}_combined"
-        combined_out = combined.render(combined_output, cleanup=True)
-        results.append((combined, combined_out))
-        
-        if show:
-            print(f"\n{'='*60}")
-            print(f"📄 Combined View ({len(pages)} pages side-by-side)")
-            print(f"{'='*60}")
-            if inline_format.lower() == "svg":
-                svg_bytes = combined.pipe(format="svg")
-                display(SVG(svg_bytes))
+                # Invisible edges to maintain order
+                for i in range(len(row_pages) - 1):
+                    _, curr_nodes = row_pages[i]
+                    _, next_nodes = row_pages[i + 1]
+                    if curr_nodes and next_nodes:
+                        src_prefix = f"p{row_pages[i][0] + 1}_"
+                        dst_prefix = f"p{row_pages[i + 1][0] + 1}_"
+                        combined.edge(src_prefix + curr_nodes[0], dst_prefix + next_nodes[0], 
+                                     style="invis", constraint="true")
+            
+            # Render combined row
+            if len(page_rows) == 1:
+                combined_output = f"{output_path}_combined"
             else:
-                png_bytes = combined.pipe(format="png")
-                display(IPyImage(data=png_bytes))
-        
-        print(f"✅ Combined graph saved → {combined_out}")
+                combined_output = f"{output_path}_combined_row{row_num}"
+            combined_out = combined.render(combined_output, cleanup=True)
+            results.append((combined, combined_out))
+            
+            if show:
+                print(f"\n{'='*60}")
+                print(f"📄 Combined View Row {row_num}/{len(page_rows)} ({len(row_pages)} pages side-by-side)")
+                print(f"{'='*60}")
+                if inline_format.lower() == "svg":
+                    svg_bytes = combined.pipe(format="svg")
+                    display(SVG(svg_bytes))
+                else:
+                    png_bytes = combined.pipe(format="png")
+                    display(IPyImage(data=png_bytes))
+            
+            print(f"✅ Combined row {row_num} saved → {combined_out}")
     
     print(f"\n📊 Total: {len(pages)} pages saved with base path '{output_path}_pageN.svg'")
     return results
