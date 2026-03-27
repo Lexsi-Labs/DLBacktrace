@@ -14,6 +14,7 @@ from .core.visualization import (
     visualize_graph, 
     visualize_relevance, 
     visualize_relevance_auto,
+    visualize_relevance_paginated,
     SEMANTIC_LAYER_TYPES,
 )
 from .core.token_relevance_visuals import (
@@ -1540,6 +1541,9 @@ class DLBacktrace:
         engine_auto_threshold=1500, 
         layer_types=None,
         compact=False,
+        paginated=False,
+        max_nodes_per_page=30,
+        rankdir="LR",
         show=True, 
         inline_format="svg"
     ):
@@ -1568,6 +1572,15 @@ class DLBacktrace:
         compact : bool
             If True, uses SEMANTIC_LAYER_TYPES for a paper-ready compact graph.
             Equivalent to layer_types=SEMANTIC_LAYER_TYPES.
+        paginated : bool
+            If True, splits the graph into multiple pages for long DAGs.
+            Each page contains max_nodes_per_page nodes in topological order.
+        max_nodes_per_page : int
+            Maximum nodes per page when paginated=True (default: 30)
+        rankdir : str
+            Graph direction: "LR" (left-to-right, wide), "TB" (top-to-bottom, tall).
+            Default "LR". Use "TB" for LaTeX/paper-friendly vertical layout that
+            fits on a single page.
         show : bool
             Whether to display inline in Jupyter/Colab
         inline_format : str
@@ -1577,17 +1590,30 @@ class DLBacktrace:
         if compact and layer_types is None:
             layer_types = list(SEMANTIC_LAYER_TYPES)
         
-        visualize_relevance_auto(
-            self.graph,
-            self.all_wt,
-            output_path=output_path,
-            node_threshold=500,
-            engine_auto_threshold=engine_auto_threshold,
-            fast_output_path=output_path,
-            layer_types=layer_types,
-            show=show,
-            inline_format=inline_format,
-        )
+        if paginated:
+            # Use paginated visualization for long graphs
+            visualize_relevance_paginated(
+                self.graph,
+                self.all_wt,
+                output_path=output_path,
+                max_nodes_per_page=max_nodes_per_page,
+                layer_types=layer_types,
+                show=show,
+                inline_format=inline_format,
+            )
+        else:
+            visualize_relevance_auto(
+                self.graph,
+                self.all_wt,
+                output_path=output_path,
+                node_threshold=500,
+                engine_auto_threshold=engine_auto_threshold,
+                fast_output_path=output_path,
+                layer_types=layer_types,
+                rankdir=rankdir,
+                show=show,
+                inline_format=inline_format,
+            )
 
     def visualize_dlbacktrace_with_modules(
         self,
