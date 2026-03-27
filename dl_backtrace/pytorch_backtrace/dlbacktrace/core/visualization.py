@@ -126,13 +126,22 @@ def visualize_relevance(graph, all_wt, output_path="backtrace_graph",
     relevance_data = {}
 
     # --- Extract relevance stats from all_wt ---
+    # Mean: sum of all entries (for batch=1) or average of sums across batches
+    # Max/Min: max/min of batch sums (for batched) or max/min element (for single)
     for node_name, rel in all_wt.items():
         node_key = node_name.replace("/", " ").replace(":", " ")
         if isinstance(rel, (list, tuple)):
-            flat = [float(r.sum()) for r in rel if hasattr(r, "sum")]
-            stats = (float(sum(flat) / len(flat)), max(flat), min(flat)) if flat else (0.0, 0.0, 0.0)
+            # Batched data: list of tensors
+            batch_sums = [float(r.sum()) for r in rel if hasattr(r, "sum")]
+            if batch_sums:
+                mean_val = sum(batch_sums) / len(batch_sums)
+                stats = (mean_val, max(batch_sums), min(batch_sums))
+            else:
+                stats = (0.0, 0.0, 0.0)
         elif hasattr(rel, "sum"):
-            stats = (float(rel.mean()), float(rel.max()), float(rel.min()))
+            # Single tensor (batch size = 1)
+            # Mean = sum of all entries in relevance vector
+            stats = (float(rel.sum()), float(rel.max()), float(rel.min()))
         else:
             try:
                 val = float(rel)
@@ -437,20 +446,25 @@ def visualize_relevance_fast(
         return ancestors
 
     # relevance only for present
+    # Mean: sum of all entries (for batch=1) or average of sums across batches
+    # Max: maximum individual value in the relevance tensor
+    # Min: minimum individual value in the relevance tensor
     rel_map = {}
     for k, v in all_wt.items():
         nk = _norm(k)
         if nk not in present_norm:
             continue
         if isinstance(v, (list, tuple)):
-            flat = [float(t.sum()) for t in v if hasattr(t, "sum")]
-            if flat:
-                mean = float(sum(flat) / len(flat))
-                rel_map[nk] = (mean, max(flat), min(flat))
+            # Batched data
+            batch_sums = [float(t.sum()) for t in v if hasattr(t, "sum")]
+            if batch_sums:
+                mean_val = sum(batch_sums) / len(batch_sums)
+                rel_map[nk] = (mean_val, max(batch_sums), min(batch_sums))
             else:
                 rel_map[nk] = (0.0, 0.0, 0.0)
         elif hasattr(v, "sum"):
-            rel_map[nk] = (float(v.mean()), float(v.max()), float(v.min()))
+            # Single tensor (batch size = 1): Mean = sum of all entries
+            rel_map[nk] = (float(v.sum()), float(v.max()), float(v.min()))
         else:
             try:
                 x = float(v)
