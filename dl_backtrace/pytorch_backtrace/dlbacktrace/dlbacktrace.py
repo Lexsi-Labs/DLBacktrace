@@ -10,6 +10,7 @@ from .core.trace_utils import (
 from .core.config import activation_master
 from .core.dlb_auto_sampler import DLBAutoSampler
 from .core.relevance_propagation import RelevancePropagator
+from .core.compiled_propagation import PropagationSchedule
 from .core.visualization import (
     visualize_graph, 
     visualize_relevance, 
