@@ -10,6 +10,7 @@ from .core.trace_utils import (
 from .core.config import activation_master
 from .core.dlb_auto_sampler import DLBAutoSampler
 from .core.relevance_propagation import RelevancePropagator
+from .core.compiled_propagation import PropagationSchedule
 from .core.visualization import visualize_graph, visualize_relevance, visualize_relevance_auto 
 from .core.token_relevance_visuals import (
     plot_tokenwise_relevance_map_swapped,
@@ -43,7 +44,7 @@ class DLBacktrace:
             strict_cpu (bool): When running on CPU, disable MKL-DNN and pin threads for stricter determinism.
         """
         # 🔧 CRITICAL: Set up deterministic environment for consistent tracing
-        print("Setting up DL-Bactrace", flush=True)
+        print("Setting up DL-Backtrace", flush=True)
         self.verbose = verbose
         self.strict_cpu = strict_cpu
         self._setup_deterministic_environment(seed=42, verbose=self.verbose, strict_cpu=self.strict_cpu)
@@ -507,11 +508,20 @@ class DLBacktrace:
         raise original_error
 
     def evaluation(self, mode="default", start_wt=[], multiplier=100.0, scaler=1.0, thresholding=0.5, task="binary-classification", target_token_ids=None, debug=False):
+        # Build propagation schedule once and cache it
+        if not hasattr(self, '_prop_schedule') or self._prop_schedule is None:
+            try:
+                self._prop_schedule = PropagationSchedule(self.node_io, activation_master)
+            except Exception as e:
+                print(f"⚠️ Failed to build PropagationSchedule, using fallback: {e}")
+                self._prop_schedule = None
+
         evaluator = RelevancePropagator(
             graph=self.graph,
             node_io=self.node_io,
             activation_master=activation_master,
-            get_layer_implementation=self.get_layer_implementation  # Pass the function instead of a static value
+            get_layer_implementation=self.get_layer_implementation,
+            propagation_schedule=self._prop_schedule,
         )
         self.all_wt = evaluator.propagate(
             start_wt=start_wt,
@@ -1036,11 +1046,13 @@ class DLBacktrace:
             if isinstance(val, (list, tuple)):
                 for i, v in enumerate(val):
                     if hasattr(v, "shape") and hasattr(v, "sum"):
-                        print(f"[{key}][{i}] shape: {v.shape}, sum: {np.sum(v):.4f}")
+                        s = float(v.sum()) if hasattr(v, 'sum') else 0.0
+                        print(f"[{key}][{i}] shape: {v.shape}, sum: {s:.4f}")
                     else:
                         print(f"[{key}][{i}] is not a NumPy array or tensor.")
             elif hasattr(val, "shape") and hasattr(val, "sum"):
-                print(f"[{key}] shape: {val.shape}, sum: {np.sum(val):.4f}")
+                s = float(val.sum()) if hasattr(val, 'sum') else 0.0
+                print(f"[{key}] shape: {val.shape}, sum: {s:.4f}")
             else:
                 print(f"[{key}] is not a NumPy array or tensor.")
 

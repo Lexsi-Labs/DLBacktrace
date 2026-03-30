@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import time
+import gc
 from typing import Optional, List, Tuple, cast
 
 import torch
@@ -257,9 +258,9 @@ class MoEAutoSampler:
             task="generation",
         )
         
-        # Return both token relevance and expert relevance separately
-        import copy
-        expert_relevance = copy.deepcopy(self.moe_bt.all_layer_expert_relevance)
+        # Swap expert relevance instead of deep-copying (Issue 5: memory)
+        expert_relevance = self.moe_bt.all_layer_expert_relevance
+        self.moe_bt.all_layer_expert_relevance = {}
         
         return all_wt, expert_relevance
 
@@ -422,7 +423,6 @@ class MoEAutoSampler:
                     tokenizer=self.tokenizer,
                     max_length=1  # Generate one token at a time
                 )
-
                 
                 # Extract logits from the last step
                 last_step_key = str(len(all_out) - 1)
@@ -487,6 +487,10 @@ class MoEAutoSampler:
                         'all_wt': all_wt,
                         'expert_relevance': expert_rel
                     })
+                
+                # Free activations after all consumers are done
+                if not return_layerwise_output:
+                    del all_out, all_in
                 
                 # Add token to generated sequence
                 generated_tokens.append(next_token_id)
