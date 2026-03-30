@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import gc
 import re
@@ -12,6 +13,11 @@ from dl_backtrace.moe_pytorch_backtrace.backtrace.core import (
     helper as helper,
 )
 from dl_backtrace.moe_pytorch_backtrace.backtrace.utils import default_v2 as UD2
+from dl_backtrace.moe_pytorch_backtrace.backtrace.supported_models import (
+    detect_model_type, SUPPORTED_MOE_MODELS, list_supported_models,
+)
+
+logger = logging.getLogger("dl_backtrace.moe")
 
 
 def t2np32(t):
@@ -103,14 +109,21 @@ class Backtrace(object):
     """
 
     def __init__(self, model=None, activation_dict={}, model_type=None, device="cpu"):
-        if model_type not in {"gpt_oss", "qwen3_moe", "jetmoe", "olmoe"}:
-            raise ValueError(f"Unsupported model_type: {model_type}")
+        # ---- auto-detect model type if not provided ----
+        if model_type is None and model is not None:
+            model_type = detect_model_type(model)
+            logger.info("Auto-detected model_type='%s'", model_type)
+        if model_type not in SUPPORTED_MOE_MODELS:
+            raise ValueError(
+                f"Unsupported model_type: {model_type!r}\n\n"
+                + list_supported_models()
+            )
 
         # ---- device handling ----
         if device not in ["cpu", "cuda"]:
             raise ValueError(f"Invalid device: {device}. Must be 'cpu' or 'cuda'.")
         if device == "cuda" and not torch.cuda.is_available():
-            print("⚠️  CUDA requested but not available. Falling back to CPU.")
+            logger.warning("CUDA requested but not available. Falling back to CPU.")
             device = "cpu"
         self.device = device
         self.impl = "cuda" if device == "cuda" else "original"
@@ -170,6 +183,19 @@ class Backtrace(object):
             "olmoe": olmoe.create_olmoe_output,
         }[model_type]
 
+        logger.info(repr(self))
+
+    def __repr__(self):
+        n_layers = sum(
+            1 for k in self.model_resource.get("graph", {})
+            if k.startswith("decoder_feed_forward_")
+        )
+        has_outputs = self.all_out_model is not None
+        return (
+            f"Backtrace(model_type='{self.model_type}', device='{self.device}', "
+            f"layers={n_layers}, outputs_computed={has_outputs})"
+        )
+
     # ---- Step 3 moved out of __init__
     def compute_outputs(self, *, input_text, tokenizer, max_length=None):
         """
@@ -205,7 +231,7 @@ class Backtrace(object):
         if device == "cuda" and torch.cuda.is_available():
             return "cuda"
         if device == "cuda" and not torch.cuda.is_available():
-            print("⚠️  CUDA device requested but CUDA not available. Falling back to CPU mode.")
+            logger.warning("CUDA device requested but CUDA not available. Falling back to CPU mode.")
             return "original"
         raise ValueError(f"device must be 'cpu' or 'cuda', got: {device}")
 
@@ -254,7 +280,7 @@ class Backtrace(object):
         # Parse device configuration to determine implementation
         device = self.device
         impl = self._parse_device_to_implementation(device)
-        print(f"device: {device}, implementation: {impl}")
+        logger.info("device: %s, implementation: %s", device, impl)
         
         # ---- helpers for device-aware I/O ----
         def arr_from_key(key_or_val):
@@ -320,7 +346,7 @@ class Backtrace(object):
             sw_src = out_arr if isinstance(out_arr, np.ndarray) else t2np32(out_arr)
             start_wt = UD2.calculate_start_wt(sw_src, scaler=scaler, task="generation")
         all_wt[out_layer] = start_wt * multiplier
-        print(f"all_wt[{[out_layer]}] start_wt: {np.sum(all_wt[out_layer])}")
+        logger.debug("all_wt[%s] start_wt: %s", [out_layer], np.sum(all_wt[out_layer]))
 
         # ---- propagate relevance ----
         for start_layer in tqdm(layer_stack):
@@ -543,10 +569,6 @@ class Backtrace(object):
             for step_idx, step_data in enumerate(results['relevance_trace']):
                 all_wt = step_data['all_wt']
                 expert_rel = step_data['expert_relevance']
-                
-                print(f"Step {step_idx}:")
-                print(f"  Token relevance keys: {list(all_wt.keys())[:3]}")
-                print(f"  Expert relevance keys: {list(expert_rel.keys())}")
         """
         
         # Validate task type
@@ -568,7 +590,7 @@ class Backtrace(object):
             raise ValueError("For generation, inputs must be dict or tuple of (input_ids, attention_mask)")
         
         if debug:
-            print(f"🚀 Running generation task with sample_auto...")
+            logger.info("Running generation task with sample_auto...")
         
         # Call sample_auto with generation kwargs and trace flags
         generated_output = self.sample_auto(
@@ -779,7 +801,7 @@ class Backtrace(object):
         graph_dict = self.model_resource.get("graph", {})
         num_nodes = len(graph_dict)
         
-        print(f"📊 Visualizing MoE DL-Backtrace graph with {num_nodes} nodes...")
+        logger.info("Visualizing MoE DL-Backtrace graph with %d nodes...", num_nodes)
 
         # Create a directed graph
         dot = graphviz.Digraph(comment='MoE DL-Backtrace Graph')
@@ -793,7 +815,7 @@ class Backtrace(object):
                 node for node in graph_dict.keys()
                 if node in self.all_wt and np.sum(np.abs(self.all_wt[node])) >= relevance_threshold
             }
-            print(f"   Filtered to {len(nodes_to_show)} nodes with relevance >= {relevance_threshold}")
+            logger.info("Filtered to %d nodes with relevance >= %s", len(nodes_to_show), relevance_threshold)
 
         # Filter to top-k if specified
         if top_k is not None and top_k < len(nodes_to_show):
@@ -803,7 +825,7 @@ class Backtrace(object):
             }
             top_nodes = sorted(node_relevances.items(), key=lambda x: x[1], reverse=True)[:top_k]
             nodes_to_show = {node for node, _ in top_nodes}
-            print(f"   Showing top {top_k} most relevant nodes")
+            logger.info("Showing top %d most relevant nodes", top_k)
 
         # Add nodes with relevance information
         for node_name in nodes_to_show:
@@ -835,19 +857,21 @@ class Backtrace(object):
         # Render the graph
         try:
             output_file = dot.render(output_path, format='svg', cleanup=True)
-            print(f"✅ Graph saved to: {output_file}")
-            
+            logger.info("Graph saved to: %s", output_file)
+
             # Try to display in Jupyter/Colab
             try:
                 from IPython.display import SVG, display
                 display(SVG(output_file))
-                print("📊 Graph displayed inline")
-            except:
-                print("💡 To view the graph, open:", output_file)
-                
+                logger.info("Graph displayed inline")
+            except ImportError: # Catch ImportError if IPython is not available
+                logger.info("To view the graph, open: %s", output_file)
+
         except Exception as e:
-            print(f"⚠️  Could not render graph: {e}")
-            print("💡 Make sure graphviz system package is installed:")
-            print("   - Ubuntu/Debian: sudo apt-get install graphviz")
-            print("   - macOS: brew install graphviz")
-            print("   - Windows: choco install graphviz")
+            logger.warning("Could not render graph: %s", e)
+            logger.info(
+                "Make sure graphviz system package is installed:\n"
+                "  - Ubuntu/Debian: sudo apt-get install graphviz\n"
+                "  - macOS: brew install graphviz\n"
+                "  - Windows: choco install graphviz"
+            )

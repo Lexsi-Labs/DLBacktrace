@@ -36,6 +36,12 @@ dependencies = [
     "tensorflow",
 ]
 
+[project.optional-dependencies]
+server = [
+    "fastapi>=0.100",
+    "uvicorn[standard]>=0.20",
+]
+
 [project.urls]
 Homepage = "https://xai.arya.ai/docs/introduction"
 Source = "https://github.com/arya-ai/DLBacktrace"

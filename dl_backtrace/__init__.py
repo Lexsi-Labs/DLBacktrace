@@ -1,6 +1,20 @@
 import os
 import torch
 
-if torch.cuda.is_available() and 'TORCH_CUDA_ARCH_LIST' not in os.environ:
-    major, minor = torch.cuda.get_device_capability()
-    os.environ['TORCH_CUDA_ARCH_LIST'] = f"{major}.{minor}"
+
+# ── Version ─────────────────────────────────────────────────
+try:
+    from .version import __version__
+except ImportError:
+    __version__ = "0.1.1"
+
+# ── Public API ──────────────────────────────────────────────
+from .pytorch_backtrace import DLBacktrace
+
+# MoE backend (optional — may not be needed by all users)
+try:
+    from .moe_pytorch_backtrace import Backtrace as MoEBacktrace
+except ImportError:
+    MoEBacktrace = None
+
+__all__ = ["DLBacktrace", "MoEBacktrace", "__version__"]

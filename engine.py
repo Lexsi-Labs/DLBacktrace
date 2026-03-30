@@ -426,17 +426,17 @@ def moe_backtrace(
     model,
     tokenizer,
     device: str,
-    moe_type: str,
     prompt: str,
     max_new_tokens: int,
+    moe_type: str = None,
 ) -> Dict[str, Any]:
-    
+    """Run MoE backtrace generation with auto-detected or explicit model type."""
     from dl_backtrace.moe_pytorch_backtrace import Backtrace
 
     backtrace = Backtrace(
-                        model= model, 
-                        model_type = moe_type, 
-                        device = device,
+        model=model,
+        model_type=moe_type,  # None = auto-detect
+        device=device,
     )
 
     tokens = tokenizer(
@@ -832,18 +832,6 @@ def main():
                 print(f"\n  ⚠️  No .dlbr files found in {cache_path}")
 
     if args.mode == "moe":
-        
-        if args.model == "openai/gpt-oss-20b":
-            moe_type = "gpt_oss"
-        elif args.model == "Qwen/Qwen3-30B-A3B":
-            moe_type = "qwen3_moe"    
-        elif args.model == "jetmoe/jetmoe-8b":
-            moe_type = "jetmoe"
-        elif args.model == "allenai/OLMoE-1B-7B-0125-Instruct":
-            moe_type = "olmoe"
-        else:
-            raise ValueError(f"Model not supported: {args.model}, supported models: gpt_oss, qwen3_moe, jetmoe, olmoe")    
-        
         model = MoEBacktraceWrapper(args.model, hf_token)
         tokenizer = AutoTokenizer.from_pretrained(args.model, token=hf_token)
         tokenizer.pad_token = tokenizer.eos_token
@@ -860,7 +848,6 @@ def main():
                     tokenizer=tokenizer,
                     max_new_tokens=num_tokens,
                     device=args.device,
-                    moe_type=moe_type,
                     prompt=args.gen_prompt,
                 )
                 record["success"] = True
