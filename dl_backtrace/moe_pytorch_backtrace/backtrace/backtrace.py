@@ -1,4 +1,6 @@
+import logging
 import numpy as np
+import gc
 import re
 import torch
 from tqdm import tqdm
@@ -11,6 +13,11 @@ from dl_backtrace.moe_pytorch_backtrace.backtrace.core import (
     helper as helper,
 )
 from dl_backtrace.moe_pytorch_backtrace.backtrace.utils import default_v2 as UD2
+from dl_backtrace.moe_pytorch_backtrace.backtrace.supported_models import (
+    detect_model_type, SUPPORTED_MOE_MODELS, list_supported_models,
+)
+
+logger = logging.getLogger("dl_backtrace.moe")
 
 
 def t2np32(t):
@@ -102,14 +109,21 @@ class Backtrace(object):
     """
 
     def __init__(self, model=None, activation_dict={}, model_type=None, device="cpu"):
-        if model_type not in {"gpt_oss", "qwen3_moe", "jetmoe", "olmoe"}:
-            raise ValueError(f"Unsupported model_type: {model_type}")
+        # ---- auto-detect model type if not provided ----
+        if model_type is None and model is not None:
+            model_type = detect_model_type(model)
+            logger.info("Auto-detected model_type='%s'", model_type)
+        if model_type not in SUPPORTED_MOE_MODELS:
+            raise ValueError(
+                f"Unsupported model_type: {model_type!r}\n\n"
+                + list_supported_models()
+            )
 
         # ---- device handling ----
         if device not in ["cpu", "cuda"]:
             raise ValueError(f"Invalid device: {device}. Must be 'cpu' or 'cuda'.")
         if device == "cuda" and not torch.cuda.is_available():
-            print("⚠️  CUDA requested but not available. Falling back to CPU.")
+            logger.warning("CUDA requested but not available. Falling back to CPU.")
             device = "cpu"
         self.device = device
         self.impl = "cuda" if device == "cuda" else "original"
@@ -141,6 +155,26 @@ class Backtrace(object):
         elif model_type == "olmoe":
             self.model_weights = olmoe.extract_olmoe_weights(model)
 
+        # ---- Step 2b: pre-compute renamed weight dicts (avoid re-creating per eval) ----
+        self._renamed_weights = {}
+        for layer_name, wt_dict in self.model_weights.items():
+            if layer_name == 'decoder_lm_head':
+                self._renamed_weights[layer_name] = helper.rename_decoder_lm_head(wt_dict)
+            elif 'feed_forward' in layer_name:
+                if model_type == "jetmoe":
+                    self._renamed_weights[layer_name] = helper.rename_jetmoe_feed_forward_keys(wt_dict)
+                elif model_type == "olmoe":
+                    self._renamed_weights[layer_name] = helper.rename_olmoe_feed_forward_keys(wt_dict)
+                elif model_type == "qwen3_moe":
+                    self._renamed_weights[layer_name] = helper.rename_qwenmoe_feed_forward_keys(wt_dict)
+                elif model_type == "gpt_oss":
+                    self._renamed_weights[layer_name] = helper.rename_gptoss_feed_forward_keys(wt_dict)
+            elif 'self_attention' in layer_name:
+                if model_type == "jetmoe":
+                    self._renamed_weights[layer_name] = helper.rename_jetmoe_self_attention_keys(wt_dict)
+                else:
+                    self._renamed_weights[layer_name] = helper.rename_self_attention_keys(wt_dict)
+
         # Registry for output creators (used by compute_outputs)
         self._create_output_fn = {
             "gpt_oss": gpt_oss.create_gpt_oss_output,
@@ -149,12 +183,33 @@ class Backtrace(object):
             "olmoe": olmoe.create_olmoe_output,
         }[model_type]
 
+        logger.info(repr(self))
+
+    def __repr__(self):
+        n_layers = sum(
+            1 for k in self.model_resource.get("graph", {})
+            if k.startswith("decoder_feed_forward_")
+        )
+        has_outputs = self.all_out_model is not None
+        return (
+            f"Backtrace(model_type='{self.model_type}', device='{self.device}', "
+            f"layers={n_layers}, outputs_computed={has_outputs})"
+        )
+
     # ---- Step 3 moved out of __init__
     def compute_outputs(self, *, input_text, tokenizer, max_length=None):
         """
         Compute and cache per-submodule outputs for the current model_type.
         Uses the instance device set at initialization.
         """
+        # Free previous activation dicts before creating new ones
+        if self.all_out_model is not None:
+            del self.all_out_model
+            self.all_out_model = None
+            gc.collect()
+            if self.device == 'cuda' and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
         self.all_out_model = self._create_output_fn(
             input_text, self.model, tokenizer, max_length, self.device
         )
@@ -176,7 +231,7 @@ class Backtrace(object):
         if device == "cuda" and torch.cuda.is_available():
             return "cuda"
         if device == "cuda" and not torch.cuda.is_available():
-            print("⚠️  CUDA device requested but CUDA not available. Falling back to CPU mode.")
+            logger.warning("CUDA device requested but CUDA not available. Falling back to CPU mode.")
             return "original"
         raise ValueError(f"device must be 'cpu' or 'cuda', got: {device}")
 
@@ -225,7 +280,7 @@ class Backtrace(object):
         # Parse device configuration to determine implementation
         device = self.device
         impl = self._parse_device_to_implementation(device)
-        print(f"device: {device}, implementation: {impl}")
+        logger.info("device: %s, implementation: %s", device, impl)
         
         # ---- helpers for device-aware I/O ----
         def arr_from_key(key_or_val):
@@ -262,18 +317,18 @@ class Backtrace(object):
         def arr_list_from_keys(keys):
             return [arr_from_key(k) for k in keys]
 
-        def to_np64(x):
+        def to_np32(x):
             """
-            Ensure value is a NumPy float64 array for accumulation into all_wt[].
+            Ensure value is a NumPy float32 array for accumulation into all_wt[].
             Accepts torch, numpy, lists/tuples of arrays.
             """
             if torch.is_tensor(x):
-                return x.detach().to(torch.float64).cpu().numpy()
+                return x.detach().to(torch.float32).cpu().numpy()
             if isinstance(x, np.ndarray):
-                return x.astype(np.float64, copy=False)
+                return x.astype(np.float32, copy=False)
             if isinstance(x, (list, tuple)):
-                return [to_np64(xx) for xx in x]
-            return np.array(x, dtype=np.float64)
+                return [to_np32(xx) for xx in x]
+            return np.array(x, dtype=np.float32)
 
         model_resource = self.model_resource
         layer_stack = self.layer_stack
@@ -291,7 +346,7 @@ class Backtrace(object):
             sw_src = out_arr if isinstance(out_arr, np.ndarray) else t2np32(out_arr)
             start_wt = UD2.calculate_start_wt(sw_src, scaler=scaler, task="generation")
         all_wt[out_layer] = start_wt * multiplier
-        print(f"all_wt[{[out_layer]}] start_wt: {np.sum(all_wt[out_layer])}")
+        logger.debug("all_wt[%s] start_wt: %s", [out_layer], np.sum(all_wt[out_layer]))
 
         # ---- propagate relevance ----
         for start_layer in tqdm(layer_stack):
@@ -300,18 +355,18 @@ class Backtrace(object):
                 for ch in child_nodes:
                     if ch not in all_wt:
                         x = get_tensor_or_raise(all_in, all_out, ch)
-                        all_wt[ch] = np.zeros_like(t2np32(x), dtype=np.float64)
+                        all_wt[ch] = np.zeros_like(t2np32(x), dtype=np.float32)
 
                 node_class = model_resource["graph"][start_layer]["class"]
 
                 if node_class == "LM_Head":
-                    weights = all_wts[start_layer]
-                    lm_head_weights = helper.rename_decoder_lm_head(weights)
+                    lm_head_weights = self._renamed_weights.get(start_layer,
+                        helper.rename_decoder_lm_head(all_wts[start_layer]))
                     x = arr_from_key(child_nodes[0])
                     temp_wt = UD2.launch_lm_head(
                         impl, all_wt[start_layer], x, lm_head_weights
                     )
-                    all_wt[child_nodes[0]] += to_np64(temp_wt)
+                    all_wt[child_nodes[0]] += to_np32(temp_wt)
 
                 elif node_class == "Layer_Norm":
                     all_wt[child_nodes[0]] += all_wt[start_layer]
@@ -324,87 +379,86 @@ class Backtrace(object):
                         xs_np = [t2np32(xx) if torch.is_tensor(xx) else xx for xx in xs]
                         temp_wt = UD2.calculate_wt_residual(all_wt[start_layer], xs_np)
                     for ind, ch in enumerate(child_nodes):
-                        all_wt[ch] += to_np64(temp_wt[ind])
+                        all_wt[ch] += to_np32(temp_wt[ind])
 
                 # -------------------- For JetMoE ---------------------
                 elif node_class == "JetMoE_Feed_Forward":
-                    weights = all_wts[start_layer]
-                    ff_w = helper.rename_jetmoe_feed_forward_keys(weights)
+                    ff_w = self._renamed_weights.get(start_layer,
+                        helper.rename_jetmoe_feed_forward_keys(all_wts[start_layer]))
                     x = arr_from_key(child_nodes[0])
                     temp_wt, ff_expert = UD2.launch_jetmoe_feed_forward(
                         impl, all_wt[start_layer], x, ff_w, self.model
                     )
-                    all_wt[child_nodes[0]] += to_np64(temp_wt)
+                    all_wt[child_nodes[0]] += to_np32(temp_wt)
                     self.all_layer_expert_relevance[f"{start_layer}_ff_expert"] = ff_expert
 
                 elif node_class == "JetMoE_Self_Attention":
-                    weights = all_wts[start_layer]
-                    sa_w = helper.rename_jetmoe_self_attention_keys(weights)
+                    sa_w = self._renamed_weights.get(start_layer,
+                        helper.rename_jetmoe_self_attention_keys(all_wts[start_layer]))
                     x = arr_from_key(child_nodes[0])
                     temp_wt, attn_expert = UD2.launch_jetmoe_self_attention(
                         impl, all_wt[start_layer], x, sa_w, self.model
                     )
-                    all_wt[child_nodes[0]] += to_np64(temp_wt)
+                    all_wt[child_nodes[0]] += to_np32(temp_wt)
                     self.all_layer_expert_relevance[f"{start_layer}_attention_expert"] = attn_expert
 
                 # -------------------- For OLMoE ---------------------
                 elif node_class == "OLMoE_Feed_Forward":
-                    weights = all_wts[start_layer]
-                    ff_w = helper.rename_olmoe_feed_forward_keys(weights)
+                    ff_w = self._renamed_weights.get(start_layer,
+                        helper.rename_olmoe_feed_forward_keys(all_wts[start_layer]))
                     x = arr_from_key(all_in[child_nodes[0]])
                     temp_wt, ff_expert = UD2.launch_olmoe_feed_forward(
                         impl, all_wt[start_layer], x, ff_w, self.model
                     )
-                    all_wt[child_nodes[0]] += to_np64(temp_wt)
+                    all_wt[child_nodes[0]] += to_np32(temp_wt)
                     self.all_layer_expert_relevance[f"{start_layer}_ff_expert"] = ff_expert
 
                 elif node_class == "Self_Attention":
-                    weights = all_wts[start_layer]
-                    sa_w = helper.rename_self_attention_keys(weights)
-                    config = get_model_config(self.model)
+                    sa_w = self._renamed_weights.get(start_layer,
+                        helper.rename_self_attention_keys(all_wts[start_layer]))
                     x = arr_from_key(all_in[child_nodes[0]])
                     temp_wt = UD2.launch_olmoe_self_attention(
                         impl, all_wt[start_layer], x, sa_w, self.model
                     )
-                    all_wt[child_nodes[0]] += to_np64(temp_wt)
+                    all_wt[child_nodes[0]] += to_np32(temp_wt)
 
                 # -------------------- For Qwen3-MoE ---------------------
                 elif node_class == "Qwen_Feed_Forward":
-                    weights = all_wts[start_layer]
-                    ff_w = helper.rename_qwenmoe_feed_forward_keys(weights)
+                    ff_w = self._renamed_weights.get(start_layer,
+                        helper.rename_qwenmoe_feed_forward_keys(all_wts[start_layer]))
                     config = get_model_config(self.model)
                     x = arr_from_key(child_nodes[0])
                     temp_wt, ff_expert = UD2.launch_qwen3_moe_feed_forward(
                         impl, all_wt[start_layer], x, ff_w, config
                     )
-                    all_wt[child_nodes[0]] += to_np64(temp_wt)
+                    all_wt[child_nodes[0]] += to_np32(temp_wt)
                     self.all_layer_expert_relevance[f"{start_layer}_ff_expert"] = ff_expert
 
                 elif node_class == "Grouped_Query_Attention":
-                    weights = all_wts[start_layer]
-                    sa_w = helper.rename_self_attention_keys(weights)
+                    sa_w = self._renamed_weights.get(start_layer,
+                        helper.rename_self_attention_keys(all_wts[start_layer]))
                     config = get_model_config(self.model)
                     x = arr_from_key(child_nodes[0])
                     temp_wt = UD2.launch_qwen3_moe_self_attention(
                         impl, all_wt[start_layer], x, sa_w, config
                     )
-                    all_wt[child_nodes[0]] += to_np64(temp_wt)
+                    all_wt[child_nodes[0]] += to_np32(temp_wt)
 
                 # -------------------- For GPT-OSS MoE ---------------------
                 elif node_class == "GPT_OSS_Feed_Forward":
-                    weights = all_wts[start_layer]
-                    ff_w = helper.rename_gptoss_feed_forward_keys(weights)
+                    ff_w = self._renamed_weights.get(start_layer,
+                        helper.rename_gptoss_feed_forward_keys(all_wts[start_layer]))
                     config = get_model_config(self.model)
                     x = arr_from_key(child_nodes[0])
                     temp_wt, ff_expert = UD2.launch_gpt_oss_feed_forward(
                         impl, all_wt[start_layer], x, ff_w, config
                     )
-                    all_wt[child_nodes[0]] += to_np64(temp_wt)
+                    all_wt[child_nodes[0]] += to_np32(temp_wt)
                     self.all_layer_expert_relevance[f"{start_layer}_ff_expert"] = ff_expert
 
                 elif node_class == "GPT_OSS_Self_Attention":
-                    weights = all_wts[start_layer]
-                    sa_w = helper.rename_self_attention_keys(weights)
+                    sa_w = self._renamed_weights.get(start_layer,
+                        helper.rename_self_attention_keys(all_wts[start_layer]))
                     config = get_model_config(self.model)
                     ATTN_PLAN = build_attention_plan(layer_stack, config)
                     attn_info = ATTN_PLAN.get(start_layer, {"attn_type": "full", "window": None})
@@ -418,7 +472,7 @@ class Backtrace(object):
                         attn_type=attn_info["attn_type"],
                         sliding_window=attn_info["window"],
                     )
-                    all_wt[child_nodes[0]] += to_np64(temp_wt)
+                    all_wt[child_nodes[0]] += to_np32(temp_wt)
 
                 # Default passthrough
                 else:
@@ -515,10 +569,6 @@ class Backtrace(object):
             for step_idx, step_data in enumerate(results['relevance_trace']):
                 all_wt = step_data['all_wt']
                 expert_rel = step_data['expert_relevance']
-                
-                print(f"Step {step_idx}:")
-                print(f"  Token relevance keys: {list(all_wt.keys())[:3]}")
-                print(f"  Expert relevance keys: {list(expert_rel.keys())}")
         """
         
         # Validate task type
@@ -540,7 +590,7 @@ class Backtrace(object):
             raise ValueError("For generation, inputs must be dict or tuple of (input_ids, attention_mask)")
         
         if debug:
-            print(f"🚀 Running generation task with sample_auto...")
+            logger.info("Running generation task with sample_auto...")
         
         # Call sample_auto with generation kwargs and trace flags
         generated_output = self.sample_auto(
@@ -751,7 +801,7 @@ class Backtrace(object):
         graph_dict = self.model_resource.get("graph", {})
         num_nodes = len(graph_dict)
         
-        print(f"📊 Visualizing MoE DL-Backtrace graph with {num_nodes} nodes...")
+        logger.info("Visualizing MoE DL-Backtrace graph with %d nodes...", num_nodes)
 
         # Create a directed graph
         dot = graphviz.Digraph(comment='MoE DL-Backtrace Graph')
@@ -765,7 +815,7 @@ class Backtrace(object):
                 node for node in graph_dict.keys()
                 if node in self.all_wt and np.sum(np.abs(self.all_wt[node])) >= relevance_threshold
             }
-            print(f"   Filtered to {len(nodes_to_show)} nodes with relevance >= {relevance_threshold}")
+            logger.info("Filtered to %d nodes with relevance >= %s", len(nodes_to_show), relevance_threshold)
 
         # Filter to top-k if specified
         if top_k is not None and top_k < len(nodes_to_show):
@@ -775,7 +825,7 @@ class Backtrace(object):
             }
             top_nodes = sorted(node_relevances.items(), key=lambda x: x[1], reverse=True)[:top_k]
             nodes_to_show = {node for node, _ in top_nodes}
-            print(f"   Showing top {top_k} most relevant nodes")
+            logger.info("Showing top %d most relevant nodes", top_k)
 
         # Add nodes with relevance information
         for node_name in nodes_to_show:
@@ -807,19 +857,21 @@ class Backtrace(object):
         # Render the graph
         try:
             output_file = dot.render(output_path, format='svg', cleanup=True)
-            print(f"✅ Graph saved to: {output_file}")
-            
+            logger.info("Graph saved to: %s", output_file)
+
             # Try to display in Jupyter/Colab
             try:
                 from IPython.display import SVG, display
                 display(SVG(output_file))
-                print("📊 Graph displayed inline")
-            except:
-                print("💡 To view the graph, open:", output_file)
-                
+                logger.info("Graph displayed inline")
+            except ImportError: # Catch ImportError if IPython is not available
+                logger.info("To view the graph, open: %s", output_file)
+
         except Exception as e:
-            print(f"⚠️  Could not render graph: {e}")
-            print("💡 Make sure graphviz system package is installed:")
-            print("   - Ubuntu/Debian: sudo apt-get install graphviz")
-            print("   - macOS: brew install graphviz")
-            print("   - Windows: choco install graphviz")
+            logger.warning("Could not render graph: %s", e)
+            logger.info(
+                "Make sure graphviz system package is installed:\n"
+                "  - Ubuntu/Debian: sudo apt-get install graphviz\n"
+                "  - macOS: brew install graphviz\n"
+                "  - Windows: choco install graphviz"
+            )

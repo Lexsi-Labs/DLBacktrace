@@ -19,7 +19,6 @@ classifiers = [
 dynamic = ["version"]
 dependencies = [
     "torch==2.6.0",
-    "transformers==4.52.3",
     "huggingface-hub",
     "lz4",
     "matplotlib",
@@ -37,6 +36,12 @@ dependencies = [
     "tensorflow",
 ]
 
+[project.optional-dependencies]
+server = [
+    "fastapi>=0.100",
+    "uvicorn[standard]>=0.20",
+]
+
 [project.urls]
 Homepage = "https://xai.arya.ai/docs/introduction"
 Source = "https://github.com/arya-ai/DLBacktrace"
@@ -46,7 +51,7 @@ Documentation = "https://xai.arya.ai/docs/introduction"
 packages = { find = { where = ["."] } }
 
 [tool.setuptools.package-data]
-"*" = ["*.md", "*.txt"]
+"*" = ["*.md", "*.txt", "*.so"]
 
 [tool.setuptools_scm]
 version_scheme = "guess-next-dev"

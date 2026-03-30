@@ -3,13 +3,6 @@ import numpy as np
 from numpy.lib.stride_tricks import as_strided
 
 # ------------- Add `import` and `launching function` for all 4 MoEs ----------------
-# MoE Utils Layers
-from .cuda_utils.MoE_utils.nonneg_conserve import dlb_style_signed_conserve_cuda as dlb_style_signed_conserve_cuda
-from .cuda_utils.MoE_utils.relevance_gated_proj import calculate_relevance_gated_proj_cuda as calculate_relevance_gated_proj_cuda
-from .cuda_utils.MoE_utils.relevance_proj import calculate_relevance_proj_cuda as calculate_relevance_proj_cuda
-from .cuda_utils.MoE_utils.relevance_single import calculate_relevance_cuda as calculate_relevance_cuda
-from .cuda_utils.MoE_utils.wt_router_logits import calculate_wt_router_logits_cuda as calculate_wt_router_logits_cuda
-
 # JetMoE Layer
 from .cuda_utils.JetMoE.original_version import calculate_wt_jetmoe_feed_forward as calculate_wt_jetmoe_feed_forward_original, calculate_wt_jetmoe_self_attention_parallel as calculate_wt_jetmoe_self_attention_parallel_original
 from .cuda_utils.JetMoE.refactored_version import calculate_wt_jetmoe_feed_forward as calculate_wt_jetmoe_feed_forward_refactored, calculate_wt_jetmoe_self_attention_parallel as calculate_wt_jetmoe_self_attention_parallel_refactored

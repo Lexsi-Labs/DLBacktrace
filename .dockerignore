@@ -1,0 +1,43 @@
+# Version control
+.git
+.github
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.eggs
+dist/
+build/
+
+# IDE / Editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# Environment
+*venv
+.env
+
+# Docs & assets (not needed in image)
+docs/
+assets/
+site/
+_build/
+_static/
+_templates/
+
+# Logs & outputs
+dl_backtrace_logs/
+benchmarks/results/
+benchmarks/debug_experiments/
+*.svg
+*.png
+*.csv
+
+# Notebooks
+*.ipynb
+.ipynb_checkpoints/

@@ -1,330 +1,30 @@
+import os
 import torch
-from torch.utils.cpp_extension import load_inline
 import numpy as np
 
+# ─── Import precompiled CUDA extension ───
+_precompiled = False
 
-linear_layer_cuda_source = r"""
-#include <torch/extension.h>
-#include <cfloat>
-#include <cstdio>
-#include <cuda_runtime.h>
+try:
+    import wt_fc_v3_ops as custom_linear_layer_cuda_ops
+    _precompiled = True
+except ImportError:
+    # Try importing from the cuda_version_v3 directory (in-tree build)
+    _cuda_version_dir = os.path.join(os.path.dirname(__file__), "cuda_version_v3")
+    import importlib.util
+    _so_files = [f for f in os.listdir(_cuda_version_dir) if f.endswith('.so')] if os.path.isdir(_cuda_version_dir) else []
+    if _so_files:
+        _spec = importlib.util.spec_from_file_location("wt_fc_v3_ops", os.path.join(_cuda_version_dir, _so_files[0]))
+        custom_linear_layer_cuda_ops = importlib.util.module_from_spec(_spec)
+        _spec.loader.exec_module(custom_linear_layer_cuda_ops)
+        _precompiled = True
+    else:
+        raise ImportError(
+            "Precompiled CUDA extension 'wt_fc_v3_ops' not found. "
+            "Please run 'bash compile_layers.sh' or 'python setup.py develop' "
+            "in the cuda_version_v3 directory to build it."
+        )
 
-__device__ __forceinline__ float apply_activation(float x, int act_func) {
-    switch (act_func) {
-        case 1:  // Sigmoid
-            return __fdividef(1.0f, 1.0f + __expf(-x));
-        case 2:  // Swish
-            return x * __fdividef(1.0f, 1.0f + __expf(-(0.75f * x)));
-        case 3:  // Wave
-            return __fdividef(x * __expf(1.0f), __expf(-x) + __expf(x));
-        case 4:  // Pulse
-            return 1.0f - __fmul_rn(tanhf(x), tanhf(x));
-        case 5:  // Absolute
-            return x * tanhf(x);
-        case 6:  // Hard Sigmoid
-            return fmaxf(fminf(__fmaf_rn(0.2f, x, 0.5f), 1.0f), 0.0f);
-        case 7:  // Tanh
-            return tanhf(x);
-        default:  // Identity (0) or unsupported
-            return x;
-    }
-}
-
-// Warp-level reduction for better performance
-__device__ __forceinline__ float warp_reduce_sum(float val) {
-    #pragma unroll
-    for (int offset = 16; offset > 0; offset >>= 1) {
-        val += __shfl_down_sync(0xffffffff, val, offset);
-    }
-    return val;
-}
-
-// Block-level reduction using warp primitives
-__device__ float block_reduce_sum(float val, float* shared) {
-    int lane = threadIdx.x % 32;
-    int wid = threadIdx.x / 32;
-    
-    // Warp-level reduction
-    val = warp_reduce_sum(val);
-    
-    // Write reduced value to shared memory
-    if (lane == 0) shared[wid] = val;
-    __syncthreads();
-    
-    // Final reduction for first warp
-    if (threadIdx.x < blockDim.x / 32) {
-        val = shared[threadIdx.x];
-    } else {
-        val = 0.0f;
-    }
-    
-    if (wid == 0) val = warp_reduce_sum(val);
-    
-    return val;
-}
-
-__global__ void calculate_wt_fc_kernel(
-    const float* __restrict__ relevance_y,
-    const float* __restrict__ input_array,
-    const float* __restrict__ w,
-    const float* __restrict__ b,
-    float* __restrict__ relevance_x,
-    const int input_dim,
-    const int output_dim,
-    const int activation_kind, 
-    const float act_lower_bound,
-    const float act_upper_bound,
-    const bool has_bias,
-    const int act_func  
-) {
-    // Grid-stride loop for better occupancy and coalescing
-    const int tid = threadIdx.x;
-    const int bid = blockIdx.x;
-    const int block_size = blockDim.x;
-    
-    // Shared memory for reductions (sized for max 32 warps)
-    __shared__ float reduction_shared[32];
-    __shared__ float p_sum_final;
-    __shared__ float n_sum_final;
-    __shared__ float relevance_val_shared;
-    __shared__ float p_agg_wt_shared;
-    __shared__ float n_agg_wt_shared;
-    
-    // Process multiple outputs per block using grid-stride loop
-    for (int output_idx = bid; output_idx < output_dim; output_idx += gridDim.x) {
-        
-        // Initialize accumulators
-        float local_p_sum = 0.0f;
-        float local_n_sum = 0.0f;
-        
-        const int weight_offset = output_idx * input_dim;
-        
-        // Vectorized memory access when possible
-        const int vec_size = 4;
-        const int vec_input_dim = input_dim / vec_size;
-        
-        // Process vectorized elements
-        if ((input_dim % vec_size == 0) && (tid * vec_size < input_dim)) {
-            for (int i = tid; i < vec_input_dim; i += block_size) {
-                int idx = i * vec_size;
-                if (idx < input_dim) {
-                    // Load 4 elements at once using float4
-                    float4 input_vec = *reinterpret_cast<const float4*>(&input_array[idx]);
-                    float4 weight_vec = *reinterpret_cast<const float4*>(&w[weight_offset + idx]);
-                    
-                    // Process vectorized data
-                    #pragma unroll
-                    for (int j = 0; j < vec_size; j++) {
-                        float contrib = ((float*)&input_vec)[j] * ((float*)&weight_vec)[j];
-                        local_p_sum += fmaxf(contrib, 0.0f);
-                        local_n_sum += fmaxf(-contrib, 0.0f);
-                    }
-                }
-            }
-        } else {
-            // Fallback for non-aligned data
-            for (int i = tid; i < input_dim; i += block_size) {
-                float input_val = input_array[i];
-                float weight_val = w[weight_offset + i];
-                float contrib = input_val * weight_val;
-                local_p_sum += fmaxf(contrib, 0.0f);
-                local_n_sum += fmaxf(-contrib, 0.0f);
-            }
-        }
-        
-        // Efficient block reduction
-        p_sum_final = block_reduce_sum(local_p_sum, reduction_shared);
-        __syncthreads();
-        n_sum_final = block_reduce_sum(local_n_sum, reduction_shared);
-        __syncthreads();
-        
-        // Thread 0 computes final values
-        if (tid == 0) {
-            float p_sum = p_sum_final;
-            float n_sum = n_sum_final;
-            
-            // Handle bias
-            float pbias = 0.0f, nbias = 0.0f;
-            if (has_bias && b) {
-                float bias_val = b[output_idx];
-                pbias = fmaxf(bias_val, 0.0f);
-                nbias = -fminf(bias_val, 0.0f);
-            }
-            
-            // Compute total sum
-            float t_sum = p_sum + pbias - n_sum - nbias;
-            
-            if (activation_kind == 0) {
-                if (t_sum < act_lower_bound) p_sum = 0.0f;
-                if (t_sum > act_upper_bound) n_sum = 0.0f;
-            } 
-            
-            else if (activation_kind == 1) {
-                // Activation-specific handling
-                float t_act = apply_activation(t_sum, act_func);
-                float p_act = apply_activation(p_sum + pbias, act_func);
-                float n_act = apply_activation(-(n_sum + nbias), act_func);
-
-                if (t_sum < act_lower_bound) p_sum = 0.0f;
-                if (t_sum > act_upper_bound) n_sum = 0.0f;
-
-                if (p_sum > 0.0f && n_sum > 0.0f) {
-                    if (t_act == p_act) {
-                        n_sum = 0.0f;
-                    } else if (t_act == n_act) {
-                        p_sum = 0.0f;
-                    }
-                }
-            }
-            
-            float p_agg_wt = 0.0f;
-            float n_agg_wt = 0.0f;
-            
-            if (p_sum > 0.0f) {
-                float total_sum = p_sum + n_sum + pbias + nbias;
-                float total_psum = p_sum + pbias;
-                p_agg_wt = (total_psum / total_sum) * (p_sum / total_psum);
-            }
-            
-            if (n_sum > 0.0f) {
-                float total_sum = p_sum + n_sum + pbias + nbias;
-                float total_nsum = n_sum + nbias;
-                n_agg_wt = (total_nsum / total_sum) * (n_sum / total_nsum);
-            }
-            
-            float p_sum_div = (p_sum == 0.0f) ? 1.0f : p_sum;
-            float n_sum_div = (n_sum == 0.0f) ? 1.0f : n_sum;
-            
-            // Store in shared memory for all threads
-            relevance_val_shared = relevance_y[output_idx];
-            p_agg_wt_shared = p_agg_wt * relevance_val_shared;
-            n_agg_wt_shared = n_agg_wt * relevance_val_shared;
-            p_sum_final = p_sum_div;
-            n_sum_final = n_sum_div;
-        }
-        __syncthreads();
-        
-        // Load shared values
-        float p_agg_wt_val = p_agg_wt_shared;
-        float n_agg_wt_val = n_agg_wt_shared;
-        float p_sum_div = p_sum_final;
-        float n_sum_div = n_sum_final;
-        
-        // Second pass with coalesced writes
-        for (int i = tid; i < input_dim; i += block_size) {
-            float input_val = input_array[i];
-            float weight_val = w[weight_offset + i];
-            float contrib = input_val * weight_val;
-            float weight = 0.0f;
-            
-            if (contrib > 0.0f) {
-                weight = (contrib / p_sum_div) * p_agg_wt_val;
-            } else if (contrib < 0.0f) {
-                weight = (-contrib / n_sum_div) * n_agg_wt_val;
-            }
-            
-            if (weight != 0.0f) {
-                atomicAdd(&relevance_x[i], weight);
-            }
-        }
-        __syncthreads();
-    }
-}
-
-torch::Tensor launch_calculate_wt_fc_kernel(
-    const torch::Tensor& relevance_y,
-    const torch::Tensor& input_array,
-    const torch::Tensor& w,
-    const torch::Tensor& b,
-    int act_type,
-    float act_lower,
-    float act_upper,
-    int act_func_int
-) {
-    // Input validation
-    TORCH_CHECK(relevance_y.is_cuda(), "relevance_y must be CUDA tensor");
-    TORCH_CHECK(input_array.is_cuda(), "input_array must be CUDA tensor");
-    TORCH_CHECK(w.is_cuda(), "w must be CUDA tensor");
-    TORCH_CHECK(relevance_y.dim() == 1, "relevance_y must be 1D tensor");
-    TORCH_CHECK(input_array.dim() == 1, "input_array must be 1D tensor");
-    TORCH_CHECK(w.dim() == 2, "w must be 2D tensor");
-    
-    auto relevance_y_c = relevance_y.contiguous();
-    auto input_array_c = input_array.contiguous();
-    auto w_c = w.contiguous();
-
-    auto input_dim = input_array_c.size(0);
-    auto output_dim = relevance_y_c.size(0);
-
-    TORCH_CHECK(w_c.size(0) == output_dim, "w must have output_dim rows");
-    TORCH_CHECK(w_c.size(1) == input_dim, "w must have input_dim columns");
-    
-    // Allocate output tensor
-    auto relevance_x = torch::zeros({input_dim}, 
-        torch::TensorOptions().dtype(input_array.dtype()).device(input_array.device()));
-    
-    bool has_bias = b.defined() && b.numel() > 0;
-    
-    // Configure kernel launch parameters
-    const int threads_per_block = 256;
-    dim3 grid_dim(output_dim);  // x: output
-    
-    // Launch kernel
-    calculate_wt_fc_kernel<<<grid_dim, threads_per_block>>>(
-        relevance_y.data_ptr<float>(),
-        input_array.data_ptr<float>(),
-        w.data_ptr<float>(),
-        has_bias ? b.contiguous().data_ptr<float>() : nullptr,
-        relevance_x.data_ptr<float>(),
-        input_dim,
-        output_dim,
-        act_type,
-        act_lower,
-        act_upper,
-        has_bias,
-        act_func_int
-    );
-    
-    // Check for kernel errors
-    cudaError_t err = cudaGetLastError();
-    TORCH_CHECK(err == cudaSuccess, "CUDA kernel failed: ", cudaGetErrorString(err));
-    
-    cudaDeviceSynchronize();
-
-    return relevance_x;
-}
-"""
-
-# Simplified C++ declaration (no pybind11 includes needed)
-linear_layer_cuda_declaration = r"""
-torch::Tensor launch_calculate_wt_fc_kernel(
-    const torch::Tensor& relevance_y,
-    const torch::Tensor& input_array,
-    const torch::Tensor& w,
-    const torch::Tensor& b,
-    int act_type,
-    float act_lower,
-    float act_upper,
-    int act_func_int
-);
-"""
-
-extra_flags = [
-    '-O3', 
-    '--use_fast_math', 
-    # '-Xcompiler', '-fPIC',
-    # '-Xptxas', '-dlcm=cg',
-    # '-Xptxas', '-dscm=wt',
-]
-
-custom_linear_layer_cuda_ops = load_inline(
-    name="linear_layer_cuda_v3",
-    cpp_sources=linear_layer_cuda_declaration,
-    cuda_sources=linear_layer_cuda_source,
-    functions=["launch_calculate_wt_fc_kernel"],
-    extra_cuda_cflags=extra_flags,
-    verbose=True
-)
 
 def calculate_wt_fc_cuda(relevance_y, input_array, w, b, act):
     """
@@ -411,4 +111,78 @@ def calculate_wt_fc_cuda(relevance_y, input_array, w, b, act):
     # Reshape back to original dimensions
     relevance_x_flat = np.array(relevance_x_flat)
     relevance_x = relevance_x_flat.reshape(*batch_dims, feature_dim)
+    return relevance_x
+
+
+def _parse_activation(act):
+    """Parse activation dict into kernel parameters. Shared by both numpy and tensor APIs."""
+    act_type = 0 if act["type"] == "mono" else 1
+    act_lower = -float('inf') if act["range"]["l"] is None else float(act["range"]["l"])
+    act_upper = float('inf') if act["range"]["u"] is None else float(act["range"]["u"])
+    
+    act_func_int = 0  # default: identity
+    if act["func"] is not None:
+        act_func_map = {
+            "sigmoid": 1, "swish": 2, "wave": 3, "pulse": 4,
+            "absolute": 5, "hard_sigmoid": 6, "tanh": 7
+        }
+        act_func_int = act_func_map.get(act["func"], 0)
+    
+    return act_type, act_lower, act_upper, act_func_int
+
+
+def calculate_wt_fc_cuda_tensor(relevance_y, input_array, w, b, act):
+    """
+    Tensor-native CUDA version — accepts and returns CUDA tensors directly.
+    No numpy conversion overhead.
+    
+    Args:
+        relevance_y: CUDA tensor, relevance at the output
+        input_array: CUDA tensor, input to the linear layer
+        w: CUDA tensor, weight matrix [out_dim, in_dim]
+        b: CUDA tensor or None, bias vector [out_dim]
+        act: dict with activation info
+    
+    Returns:
+        CUDA tensor, relevance at the input (same shape as input_array)
+    """
+    if relevance_y is None or input_array is None or w is None:
+        return None
+    
+    original_shape = input_array.shape
+    batch_dims = original_shape[:-1]
+    feature_dim = original_shape[-1]
+    
+    input_flat = input_array.reshape(-1, feature_dim)
+    relevance_flat = relevance_y.reshape(-1, relevance_y.shape[-1])
+    
+    # Ensure weights are CUDA tensors (they may come from CPU hyperparams)
+    if not w.is_cuda:
+        w = w.cuda()
+    if b is not None and not b.is_cuda:
+        b = b.cuda()
+    b_torch = b if b is not None else torch.empty(0, device=w.device)
+    
+    act_type, act_lower, act_upper, act_func_int = _parse_activation(act)
+    
+    cuda_function = custom_linear_layer_cuda_ops.launch_calculate_wt_fc_kernel
+    
+    results = []
+    for i in range(input_flat.shape[0]):
+        inp_i = input_flat[i].contiguous()
+        wts_i = relevance_flat[i].contiguous()
+        
+        result = cuda_function(
+            wts_i, inp_i, w, b_torch,
+            act_type, act_lower, act_upper, act_func_int
+        )
+        
+        if result is None:
+            print(f"[CUDA ERROR] Kernel returned None for batch element {i}")
+            return None
+        
+        results.append(result)
+    
+    torch.cuda.synchronize()
+    relevance_x = torch.stack(results).reshape(*batch_dims, feature_dim)
     return relevance_x

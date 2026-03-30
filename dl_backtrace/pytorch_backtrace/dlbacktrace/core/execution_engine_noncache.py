@@ -3812,8 +3812,8 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
                 
                 if real_key and real_key in model.state_dict():
                     current_weight = model.state_dict()[real_key]
-                    # Update extracted weight to match current model state
-                    extracted_weights[placeholder_name] = current_weight.clone()
+                    # Reference weight directly — read-only during forward pass
+                    extracted_weights[placeholder_name] = current_weight
                     logger.debug(f"✅ Synchronized {placeholder_name} -> {real_key}")
     else:
         logger.warning("⚠️ No exported_program provided, skipping weight synchronization")
@@ -3927,9 +3927,6 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
             continue
         
         layer_in = [_sanitize_input_tensor(tensor_map[p]) for p in parents]
-        
-        # 🔧 CRITICAL FIX: Ensure input consistency for all operations
-        layer_in = ensure_input_consistency(layer_in, model)
         
         output = layer_in
         
@@ -4103,65 +4100,28 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
         # At the end of node execution
         processed_output = _process_output_tuple(output)
 
-        # 🔧 CRITICAL FIX: Only check for NaN in floating point tensors
-        if isinstance(processed_output, torch.Tensor) and torch.is_floating_point(processed_output) and torch.isnan(processed_output).any():
-            logger.error(f"[ERROR:NaN] Node `{node_name}` produced NaNs → shape: {processed_output.shape}")
-        
-        # 🔧 DEBUG: Check for extreme values that could indicate precision issues
-        if isinstance(processed_output, torch.Tensor):
-            # 🔧 CRITICAL FIX: Check for empty tensors first
-            if processed_output.numel() == 0:
-                logger.debug(f"[DEBUG:EMPTY] Node `{node_name}` produced empty tensor → shape: {processed_output.shape}")
-            # 🔧 CRITICAL FIX: Only check abs for numeric tensors, not boolean tensors
-            elif processed_output.dtype in [torch.bool]:
-                # For boolean tensors, just check basic properties
-                logger.debug(f"[DEBUG:BOOL] Node `{node_name}` produced boolean tensor → shape: {processed_output.shape}")
-            elif torch.is_floating_point(processed_output) or torch.is_complex(processed_output):
-                # Only apply abs() to floating point or complex tensors
+        # NaN and extreme-value checks — only in debug mode (saves ~4200 GPU kernel launches)
+        if logger.isEnabledFor(logging.DEBUG) and isinstance(processed_output, torch.Tensor):
+            if torch.is_floating_point(processed_output) and processed_output.numel() > 0:
+                if torch.isnan(processed_output).any():
+                    logger.error(f"[ERROR:NaN] Node `{node_name}` produced NaNs → shape: {processed_output.shape}")
                 max_val = torch.max(torch.abs(processed_output)).item()
-                
-                # Skip extreme value warnings for attention mask operations that legitimately use float32 min/max
-                attention_mask_ops = ["full", "masked_fill", "eq", "triu", "tril", "mul", "add"]
-                shape_preserving_ops = ["slice", "unsqueeze", "expand", "clone", "copy", "slice_scatter"]
-                is_attention_mask = (func_name in attention_mask_ops or 
-                                   any(op in node_name.lower() for op in ["mask", "attention", "causal"]))
-                is_shape_preserving = (func_name in shape_preserving_ops or
-                                     any(op in node_name.lower() for op in ["slice", "unsqueeze", "expand", "clone", "copy"]))
-                
-                if max_val > 1e6 and not (is_attention_mask or is_shape_preserving):
-                    logger.warning(f"[WARNING:EXTREME] Node `{node_name}` produced extreme values → max: {max_val:.2e}")
-                elif is_shape_preserving:
-                    logger.debug(f"✅ Skipped extreme value warning for shape-preserving operation: {func_name}")
-                elif func_name in ["scaled_dot_product_attention", "layer_norm", "linear"] and max_val < 1e-6:
-                    logger.warning(f"[WARNING:SMALL] Node `{node_name}` produced very small values → max: {max_val:.2e}")
-                
-                # Log first few values for critical operations to help debug
-                if func_name in ["scaled_dot_product_attention", "layer_norm"] and logger.isEnabledFor(logging.DEBUG):
-                    flat_vals = processed_output.flatten()[:5].tolist()
-                    logger.debug(f"[DEBUG:VALUES] {node_name} first 5 values: {[f'{v:.6f}' for v in flat_vals]}")
-            elif processed_output.dtype in [torch.int8, torch.int16, torch.int32, torch.int64]:
-                # For integer tensors, use different approach
-                max_val = torch.max(processed_output).item()
-                min_val = torch.min(processed_output).item()
-                logger.debug(f"[DEBUG:INT] Node `{node_name}` → min: {min_val}, max: {max_val}")
-            else:
-                # For other dtypes, just log basic info
-                logger.debug(f"[DEBUG:OTHER] Node `{node_name}` → dtype: {processed_output.dtype}, shape: {processed_output.shape}")
+                if max_val > 1e6:
+                    logger.debug(f"[DEBUG:EXTREME] Node `{node_name}` → max: {max_val:.2e}")
 
-        # 🔧 CRITICAL FIX: Ensure ALL tensor outputs maintain consistency without forcing float32
+        # Store output — avoid copies when possible
         if isinstance(processed_output, torch.Tensor):
-            # Preserve original precision but ensure consistent memory format
-            processed_output = processed_output.detach().contiguous()
-            # Only convert to float32 if the model was originally in float32
-            if hasattr(model, 'dtype') and model.dtype == torch.float32:
-                processed_output = processed_output.to(dtype=torch.float32)
+            if processed_output.requires_grad:
+                processed_output = processed_output.detach()
+            if not processed_output.is_contiguous():
+                processed_output = processed_output.contiguous()
             tensor_map[node_name] = processed_output
         elif isinstance(processed_output, (list, tuple)) and all(isinstance(x, torch.Tensor) for x in processed_output):
-            # Preserve original precision for all tensors in tuples
-            processed_output = [x.detach().contiguous() for x in processed_output]
-            # Only convert to float32 if the model was originally in float32
-            if hasattr(model, 'dtype') and model.dtype == torch.float32:
-                processed_output = [x.to(dtype=torch.float32) for x in processed_output]
+            processed_output = [
+                (x.detach() if x.requires_grad else x).contiguous() if not x.is_contiguous()
+                else (x.detach() if x.requires_grad else x)
+                for x in processed_output
+            ]
             tensor_map[node_name] = processed_output
         elif isinstance(processed_output, (int, float)):
             tensor_map[node_name] = processed_output
@@ -4197,6 +4157,9 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
             "output_children":  children,
             "layer_hyperparams":layer_hyperparams,
         }
+
+    # Free tensor_map — node_io already holds all tensor references
+    del tensor_map
 
     return node_io
 

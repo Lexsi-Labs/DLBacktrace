@@ -1,13 +1,15 @@
-# dlb_auto_sampler.py
-# Auto sampler that uses DL-BacktraceFX for logits and matches HF sampling/beam semantics
-# Works across multiple Transformers versions (tested new/older) via fallbacks.
+"""DLB-native autoregressive sampler.
+
+Uses DL-Backtrace for all forward passes and mirrors HuggingFace sampling/beam
+semantics. Supports multiple Transformers versions via compatibility fallbacks.
+"""
 
 from __future__ import annotations
 
 import gc
+import json
 import time
-import gzip
-import lzma
+import io
 import numpy as np
 from pathlib import Path
 from typing import Optional, List, Tuple, cast, Any, Dict
@@ -15,12 +17,11 @@ from typing import Optional, List, Tuple, cast, Any, Dict
 import torch
 import torch.nn.functional as F
 
-# Optional: 7z support (requires py7zr)
 try:
-    import py7zr
-    HAS_7Z = True
+    import lz4.frame
+    HAS_LZ4 = True
 except ImportError:
-    HAS_7Z = False
+    HAS_LZ4 = False
 
 from transformers.generation.logits_process import (
     LogitsProcessorList,
@@ -30,7 +31,7 @@ from transformers.generation.logits_process import (
 )
 from transformers.generation.beam_search import BeamSearchScorer
 
-# ---- Stopping criteria (with fallback for older Transformers) ----
+# Stopping criteria with fallback for older Transformers versions
 try:
     from transformers.generation.stopping_criteria import (
         StoppingCriteriaList,
@@ -64,7 +65,7 @@ except ImportError:
                 return (cur - self.start_length) >= self.max_new_tokens
 
 
-# Optional: steadier math (helps parity on CUDA)
+# Deterministic math for reproducibility across CUDA runs
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 if torch.cuda.is_available():
@@ -92,11 +93,62 @@ class DLBAutoSampler:
         self.tokenizer = tokenizer
 
     def _clear_dlb_memory(self):
-        """Clear DLB intermediate storage and CUDA cache."""
+        """Clear DLB intermediate storage (node_io + all_wt) and CUDA cache."""
         self.dlb.node_io = {}
+        if hasattr(self.dlb, 'all_wt'):
+            self.dlb.all_wt = {}
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         gc.collect()
+
+    def _save_to_disk(
+        self,
+        data,
+        *,
+        cache_dir: Path,
+        filename: str,
+        use_compression: bool = True,
+        compression_method: str = "lz4",
+        pickle_protocol: int = 4,
+    ) -> str:
+        """Save tensor/dict data to disk with optional lz4 compression. Returns the file path."""
+        base_path = cache_dir / filename
+
+        def _to_cpu_async(obj):
+            if torch.is_tensor(obj):
+                t = obj.detach()
+                return t.to('cpu', non_blocking=True) if t.is_cuda else t
+            if isinstance(obj, np.ndarray):
+                return torch.from_numpy(obj)
+            if isinstance(obj, dict):
+                return {k: _to_cpu_async(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [_to_cpu_async(v) for v in obj]
+            if isinstance(obj, tuple):
+                return tuple(_to_cpu_async(v) for v in obj)
+            return obj
+
+        cpu_data = _to_cpu_async(data)
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+
+        if use_compression and compression_method == "lz4":
+            if not HAS_LZ4:
+                raise ImportError("lz4 library required. Install with: pip install lz4")
+            file_path = Path(str(base_path) + '.lz4')
+            buf = io.BytesIO()
+            torch.save(cpu_data, buf, pickle_protocol=pickle_protocol)
+            compressed = lz4.frame.compress(buf.getvalue())
+            with open(file_path, 'wb') as f:
+                f.write(compressed)
+            del buf, compressed
+        else:
+            file_path = base_path
+            torch.save(cpu_data, file_path, pickle_protocol=pickle_protocol)
+
+        del cpu_data
+        gc.collect()
+        return str(file_path)
 
     def _print_generated_sequence(self, generated: torch.Tensor, prefix: str = ""):
         """Print decoded sequence using self.tokenizer."""
@@ -105,56 +157,6 @@ class DLBAutoSampler:
             print(f"{prefix}: {text}")
         else:
             print(text)
-
-    # ---------- compression helpers ----------
-
-    @staticmethod
-    def load_compressed_relevance(file_path: str):
-        """
-        Load relevance data from compressed file with automatic format detection.
-        
-        Args:
-            file_path: Path to compressed relevance file (.pt.gz, .pt.xz, .pt.7z, or .pt)
-        
-        Returns:
-            Loaded relevance dictionary
-        
-        Example:
-            >>> relevance = DLBAutoSampler.load_compressed_relevance("step_00000.pt.gz")
-        """
-        path = Path(file_path)
-        
-        if path.suffix == '.gz':
-            # Gzip compressed
-            with gzip.open(path, 'rb') as f:
-                return torch.load(f, weights_only=False)
-        
-        elif path.suffix == '.xz':
-            # LZMA compressed
-            with lzma.open(path, 'rb') as f:
-                return torch.load(f, weights_only=False)
-        
-        elif path.suffix == '.7z':
-            # 7z compressed
-            if not HAS_7Z:
-                raise ImportError(
-                    "py7zr library required to load 7z files. "
-                    "Install with: pip install py7zr"
-                )
-            import tempfile
-            with tempfile.TemporaryDirectory() as tmpdir:
-                tmpdir_path = Path(tmpdir)
-                with py7zr.SevenZipFile(path, 'r') as archive:
-                    archive.extractall(tmpdir_path)
-                # Find the extracted .pt file
-                pt_files = list(tmpdir_path.glob('*.pt'))
-                if not pt_files:
-                    raise ValueError(f"No .pt file found in 7z archive: {path}")
-                return torch.load(pt_files[0], weights_only=False)
-        
-        else:
-            # Uncompressed or unknown format
-            return torch.load(path, weights_only=False)
 
     # ---------- small dtype helpers ----------
 
@@ -370,29 +372,6 @@ class DLBAutoSampler:
                 return mapping[key]
         raise ValueError(f"Unsupported relevance dtype hint: {dtype_hint}")
 
-    def _compress_relevance_tree(self, data, *, target_dtype=None, move_to_cpu=True):
-        if torch.is_tensor(data):
-            tensor = data.detach()
-            if move_to_cpu:
-                tensor = tensor.to("cpu")
-            if target_dtype is not None:
-                tensor = tensor.to(dtype=target_dtype)
-            return tensor.clone()
-        # Handle numpy arrays by converting to torch tensor with target dtype
-        if isinstance(data, np.ndarray):
-            tensor = torch.from_numpy(data)
-            if move_to_cpu:
-                tensor = tensor.to("cpu")
-            if target_dtype is not None:
-                tensor = tensor.to(dtype=target_dtype)
-            return tensor
-        if isinstance(data, dict):
-            return {k: self._compress_relevance_tree(v, target_dtype=target_dtype, move_to_cpu=move_to_cpu) for k, v in data.items()}
-        if isinstance(data, list):
-            return [self._compress_relevance_tree(v, target_dtype=target_dtype, move_to_cpu=move_to_cpu) for v in data]
-        if isinstance(data, tuple):
-            return tuple(self._compress_relevance_tree(v, target_dtype=target_dtype, move_to_cpu=move_to_cpu) for v in data)
-        return data
 
     def _prepare_cache_dir(self, base_dir: Optional[str], policy: str):
         if policy != "disk":
@@ -415,103 +394,183 @@ class DLBAutoSampler:
         target_dtype,
         move_to_cpu: bool,
         use_compression: bool = True,
-        compression_method: str = "gzip",
+        compression_method: str = "lz4",
         pickle_protocol: int = 4,
     ):
-        """
-        Store relevance entry according to specified policy.
-        
-        Args:
-            rel_dict: Relevance dictionary to store
-            policy: Cache policy ("full", "summary", "disk", "none")
-            step_idx: Generation step index
-            cache_dir: Directory for disk caching
-            target_dtype: Target dtype for compression
-            move_to_cpu: Whether to move tensors to CPU
-            use_compression: If True, use compression (default: True)
-            compression_method: Compression method - "gzip", "lzma", "7z", or "none"
-                              - "gzip": Fast, good compression (default)
-                              - "lzma": Better compression, slower
-                              - "7z": Best compression, slowest (requires py7zr)
-                              - "none": No compression
-            pickle_protocol: Pickle protocol version (2-5). Higher = better compression.
-                            Protocol 4 (default): Python 3.4+, good compression
-                            Protocol 5: Best compression, Python 3.8+
+        """Store relevance: filter → GPU concat → ONE DMA → free GPU → raw-bytes save.
+
+        File format (.dlbr):
+          [8-byte header_len LE] [JSON metadata] [LZ4-compressed raw float32 bytes]
+
+        Use DLBAutoSampler.load_relevance_step() to reload.
         """
         normalized_policy = (policy or "full").lower()
         if normalized_policy == "none":
             return None
 
-        processed = self._compress_relevance_tree(rel_dict, target_dtype=target_dtype, move_to_cpu=move_to_cpu)
-        if processed is None:
+        _t0 = time.perf_counter()
+
+        # Filter weight/buffer nodes by name prefix
+        original_count = 0
+        original_bytes = 0
+        kept_keys = []
+        if isinstance(rel_dict, dict):
+            original_count = len(rel_dict)
+            for k, v in rel_dict.items():
+                if torch.is_tensor(v):
+                    original_bytes += v.nelement() * v.element_size()
+            kept_keys = [k for k in rel_dict
+                         if not (k.startswith("p_model_") or k.startswith("b_model_"))]
+
+        # Flatten all kept tensors into a single GPU tensor, then do one DMA transfer
+        meta_entries = []
+        flat_parts = []
+        offset = 0
+        cast_dtype = self._resolve_torch_dtype(target_dtype) if target_dtype else torch.float32
+
+        for k in kept_keys:
+            v = rel_dict[k]
+            if torch.is_tensor(v):
+                t = v.detach()
+                orig_dtype = str(t.dtype)
+                flat = t.to(dtype=cast_dtype).reshape(-1)
+                n = flat.numel()
+                meta_entries.append((k, list(t.shape), orig_dtype, n))
+                flat_parts.append(flat)
+                offset += n
+            elif isinstance(v, (list, tuple)):
+                for i, sub in enumerate(v):
+                    if torch.is_tensor(sub):
+                        t = sub.detach()
+                        orig_dtype = str(t.dtype)
+                        flat = t.to(dtype=cast_dtype).reshape(-1)
+                        n = flat.numel()
+                        meta_entries.append((f"{k}[{i}]", list(t.shape), orig_dtype, n))
+                        flat_parts.append(flat)
+                        offset += n
+
+        if not flat_parts:
+            rel_dict.clear()
             return None
 
+        flat_gpu = torch.cat(flat_parts)
+        del flat_parts
+
+        flat_cpu = flat_gpu.cpu()
+        del flat_gpu
+
+        # Free GPU memory before serialisation
+        rel_dict.clear()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
         if normalized_policy == "summary":
-            return {"summary": self._summarize_relevance(processed)}
+            cpu_dict = self._flat_to_dict(flat_cpu, meta_entries)
+            return {"summary": self._summarize_relevance(cpu_dict)}
 
-        if normalized_policy == "disk":
-            if cache_dir is None:
-                raise ValueError("relevance_cache_dir must be provided when relevance_cache_policy='disk'")
-            
-            base_file_path = cache_dir / f"step_{step_idx:05d}.pt"
-            
-            # Determine compression method and file extension
-            if not use_compression or compression_method == "none":
-                # No compression
-                file_path = base_file_path
-                torch.save(processed, file_path, pickle_protocol=pickle_protocol)
-            
-            elif compression_method == "gzip":
-                # Gzip compression (fast, good ratio)
-                file_path = Path(str(base_file_path) + '.gz')
-                with gzip.open(file_path, 'wb', compresslevel=6) as f:
-                    torch.save(processed, f, pickle_protocol=pickle_protocol)
-            
-            elif compression_method == "lzma":
-                # LZMA/xz compression (better ratio, slower)
-                file_path = Path(str(base_file_path) + '.xz')
-                with lzma.open(file_path, 'wb', preset=6) as f:
-                    torch.save(processed, f, pickle_protocol=pickle_protocol)
-            
-            elif compression_method == "7z":
-                # 7z compression (best ratio, slowest)
-                if not HAS_7Z:
-                    raise ImportError(
-                        "py7zr library required for 7z compression. "
-                        "Install with: pip install py7zr"
-                    )
-                file_path = Path(str(base_file_path) + '.7z')
-                # Save to temporary .pt file first
-                import tempfile
-                with tempfile.NamedTemporaryFile(suffix='.pt', delete=False) as tmp:
-                    tmp_path = Path(tmp.name)
-                    torch.save(processed, tmp_path, pickle_protocol=pickle_protocol)
-                
-                # Compress with 7z
-                with py7zr.SevenZipFile(file_path, 'w') as archive:
-                    archive.write(tmp_path, arcname=f'step_{step_idx:05d}.pt')
-                
-                # Clean up temp file
-                tmp_path.unlink()
-            
-            else:
-                raise ValueError(
-                    f"Unknown compression_method: {compression_method}. "
-                    f"Must be one of: 'gzip', 'lzma', '7z', 'none'"
-                )
-            
-            return {
-                "summary": self._summarize_relevance(processed),
-                "path": str(file_path),
-                "compression": compression_method,
-            }
+        if normalized_policy == "full":
+            return self._flat_to_dict(flat_cpu, meta_entries)
 
-
-        if normalized_policy != "full":
+        if normalized_policy != "disk":
             raise ValueError(
-                "relevance_cache_policy must be one of {'full', 'summary', 'disk', 'none'}"
+                "relevance_cache_policy must be one of "
+                "{'full', 'summary', 'disk', 'none'}"
             )
-        return processed
+
+        if cache_dir is None:
+            raise ValueError(
+                "relevance_cache_dir must be provided when "
+                "relevance_cache_policy='disk'"
+            )
+
+        cpu_dict = self._flat_to_dict(flat_cpu, meta_entries)
+        summary_val = self._summarize_relevance(cpu_dict)
+        del cpu_dict
+
+        header = {
+            "format": "dlbr_v1",
+            "dtype": str(cast_dtype),
+            "total_elements": int(flat_cpu.numel()),
+            "entries": [
+                {"key": k, "shape": s, "orig_dtype": d, "count": n}
+                for k, s, d, n in meta_entries
+            ],
+        }
+        header_bytes = json.dumps(header, separators=(',', ':')).encode('utf-8')
+        header_len = len(header_bytes)
+
+        raw_bytes = flat_cpu.numpy().tobytes()
+        del flat_cpu
+
+        file_path = cache_dir / f"step_{step_idx:05d}.dlbr"
+        if use_compression and compression_method == "lz4" and HAS_LZ4:
+            compressed = lz4.frame.compress(raw_bytes)
+            with open(file_path, 'wb') as f:
+                f.write(header_len.to_bytes(8, 'little'))
+                f.write(header_bytes)
+                f.write(compressed)
+            del compressed
+        else:
+            with open(file_path, 'wb') as f:
+                f.write(header_len.to_bytes(8, 'little'))
+                f.write(header_bytes)
+                f.write(raw_bytes)
+        del raw_bytes
+
+        gc.collect()
+        return {
+            "summary": summary_val,
+            "path": str(file_path),
+            "compression": compression_method if use_compression else "none",
+        }
+
+    @staticmethod
+    def _flat_to_dict(flat_cpu, meta_entries):
+        """Reconstruct a {key: tensor} dict from a flat buffer + metadata."""
+        result = {}
+        offset = 0
+        for key, shape, orig_dtype, count in meta_entries:
+            t = flat_cpu[offset:offset + count].reshape(shape)
+            result[key] = t
+            offset += count
+        return result
+
+    @staticmethod
+    def load_relevance_step(file_path: str, device: str = "cpu"):
+        """Load a .dlbr relevance file. Returns a dict mapping node keys to tensors."""
+        path = Path(file_path)
+        with open(path, 'rb') as f:
+            header_len = int.from_bytes(f.read(8), 'little')
+            header = json.loads(f.read(header_len).decode('utf-8'))
+            payload = f.read()
+
+        dtype_str = header.get("dtype", "torch.float32")
+        dtype_map = {
+            "torch.float32": (torch.float32, np.float32),
+            "torch.float16": (torch.float16, np.float16),
+            "torch.bfloat16": (torch.float32, np.float32),  # no numpy equiv for bfloat16
+        }
+        torch_dtype, np_dtype = dtype_map.get(dtype_str, (torch.float32, np.float32))
+
+        if HAS_LZ4:
+            try:
+                payload = lz4.frame.decompress(payload)
+            except Exception:
+                pass  # uncompressed fallback
+
+        flat = torch.frombuffer(bytearray(payload), dtype=torch_dtype)
+        result = {}
+        offset = 0
+        for entry in header["entries"]:
+            key = entry["key"]
+            shape = entry["shape"]
+            count = entry["count"]
+            t = flat[offset:offset + count].reshape(shape).clone()
+            if device != "cpu":
+                t = t.to(device)
+            result[key] = t
+            offset += count
+        return result
 
     # ---------- public API ----------
 
@@ -540,20 +599,20 @@ class DLBAutoSampler:
         pad_token_id: Optional[int] = None,
         # beams
         num_beams: int = 1,
-        num_return_sequences: Optional[int] = None,  # ignored on return; always top-1
+        num_return_sequences: Optional[int] = None,
         length_penalty: float = 1.0,
         # misc
         return_scores: bool = False,
         return_layerwise_output: bool = False,
         return_relevance: bool = False,
-        dlb_tokens_count: Optional[int] = None,
+        explain_tokens = "all",
         debug: bool = False,
         relevance_cache_policy: str = "full",
         relevance_cache_dir: Optional[str] = None,
         relevance_compress_dtype: Optional[Any] = "float16",
         relevance_move_to_cpu: bool = True,
         relevance_use_compression: bool = True,
-        relevance_compression_method: str = "gzip",
+        relevance_compression_method: str = "lz4",
         relevance_pickle_protocol: int = 4,
     ):
         """
@@ -562,22 +621,19 @@ class DLBAutoSampler:
             - Or (sequence, scores_trace) for sampling when return_scores=True
 
         Args:
-            dlb_tokens_count: How many generated tokens to compute DLB relevance for.
-                - None (default): Compute relevance for all generated tokens
-                - int: Compute relevance for first N generated tokens only
-                Only applies when return_relevance=True.
+            explain_tokens: Which generated tokens to compute DLB relevance for.
+                - "all" (default): Compute relevance for every generated token
+                - "none": Skip relevance for all tokens
+                - int N: Compute relevance for the first N tokens only
+                - list[int]: Compute relevance for these specific step indices only
+                  (e.g. [0, 4, 7] → only tokens at step 0, 4, and 7)
 
-        Relevance caching knobs:
             relevance_cache_policy: "full" (default), "summary", "disk", or "none".
             relevance_cache_dir: base directory for on-disk caching (policy="disk").
             relevance_compress_dtype: dtype hint (str or torch.dtype) for stored tensors.
-            relevance_use_compression: If True, use compression for disk storage (default: True).
-            relevance_compression_method: Compression method - "gzip" (default), "lzma", "7z", or "none".
-                                        - "gzip": Fast, good compression (~75% reduction)
-                                        - "lzma": Better compression (~80% reduction), slower
-                                        - "7z": Best compression (~82% reduction), slowest
-                                        - "none": No compression (only dtype compression)
-            relevance_pickle_protocol: Pickle protocol (2-5). Higher = better compression. Default=4.
+            relevance_use_compression: If True, use lz4 compression for disk storage (default: True).
+            relevance_compression_method: "lz4" (default) or "none".
+            relevance_pickle_protocol: Pickle protocol (2-5). Default=4.
             relevance_move_to_cpu: move tensors to CPU before caching to reduce VRAM.
         """ 
         model = self._get_causallm(self.dlb.model)
@@ -638,7 +694,7 @@ class DLBAutoSampler:
         gen_kwargs = dict(
             max_new_tokens=max_new_tokens,
             min_new_tokens=min_new_tokens,
-            do_sample=do_sample,  # sampling only when num_beams == 1 and any knob is set
+            do_sample=do_sample,
             bos_token_id=bos_token_id,
             eos_token_id=eos_token_id,
             pad_token_id=pad_token_id,
@@ -697,11 +753,43 @@ class DLBAutoSampler:
             scores_trace = [] if return_scores else None
             relevance_trace = [] if return_relevance else None
             io_data_trace = [] if return_layerwise_output else None
+            disk_streaming = (cache_policy == "disk" and cache_dir_path is not None)
+
+            # ── Per-step timing accumulator ──
+            _step_timings = []
 
             stopped_by = None
-            for _ in range(max_new_tokens if max_new_tokens is not None else 10_000_000):
-                # Ask DLB for logits (B=1)
+
+            # Build DLB gating function from explain_tokens
+            if isinstance(explain_tokens, str):
+                if explain_tokens.lower() == "none":
+                    _should_run_dlb = lambda idx: False
+                else:  # "all"
+                    _should_run_dlb = lambda idx: True
+            elif isinstance(explain_tokens, int):
+                _should_run_dlb = lambda idx: idx < explain_tokens
+            elif isinstance(explain_tokens, (list, tuple)):
+                _dlb_steps = set(explain_tokens)
+                _should_run_dlb = lambda idx: idx in _dlb_steps
+            else:
+                _should_run_dlb = lambda idx: True
+
+            for _gen_step_idx in range(max_new_tokens if max_new_tokens is not None else 10_000_000):
+                _t = {}  # timing dict for this step
+                _t["step"] = _gen_step_idx
+                _t["seq_len"] = generated.shape[1]
+
+                # ── Stage A: Forward pass (predict) ──
+                if device == "cuda":
+                    torch.cuda.synchronize()
+                _ts = time.perf_counter()
                 io_data = self.dlb.predict(generated, attn, debug=False, temperature=1.0)
+                if device == "cuda":
+                    torch.cuda.synchronize()
+                _t["predict"] = time.perf_counter() - _ts
+
+                # ── Stage B: Logits extraction + sampling ──
+                _ts = time.perf_counter()
                 logits = self._extract_last_logits(io_data)        # [1, T_cur, V]
                 if logits.device != device:
                     logits = logits.to(device)
@@ -726,16 +814,52 @@ class DLBAutoSampler:
 
                 # 🔑 force to same device as `generated`
                 next_tokens = self._as_long(next_tokens).to(device)
+                if device == "cuda":
+                    torch.cuda.synchronize()
+                _t["sampling"] = time.perf_counter() - _ts
 
-                if return_scores:
-                    scores_trace.append(scores.detach().to("cpu"))
+                # ── Stage C: Save scores to disk ──
+                _ts = time.perf_counter()
+                if return_scores and _should_run_dlb(_gen_step_idx):
+                    scores_cpu = scores.detach().to("cpu")
+                    if disk_streaming:
+                        path = self._save_to_disk(
+                            scores_cpu,
+                            cache_dir=cache_dir_path,
+                            filename=f"step_{_gen_step_idx:05d}_scores.pt",
+                            use_compression=relevance_use_compression,
+                            compression_method=relevance_compression_method,
+                            pickle_protocol=relevance_pickle_protocol,
+                        )
+                        scores_trace.append({"path": path})
+                        del scores_cpu
+                    else:
+                        scores_trace.append(scores_cpu)
+                _t["scores_save"] = time.perf_counter() - _ts
 
+                # ── Stage D: Save IO data to disk ──
+                _ts = time.perf_counter()
                 if return_layerwise_output:
-                    io_data_trace.append(io_data)
+                    if disk_streaming:
+                        path = self._save_to_disk(
+                            io_data,
+                            cache_dir=cache_dir_path,
+                            filename=f"step_{_gen_step_idx:05d}_io.pt",
+                            use_compression=relevance_use_compression,
+                            compression_method=relevance_compression_method,
+                            pickle_protocol=relevance_pickle_protocol,
+                        )
+                        io_data_trace.append({"path": path})
+                        del io_data
+                        gc.collect()
+                    else:
+                        io_data_trace.append(io_data)
+                _t["io_save"] = time.perf_counter() - _ts
 
+                # ── Stage E: Backtracing (relevance propagation) ──
+                _ts = time.perf_counter()
                 if return_relevance:
-                    step_idx = len(relevance_trace)
-                    if dlb_tokens_count is None or step_idx < dlb_tokens_count:
+                    if _should_run_dlb(_gen_step_idx):
                         rel_dict = self._compute_relevance(
                             target_token_ids=next_tokens.view(-1),
                             mode="default",
@@ -745,10 +869,18 @@ class DLBAutoSampler:
                             task="generation",
                             debug=False,
                         )
+                if device == "cuda":
+                    torch.cuda.synchronize()
+                _t["backtrace"] = time.perf_counter() - _ts
+
+                # ── Stage F: Save relevance to disk ──
+                _ts = time.perf_counter()
+                if return_relevance:
+                    if _should_run_dlb(_gen_step_idx):
                         entry = self._store_relevance_entry(
                             rel_dict,
                             policy=cache_policy,
-                            step_idx=step_idx,
+                            step_idx=_gen_step_idx,
                             cache_dir=cache_dir_path,
                             target_dtype=cache_dtype,
                             move_to_cpu=relevance_move_to_cpu,
@@ -757,7 +889,32 @@ class DLBAutoSampler:
                             pickle_protocol=relevance_pickle_protocol,
                         )
                         relevance_trace.append(entry)
+                        # Free the caller-side GPU reference immediately
+                        del rel_dict
+                _t["relevance_save"] = time.perf_counter() - _ts
+
+                # ── Stage G: Memory cleanup ──
+                _ts = time.perf_counter()
+                if return_relevance:
+                    if _should_run_dlb(_gen_step_idx):
                         self._clear_dlb_memory()
+                _t["cleanup"] = time.perf_counter() - _ts
+
+                _t["total"] = _t["predict"] + _t["sampling"] + _t["scores_save"] + _t["io_save"] + _t["backtrace"] + _t["relevance_save"] + _t["cleanup"]
+
+                # Print per-token line
+                print(
+                    f"  ⏱ Token {_gen_step_idx:3d} (seq={_t['seq_len']:4d}) │ "
+                    f"predict={_t['predict']:6.2f}s │ "
+                    f"sample={_t['sampling']:5.3f}s │ "
+                    f"backtrace={_t['backtrace']:5.2f}s │ "
+                    f"rel_save={_t['relevance_save']:5.2f}s │ "
+                    f"scores_save={_t['scores_save']:5.3f}s │ "
+                    f"io_save={_t['io_save']:5.2f}s │ "
+                    f"cleanup={_t['cleanup']:5.2f}s │ "
+                    f"TOTAL={_t['total']:6.2f}s"
+                )
+                _step_timings.append(_t)
 
                 generated = torch.cat([generated, next_tokens], dim=1) 
                 attn = torch.cat(
@@ -780,19 +937,26 @@ class DLBAutoSampler:
             else:
                 stopped_by = "loop_exhausted"
 
+            # ── Print timing summary ──
+            if _step_timings:
+                stages = ["predict", "sampling", "backtrace", "relevance_save", "scores_save", "io_save", "cleanup", "total"]
+                print("\n" + "=" * 90)
+                print("  ⏱ GENERATION TIMING SUMMARY")
+                print("=" * 90)
+                for stage in stages:
+                    vals = [t[stage] for t in _step_timings]
+                    total_s = sum(vals)
+                    avg_s = total_s / len(vals) if vals else 0
+                    pct = (total_s / sum(t["total"] for t in _step_timings) * 100) if stage != "total" else 100.0
+                    print(f"  {stage:>16s}:  total={total_s:7.2f}s  avg={avg_s:6.2f}s  ({pct:5.1f}%)")
+                print("=" * 90)
+
             if debug:
                 print(f"[greedy/sampling] stopped_by={stopped_by}")
 
-            if return_relevance:
-                print("\n" + "=" * 60)
-                print("GENERATED SEQUENCE (Prompt + Generated):")
-                print("=" * 60)
-                self._print_generated_sequence(generated)
-                print("=" * 60 + "\n")
-
             want_extras = return_scores or return_relevance or return_layerwise_output
             if not want_extras:
-                return generated  # [1, T]
+                return generated
 
             info = {}
             if return_scores:
@@ -804,6 +968,8 @@ class DLBAutoSampler:
                     info["relevance_cache_dir"] = str(cache_dir_path)
             if return_layerwise_output:
                 info["layerwise_output_trace"] = io_data_trace
+            if disk_streaming and cache_dir_path is not None:
+                info["cache_dir"] = str(cache_dir_path)
             return generated, info  # ([1, T], dict)
 
 
@@ -819,16 +985,15 @@ class DLBAutoSampler:
         beam_scorer = BeamSearchScorer(
             batch_size=1,
             num_beams=beams,
-            device=device,                    # stays on same device
+            device=device,
             length_penalty=length_penalty,
-            do_early_stopping=do_early_stopping,  # bool
-            num_beam_hyps_to_keep=1,              # keep only the best hypothesis
+            do_early_stopping=do_early_stopping,
+            num_beam_hyps_to_keep=1,
             max_length=max_len_for_beam,
         )
 
-        # Expand seeds for bookkeeping (DLB called per-beam)
-        generated = self._as_long(input_ids.expand(beams, -1).contiguous()).to(device)   # <— ensure device
-        attn = self._as_long(attention_mask.expand(beams, -1).contiguous()).to(device)   # <— ensure device
+        generated = self._as_long(input_ids.expand(beams, -1).contiguous()).to(device)
+        attn = self._as_long(attention_mask.expand(beams, -1).contiguous()).to(device)
 
         # Local beam scores
         beam_scores = torch.zeros((1, beams), dtype=torch.float32, device=device)
@@ -845,7 +1010,8 @@ class DLBAutoSampler:
 
         scores_trace_beam = [] if return_scores else None
         relevance_trace_beam = [] if return_relevance else None
-        io_data_trace_beam = [] if return_layerwise_output else None 
+        io_data_trace_beam = [] if return_layerwise_output else None
+        disk_streaming_beam = (cache_policy == "disk" and cache_dir_path is not None)
 
         stopped_by = None
         for _ in range(max_new_tokens if max_new_tokens is not None else 10_000_000):
@@ -878,8 +1044,22 @@ class DLBAutoSampler:
                 if vocab_size is None:
                     vocab_size = nl_b.size(-1)
 
+            beam_step_idx = cur_len - start_len
             if return_layerwise_output:
-                io_data_trace_beam.append(io_data_step)              # per-step, per-beam
+                if disk_streaming_beam:
+                    path = self._save_to_disk(
+                        io_data_step,
+                        cache_dir=cache_dir_path,
+                        filename=f"beam_step_{beam_step_idx:05d}_io.pt",
+                        use_compression=relevance_use_compression,
+                        compression_method=relevance_compression_method,
+                        pickle_protocol=relevance_pickle_protocol,
+                    )
+                    io_data_trace_beam.append({"path": path})
+                    del io_data_step
+                    gc.collect()
+                else:
+                    io_data_trace_beam.append(io_data_step)              # per-step, per-beam
 
             next_logits = torch.cat(next_logits_list, dim=0)         # [beams, V] on device
 
@@ -923,7 +1103,20 @@ class DLBAutoSampler:
             )
 
             if return_scores:
-                scores_trace_beam.append(next_scores.detach().to("cpu"))
+                scores_cpu = next_scores.detach().to("cpu")
+                if disk_streaming_beam:
+                    path = self._save_to_disk(
+                        scores_cpu,
+                        cache_dir=cache_dir_path,
+                        filename=f"beam_step_{beam_step_idx:05d}_scores.pt",
+                        use_compression=relevance_use_compression,
+                        compression_method=relevance_compression_method,
+                        pickle_protocol=relevance_pickle_protocol,
+                    )
+                    scores_trace_beam.append({"path": path})
+                    del scores_cpu
+                else:
+                    scores_trace_beam.append(scores_cpu)
 
             # Rebuild the new beam batch using public keys
             next_beam_scores = beam_outputs["next_beam_scores"].to(device)   # [beams]
@@ -950,7 +1143,7 @@ class DLBAutoSampler:
 
             if return_relevance:
                 step_offset = len(relevance_trace_beam)
-                if dlb_tokens_count is None or step_offset < dlb_tokens_count:
+                if _should_run_dlb(step_offset):
                     step_rel_scores = []
                     for b in range(beams):
                         self.dlb.predict(
@@ -1025,15 +1218,8 @@ class DLBAutoSampler:
                 max_length=max_len_for_beam,
             )
 
-        sequences = final["sequences"]  # [1, T_total] because num_beam_hyps_to_keep=1
-        out_top1 = sequences[:1, :]     # ensure [1, T_total]
-
-        if return_relevance:
-            print("\n" + "=" * 60)
-            print("GENERATED SEQUENCE (Prompt + Generated):")
-            print("=" * 60)
-            self._print_generated_sequence(out_top1)
-            print("=" * 60 + "\n")
+        sequences = final["sequences"]
+        out_top1 = sequences[:1, :]
 
         want_extras = return_scores or return_relevance or return_layerwise_output
         if not want_extras:
@@ -1057,4 +1243,6 @@ class DLBAutoSampler:
                 for step_ios in io_data_trace_beam
             ]
             info_beam["layerwise_output_trace"] = flat_io_trace
+        if disk_streaming_beam and cache_dir_path is not None:
+            info_beam["cache_dir"] = str(cache_dir_path)
         return out_top1, info_beam

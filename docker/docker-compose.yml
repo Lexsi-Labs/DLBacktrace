@@ -1,0 +1,69 @@
+# ─────────────────────────────────────────────────────────────
+#  DLBacktrace – Docker Compose (GPU)
+#
+#  Usage:
+#    # Build & run DLB engine
+#    docker compose -f docker/docker-compose.yml up --build engine
+#
+#    # Run the FastAPI API server
+#    docker compose -f docker/docker-compose.yml up --build api
+#
+#  Requires:
+#    - NVIDIA Container Toolkit (nvidia-docker2)
+#    - Set HUGGING_FACE_HUB_TOKEN in your shell or in docker/.env
+# ─────────────────────────────────────────────────────────────
+
+services:
+  # ── DLB Engine ─────────────────────────────────────────────
+  engine:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: dlbacktrace:latest
+    container_name: dlbacktrace-engine
+    command: >
+      python engine.py
+        --mode gen
+        --device cuda
+        --gen-tokens 25
+        --cache-dir engine_results
+        --model "meta-llama/Llama-3.2-1B"
+        --gen-prompt "What are stock market fluctuations?"
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - ../engine_results:/app/engine_results
+    shm_size: "8g"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # ── FastAPI server ────────────────────────────────────────
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: dlbacktrace:latest
+    container_name: dlbacktrace-api
+    command: >
+      python -m uvicorn new_integration.app:app
+        --host 0.0.0.0
+        --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - NVIDIA_VISIBLE_DEVICES=all
+    shm_size: "8g"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
