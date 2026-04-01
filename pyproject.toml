@@ -42,6 +42,10 @@ server = [
     "uvicorn[standard]>=0.20",
 ]
 
+[project.scripts]
+dlbacktrace = "dl_backtrace.cli.engine:main"
+dlbacktrace-server = "dl_backtrace.cli.server:main"
+
 [project.urls]
 Homepage = "https://xai.arya.ai/docs/introduction"
 Source = "https://github.com/arya-ai/DLBacktrace"
