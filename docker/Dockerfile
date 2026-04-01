@@ -36,6 +36,7 @@ RUN uv pip install --no-cache --system \
 
 # Install dl-backtrace from PyPI
 RUN uv pip install --no-cache --system \
+        transformers==4.52.3 \
         dl-backtrace==0.1.14 \
         psutil tabulate lz4
 
@@ -51,4 +52,4 @@ ENV TRANSFORMERS_VERBOSITY="error"
 
 WORKDIR /app
 
-CMD ["python", "engine.py", "--mode", "gen", "--device", "cuda"]
+CMD ["python", "-m", "dl_backtrace", "--mode", "gen", "--device", "cuda"]
