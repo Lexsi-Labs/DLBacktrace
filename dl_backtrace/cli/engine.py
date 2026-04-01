@@ -552,6 +552,7 @@ def print_gen_table(records: List[Dict[str, Any]]):
 def save_report(
     seq_records: List[Dict[str, Any]],
     gen_records: List[Dict[str, Any]],
+    moe_records: List[Dict[str, Any]],
     system_info: Dict[str, Any],
     output_dir: str,
 ):
@@ -559,7 +560,8 @@ def save_report(
     os.makedirs(output_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = os.path.join(output_dir, f"benchmark_{timestamp}.json")
-
+    moe_path = os.path.join(output_dir, f"moe_benchmark_{timestamp}.json")
+    
     report = {
         "timestamp": timestamp,
         "system_info": system_info,

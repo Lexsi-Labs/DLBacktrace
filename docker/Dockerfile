@@ -8,12 +8,7 @@
 ARG BASE_IMAGE=nvidia/cuda:13.1.1-runtime-ubuntu24.04
 FROM ${BASE_IMAGE}
 
-# Prevent interactive prompts during apt installs
 ENV DEBIAN_FRONTEND=noninteractive
-
-# ── Build args ──────────────────────────────────────────────
-ARG REPO_URL=https://github.com/omkararyaai/DLBacktrace.git
-ARG REPO_BRANCH=dlb_v2
 
 # ── System packages ─────────────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -27,27 +22,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Ensure `python` and `pip` point to python3
 RUN ln -sf /usr/bin/python3 /usr/bin/python
 
 # ── Python package manager ──────────────────────────────────
 RUN pip install --no-cache-dir --break-system-packages uv
 
-# ── Clone repository ────────────────────────────────────────
-WORKDIR /app
-RUN git clone --depth 1 --branch ${REPO_BRANCH} ${REPO_URL} . \
-    && rm -rf .git
-
 # ── Python dependencies ─────────────────────────────────────
-RUN uv pip install --no-cache --system --break-system-packages \
-        -r requirements.txt
+RUN uv pip install --no-cache --system \
+        torch==2.6.0+cu126 \
+        torchvision==0.21.0+cu126 \
+        torchaudio==2.6.0+cu126 \
+        --extra-index-url https://download.pytorch.org/whl/cu126
 
-# Install DLBacktrace from local source in editable mode
-RUN uv pip install --no-cache --system --break-system-packages \
-        -e .
-
-# Install DLB engine dependencies
-RUN uv pip install --no-cache --system --break-system-packages \
+# Install dl-backtrace from PyPI
+RUN uv pip install --no-cache --system \
+        transformers==4.52.3 \
+        dl-backtrace==0.1.14 \
         psutil tabulate lz4
 
 # ── Cleanup ─────────────────────────────────────────────────
@@ -60,5 +50,6 @@ ENV CUBLAS_WORKSPACE_CONFIG=":4096:8"
 ENV PYTHONWARNINGS="ignore"
 ENV TRANSFORMERS_VERBOSITY="error"
 
-# Default: run the DLB engine
-CMD ["python", "engine.py", "--mode", "gen", "--device", "cuda"]
+WORKDIR /app
+
+CMD ["python", "-m", "dl_backtrace", "--mode", "gen", "--device", "cuda"]
