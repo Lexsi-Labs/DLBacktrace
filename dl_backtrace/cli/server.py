@@ -94,6 +94,28 @@ class GenerateRequest(BaseModel):
     scaler: float = Field(1.0, description="Relevance scaling factor")
     thresholding: float = Field(0.5, description="Relevance threshold")
     debug: bool = Field(False, description="Enable debug logging")
+    explain_tokens: Union[str, int, List[int]] = Field(
+        "all",
+        description=(
+            'Which tokens to compute DLB relevance for. '
+            '"all" (default) — every generated token, '
+            '"none" — skip relevance, '
+            'an integer N — first N tokens only, '
+            'or a list of specific token indices e.g. [0, 4, 9]'
+        ),
+    )
+    relevance_cache_policy: str = Field(
+        "disk",
+        description=(
+            'Cache policy for per-step relevance data. '
+            '"disk" — stream to disk (low RAM, engine.py default), '
+            '"memory" — keep in RAM (faster but higher RAM usage)'
+        ),
+    )
+    cache_dir: str = Field(
+        "cache",
+        description="Directory for disk-streamed relevance/scores/IO data (used when relevance_cache_policy='disk')",
+    )
 
 
 class NodeRelevanceSummary(BaseModel):
@@ -327,6 +349,7 @@ class ServerState:
         input_ids = tokens["input_ids"].to(self.device)
         attention_mask = tokens["attention_mask"].to(self.device)
 
+        os.makedirs(req.cache_dir, exist_ok=True)
         t0 = time.perf_counter()
         results = self.backtrace_engine.run_task(
             task="generation",
@@ -342,6 +365,9 @@ class ServerState:
             debug=req.debug,
             top_k=req.top_k if req.top_k > 0 else None,
             top_p=req.top_p,
+            explain_tokens=req.explain_tokens,
+            relevance_cache_policy=req.relevance_cache_policy,
+            relevance_cache_dir=req.cache_dir,
         )
         elapsed = time.perf_counter() - t0
 
@@ -404,6 +430,7 @@ class ServerState:
             verbose=False,
         )
 
+        os.makedirs(req.cache_dir, exist_ok=True)
         t0 = time.perf_counter()
         results = ir.run_task(
             task="generation",
@@ -413,7 +440,15 @@ class ServerState:
             temperature=req.temperature,
             return_relevance=req.return_relevance,
             return_scores=req.return_scores,
+            multiplier=req.multiplier,
+            scaler=req.scaler,
+            thresholding=req.thresholding,
             debug=req.debug,
+            top_k=req.top_k if req.top_k > 0 else None,
+            top_p=req.top_p,
+            explain_tokens=req.explain_tokens,
+            relevance_cache_policy=req.relevance_cache_policy,
+            relevance_cache_dir=req.cache_dir,
         )
         elapsed = time.perf_counter() - t0
 
@@ -627,6 +662,29 @@ def parse_args():
         choices=["debug", "info", "warning", "error"],
         help="Logging level (default: info)",
     )
+    parser.add_argument(
+        "--cache-dir", type=str, default="cache",
+        help="Server-wide default directory for disk-streamed relevance/scores/IO data (default: cache)",
+    )
+    parser.add_argument(
+        "--output-dir", type=str, default="results",
+        help="Directory for saving JSON benchmark/result reports (default: results)",
+    )
+    parser.add_argument(
+        "--explain-tokens", nargs="+", default=["all"],
+        help=(
+            'Server-wide default for which tokens to compute DLB relevance for. '
+            '"all" (default) — every generated token, '
+            '"none" — skip relevance, '
+            'an int N — first N tokens only, '
+            'or specific indices like "0 4 9". '
+            'Can be overridden per-request via the explain_tokens field.'
+        ),
+    )
+    parser.add_argument(
+        "--view-output", action="store_true", default=False,
+        help="Load and print saved .dlbr relevance output after each generation (default: off)",
+    )
     return parser.parse_args()
 
 
@@ -635,6 +693,15 @@ def main():
 
     args = parse_args()
     _cli_args = args
+
+    # Resolve --explain-tokens into the right type (mirrors engine.py logic)
+    et = args.explain_tokens
+    if len(et) == 1 and et[0].lower() in ("all", "none"):
+        args.explain_tokens_resolved = et[0].lower()
+    elif len(et) == 1 and et[0].isdigit():
+        args.explain_tokens_resolved = int(et[0])   # first-N
+    else:
+        args.explain_tokens_resolved = [int(x) for x in et]  # specific indices
 
     # Device fallback
     if args.device == "cuda" and not torch.cuda.is_available():
@@ -649,11 +716,15 @@ def main():
     )
 
     print(BANNER)
-    print(f"  Model   : {args.model}")
-    print(f"  Backend : {args.backend}")
-    print(f"  Device  : {args.device}")
-    print(f"  Address : http://{args.host}:{args.port}")
-    print(f"  Docs    : http://{args.host}:{args.port}/docs")
+    print(f"  Model          : {args.model}")
+    print(f"  Backend        : {args.backend}")
+    print(f"  Device         : {args.device}")
+    print(f"  Address        : http://{args.host}:{args.port}")
+    print(f"  Docs           : http://{args.host}:{args.port}/docs")
+    print(f"  Cache dir      : {args.cache_dir}")
+    print(f"  Output dir     : {args.output_dir}")
+    print(f"  Explain tokens : {args.explain_tokens_resolved}")
+    print(f"  View output    : {args.view_output}")
     print("═" * 70)
 
     import uvicorn
