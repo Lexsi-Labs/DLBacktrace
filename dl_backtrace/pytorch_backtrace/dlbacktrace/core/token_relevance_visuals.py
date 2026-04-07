@@ -41,6 +41,12 @@ def _find_input_key(rel_dict, preferred="input_ids"):
 def _reduce_to_token_axis(arr, target_len):
     """Reduce a tensor to per-token relevance values."""
     a = _to_numpy(arr)
+    if isinstance(a, (int, float, np.integer, np.floating)):
+        a = np.array([a])
+    if not isinstance(a, np.ndarray):
+        a = np.asarray(a)
+    if a.ndim == 0:
+        a = a.reshape(1)
     if a.ndim == 1 and a.shape[0] == target_len:
         return a.astype(np.float64)
     if target_len in a.shape:
