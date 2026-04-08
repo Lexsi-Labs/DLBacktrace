@@ -7,6 +7,58 @@ import graphviz
 from networkx.drawing.nx_pydot import graphviz_layout
 from collections import defaultdict
 from IPython.display import display, SVG, Image as IPyImage
+from typing import Optional, Sequence
+
+# Semantically meaningful layer categories for compact visualization
+# These match the ATEN_LAYER_MAP categories in graph_builder.py
+SEMANTIC_LAYER_TYPES: tuple[str, ...] = (
+    "MLP_Layer",      # Linear/FC layers (linear, addmm)
+    "DL_Layer",       # Conv layers (conv2d, max_pool2d, etc.)
+    "Activation",     # ReLU, GELU, SiLU, etc.
+    "Normalization",  # BatchNorm, LayerNorm, GroupNorm
+    "Attention",      # Self/Cross attention (scaled_dot_product_attention)
+    "Output",         # Final output node (layer_type)
+    "Placeholder",    # Input nodes (layer_type) - CRITICAL for graph connectivity
+    "Model_Input",    # Legacy input type (layer_type)
+    "NLP_Embedding",  # Embedding layers (embedding, embedding_bag)
+)
+
+# Default types to always force-include (for graph connectivity)
+# Note: Placeholder excluded to keep compact graphs clean
+DEFAULT_FORCE_INCLUDE_TYPES: tuple[str, ...] = ("Model_Input", "Output")
+
+# Prefixes for parameter/bias nodes to exclude from compact graphs
+EXCLUDED_NODE_PREFIXES: tuple[str, ...] = ("p_model_", "b_model_")
+
+
+def _is_excluded_node(node_name: str) -> bool:
+    """Check if node should be excluded (parameter/bias weights)."""
+    return any(node_name.startswith(prefix) for prefix in EXCLUDED_NODE_PREFIXES)
+
+
+def _get_node_category(node_attrs: dict) -> str:
+    """Get the semantic category for a node by checking both layer_type and layer_name.
+    
+    The graph stores:
+    - layer_type: 'ATen_Operation', 'Placeholder', 'Output', 'Operation', etc.
+    - layer_name: 'DL_Layer', 'MLP_Layer', 'Activation', 'Normalization', etc.
+    
+    For filtering, we need to check layer_name first (for ATen ops), then layer_type.
+    """
+    layer_name = node_attrs.get("layer_name", "")
+    layer_type = node_attrs.get("layer_type", "Unknown")
+    
+    # For ATen operations, layer_name contains the semantic category
+    if layer_name in SEMANTIC_LAYER_TYPES:
+        return layer_name
+    
+    # For Output, Model_Input, etc., layer_type is the category
+    # Note: Placeholder excluded to keep compact graphs clean
+    if layer_type in ("Output", "Model_Input"):
+        return layer_type
+    
+    # Return layer_type as fallback
+    return layer_type
 
 
 def visualize_graph(graph, save_path="graph.png", *, show=True, dpi=600):
@@ -47,18 +99,54 @@ def visualize_graph(graph, save_path="graph.png", *, show=True, dpi=600):
 
 def visualize_relevance(graph, all_wt, output_path="backtrace_graph",
                         *, top_k=None, relevance_threshold=None,
+                        layer_types: Optional[Sequence[str]] = None,
+                        rankdir: str = "LR",
                         show=True, inline_format="svg"):
-    """🎯 Visualize relevance backtrace using Graphviz (shows inline + saves)"""
+    """🎯 Visualize relevance backtrace using Graphviz (shows inline + saves)
+    
+    Parameters
+    ----------
+    graph : networkx.DiGraph
+        The computation graph with layer_type attributes on nodes
+    all_wt : dict
+        Relevance weights for each node
+    output_path : str
+        Output file path (without extension)
+    top_k : int, optional
+        Show only top-k nodes by relevance
+    relevance_threshold : float, optional
+        Show nodes with |relevance| >= threshold
+    layer_types : list[str], optional
+        Filter to only these layer types. If None, shows all nodes.
+        Use SEMANTIC_LAYER_TYPES for a compact paper-ready graph.
+    rankdir : str
+        Graph direction: "LR" (left-to-right, wide), "TB" (top-to-bottom, tall),
+        "RL" (right-to-left), "BT" (bottom-to-top). Default "LR".
+        Use "TB" for LaTeX/paper-friendly vertical layout.
+    show : bool
+        Whether to display inline in Jupyter/Colab
+    inline_format : str
+        Format for inline display ("svg" or "png")
+    """
     relevance_data = {}
 
     # --- Extract relevance stats from all_wt ---
+    # Mean: sum of all entries (for batch=1) or average of sums across batches
+    # Max/Min: max/min of batch sums (for batched) or max/min element (for single)
     for node_name, rel in all_wt.items():
         node_key = node_name.replace("/", " ").replace(":", " ")
         if isinstance(rel, (list, tuple)):
-            flat = [float(r.sum()) for r in rel if hasattr(r, "sum")]
-            stats = (float(sum(flat) / len(flat)), max(flat), min(flat)) if flat else (0.0, 0.0, 0.0)
+            # Batched data: list of tensors
+            batch_sums = [float(r.sum()) for r in rel if hasattr(r, "sum")]
+            if batch_sums:
+                mean_val = sum(batch_sums) / len(batch_sums)
+                stats = (mean_val, max(batch_sums), min(batch_sums))
+            else:
+                stats = (0.0, 0.0, 0.0)
         elif hasattr(rel, "sum"):
-            stats = (float(rel.mean()), float(rel.max()), float(rel.min()))
+            # Single tensor (batch size = 1)
+            # Mean = sum of all entries in relevance vector
+            stats = (float(rel.sum()), float(rel.max()), float(rel.min()))
         else:
             try:
                 val = float(rel)
@@ -67,24 +155,62 @@ def visualize_relevance(graph, all_wt, output_path="backtrace_graph",
                 stats = (0.0, 0.0, 0.0)
         relevance_data[node_key] = stats
 
-    # --- Filter based on top_k or threshold ---
+    # --- Filter based on top_k, threshold, or layer_types ---
     flat_scores = {k: v[0] for k, v in relevance_data.items()}
+    total_nodes = len(graph.nodes)
 
     force_include = {
         node.replace("/", " ").replace(":", " ")
         for node in graph.nodes
-        if graph.nodes[node].get("layer_type") in ("Placeholder", "Model_Input")
+        if _get_node_category(graph.nodes[node]) in DEFAULT_FORCE_INCLUDE_TYPES
+        and not _is_excluded_node(node)
     }
 
-    if top_k:
+    if layer_types is not None:
+        # Layer-type filtering mode - use _get_node_category for proper semantic matching
+        layer_types_set = set(layer_types)
+        top_node_names = {
+            node.replace("/", " ").replace(":", " ")
+            for node in graph.nodes
+            if _get_node_category(graph.nodes[node]) in layer_types_set
+            and not _is_excluded_node(node)
+        } | force_include
+        print(f"📊 Layer-type filtering: {total_nodes} nodes → {len(top_node_names)} nodes (filter: {list(layer_types_set)[:5]}{'...' if len(layer_types_set) > 5 else ''})")
+    elif top_k:
         top_keys = sorted(flat_scores.items(), key=lambda x: abs(x[1]), reverse=True)[:top_k]
-        top_node_names = {k for k, _ in top_keys} | force_include
+        top_node_names = {k for k, _ in top_keys if not _is_excluded_node(k)} | force_include
+        print(f"📊 Top-k filtering: {total_nodes} nodes → {len(top_node_names)} nodes (top_k={top_k})")
     elif relevance_threshold is not None:
-        top_node_names = {k for k, v in flat_scores.items() if abs(v) >= relevance_threshold} | force_include
+        top_node_names = {k for k, v in flat_scores.items() if abs(v) >= relevance_threshold and not _is_excluded_node(k)} | force_include
+        print(f"📊 Threshold filtering: {total_nodes} nodes → {len(top_node_names)} nodes (threshold={relevance_threshold})")
     else:
-        top_node_names = set(relevance_data.keys()) | force_include
+        top_node_names = {k for k in relevance_data.keys() if not _is_excluded_node(k)} | force_include
+        print(f"📊 No filtering: {total_nodes} nodes")
 
-    # --- Color map for node types ---
+    # --- Build raw->normalized name mapping for ancestor lookup ---
+    raw_to_norm = {node: node.replace("/", " ").replace(":", " ") for node in graph.nodes}
+    norm_to_raw = {v: k for k, v in raw_to_norm.items()}
+    
+    # --- Helper to find transitive ancestors in filtered set ---
+    def find_filtered_ancestors(node_raw, visited=None):
+        """BFS to find all ancestors that are in the filtered set."""
+        if visited is None:
+            visited = set()
+        ancestors = set()
+        parents = graph.nodes[node_raw].get("parents", [])
+        for parent_raw in parents:
+            if parent_raw in visited:
+                continue
+            visited.add(parent_raw)
+            parent_norm = raw_to_norm.get(parent_raw, parent_raw.replace("/", " ").replace(":", " "))
+            if parent_norm in top_node_names:
+                ancestors.add(parent_norm)
+            elif parent_raw in graph.nodes:
+                # Recursively search this parent's ancestors
+                ancestors.update(find_filtered_ancestors(parent_raw, visited))
+        return ancestors
+
+    # --- Color map for node types (uses layer_name for ATen ops, layer_type for others) ---
     color_map = {
         "MLP_Layer": "lightblue",
         "DL_Layer": "lightgreen",
@@ -104,7 +230,7 @@ def visualize_relevance(graph, all_wt, output_path="backtrace_graph",
     g = graphviz.Digraph(
         "DLBacktrace",
         format="svg",
-        graph_attr={"rankdir": "LR", "splines": "spline"},
+        graph_attr={"rankdir": rankdir, "splines": "spline"},
         node_attr={"fontname": "Helvetica", "fontsize": "10"}
     )
 
@@ -114,7 +240,9 @@ def visualize_relevance(graph, all_wt, output_path="backtrace_graph",
         if name not in top_node_names:
             continue
         rel = relevance_data.get(name, (0.0, 0.0, 0.0))
-        fill = color_map.get(graph.nodes[node].get("layer_type", "Unknown"), "white")
+        # Use layer_name first (for semantic category), then layer_type as fallback
+        node_category = _get_node_category(graph.nodes[node])
+        fill = color_map.get(node_category, color_map.get(graph.nodes[node].get("layer_type", "Unknown"), "white"))
         g.node(
             name,
             label=f"{name}\nMean: {rel[0]:.3f}\nMax: {rel[1]:.3f}\nMin: {rel[2]:.3f}",
@@ -122,15 +250,30 @@ def visualize_relevance(graph, all_wt, output_path="backtrace_graph",
             fillcolor=fill,
         )
 
-    # --- Add edges ---
+    # --- Add edges (with transitive connections when layer_types filtering) ---
+    added_edges = set()
     for node in graph.nodes:
         name = node.replace("/", " ").replace(":", " ")
         if name not in top_node_names:
             continue
-        for parent in graph.nodes[node].get("parents", []):
-            parent_fmt = parent.replace("/", " ").replace(":", " ")
-            if parent_fmt in top_node_names:
-                g.edge(parent_fmt, name)
+        
+        if layer_types is not None:
+            # Use transitive ancestor search for filtered graphs
+            ancestors = find_filtered_ancestors(node)
+            for ancestor in ancestors:
+                edge = (ancestor, name)
+                if edge not in added_edges:
+                    added_edges.add(edge)
+                    g.edge(ancestor, name)
+        else:
+            # Original direct parent logic
+            for parent in graph.nodes[node].get("parents", []):
+                parent_fmt = parent.replace("/", " ").replace(":", " ")
+                if parent_fmt in top_node_names:
+                    edge = (parent_fmt, name)
+                    if edge not in added_edges:
+                        added_edges.add(edge)
+                        g.edge(parent_fmt, name)
 
     out = g.render(output_path, format="svg", cleanup=True)
 
@@ -254,32 +397,83 @@ def visualize_relevance_fast(
     max_parents_per_node=None,
     engine_auto_threshold=1200,
     disable_concentrate_for_sfdp=True,
+    layer_types: Optional[Sequence[str]] = None,
+    rankdir: str = "LR",
     show=True,
     inline_format="svg",
 ):
+    """Fast visualization for large/collapsed graphs.
+    
+    Parameters
+    ----------
+    layer_types : list[str], optional
+        Filter to only these layer types. If None, shows all nodes.
+    rankdir : str
+        Graph direction: "LR" (left-to-right), "TB" (top-to-bottom).
+        Default "LR". Use "TB" for LaTeX-friendly vertical layout.
+    """
     def _norm(s):
         return s.replace("/", " ").replace(":", " ")
 
-    # present nodes
-    present_raw = list(graph.nodes.keys())
-    norm_by_raw = {raw: _norm(raw) for raw in present_raw}
-    present_norm = set(norm_by_raw.values())
+    # present nodes - keep all for transitive edge computation
+    all_raw = list(graph.nodes.keys())
+    total_nodes = len(all_raw)
+    
+    # Determine filtered set using _get_node_category for proper semantic matching
+    if layer_types is not None:
+        layer_types_set = set(layer_types) | set(DEFAULT_FORCE_INCLUDE_TYPES)
+        present_raw = [
+            raw for raw in all_raw
+            if _get_node_category(graph.nodes[raw]) in layer_types_set
+            and not _is_excluded_node(raw)
+        ]
+        print(f"📊 Layer-type filtering (fast): {total_nodes} nodes → {len(present_raw)} nodes (filter: {list(layer_types)[:5]}{'...' if len(layer_types) > 5 else ''})")
+    else:
+        present_raw = [raw for raw in all_raw if not _is_excluded_node(raw)]
+        print(f"📊 No filtering (fast): {total_nodes} nodes → {len(present_raw)} nodes (excluded p_model_*/b_model_*)")
+    
+    norm_by_raw = {raw: _norm(raw) for raw in all_raw}  # All nodes for lookup
+    present_norm = {_norm(raw) for raw in present_raw}  # Filtered set
+    
+    # Helper to find transitive ancestors in filtered set
+    def find_filtered_ancestors(node_raw, visited=None):
+        """BFS to find all ancestors that are in the filtered set."""
+        if visited is None:
+            visited = set()
+        ancestors = set()
+        parents = graph.nodes[node_raw].get("parents", []) or []
+        for parent_raw in parents:
+            if parent_raw in visited:
+                continue
+            visited.add(parent_raw)
+            parent_norm = norm_by_raw.get(parent_raw, _norm(parent_raw))
+            if parent_norm in present_norm:
+                ancestors.add(parent_norm)
+            elif parent_raw in graph.nodes:
+                # Recursively search this parent's ancestors
+                ancestors.update(find_filtered_ancestors(parent_raw, visited))
+        return ancestors
 
     # relevance only for present
+    # Mean: sum of all entries (for batch=1) or average of sums across batches
+    # Max: maximum individual value in the relevance tensor
+    # Min: minimum individual value in the relevance tensor
     rel_map = {}
     for k, v in all_wt.items():
         nk = _norm(k)
         if nk not in present_norm:
             continue
         if isinstance(v, (list, tuple)):
-            flat = [float(t.sum()) for t in v if hasattr(t, "sum")]
-            if flat:
-                mean = float(sum(flat) / len(flat))
-                rel_map[nk] = (mean, max(flat), min(flat))
+            # Batched data
+            batch_sums = [float(t.sum()) for t in v if hasattr(t, "sum")]
+            if batch_sums:
+                mean_val = sum(batch_sums) / len(batch_sums)
+                rel_map[nk] = (mean_val, max(batch_sums), min(batch_sums))
             else:
                 rel_map[nk] = (0.0, 0.0, 0.0)
         elif hasattr(v, "sum"):
-            rel_map[nk] = (float(v.mean()), float(v.max()), float(v.min()))
+            # Single tensor (batch size = 1): Mean = sum of all entries
+            rel_map[nk] = (float(v.sum()), float(v.max()), float(v.min()))
         else:
             try:
                 x = float(v)
@@ -317,7 +511,7 @@ def visualize_relevance_fast(
         "outputorder": "edgesfirst",
     }
     if engine == "dot":
-        graph_attr["rankdir"] = "LR"
+        graph_attr["rankdir"] = rankdir
         graph_attr["splines"] = "spline"
         graph_attr["concentrate"] = "true"
     else:
@@ -356,8 +550,9 @@ def visualize_relevance_fast(
     for raw in present_raw:
         nk = norm_by_raw[raw]
         mean, mx, mn = rel_map.get(nk, (0.0, 0.0, 0.0))
-        lt = graph.nodes[raw].get("layer_type", "Unknown")
-        fill = color_map.get(lt, "white")
+        # Use _get_node_category for proper semantic coloring
+        node_category = _get_node_category(graph.nodes[raw])
+        fill = color_map.get(node_category, color_map.get(graph.nodes[raw].get("layer_type", "Unknown"), "white"))
         collapsed = graph.nodes[raw].get("collapsed_count", 0)
         collapsed_line = f"\n[collapsed {collapsed}]" if collapsed else ""
 
@@ -374,25 +569,35 @@ def visualize_relevance_fast(
             fillcolor=fill,
         )
 
-    # edges
+    # edges - use transitive ancestors when layer_types filtering
     added = set()
     for raw in present_raw:
         child = norm_by_raw[raw]
-        parents = graph.nodes[raw].get("parents", []) or []
-        if max_parents_per_node is not None and len(parents) > max_parents_per_node:
-            parents = sorted(
-                parents,
-                key=lambda p: abs(rel_map.get(_norm(p), (0.0, 0.0, 0.0))[0]),
-                reverse=True,
-            )[:max_parents_per_node]
+        
+        if layer_types is not None:
+            # Use transitive ancestor search for filtered graphs
+            ancestors = find_filtered_ancestors(raw)
+            for ancestor in ancestors:
+                e = (ancestor, child)
+                if e not in added:
+                    added.add(e)
+                    g.edge(ancestor, child)
+        else:
+            # Original direct parent logic
+            parents = graph.nodes[raw].get("parents", []) or []
+            if max_parents_per_node is not None and len(parents) > max_parents_per_node:
+                parents = sorted(
+                    parents,
+                    key=lambda p: abs(rel_map.get(_norm(p), (0.0, 0.0, 0.0))[0]),
+                    reverse=True,
+                )[:max_parents_per_node]
 
-        for p_raw in parents:
-            pn = norm_by_raw.get(p_raw, _norm(p_raw))
-            e = (pn, child)
-            if e in added:
-                continue
-            added.add(e)
-            g.edge(pn, child)
+            for p_raw in parents:
+                pn = norm_by_raw.get(p_raw, _norm(p_raw))
+                e = (pn, child)
+                if e not in added:
+                    added.add(e)
+                    g.edge(pn, child)
 
     out = g.render(output_path, cleanup=True)
 
@@ -417,12 +622,36 @@ def visualize_relevance_auto(
     node_threshold=500,
     engine_auto_threshold=1500,
     fast_output_path="backtrace_collapsed_fast",
+    layer_types: Optional[Sequence[str]] = None,
+    rankdir: str = "LR",
     show=True,
     inline_format="svg",
 ):
-    """Auto-choose pretty vs fast; always show inline and save."""
-    num_nodes = len(graph.nodes)
-    print(f"num_nodes: {num_nodes}")
+    """Auto-choose pretty vs fast visualization; always show inline and save.
+    
+    Parameters
+    ----------
+    layer_types : list[str], optional
+        Filter to only these layer types. If specified, layer_types filtering
+        takes precedence over automatic collapsing for large graphs.
+        Use SEMANTIC_LAYER_TYPES for a compact paper-ready graph.
+    rankdir : str
+        Graph direction: "LR" (left-to-right, wide), "TB" (top-to-bottom, tall).
+        Default "LR". Use "TB" for LaTeX/paper-friendly vertical layout.
+    """
+    # If layer_types specified, count only matching nodes for threshold decision
+    if layer_types is not None:
+        layer_types_set = set(layer_types) | set(DEFAULT_FORCE_INCLUDE_TYPES)
+        filtered_count = sum(
+            1 for n in graph.nodes 
+            if _get_node_category(graph.nodes[n]) in layer_types_set
+            and not _is_excluded_node(n)
+        )
+        num_nodes = filtered_count
+        print(f"num_nodes after layer_types filter: {num_nodes} (from {len(graph.nodes)} total)")
+    else:
+        num_nodes = sum(1 for n in graph.nodes if not _is_excluded_node(n))
+        print(f"num_nodes: {num_nodes} (from {len(graph.nodes)} total, excluded p_model_*/b_model_*)")
 
     if num_nodes < node_threshold:
         # small graph → original pretty version
@@ -430,6 +659,8 @@ def visualize_relevance_auto(
             graph,
             all_wt,
             output_path=output_path,
+            layer_types=layer_types,
+            rankdir=rankdir,
             show=show,
             inline_format=inline_format,
         )
@@ -448,6 +679,404 @@ def visualize_relevance_auto(
             collapsed_map=collapsed_map,
             max_parents_per_node=2,
             engine_auto_threshold=engine_auto_threshold,
+            layer_types=layer_types,
+            rankdir=rankdir,
             show=show,
             inline_format=inline_format,
         )
+
+
+def visualize_relevance_paginated(
+    graph,
+    all_wt,
+    output_path="backtrace_graph",
+    *,
+    max_nodes_per_page: int = 30,
+    layer_types: Optional[Sequence[str]] = None,
+    rankdir: str = "TB",
+    pages_per_row: int = 1,
+    show=True,
+    inline_format="svg",
+):
+    """🎯 Visualize relevance backtrace as multiple sub-graphs (pages) for long DAGs.
+    
+    Splits the graph into topologically-ordered pages, each containing at most
+    `max_nodes_per_page` nodes. Each page is saved as a separate file and
+    displayed inline sequentially.
+    
+    Parameters
+    ----------
+    graph : networkx.DiGraph
+        The computation graph with layer_type attributes on nodes
+    all_wt : dict
+        Relevance weights for each node
+    output_path : str
+        Base output file path (without extension). Pages will be named
+        {output_path}_page1.svg, {output_path}_page2.svg, etc.
+        When pages_per_row > 1, also creates {output_path}_combined.svg
+    max_nodes_per_page : int
+        Maximum number of nodes per page/sub-graph (default: 30)
+    layer_types : list[str], optional
+        Filter to only these layer types. Use SEMANTIC_LAYER_TYPES for compact graphs.
+    rankdir : str
+        Graph direction: "TB" (top-to-bottom, default for paginated), 
+        "LR" (left-to-right). Default "TB" for vertical flow.
+    pages_per_row : int
+        Number of pages to display side-by-side in a combined view (default: 1).
+        When > 1, creates an additional combined SVG with pages arranged 
+        left-to-right. Useful for fitting multiple pages on one LaTeX page.
+    show : bool
+        Whether to display inline in Jupyter/Colab
+    inline_format : str
+        Format for inline display ("svg" or "png")
+    
+    Returns
+    -------
+    list[tuple[graphviz.Digraph, str]]
+        List of (graph, output_path) tuples for each page
+    """
+    # --- Extract relevance stats ---
+    def _norm(s):
+        return s.replace("/", " ").replace(":", " ")
+    
+    relevance_data = {}
+    for node_name, rel in all_wt.items():
+        node_key = _norm(node_name)
+        if isinstance(rel, (list, tuple)):
+            batch_sums = [float(r.sum()) for r in rel if hasattr(r, "sum")]
+            if batch_sums:
+                mean_val = sum(batch_sums) / len(batch_sums)
+                relevance_data[node_key] = (mean_val, max(batch_sums), min(batch_sums))
+            else:
+                relevance_data[node_key] = (0.0, 0.0, 0.0)
+        elif hasattr(rel, "sum"):
+            relevance_data[node_key] = (float(rel.sum()), float(rel.max()), float(rel.min()))
+        else:
+            try:
+                val = float(rel)
+                relevance_data[node_key] = (val, val, val)
+            except Exception:
+                relevance_data[node_key] = (0.0, 0.0, 0.0)
+    
+    # --- Filter nodes ---
+    total_nodes = len(graph.nodes)
+    
+    if layer_types is not None:
+        layer_types_set = set(layer_types) | set(DEFAULT_FORCE_INCLUDE_TYPES)
+        filtered_nodes = [
+            node for node in graph.nodes
+            if _get_node_category(graph.nodes[node]) in layer_types_set
+            and not _is_excluded_node(node)
+        ]
+    else:
+        filtered_nodes = [node for node in graph.nodes if not _is_excluded_node(node)]
+    
+    filtered_norm = {_norm(n) for n in filtered_nodes}
+    print(f"📊 Paginated: {total_nodes} nodes → {len(filtered_nodes)} nodes")
+    
+    # --- Build parent mapping for filtered nodes ---
+    raw_to_norm = {node: _norm(node) for node in graph.nodes}
+    
+    def find_filtered_ancestors(node_raw, visited=None):
+        """BFS to find ancestors in filtered set (for transitive edges)."""
+        if visited is None:
+            visited = set()
+        ancestors = set()
+        parents = graph.nodes[node_raw].get("parents", []) or []
+        for parent_raw in parents:
+            if parent_raw in visited:
+                continue
+            visited.add(parent_raw)
+            parent_norm = raw_to_norm.get(parent_raw, _norm(parent_raw))
+            if parent_norm in filtered_norm:
+                ancestors.add(parent_norm)
+            elif parent_raw in graph.nodes:
+                ancestors.update(find_filtered_ancestors(parent_raw, visited))
+        return ancestors
+    
+    # --- Topological sort of filtered nodes ---
+    # Build edges for filtered subgraph
+    filtered_edges = {}  # node_norm -> set of parent_norms (in filtered set)
+    for node in filtered_nodes:
+        node_norm = _norm(node)
+        if layer_types is not None:
+            filtered_edges[node_norm] = find_filtered_ancestors(node)
+        else:
+            parents = graph.nodes[node].get("parents", []) or []
+            filtered_edges[node_norm] = {_norm(p) for p in parents if _norm(p) in filtered_norm}
+    
+    # Kahn's algorithm for topological sort
+    in_degree = {n: 0 for n in filtered_norm}
+    for node, parents in filtered_edges.items():
+        for p in parents:
+            if p in in_degree:
+                in_degree[node] = in_degree.get(node, 0) + 1
+    
+    # Start with nodes that have no filtered parents (in_degree == 0)
+    queue = [n for n, d in in_degree.items() if d == 0]
+    topo_order = []
+    
+    while queue:
+        node = queue.pop(0)
+        topo_order.append(node)
+        # Find children of this node
+        for child, parents in filtered_edges.items():
+            if node in parents:
+                in_degree[child] -= 1
+                if in_degree[child] == 0 and child not in topo_order:
+                    queue.append(child)
+    
+    # Add any remaining nodes (handles cycles gracefully)
+    for n in filtered_norm:
+        if n not in topo_order:
+            topo_order.append(n)
+    
+    print(f"📊 Topological order: {len(topo_order)} nodes")
+    
+    # --- Split into pages ---
+    pages = []
+    for i in range(0, len(topo_order), max_nodes_per_page):
+        pages.append(topo_order[i:i + max_nodes_per_page])
+    
+    print(f"📊 Split into {len(pages)} pages (max {max_nodes_per_page} nodes/page)")
+    
+    # --- Color scale setup ---
+    all_means = [relevance_data.get(n, (0.0, 0.0, 0.0))[0] for n in topo_order]
+    max_abs = max(abs(v) for v in all_means) if all_means else 1.0
+    if max_abs == 0:
+        max_abs = 1.0
+    
+    def get_color(mean_val):
+        norm = mean_val / max_abs
+        if norm >= 0:
+            r = int(255 * (1 - norm))
+            return f"#{r:02x}ff{r:02x}"  # green
+        else:
+            g = int(255 * (1 + norm))
+            return f"#ff{g:02x}{g:02x}"  # red
+    
+    # --- Render each page ---
+    results = []
+    for page_idx, page_nodes in enumerate(pages):
+        page_num = page_idx + 1
+        page_node_set = set(page_nodes)
+        
+        # Include connector nodes from previous page for context
+        connector_nodes = set()
+        if page_idx > 0:
+            prev_page_nodes = set(pages[page_idx - 1])
+            for node in page_nodes:
+                for parent in filtered_edges.get(node, set()):
+                    if parent in prev_page_nodes:
+                        connector_nodes.add(parent)
+        
+        g = graphviz.Digraph(
+            name=f"DLBacktrace_Page{page_num}",
+            format="svg",
+            graph_attr={
+                "rankdir": rankdir,
+                "label": f"DLBacktrace Graph - Page {page_num}/{len(pages)}",
+                "labelloc": "t",
+                "fontsize": "14",
+                "nodesep": "0.3",
+                "ranksep": "0.5",
+            },
+            node_attr={
+                "shape": "box",
+                "style": "filled,rounded",
+                "fontsize": "10",
+            },
+            edge_attr={
+                "fontsize": "8",
+            },
+        )
+        
+        # Add connector nodes (grayed out, from previous page)
+        for node in connector_nodes:
+            stats = relevance_data.get(node, (0.0, 0.0, 0.0))
+            label = f"{node}\n(from prev page)"
+            g.node(node, label=label, fillcolor="lightgray", style="filled,rounded,dashed")
+        
+        # Add page nodes
+        for node in page_nodes:
+            stats = relevance_data.get(node, (0.0, 0.0, 0.0))
+            mean, mx, mn = stats
+            label = f"{node}\nMean={mean:.4f}\nMax={mx:.4f} Min={mn:.4f}"
+            color = get_color(mean)
+            g.node(node, label=label, fillcolor=color)
+        
+        # Add edges within page and from connectors
+        added_edges = set()
+        for node in page_nodes:
+            for parent in filtered_edges.get(node, set()):
+                if parent in page_node_set or parent in connector_nodes:
+                    edge = (parent, node)
+                    if edge not in added_edges:
+                        added_edges.add(edge)
+                        # Get edge weight (child's mean relevance)
+                        child_mean = relevance_data.get(node, (0.0, 0.0, 0.0))[0]
+                        g.edge(parent, node, label=f"{child_mean:.3f}")
+        
+        # Render
+        page_output = f"{output_path}_page{page_num}"
+        out = g.render(page_output, cleanup=True)
+        results.append((g, out))
+        
+        # Show inline
+        if show and pages_per_row == 1:
+            print(f"\n{'='*50}")
+            print(f"📄 Page {page_num}/{len(pages)} ({len(page_nodes)} nodes)")
+            print(f"{'='*50}")
+            if inline_format.lower() == "svg":
+                svg_bytes = g.pipe(format="svg")
+                display(SVG(svg_bytes))
+            else:
+                png_bytes = g.pipe(format="png")
+                display(IPyImage(data=png_bytes))
+        
+        print(f"✅ Page {page_num} saved → {out}")
+    
+    # --- Create combined grid/matrix views when pages_per_row > 1 ---
+    # Layout: pages arranged in columns, flowing top-to-bottom within each column
+    # Example: 3 pages with pages_per_row=3 creates a Nx3 matrix
+    if pages_per_row > 1 and len(pages) > 1:
+        num_columns = min(pages_per_row, len(pages))
+        
+        # Organize pages into columns
+        # Column 0: pages[0], pages[num_columns], pages[2*num_columns], ...
+        # Column 1: pages[1], pages[num_columns+1], ...
+        columns = [[] for _ in range(num_columns)]
+        for page_idx, page_nodes in enumerate(pages):
+            col_idx = page_idx % num_columns
+            columns[col_idx].append((page_idx, page_nodes))
+        
+        num_rows = max(len(col) for col in columns)
+        
+        print(f"\n📊 Creating grid layout: {num_rows} rows × {num_columns} columns...")
+        
+        # Create a master graph
+        combined = graphviz.Digraph(
+            name="DLBacktrace_Combined_Grid",
+            format="svg",
+            engine="dot",
+            graph_attr={
+                "rankdir": "TB",  # Top-to-bottom for rows
+                "label": f"DLBacktrace Graph - Grid View ({len(pages)} pages in {num_rows}×{num_columns} layout)",
+                "labelloc": "t",
+                "fontsize": "14",
+                "splines": "ortho",  # Orthogonal edges for cleaner look
+                "nodesep": "0.4",
+                "ranksep": "0.6",
+                "newrank": "true",
+            },
+        )
+        
+        # Create nodes for each page in its column cluster
+        for col_idx, col_pages in enumerate(columns):
+            with combined.subgraph(name=f"cluster_col{col_idx}") as col_subg:
+                col_subg.attr(
+                    label=f"Column {col_idx + 1}",
+                    style="rounded,dashed",
+                    color="gray",
+                    fontsize="10",
+                    margin="15",
+                )
+                
+                for row_idx, (global_page_idx, page_nodes) in enumerate(col_pages):
+                    page_num = global_page_idx + 1
+                    page_node_set = set(page_nodes)
+                    
+                    # Determine connector nodes from previous page
+                    connector_nodes = set()
+                    if global_page_idx > 0:
+                        prev_page_nodes = set(pages[global_page_idx - 1])
+                        for node in page_nodes:
+                            for parent in filtered_edges.get(node, set()):
+                                if parent in prev_page_nodes:
+                                    connector_nodes.add(parent)
+                    
+                    # Create a sub-cluster for this page
+                    with col_subg.subgraph(name=f"cluster_page{page_num}") as page_subg:
+                        page_subg.attr(
+                            label=f"Page {page_num}",
+                            style="rounded,filled",
+                            color="black",
+                            fillcolor="white",
+                            fontsize="9",
+                            margin="8",
+                        )
+                        
+                        prefix = f"p{page_num}_"
+                        
+                        # Add connector nodes (grayed out)
+                        for node in connector_nodes:
+                            stats = relevance_data.get(node, (0.0, 0.0, 0.0))
+                            short_node = node[:20] + "..." if len(node) > 20 else node
+                            label = f"{short_node}\n(prev)"
+                            page_subg.node(prefix + node, label=label, fillcolor="lightgray",
+                                          style="filled,rounded,dashed", shape="box", fontsize="7")
+                        
+                        # Add page nodes
+                        for node in page_nodes:
+                            stats = relevance_data.get(node, (0.0, 0.0, 0.0))
+                            mean, mx, mn = stats
+                            short_node = node[:20] + "..." if len(node) > 20 else node
+                            label = f"{short_node}\nM={mean:.3f}\n↑{mx:.3f}↓{mn:.3f}"
+                            color = get_color(mean)
+                            page_subg.node(prefix + node, label=label, fillcolor=color,
+                                          style="filled,rounded", shape="box", fontsize="7")
+                        
+                        # Add edges within page
+                        for node in page_nodes:
+                            for parent in filtered_edges.get(node, set()):
+                                if parent in page_node_set or parent in connector_nodes:
+                                    child_mean = relevance_data.get(node, (0.0, 0.0, 0.0))[0]
+                                    page_subg.edge(prefix + parent, prefix + node,
+                                                  label=f"{child_mean:.2f}", fontsize="6")
+                    
+                    # Add invisible edge to next page in this column
+                    if row_idx < len(col_pages) - 1:
+                        next_page_idx, next_page_nodes = col_pages[row_idx + 1]
+                        if page_nodes and next_page_nodes:
+                            src_prefix = f"p{page_num}_"
+                            dst_prefix = f"p{next_page_idx + 1}_"
+                            combined.edge(src_prefix + page_nodes[-1], dst_prefix + next_page_nodes[0],
+                                         style="invis", constraint="true")
+        
+        # Add invisible edges between columns to align them horizontally
+        # Connect first node of each column's first page
+        for col_idx in range(num_columns - 1):
+            if columns[col_idx] and columns[col_idx + 1]:
+                _, left_nodes = columns[col_idx][0]
+                _, right_nodes = columns[col_idx + 1][0]
+                if left_nodes and right_nodes:
+                    left_page_idx = columns[col_idx][0][0]
+                    right_page_idx = columns[col_idx + 1][0][0]
+                    src = f"p{left_page_idx + 1}_{left_nodes[0]}"
+                    dst = f"p{right_page_idx + 1}_{right_nodes[0]}"
+                    # Use rank=same to align horizontally
+                    with combined.subgraph() as s:
+                        s.attr(rank="same")
+                        s.node(src)
+                        s.node(dst)
+        
+        # Render combined grid
+        combined_output = f"{output_path}_combined"
+        combined_out = combined.render(combined_output, cleanup=True)
+        results.append((combined, combined_out))
+        
+        if show:
+            print(f"\n{'='*60}")
+            print(f"📄 Combined Grid View ({num_rows} rows × {num_columns} columns)")
+            print(f"{'='*60}")
+            if inline_format.lower() == "svg":
+                svg_bytes = combined.pipe(format="svg")
+                display(SVG(svg_bytes))
+            else:
+                png_bytes = combined.pipe(format="png")
+                display(IPyImage(data=png_bytes))
+        
+        print(f"✅ Combined grid saved → {combined_out}")
+    
+    print(f"\n📊 Total: {len(pages)} pages saved with base path '{output_path}_pageN.svg'")
+    return results
