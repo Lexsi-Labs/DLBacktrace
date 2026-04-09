@@ -818,6 +818,10 @@ class DLBAutoSampler:
                     torch.cuda.synchronize()
                 _t["sampling"] = time.perf_counter() - _ts
 
+                if not return_layerwise_output:
+                    del logits, io_data
+                    gc.collect()
+
                 # ── Stage C: Save scores to disk ──
                 _ts = time.perf_counter()
                 if return_scores and _should_run_dlb(_gen_step_idx):
@@ -895,9 +899,7 @@ class DLBAutoSampler:
 
                 # ── Stage G: Memory cleanup ──
                 _ts = time.perf_counter()
-                if return_relevance:
-                    if _should_run_dlb(_gen_step_idx):
-                        self._clear_dlb_memory()
+                self._clear_dlb_memory()
                 _t["cleanup"] = time.perf_counter() - _ts
 
                 _t["total"] = _t["predict"] + _t["sampling"] + _t["scores_save"] + _t["io_save"] + _t["backtrace"] + _t["relevance_save"] + _t["cleanup"]
