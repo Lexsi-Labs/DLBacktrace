@@ -818,6 +818,10 @@ class DLBAutoSampler:
                     torch.cuda.synchronize()
                 _t["sampling"] = time.perf_counter() - _ts
 
+                if not return_layerwise_output:
+                    del logits, io_data
+                    gc.collect()
+
                 # ── Stage C: Save scores to disk ──
                 _ts = time.perf_counter()
                 if return_scores and _should_run_dlb(_gen_step_idx):
@@ -855,20 +859,21 @@ class DLBAutoSampler:
                     else:
                         io_data_trace.append(io_data)
                 _t["io_save"] = time.perf_counter() - _ts
+                
+                rel_dict = None
 
                 # ── Stage E: Backtracing (relevance propagation) ──
                 _ts = time.perf_counter()
-                if return_relevance:
-                    if _should_run_dlb(_gen_step_idx):
-                        rel_dict = self._compute_relevance(
-                            target_token_ids=next_tokens.view(-1),
-                            mode="default",
-                            multiplier=100.0,
-                            scaler=1.0,
-                            thresholding=0.5,
-                            task="generation",
-                            debug=False,
-                        )
+                if _should_run_dlb(_gen_step_idx):
+                    rel_dict = self._compute_relevance(
+                        target_token_ids=next_tokens.view(-1),
+                        mode="default",
+                        multiplier=100.0,
+                        scaler=1.0,
+                        thresholding=0.5,
+                        task="generation",
+                        debug=False,
+                    )
                 if device == "cuda":
                     torch.cuda.synchronize()
                 _t["backtrace"] = time.perf_counter() - _ts
@@ -891,13 +896,12 @@ class DLBAutoSampler:
                         relevance_trace.append(entry)
                         # Free the caller-side GPU reference immediately
                         del rel_dict
+                        rel_dict = None
                 _t["relevance_save"] = time.perf_counter() - _ts
 
                 # ── Stage G: Memory cleanup ──
                 _ts = time.perf_counter()
-                if return_relevance:
-                    if _should_run_dlb(_gen_step_idx):
-                        self._clear_dlb_memory()
+                self._clear_dlb_memory()
                 _t["cleanup"] = time.perf_counter() - _ts
 
                 _t["total"] = _t["predict"] + _t["sampling"] + _t["scores_save"] + _t["io_save"] + _t["backtrace"] + _t["relevance_save"] + _t["cleanup"]
