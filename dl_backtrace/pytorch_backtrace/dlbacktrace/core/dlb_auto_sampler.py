@@ -93,13 +93,18 @@ class DLBAutoSampler:
         self.tokenizer = tokenizer
 
     def _clear_dlb_memory(self):
-        """Clear DLB intermediate storage (node_io + all_wt) and CUDA cache."""
+        """Clear DLB intermediate storage (node_io + all_wt).
+        
+        Note: torch.cuda.empty_cache() and gc.collect() intentionally NOT called here.
+        empty_cache() releases ALL cached GPU memory back to the OS, forcing CUDA to
+        reallocate everything from scratch on the next predict() call. As tensors grow
+        with sequence length, this reallocation cost grows proportionally — it was the
+        primary cause of predict() time increasing ~0.5s per 50 tokens.
+        Python's reference-counting GC handles the freed dicts immediately.
+        """
         self.dlb.node_io = {}
         if hasattr(self.dlb, 'all_wt'):
             self.dlb.all_wt = {}
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        gc.collect()
 
     def _save_to_disk(
         self,
@@ -820,7 +825,6 @@ class DLBAutoSampler:
 
                 if not return_layerwise_output:
                     del logits, io_data
-                    gc.collect()
 
                 # ── Stage C: Save scores to disk ──
                 _ts = time.perf_counter()
