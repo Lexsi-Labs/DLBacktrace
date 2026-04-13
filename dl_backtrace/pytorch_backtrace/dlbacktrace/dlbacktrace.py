@@ -553,7 +553,7 @@ class DLBacktrace:
         return_relevance=False,
         return_layerwise_output=False,
         relevance_cache_policy="full",
-        relevance_cache_dir=None,
+        relevance_cache_dir="./relevance_cache",
         relevance_compress_dtype="float16",
         relevance_move_to_cpu=True,
         debug=False,
