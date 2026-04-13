@@ -109,7 +109,7 @@ class DLBAutoSampler:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-    # ── Native Forward with KV-Cache (Fast Path) ──────────────────────────
+    # -- Native Forward with KV-Cache (Fast Path) --------------------------
 
     def _check_native_forward_support(self):
         """Check if the underlying model supports native forward with KV-cache.
@@ -129,10 +129,37 @@ class DLBAutoSampler:
         except (ValueError, TypeError):
             return False
 
-    def _native_forward_with_cache(self, input_ids, attention_mask, past_key_values=None):
+    def _ensure_model_on_device(self, target_device):
+        """Move the inner model to *target_device* if it isn't there already.
+
+        DLB's execution engine operates on its own extracted-weight copies, so
+        the original nn.Module may still be on CPU even when generation runs on
+        CUDA.  This one-time move makes the native forward path possible.
+
+        Returns the device the model actually ended up on (may differ from
+        *target_device* if OOM prevented the move).
+        """
+        inner = self.dlb.model.model
+        try:
+            model_device = next(inner.parameters()).device
+        except StopIteration:
+            return target_device
+
+        if str(model_device) == str(target_device):
+            return model_device
+
+        try:
+            inner.to(target_device)
+            return target_device
+        except (RuntimeError, torch.cuda.OutOfMemoryError):
+            # Not enough VRAM to hold both extracted weights AND model params
+            return model_device
+
+    def _native_forward_with_cache(self, input_ids, attention_mask,
+                                    past_key_values=None, target_device=None):
         """Fast forward pass using the native model with KV-cache.
 
-        When *past_key_values* is ``None``, runs a full “prefill” pass over the
+        When *past_key_values* is ``None``, runs a full "prefill" pass over the
         entire sequence.  On subsequent calls with valid *past_key_values*,
         only processes the **last token** (incremental decode), reusing cached
         key / value states from all previous positions.
@@ -145,6 +172,9 @@ class DLBAutoSampler:
             Full attention mask covering every position.
         past_key_values : tuple | None
             Cached KV states from a previous call, or ``None`` for prefill.
+        target_device : str | torch.device | None
+            Device the generation loop is running on.  Used to ensure the
+            model is on the correct device on the first call.
 
         Returns
         -------
@@ -153,20 +183,33 @@ class DLBAutoSampler:
             ``[batch, seq_len, vocab]`` for prefill.
             *new_past_key_values*: updated cache for the next call.
         """
-        # Unwrap ModelWrapper → access the HuggingFace CausalLM directly
         inner_model = self.dlb.model.model
+
+        # ── One-time device alignment ──
+        if not hasattr(self, '_native_fwd_device_ok'):
+            if target_device is not None:
+                self._ensure_model_on_device(target_device)
+            self._native_fwd_device_ok = True
+
+        # Detect model device for input alignment
+        try:
+            _dev = next(inner_model.parameters()).device
+        except StopIteration:
+            _dev = input_ids.device
 
         if past_key_values is not None:
             # Incremental decode — only feed the LAST token
-            model_input = input_ids[:, -1:]
+            model_input = input_ids[:, -1:].to(_dev)
         else:
             # Prefill — feed the entire sequence
-            model_input = input_ids
+            model_input = input_ids.to(_dev)
+
+        mask_input = attention_mask.to(_dev)
 
         with torch.no_grad():
             output = inner_model(
                 input_ids=model_input,
-                attention_mask=attention_mask,
+                attention_mask=mask_input,
                 past_key_values=past_key_values,
                 use_cache=True,
             )
@@ -882,6 +925,7 @@ class DLBAutoSampler:
                     # ── FAST PATH: Native model with KV-cache (~10-30 ms/token) ──
                     logits, _past_kv = self._native_forward_with_cache(
                         generated, attn, past_key_values=_past_kv,
+                        target_device=device,
                     )
                     io_data = None
 
