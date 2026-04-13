@@ -93,18 +93,21 @@ class DLBAutoSampler:
         self.tokenizer = tokenizer
 
     def _clear_dlb_memory(self):
-        """Clear DLB intermediate storage (node_io + all_wt).
+        """Clear DLB intermediate storage (node_io + all_wt) and defragment CUDA cache.
         
-        Note: torch.cuda.empty_cache() and gc.collect() intentionally NOT called here.
-        empty_cache() releases ALL cached GPU memory back to the OS, forcing CUDA to
-        reallocate everything from scratch on the next predict() call. As tensors grow
-        with sequence length, this reallocation cost grows proportionally — it was the
-        primary cause of predict() time increasing ~0.5s per 50 tokens.
-        Python's reference-counting GC handles the freed dicts immediately.
+        Note: gc.collect() intentionally NOT called here — it forces a full Python GC sweep
+        (~10-50ms) on every step. Python's reference counting handles the freed dicts immediately.
+        
+        torch.cuda.empty_cache() IS called because, as sequence length grows each step, new
+        tensors are slightly larger than old ones. Without defragmenting, the CUDA allocator's
+        cached blocks from previous (smaller) tensors can't serve new (larger) requests,
+        eventually causing OOM around 250 tokens.
         """
         self.dlb.node_io = {}
         if hasattr(self.dlb, 'all_wt'):
             self.dlb.all_wt = {}
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     def _save_to_disk(
         self,

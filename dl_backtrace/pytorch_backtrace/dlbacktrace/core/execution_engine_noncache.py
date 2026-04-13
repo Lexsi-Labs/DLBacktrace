@@ -3900,6 +3900,14 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
             else:
                 tensor_map[layer_stack[len(extracted_weights)]] = inputs
 
+    # ── Eager tensor_map cleanup: pre-compute reference counts ──
+    # Track how many children still need each node's output from tensor_map.
+    # When the count reaches 0, we delete the entry from tensor_map to free GPU memory.
+    _remaining_children = {}
+    for _n in layer_stack:
+        _ch = graph.nodes[_n].get("children", [])
+        _remaining_children[_n] = len(_ch)
+
     for node_name in layer_stack:
         node_data = graph.nodes[node_name]
         parents = node_data["parents"]
@@ -4149,7 +4157,19 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
             "layer_hyperparams":layer_hyperparams,
         }
 
+        # ── Eager tensor_map cleanup ──
+        # Decrement reference counts for parents. When a parent's count reaches 0,
+        # all downstream consumers have been processed and the tensor can be freed
+        # from tensor_map. The tensor survives in node_io["output_values"] for
+        # relevance propagation.
+        for p in parents:
+            if p in _remaining_children:
+                _remaining_children[p] -= 1
+                if _remaining_children[p] <= 0 and p in tensor_map:
+                    del tensor_map[p]
+
     # Free tensor_map — node_io already holds all tensor references
+    tensor_map.clear()
     del tensor_map
 
     return node_io
