@@ -731,7 +731,7 @@ class DLBAutoSampler:
         return_relevance: bool = False,
         explain_tokens = "all",
         debug: bool = False,
-        relevance_cache_policy: str = "none",
+        relevance_cache_policy: str = "full",
         relevance_cache_dir: Optional[str] = None,
         relevance_compress_dtype: Optional[Any] = "float16",
         relevance_move_to_cpu: bool = True,

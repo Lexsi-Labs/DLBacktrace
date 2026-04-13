@@ -552,7 +552,7 @@ class DLBacktrace:
         return_scores=False,
         return_relevance=False,
         return_layerwise_output=False,
-        relevance_cache_policy="none",
+        relevance_cache_policy="full",
         relevance_cache_dir=None,
         relevance_compress_dtype="float16",
         relevance_move_to_cpu=True,
@@ -698,6 +698,11 @@ class DLBacktrace:
             if debug:
                 print(f"🚀 Running generation task with sample_auto...")
             
+            # When user requests relevance but hasn't set a storage policy,
+            # upgrade from the default "none" to "full" (in-memory).
+            if return_relevance and relevance_cache_policy == "none":
+                relevance_cache_policy = "full"
+
             cache_kwargs = {
                 "relevance_cache_policy": relevance_cache_policy,
                 "relevance_cache_dir": relevance_cache_dir,
