@@ -109,6 +109,79 @@ class DLBAutoSampler:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
+    # ── Native Forward with KV-Cache (Fast Path) ──────────────────────────
+
+    def _check_native_forward_support(self):
+        """Check if the underlying model supports native forward with KV-cache.
+
+        Walks the wrapper chain (e.g., ModelWrapper.model → AutoModelForCausalLM)
+        looking for a model whose forward() accepts `use_cache` and
+        `past_key_values` parameters.
+        """
+        model = self.dlb.model
+        inner = getattr(model, 'model', None)
+        if inner is None:
+            return False
+        try:
+            import inspect
+            sig = inspect.signature(inner.forward)
+            return 'use_cache' in sig.parameters and 'past_key_values' in sig.parameters
+        except (ValueError, TypeError):
+            return False
+
+    def _native_forward_with_cache(self, input_ids, attention_mask, past_key_values=None):
+        """Fast forward pass using the native model with KV-cache.
+
+        When *past_key_values* is ``None``, runs a full “prefill” pass over the
+        entire sequence.  On subsequent calls with valid *past_key_values*,
+        only processes the **last token** (incremental decode), reusing cached
+        key / value states from all previous positions.
+
+        Parameters
+        ----------
+        input_ids : Tensor [batch, seq_len]
+            Full token sequence (including all previously generated tokens).
+        attention_mask : Tensor [batch, seq_len]
+            Full attention mask covering every position.
+        past_key_values : tuple | None
+            Cached KV states from a previous call, or ``None`` for prefill.
+
+        Returns
+        -------
+        (logits, new_past_key_values)
+            *logits*: ``[batch, 1, vocab]`` for incremental /
+            ``[batch, seq_len, vocab]`` for prefill.
+            *new_past_key_values*: updated cache for the next call.
+        """
+        # Unwrap ModelWrapper → access the HuggingFace CausalLM directly
+        inner_model = self.dlb.model.model
+
+        if past_key_values is not None:
+            # Incremental decode — only feed the LAST token
+            model_input = input_ids[:, -1:]
+        else:
+            # Prefill — feed the entire sequence
+            model_input = input_ids
+
+        with torch.no_grad():
+            output = inner_model(
+                input_ids=model_input,
+                attention_mask=attention_mask,
+                past_key_values=past_key_values,
+                use_cache=True,
+            )
+
+        # Extract logits (handles CausalLMOutput, plain Tensor, or tuple)
+        if hasattr(output, 'logits'):
+            logits = output.logits
+        elif isinstance(output, torch.Tensor):
+            logits = output
+        else:
+            logits = output[0]
+
+        new_past_kv = getattr(output, 'past_key_values', None)
+        return logits, new_past_kv
+
     def _save_to_disk(
         self,
         data,
@@ -782,23 +855,42 @@ class DLBAutoSampler:
             else:
                 _should_run_dlb = lambda idx: True
 
+            # ── Fast-path: native model with KV-cache ──
+            _native_fwd_ok = self._check_native_forward_support()
+            _past_kv = None          # KV-cache for native forward
+            if _native_fwd_ok:
+                print("  ⚡ Native KV-cache forward available — fast path enabled for non-DLB steps")
+
             for _gen_step_idx in range(max_new_tokens if max_new_tokens is not None else 10_000_000):
                 _t = {}  # timing dict for this step
                 _t["step"] = _gen_step_idx
                 _t["seq_len"] = generated.shape[1]
 
-                # ── Stage A: Forward pass (predict) ──
+                # ── Stage A: Forward pass ──
                 if device == "cuda":
                     torch.cuda.synchronize()
                 _ts = time.perf_counter()
-                io_data = self.dlb.predict(generated, attn, debug=False, temperature=1.0)
+
+                _use_dlb = _should_run_dlb(_gen_step_idx) or not _native_fwd_ok
+
+                if _use_dlb:
+                    # ── SLOW PATH: Full DLB predict (builds node_io for relevance) ──
+                    io_data = self.dlb.predict(generated, attn, debug=False, temperature=1.0)
+                    logits = self._extract_last_logits(io_data)
+                    _past_kv = None          # DLB used its own forward → KV-cache is stale
+                else:
+                    # ── FAST PATH: Native model with KV-cache (~10-30 ms/token) ──
+                    logits, _past_kv = self._native_forward_with_cache(
+                        generated, attn, past_key_values=_past_kv,
+                    )
+                    io_data = None
+
                 if device == "cuda":
                     torch.cuda.synchronize()
                 _t["predict"] = time.perf_counter() - _ts
 
                 # ── Stage B: Logits extraction + sampling ──
                 _ts = time.perf_counter()
-                logits = self._extract_last_logits(io_data)        # [1, T_cur, V]
                 if logits.device != device:
                     logits = logits.to(device)
                 next_logits = self._as_float(logits[:, -1, :])     # Float for processors
@@ -827,7 +919,9 @@ class DLBAutoSampler:
                 _t["sampling"] = time.perf_counter() - _ts
 
                 if not return_layerwise_output:
-                    del logits, io_data
+                    del logits
+                    if io_data is not None:
+                        del io_data
 
                 # ── Stage C: Save scores to disk ──
                 _ts = time.perf_counter()
@@ -850,7 +944,7 @@ class DLBAutoSampler:
 
                 # ── Stage D: Save IO data to disk ──
                 _ts = time.perf_counter()
-                if return_layerwise_output:
+                if return_layerwise_output and io_data is not None:
                     if disk_streaming:
                         path = self._save_to_disk(
                             io_data,
@@ -907,15 +1001,20 @@ class DLBAutoSampler:
                 _t["relevance_save"] = time.perf_counter() - _ts
 
                 # ── Stage G: Memory cleanup ──
+                # Only needed after DLB predict steps (which populate node_io).
+                # On fast-path steps: nothing to clean, and empty_cache() would
+                # destroy the KV-cache living in GPU memory via _past_kv.
                 _ts = time.perf_counter()
-                self._clear_dlb_memory()
+                if _use_dlb:
+                    self._clear_dlb_memory()
                 _t["cleanup"] = time.perf_counter() - _ts
 
                 _t["total"] = _t["predict"] + _t["sampling"] + _t["scores_save"] + _t["io_save"] + _t["backtrace"] + _t["relevance_save"] + _t["cleanup"]
 
                 # Print per-token line
+                _path_label = "DLB " if _use_dlb else "FAST"
                 print(
-                    f"  ⏱ Token {_gen_step_idx:3d} (seq={_t['seq_len']:4d}) │ "
+                    f"  ⏱ Token {_gen_step_idx:3d} [{_path_label}] (seq={_t['seq_len']:4d}) │ "
                     f"predict={_t['predict']:6.2f}s │ "
                     f"sample={_t['sampling']:5.3f}s │ "
                     f"backtrace={_t['backtrace']:5.2f}s │ "
