@@ -372,14 +372,9 @@ def setup_consistent_environment(model=None):
     except Exception as e:
         logger.debug(f"⚠️  Could not set deterministic SDPA: {e}")
     
-    # 🔧 ENHANCED: Memory management for consistent performance
-    try:
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            torch.cuda.synchronize()
-            logger.debug("✅ CUDA memory cleared and synchronized")
-    except Exception as e:
-        logger.debug(f"⚠️  Could not manage CUDA memory: {e}")
+    # Note: torch.cuda.empty_cache() + synchronize() intentionally removed here.
+    # They force expensive GPU synchronization (~50-100ms) and are unnecessary
+    # during setup — memory cleanup is handled at end of generation steps.
     
     logger.debug("🔧 Deterministic environment setup complete!")
 
@@ -3786,79 +3781,75 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
         logger.error(f"[Execution Error] Node `{node_name}` failed in `{func_name}`: {e}")
         #return layer_in
 
-def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, tracer, exported_program=None):
+def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, tracer, exported_program=None, cached_state=None):
     logger = get_logger()
     logger.info(f"Executing `run_execution_nocache` ...!")
     
-    # 🔧 CONSISTENCY FIX: Set up consistent environment
-    setup_consistent_environment(model)
+    # Use cached_state to skip redundant setup on repeated calls (e.g., during generation).
+    # The dict is mutated in-place so the caller (ExecutionEngineNoCache) retains state.
+    if cached_state is None:
+        cached_state = {}
     
-    # 🔧 CRITICAL FIX: Ensure model is in consistent state
-    logger.debug("🔧 Ensuring model consistency...")
-    model.eval()
-    model.requires_grad_(False)
+    # ── Environment setup + model state: only on FIRST call ──
+    if not cached_state.get("env_setup_done"):
+        setup_consistent_environment(model)
+        model.eval()
+        model.requires_grad_(False)
+        cached_state["env_setup_done"] = True
+        logger.debug("✅ Environment setup and model consistency ensured (first call)")
     
-    # 🔧 CRITICAL FIX: Synchronize extracted weights with current model state
-    logger.debug("🔧 Synchronizing extracted weights with model state...")
-    if exported_program is not None:
-        for placeholder_name, extracted_weight in extracted_weights.items():
-            if extracted_weight is not None and isinstance(extracted_weight, torch.Tensor):
-                # Get the real parameter name from exported_program
-                real_key = None
-                for spec in exported_program.graph_signature.input_specs:
-                    if hasattr(spec.arg, 'name') and spec.arg.name == placeholder_name:
-                        real_key = spec.target
-                        break
-                
-                if real_key and real_key in model.state_dict():
-                    current_weight = model.state_dict()[real_key]
-                    # Reference weight directly — read-only during forward pass
-                    extracted_weights[placeholder_name] = current_weight
-                    logger.debug(f"✅ Synchronized {placeholder_name} -> {real_key}")
-    else:
-        logger.warning("⚠️ No exported_program provided, skipping weight synchronization")
+    # ── Weight synchronization: only on FIRST call ──
+    # Weights don't change during generation (model is in eval mode with requires_grad=False).
+    # Previously this called model.state_dict() TWICE per placeholder on EVERY call — for a
+    # large model that's hundreds of MB of allocation per predict() invocation.
+    if not cached_state.get("weights_synced"):
+        logger.debug("🔧 Synchronizing extracted weights with model state...")
+        if exported_program is not None:
+            # Build placeholder→target mapping once (avoids repeated inner loop)
+            spec_map = {}
+            for spec in exported_program.graph_signature.input_specs:
+                if hasattr(spec.arg, 'name'):
+                    spec_map[spec.arg.name] = spec.target
+            
+            # Single call to model.state_dict() instead of N calls (one per placeholder)
+            state_dict = model.state_dict()
+            for placeholder_name, extracted_weight in extracted_weights.items():
+                if extracted_weight is not None and isinstance(extracted_weight, torch.Tensor):
+                    real_key = spec_map.get(placeholder_name)
+                    if real_key and real_key in state_dict:
+                        extracted_weights[placeholder_name] = state_dict[real_key]
+                        logger.debug(f"✅ Synchronized {placeholder_name} -> {real_key}")
+            del state_dict  # Free the full state dict copy immediately
+        else:
+            logger.warning("⚠️ No exported_program provided, skipping weight synchronization")
+        cached_state["weights_synced"] = True
+        logger.debug("✅ Weight synchronization complete")
     
-    logger.debug("✅ Weight synchronization complete")
+    # ── Model metadata: use pre-computed values from cached_state ──
+    target_device = cached_state.get("target_device")
+    if target_device is None:
+        target_device = ensure_model_has_device_attribute(model)
+        cached_state["target_device"] = target_device
     
-    # 🔧 CRITICAL FIX: Preserve original model precision instead of forcing float32
-    # This ensures numerical consistency with the original model
-    logger.debug("Preserving original model precision for consistency")
-    for param in model.parameters():
-        logger.debug(f"Parameter {param.shape} dtype: {param.dtype}")
-    
-    for buffer in model.buffers():
-        logger.debug(f"Buffer {buffer.shape} dtype: {buffer.dtype}")
-    
-    logger.debug("✅ Model consistency ensured")
-    
-    # 🔧 ENHANCED FIX: Get the target device from the model for all operations
-    target_device = ensure_model_has_device_attribute(model)
-    logger.debug(f"🎯 Target device for all operations: {target_device}")
-    
-    # 🔧 ENHANCED FIX: Get the model dtype for all operations
-    model_dtype = torch.float32  # fallback
-    for param in model.parameters():
-        if param.is_floating_point():
-            model_dtype = param.dtype
-            break
-    else:
-        for buffer in model.buffers():
-            if buffer.is_floating_point():
-                model_dtype = buffer.dtype
-                break
-    logger.debug(f"🎯 Model dtype for all operations: {model_dtype}")
+    model_dtype = cached_state.get("model_dtype", torch.float32)
     
     tensor_map = {}
     node_io = {}
 
-    model_signature = inspect.signature(model.forward)
-    all_param_names = list(model_signature.parameters.keys())
+    # Use pre-computed signature info from cached_state (avoids inspect.signature on every call)
+    all_param_names = cached_state.get("all_param_names")
+    required_params = cached_state.get("required_params")
     
-    required_params = [
-        name for name, param in model_signature.parameters.items()
-        if param.default is inspect.Parameter.empty 
-        and param.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
-    ]
+    if all_param_names is None:
+        model_signature = inspect.signature(model.forward)
+        all_param_names = list(model_signature.parameters.keys())
+        required_params = [
+            name for name, param in model_signature.parameters.items()
+            if param.default is inspect.Parameter.empty 
+            and param.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+        ]
+        cached_state["all_param_names"] = all_param_names
+        cached_state["required_params"] = required_params
     
     if len(inputs) < len(required_params):
         raise ValueError(
@@ -4174,9 +4165,37 @@ class ExecutionEngineNoCache:
         self.debug = debug
         self.log_level = log_level
         
-        # Setup logging for this instance with force_reconfigure to ensure proper setup
+        # Setup logging for this instance
         self.logger = setup_logging(debug=debug, log_level=log_level, force_reconfigure=True)
         self.logger.info(f"ExecutionEngineNoCache initialized with debug={debug}, log_level={log_level}")
+        
+        # Pre-compute model metadata that is invariant across calls.
+        # This avoids re-running inspect.signature(), iterating all parameters for dtype,
+        # and calling ensure_model_has_device_attribute() on every predict() call.
+        self._cached_state = {
+            "env_setup_done": False,
+            "weights_synced": False,
+            "target_device": ensure_model_has_device_attribute(model),
+            "model_dtype": self._detect_model_dtype(),
+        }
+        # Pre-compute model forward signature (avoids inspect.signature on every call)
+        model_signature = inspect.signature(model.forward)
+        self._cached_state["all_param_names"] = list(model_signature.parameters.keys())
+        self._cached_state["required_params"] = [
+            name for name, param in model_signature.parameters.items()
+            if param.default is inspect.Parameter.empty
+            and param.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+        ]
+
+    def _detect_model_dtype(self):
+        """Detect model's computation dtype from its parameters/buffers (called once at init)."""
+        for param in self.model.parameters():
+            if param.is_floating_point():
+                return param.dtype
+        for buffer in self.model.buffers():
+            if buffer.is_floating_point():
+                return buffer.dtype
+        return torch.float32
 
     def run(self, inputs, debug=None, log_level=None):
         """Run the execution engine with optional debug and log level overrides"""
@@ -4194,7 +4213,7 @@ class ExecutionEngineNoCache:
             
         self.logger.info(f"Starting execution with {len(inputs)} inputs")
         
-        # Run the execution
+        # Run the execution with cached_state to avoid redundant setup on repeated calls
         result = run_execution_nocache(
             graph=self.graph,
             layer_stack=self.layer_stack,
@@ -4203,6 +4222,7 @@ class ExecutionEngineNoCache:
             inputs=inputs,
             tracer=self.tracer,
             exported_program=self.exported_program,
+            cached_state=self._cached_state,
         )
         
         # Flush logs at the end of execution to ensure all debug statements are captured

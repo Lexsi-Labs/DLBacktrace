@@ -303,7 +303,7 @@ def benchmark_gen_scaling(
     device: str,
     input_prompt: str = "What is the capital of France?",
     run_idx: int = 0,
-    cache_dir: str = "benchmarks/cache",
+    cache_dir: str = None,
     explain_tokens = "all",
 ) -> Dict[str, Any]:
     """Benchmark multi-token generation using run_task(task='generation').
@@ -364,12 +364,12 @@ def benchmark_gen_scaling(
             inputs={"input_ids": input_ids, "attention_mask": attention_mask},
             tokenizer=tokenizer,
             max_new_tokens=max_new_tokens,
-            return_relevance=True,
-            return_scores=True,
+            return_relevance=False,
+            return_scores=False,
             debug=False,
             explain_tokens=explain_tokens,
-            relevance_cache_policy="disk",
-            relevance_cache_dir=cache_dir,
+            relevance_cache_policy="none",
+            relevance_cache_dir=None,
         )
         if device == "cuda":
             torch.cuda.synchronize()
