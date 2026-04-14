@@ -368,8 +368,8 @@ def benchmark_gen_scaling(
             return_scores=False,
             debug=False,
             explain_tokens=explain_tokens,
-            relevance_cache_policy="none",
-            relevance_cache_dir=None,
+            relevance_cache_policy="disk",
+            relevance_cache_dir=cache_dir,
         )
         if device == "cuda":
             torch.cuda.synchronize()

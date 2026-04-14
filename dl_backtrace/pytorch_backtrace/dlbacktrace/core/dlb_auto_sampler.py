@@ -271,7 +271,7 @@ class DLBAutoSampler:
             torch.save(cpu_data, file_path, pickle_protocol=pickle_protocol)
 
         del cpu_data
-        gc.collect()
+        # gc.collect()
         return str(file_path)
 
     def _print_generated_sequence(self, generated: torch.Tensor, prefix: str = ""):
@@ -496,40 +496,6 @@ class DLBAutoSampler:
                 return mapping[key]
         raise ValueError(f"Unsupported relevance dtype hint: {dtype_hint}")
 
-    @staticmethod
-    def load_relevance_trace(relevance_trace: list, device: str = "cpu") -> list:
-        """
-        Materialize a relevance_trace that may contain disk-stub entries.
-
-        When relevance_cache_policy="disk", each entry in relevance_trace is a dict:
-            {"summary": <float>, "path": <str>, "compression": <str>}
-        instead of a full {node_name: tensor} dict.
-
-        This function loads those stubs back from disk so the trace can be
-        passed to visualization functions.
-
-        Args:
-            relevance_trace: list of either {node: tensor} dicts (full/summary policy)
-                            or {"path": ..., "summary": ..., "compression": ...} stubs (disk policy)
-            device: torch device string for loaded tensors (default "cpu")
-
-        Returns:
-            list of {node_name: tensor} dicts, ready for visualizers
-        """
-        loaded = []
-        for entry in relevance_trace:
-            if not isinstance(entry, dict):
-                loaded.append(entry)
-                continue
-            # Detect disk stub: has "path" key pointing to a .dlbr file
-            if "path" in entry and "summary" in entry:
-                tensors = DLBAutoSampler.load_relevance_step(entry["path"], device=device)
-                loaded.append(tensors)
-            else:
-                # Already a full {node: tensor} dict (policy="full") — pass through
-                loaded.append(entry)
-
-        return loaded
 
     def _prepare_cache_dir(self, base_dir: Optional[str], policy: str):
         if policy != "disk":
@@ -675,7 +641,7 @@ class DLBAutoSampler:
                 f.write(raw_bytes)
         del raw_bytes
 
-        gc.collect()
+        # gc.collect()
         return {
             "summary": summary_val,
             "path": str(file_path),
@@ -1034,7 +1000,7 @@ class DLBAutoSampler:
                         )
                         io_data_trace.append({"path": path})
                         del io_data
-                        gc.collect()
+                        # gc.collect()
                     else:
                         io_data_trace.append(io_data)
                 _t["io_save"] = time.perf_counter() - _ts

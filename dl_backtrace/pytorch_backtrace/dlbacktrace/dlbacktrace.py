@@ -1043,11 +1043,6 @@ class DLBacktrace:
         eng = DLBAutoSampler(self, tokenizer)  # `self` is the DLB engine (has .model and .predict)
         return eng.generate(input_ids=input_ids, attention_mask=attention_mask, **kwargs) 
 
-    def load_relevance_trace(self, relevance_trace: list, device: str = "cpu") -> list:
-        """Load disk-cached relevance stubs back into tensor dicts for visualization."""
-        from .core.dlb_auto_sampler import DLBAutoSampler
-        return DLBAutoSampler.load_relevance_trace(relevance_trace, device=device)
-
     def print_all_relevance_info(self):
         """ 
             print shape and sum of all relevance values in `self.all_wt`.
