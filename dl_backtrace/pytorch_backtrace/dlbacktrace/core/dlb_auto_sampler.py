@@ -238,35 +238,19 @@ class DLBAutoSampler:
         """Save tensor/dict data to disk with optional lz4 compression. Returns the file path."""
         base_path = cache_dir / filename
 
-        # Types that are safe to pickle (primitives + containers)
-        _SAFE_SCALARS = (int, float, bool, str, bytes, type(None))
-
         def _to_cpu_async(obj):
-            """Recursively move tensors to CPU and drop non-serializable objects."""
             if torch.is_tensor(obj):
                 t = obj.detach()
                 return t.to('cpu', non_blocking=True) if t.is_cuda else t
             if isinstance(obj, np.ndarray):
                 return torch.from_numpy(obj)
             if isinstance(obj, dict):
-                return {k: _to_cpu_async(v) for k, v in obj.items()
-                        if _is_serializable(v)}
+                return {k: _to_cpu_async(v) for k, v in obj.items()}
             if isinstance(obj, list):
-                return [_to_cpu_async(v) for v in obj if _is_serializable(v)]
+                return [_to_cpu_async(v) for v in obj]
             if isinstance(obj, tuple):
-                return tuple(_to_cpu_async(v) for v in obj if _is_serializable(v))
-            if isinstance(obj, _SAFE_SCALARS):
-                return obj
-            # Drop anything else (PyCapsule, C-objects, HF cache internals, etc.)
-            return None
-
-        def _is_serializable(obj):
-            """Quick check: is this object (or container of objects) safe to pickle?"""
-            if torch.is_tensor(obj) or isinstance(obj, (np.ndarray, *_SAFE_SCALARS)):
-                return True
-            if isinstance(obj, (dict, list, tuple)):
-                return True
-            return False
+                return tuple(_to_cpu_async(v) for v in obj)
+            return obj
 
         cpu_data = _to_cpu_async(data)
         if torch.cuda.is_available():
@@ -287,7 +271,7 @@ class DLBAutoSampler:
             torch.save(cpu_data, file_path, pickle_protocol=pickle_protocol)
 
         del cpu_data
-        # gc.collect()
+        gc.collect()
         return str(file_path)
 
     def _print_generated_sequence(self, generated: torch.Tensor, prefix: str = ""):
@@ -657,7 +641,7 @@ class DLBAutoSampler:
                 f.write(raw_bytes)
         del raw_bytes
 
-        # gc.collect()
+        gc.collect()
         return {
             "summary": summary_val,
             "path": str(file_path),
@@ -1016,7 +1000,7 @@ class DLBAutoSampler:
                         )
                         io_data_trace.append({"path": path})
                         del io_data
-                        # gc.collect()
+                        gc.collect()
                     else:
                         io_data_trace.append(io_data)
                 _t["io_save"] = time.perf_counter() - _ts
