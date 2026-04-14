@@ -918,9 +918,14 @@ class DLBAutoSampler:
 
                 if _use_dlb:
                     # ── SLOW PATH: Full DLB predict (builds node_io for relevance) ──
+                    if _past_kv is not None:
+                        del _past_kv
+                        _past_kv = None
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
                     io_data = self.dlb.predict(generated, attn, debug=False, temperature=1.0)
                     logits = self._extract_last_logits(io_data)
-                    _past_kv = None          # DLB used its own forward → KV-cache is stale
+                    
                 else:
                     # ── FAST PATH: Native model with KV-cache (~10-30 ms/token) ──
                     logits, _past_kv = self._native_forward_with_cache(
