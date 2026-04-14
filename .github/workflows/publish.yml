@@ -62,7 +62,7 @@ jobs:
         id: slack
         uses: slackapi/slack-github-action@v1.24.0
         with:
-          channel-id: 'aryaxai-dl-backtrace-release'
+          channel-id: 'dl-backtrace-release'
           payload: |
             {
               "text": "AryaXAI SDK release",
