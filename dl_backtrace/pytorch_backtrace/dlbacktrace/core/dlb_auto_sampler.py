@@ -1003,10 +1003,8 @@ class DLBAutoSampler:
                             pickle_protocol=relevance_pickle_protocol,
                         )
                         scores_trace.append({"path": path})
-                        del scores_cpu
                     else:
                         scores_trace.append(scores_cpu)
-                    del scores
                     del scores_cpu
                 _t["scores_save"] = time.perf_counter() - _ts
 
@@ -1049,10 +1047,10 @@ class DLBAutoSampler:
                     torch.cuda.synchronize()
                 _t["backtrace"] = time.perf_counter() - _ts
 
-                # ── Stage F: Save relevance to disk ──
+                # ── Stage F: Save relevance ──
                 _ts = time.perf_counter()
-                if return_relevance and cache_policy == "disk":
-                    if _should_run_dlb(_gen_step_idx):
+                if return_relevance and _should_run_dlb(_gen_step_idx):
+                    if cache_policy == "disk":
                         entry = self._store_relevance_entry(
                             rel_dict,
                             policy=cache_policy,
@@ -1064,20 +1062,30 @@ class DLBAutoSampler:
                             compression_method=relevance_compression_method,
                             pickle_protocol=relevance_pickle_protocol,
                         )
+                        relevance_trace.append(entry)
+                        # _store_relevance_entry already calls rel_dict.clear()
+                        # for disk policy, so nothing left to free
+                    elif cache_policy == "full":
+                        # Deep-copy tensors to CPU so we can safely free GPU memory
+                        cpu_rel = {}
+                        for k, v in rel_dict.items():
+                            if torch.is_tensor(v):
+                                cpu_rel[k] = v.detach().cpu().clone()
+                            else:
+                                cpu_rel[k] = v
+                        relevance_trace.append(cpu_rel)
+                        del cpu_rel
                 _t["relevance_save"] = time.perf_counter() - _ts
 
-                if _should_run_dlb(_gen_step_idx) and cache_policy == "full":
-                    relevance_trace.append(rel_dict)
-                elif cache_policy == "disk":
-                    relevance_trace.append(entry)
-                    
                 # ── Stage G: Memory cleanup ──
                 _ts = time.perf_counter()
                 if rel_dict is not None:
-                    rel_dict.clear()
+                    # Safe to clear — "full" policy already copied tensors above,
+                    # "disk" policy already consumed the data in _store_relevance_entry
+                    if isinstance(rel_dict, dict):
+                        rel_dict.clear()
                     del rel_dict
                     rel_dict = None
-                    
                 _t["cleanup"] = time.perf_counter() - _ts
 
                 _t["total"] = _t["predict"] + _t["sampling"] + _t["scores_save"] + _t["io_save"] + _t["backtrace"] + _t["relevance_save"] + _t["cleanup"]
