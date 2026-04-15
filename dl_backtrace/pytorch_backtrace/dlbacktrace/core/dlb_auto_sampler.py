@@ -1081,7 +1081,6 @@ class DLBAutoSampler:
                         )
                         relevance_trace.clear()
                         relevance_trace.append(full_rel)
-                        full_rel.clear()
                         del full_rel
                 _t["relevance_save"] = time.perf_counter() - _ts
 
