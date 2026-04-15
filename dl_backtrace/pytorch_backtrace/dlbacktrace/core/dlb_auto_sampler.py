@@ -1042,8 +1042,7 @@ class DLBAutoSampler:
                         thresholding=0.5,
                         task="generation",
                         debug=False,
-                    )
-                    self.dlb.all_wt = {}    
+                    )  
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
                 if device == "cuda":
