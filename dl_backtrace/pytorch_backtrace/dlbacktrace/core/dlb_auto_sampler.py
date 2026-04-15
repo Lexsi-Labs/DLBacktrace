@@ -120,9 +120,6 @@ class DLBAutoSampler:
             all_wt.clear()
         self.dlb.all_wt = {}
 
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
     # -- Native Forward with KV-Cache (Fast Path) --------------------------
 
     def _check_native_forward_support(self):
@@ -932,7 +929,7 @@ class DLBAutoSampler:
 
                 if _use_dlb:
                     # ── SLOW PATH: clear BEFORE allocating ──
-                    # Kill old node_io/all_wt first so peak RAM = 1× not 2×
+                    # Kill old node_io/all_wt first so peak RAM
                     self._clear_dlb_memory()
                     if _past_kv is not None:
                         del _past_kv
@@ -946,7 +943,8 @@ class DLBAutoSampler:
                         del io_data
                         io_data = None
                 else:
-                    # ── FAST PATH: Native model with KV-cache (~10-30 ms/token) ──
+                    # ── FAST PATH: Native model with KV-cache
+                    
                     logits, _past_kv = self._native_forward_with_cache(
                         generated, attn, past_key_values=_past_kv,
                         target_device=device,
@@ -994,8 +992,8 @@ class DLBAutoSampler:
                 # ── Stage C: Save scores to disk ──
                 _ts = time.perf_counter()
                 if return_scores and _should_run_dlb(_gen_step_idx):
-                    scores_cpu = scores.detach().to("cpu")
                     if disk_streaming:
+                        scores_cpu = scores.detach().to("cpu")
                         path = self._save_to_disk(
                             scores_cpu,
                             cache_dir=cache_dir_path,
@@ -1007,7 +1005,8 @@ class DLBAutoSampler:
                         scores_trace.append({"path": path})
                         del scores_cpu
                     else:
-                        scores_trace.append(scores_cpu)
+                        scores_trace.append(scores)
+                    del scores
                 _t["scores_save"] = time.perf_counter() - _ts
 
                 # ── Stage D: Save IO data to disk ──
@@ -1064,8 +1063,12 @@ class DLBAutoSampler:
                         )
                         relevance_trace.append(entry)
                         # Free the caller-side GPU reference immediately
-                        del rel_dict
-                        rel_dict = None
+                        if rel_dict is not None:
+                            rel_dict.clear()
+                            del rel_dict
+                        self.dlb.all_wt = {}    
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
                 _t["relevance_save"] = time.perf_counter() - _ts
 
                 # ── Stage G: Memory cleanup ──
