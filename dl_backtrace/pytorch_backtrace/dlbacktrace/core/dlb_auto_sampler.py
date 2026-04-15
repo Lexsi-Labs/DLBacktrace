@@ -600,9 +600,12 @@ class DLBAutoSampler:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        if normalized_policy == "summary" or normalized_policy == "full":
+        if normalized_policy == "summary":
             cpu_dict = self._flat_to_dict(flat_cpu, meta_entries)
             return {"summary": self._summarize_relevance(cpu_dict)}
+
+        if normalized_policy == "full":
+            return self._flat_to_dict(flat_cpu, meta_entries)
 
         if normalized_policy != "disk":
             raise ValueError(
@@ -1076,6 +1079,7 @@ class DLBAutoSampler:
                             compression_method=relevance_compression_method,
                             pickle_protocol=relevance_pickle_protocol,
                         )
+                        relevance_trace.clear()
                         relevance_trace.append(full_rel)
                         full_rel.clear()
                         del full_rel
