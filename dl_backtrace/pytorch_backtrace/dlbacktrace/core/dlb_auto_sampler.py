@@ -1066,7 +1066,7 @@ class DLBAutoSampler:
                         # _store_relevance_entry already calls rel_dict.clear()
                         # for disk policy, so nothing left to free
                     elif cache_policy == "full":
-                        # Deep-copy tensors to CPU so we can safely free GPU memory
+                        # Only keep the LAST DLB step's relevance in memory
                         full_rel = self._store_relevance_entry(
                             rel_dict,
                             policy=cache_policy,
@@ -1078,6 +1078,7 @@ class DLBAutoSampler:
                             compression_method=relevance_compression_method,
                             pickle_protocol=relevance_pickle_protocol,
                         )
+                        relevance_trace.clear()
                         relevance_trace.append(full_rel)
                         del full_rel
                 _t["relevance_save"] = time.perf_counter() - _ts
