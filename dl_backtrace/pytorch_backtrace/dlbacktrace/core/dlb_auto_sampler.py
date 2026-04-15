@@ -992,8 +992,8 @@ class DLBAutoSampler:
                 # ── Stage C: Save scores to disk ──
                 _ts = time.perf_counter()
                 if return_scores:
+                    scores_cpu = scores.detach().to("cpu")
                     if disk_streaming:
-                        scores_cpu = scores.detach().to("cpu")
                         path = self._save_to_disk(
                             scores_cpu,
                             cache_dir=cache_dir_path,
@@ -1005,8 +1005,9 @@ class DLBAutoSampler:
                         scores_trace.append({"path": path})
                         del scores_cpu
                     else:
-                        scores_trace.append(scores)
+                        scores_trace.append(scores_cpu)
                     del scores
+                    del scores_cpu
                 _t["scores_save"] = time.perf_counter() - _ts
 
                 # ── Stage D: Save IO data to disk ──
@@ -1064,9 +1065,13 @@ class DLBAutoSampler:
                             compression_method=relevance_compression_method,
                             pickle_protocol=relevance_pickle_protocol,
                         )
-                        relevance_trace.append(entry)
                 _t["relevance_save"] = time.perf_counter() - _ts
 
+                if _should_run_dlb(_gen_step_idx) and cache_policy == "full":
+                    relevance_trace.append(rel_dict)
+                elif cache_policy == "disk":
+                    relevance_trace.append(entry)
+                    
                 # ── Stage G: Memory cleanup ──
                 _ts = time.perf_counter()
                 if rel_dict is not None:
