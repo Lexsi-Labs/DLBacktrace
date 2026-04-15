@@ -991,7 +991,7 @@ class DLBAutoSampler:
 
                 # ── Stage C: Save scores to disk ──
                 _ts = time.perf_counter()
-                if return_scores and _should_run_dlb(_gen_step_idx):
+                if return_scores:
                     if disk_streaming:
                         scores_cpu = scores.detach().to("cpu")
                         path = self._save_to_disk(
@@ -1042,13 +1042,16 @@ class DLBAutoSampler:
                         task="generation",
                         debug=False,
                     )
+                    self.dlb.all_wt = {}    
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
                 if device == "cuda":
                     torch.cuda.synchronize()
                 _t["backtrace"] = time.perf_counter() - _ts
 
                 # ── Stage F: Save relevance to disk ──
                 _ts = time.perf_counter()
-                if return_relevance:
+                if return_relevance and cache_policy == "disk":
                     if _should_run_dlb(_gen_step_idx):
                         entry = self._store_relevance_entry(
                             rel_dict,
@@ -1062,10 +1065,6 @@ class DLBAutoSampler:
                             pickle_protocol=relevance_pickle_protocol,
                         )
                         relevance_trace.append(entry)
-                        
-                        self.dlb.all_wt = {}    
-                        if torch.cuda.is_available():
-                            torch.cuda.empty_cache()
                 _t["relevance_save"] = time.perf_counter() - _ts
 
                 # ── Stage G: Memory cleanup ──
@@ -1074,6 +1073,7 @@ class DLBAutoSampler:
                     rel_dict.clear()
                     del rel_dict
                     rel_dict = None
+                    
                 _t["cleanup"] = time.perf_counter() - _ts
 
                 _t["total"] = _t["predict"] + _t["sampling"] + _t["scores_save"] + _t["io_save"] + _t["backtrace"] + _t["relevance_save"] + _t["cleanup"]
