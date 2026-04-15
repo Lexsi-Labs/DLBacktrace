@@ -1062,20 +1062,13 @@ class DLBAutoSampler:
                             pickle_protocol=relevance_pickle_protocol,
                         )
                         relevance_trace.append(entry)
-                        # Free the caller-side GPU reference immediately
-                        if rel_dict is not None:
-                            rel_dict.clear()
-                            del rel_dict
+                        
                         self.dlb.all_wt = {}    
                         if torch.cuda.is_available():
                             torch.cuda.empty_cache()
                 _t["relevance_save"] = time.perf_counter() - _ts
 
                 # ── Stage G: Memory cleanup ──
-                # _clear_dlb_memory() is now called PRE-step (before predict),
-                # so there's nothing to clear here after relevance is saved.
-                # We still need to free rel_dict if it wasn't consumed by
-                # _store_relevance_entry (e.g. return_relevance=False).
                 _ts = time.perf_counter()
                 if rel_dict is not None:
                     rel_dict.clear()
