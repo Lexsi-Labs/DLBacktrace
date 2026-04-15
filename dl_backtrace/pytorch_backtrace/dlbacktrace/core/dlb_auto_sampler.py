@@ -93,19 +93,33 @@ class DLBAutoSampler:
         self.tokenizer = tokenizer
 
     def _clear_dlb_memory(self):
-        """Clear DLB intermediate storage (node_io + all_wt) and defragment CUDA cache.
-        
-        Note: gc.collect() intentionally NOT called here — it forces a full Python GC sweep
-        (~10-50ms) on every step. Python's reference counting handles the freed dicts immediately.
-        
-        torch.cuda.empty_cache() IS called because, as sequence length grows each step, new
-        tensors are slightly larger than old ones. Without defragmenting, the CUDA allocator's
-        cached blocks from previous (smaller) tensors can't serve new (larger) requests,
-        eventually causing OOM around 250 tokens.
-        """
+        """Clear DLB intermediate storage BEFORE the next allocation, not after."""
+        # Explicitly delete tensor contents before dropping the dict reference,
+        # so Python's refcount drops to zero immediately without waiting for GC.
+        node_io = getattr(self.dlb, 'node_io', None)
+        if node_io:
+            for v in node_io.values():
+                if isinstance(v, dict):
+                    for vv in v.values():
+                        if torch.is_tensor(vv):
+                            del vv
+                elif torch.is_tensor(v):
+                    del v
+            node_io.clear()
         self.dlb.node_io = {}
-        if hasattr(self.dlb, 'all_wt'):
-            self.dlb.all_wt = {}
+
+        all_wt = getattr(self.dlb, 'all_wt', None)
+        if all_wt:
+            for v in all_wt.values():
+                if isinstance(v, (list, tuple)):
+                    for vv in v:
+                        if torch.is_tensor(vv):
+                            del vv
+                elif torch.is_tensor(v):
+                    del v
+            all_wt.clear()
+        self.dlb.all_wt = {}
+
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
@@ -917,15 +931,20 @@ class DLBAutoSampler:
                 _use_dlb = _should_run_dlb(_gen_step_idx) or not _native_fwd_ok
 
                 if _use_dlb:
-                    # ── SLOW PATH: Full DLB predict (builds node_io for relevance) ──
+                    # ── SLOW PATH: clear BEFORE allocating ──
+                    # Kill old node_io/all_wt first so peak RAM = 1× not 2×
+                    self._clear_dlb_memory()
                     if _past_kv is not None:
                         del _past_kv
                         _past_kv = None
-                        if torch.cuda.is_available():
-                            torch.cuda.empty_cache()
                     io_data = self.dlb.predict(generated, attn, debug=False, temperature=1.0)
                     logits = self._extract_last_logits(io_data)
-                    
+                    # Drop io_data immediately unless layerwise output is needed —
+                    # self.dlb.node_io and io_data are the same dict, so keeping
+                    # io_data alive prevents the refcount from hitting zero
+                    if not return_layerwise_output:
+                        del io_data
+                        io_data = None
                 else:
                     # ── FAST PATH: Native model with KV-cache (~10-30 ms/token) ──
                     logits, _past_kv = self._native_forward_with_cache(
@@ -1050,12 +1069,15 @@ class DLBAutoSampler:
                 _t["relevance_save"] = time.perf_counter() - _ts
 
                 # ── Stage G: Memory cleanup ──
-                # Only needed after DLB predict steps (which populate node_io).
-                # On fast-path steps: nothing to clean, and empty_cache() would
-                # destroy the KV-cache living in GPU memory via _past_kv.
+                # _clear_dlb_memory() is now called PRE-step (before predict),
+                # so there's nothing to clear here after relevance is saved.
+                # We still need to free rel_dict if it wasn't consumed by
+                # _store_relevance_entry (e.g. return_relevance=False).
                 _ts = time.perf_counter()
-                if _use_dlb:
-                    self._clear_dlb_memory()
+                if rel_dict is not None:
+                    rel_dict.clear()
+                    del rel_dict
+                    rel_dict = None
                 _t["cleanup"] = time.perf_counter() - _ts
 
                 _t["total"] = _t["predict"] + _t["sampling"] + _t["scores_save"] + _t["io_save"] + _t["backtrace"] + _t["relevance_save"] + _t["cleanup"]
