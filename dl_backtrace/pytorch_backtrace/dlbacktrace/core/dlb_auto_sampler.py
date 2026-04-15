@@ -1067,14 +1067,19 @@ class DLBAutoSampler:
                         # for disk policy, so nothing left to free
                     elif cache_policy == "full":
                         # Deep-copy tensors to CPU so we can safely free GPU memory
-                        cpu_rel = {}
-                        for k, v in rel_dict.items():
-                            if torch.is_tensor(v):
-                                cpu_rel[k] = v.detach().cpu().clone()
-                            else:
-                                cpu_rel[k] = v
-                        relevance_trace.append(cpu_rel)
-                        del cpu_rel
+                        full_rel = self._store_relevance_entry(
+                            rel_dict,
+                            policy=cache_policy,
+                            step_idx=_gen_step_idx,
+                            cache_dir=cache_dir_path,
+                            target_dtype=cache_dtype,
+                            move_to_cpu=relevance_move_to_cpu,
+                            use_compression=relevance_use_compression,
+                            compression_method=relevance_compression_method,
+                            pickle_protocol=relevance_pickle_protocol,
+                        )
+                        relevance_trace.append(full_rel)
+                        del full_rel
                 _t["relevance_save"] = time.perf_counter() - _ts
 
                 # ── Stage G: Memory cleanup ──
