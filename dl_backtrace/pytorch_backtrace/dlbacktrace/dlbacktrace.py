@@ -387,17 +387,21 @@ class DLBacktrace:
             print(f"   Execution engine: Non-cache (ExecutionEngineNoCache)")
             print(f"   Layer stack length: {len(self.layer_stack)}")
         
-        # Always use non-cache execution engine
-        executor = ExecutionEngineNoCache(
-            model=self.model,
-            extracted_weights=self.extracted_weights,
-            fx_graph=self.graph,
-            layer_stack=self.layer_stack,
-            tracer=self.tracer,
-            exported_program=self.exported_program,
-            debug=debug,
-            log_level="DEBUG" if debug else "INFO"
-        )
+        # Reuse cached executor to avoid re-creating on every predict() call.
+        # The executor's _cached_state dict persists across calls, skipping redundant
+        # environment setup, weight synchronization, and metadata detection.
+        if not hasattr(self, '_cached_executor') or self._cached_executor is None:
+            self._cached_executor = ExecutionEngineNoCache(
+                model=self.model,
+                extracted_weights=self.extracted_weights,
+                fx_graph=self.graph,
+                layer_stack=self.layer_stack,
+                tracer=self.tracer,
+                exported_program=self.exported_program,
+                debug=debug,
+                log_level="DEBUG" if debug else "INFO"
+            )
+        executor = self._cached_executor
         
         if debug:
             print(f"🔧 Starting execution with {type(executor).__name__}")
@@ -549,7 +553,7 @@ class DLBacktrace:
         return_relevance=False,
         return_layerwise_output=False,
         relevance_cache_policy="full",
-        relevance_cache_dir=None,
+        relevance_cache_dir="./relevance_cache",
         relevance_compress_dtype="float16",
         relevance_move_to_cpu=True,
         debug=False,
@@ -694,6 +698,11 @@ class DLBacktrace:
             if debug:
                 print(f"🚀 Running generation task with sample_auto...")
             
+            # When user requests relevance but hasn't set a storage policy,
+            # upgrade from the default "none" to "full" (in-memory).
+            if return_relevance and relevance_cache_policy == "none":
+                relevance_cache_policy = "full"
+
             cache_kwargs = {
                 "relevance_cache_policy": relevance_cache_policy,
                 "relevance_cache_dir": relevance_cache_dir,
