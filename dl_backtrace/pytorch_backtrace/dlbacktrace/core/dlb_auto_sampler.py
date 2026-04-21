@@ -960,6 +960,16 @@ class DLBAutoSampler:
                     )
                     io_data = None
 
+                # ── OOM guard: stop DLB loop if GPU usage > 90% ──
+                _gpu_pct = self._get_gpu_memory_usage_pct()
+                if _use_dlb and _gpu_pct > 90.0:
+                    print(
+                        f" GPU memory at {_gpu_pct:.1f}% after token {_gen_step_idx} "
+                        f"— stopping generation to prevent OOM."
+                    )
+                    stopped_by = "gpu_oom_guard"
+                    break
+
                 if device == "cuda":
                     torch.cuda.synchronize()
                 _t["predict"] = time.perf_counter() - _ts
@@ -1101,18 +1111,6 @@ class DLBAutoSampler:
                         rel_dict.clear()
                     del rel_dict
                     rel_dict = None
-
-                # ── OOM guard: stop DLB loop if GPU usage > 90% ──
-                _gpu_pct = self._get_gpu_memory_usage_pct()
-                if _use_dlb and _gpu_pct > 90.0:
-                    print(
-                        f" GPU memory at {_gpu_pct:.1f}% after token {_gen_step_idx} "
-                        f"— stopping generation to prevent OOM."
-                    )
-                    stopped_by = "gpu_oom_guard"
-                    _t["cleanup"] = time.perf_counter() - _ts
-                    _step_timings.append(_t)
-                    break
 
                 _t["cleanup"] = time.perf_counter() - _ts
 
