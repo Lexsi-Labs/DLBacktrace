@@ -960,9 +960,9 @@ class DLBAutoSampler:
                     )
                     io_data = None
 
-                # ── OOM guard: stop DLB loop if GPU usage > 90% ──
+                # ── OOM guard: stop DLB loop if GPU usage > 85% ──
                 _gpu_pct = self._get_gpu_memory_usage_pct()
-                if _use_dlb and _gpu_pct > 90.0:
+                if _use_dlb and _gpu_pct > 85.0:
                     print(
                         f" GPU memory at {_gpu_pct:.1f}% after token {_gen_step_idx} "
                         f"— stopping generation to prevent OOM."
