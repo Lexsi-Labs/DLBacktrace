@@ -597,11 +597,10 @@ class DLBAutoSampler:
             rel_dict.clear()
             return None
 
-        flat_gpu = torch.cat(flat_parts)
+        # Cat directly on CPU — avoids allocating a large contiguous GPU tensor
+        # that frequently triggers OOM at long sequence lengths.
+        flat_cpu = torch.cat([t.cpu() for t in flat_parts])
         del flat_parts
-
-        flat_cpu = flat_gpu.cpu()
-        del flat_gpu
 
         # Free GPU memory before serialisation
         rel_dict.clear()
