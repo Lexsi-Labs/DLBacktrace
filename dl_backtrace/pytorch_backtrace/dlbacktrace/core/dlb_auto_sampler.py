@@ -121,6 +121,14 @@ class DLBAutoSampler:
         self.dlb.all_wt = {}
         # gc.collect()
 
+    def _get_gpu_memory_usage_pct(self) -> float:
+        """Return current GPU memory usage as a percentage (0-100). Returns 0 if no CUDA."""
+        if not torch.cuda.is_available():
+            return 0.0
+        allocated = torch.cuda.memory_allocated()
+        total = torch.cuda.get_device_properties(0).total_memory
+        return (allocated / total) * 100.0
+
     # -- Native Forward with KV-Cache (Fast Path) --------------------------
 
     def _check_native_forward_support(self):
@@ -589,11 +597,10 @@ class DLBAutoSampler:
             rel_dict.clear()
             return None
 
-        flat_gpu = torch.cat(flat_parts)
+        # Cat directly on CPU — avoids allocating a large contiguous GPU tensor
+        # that frequently triggers OOM at long sequence lengths.
+        flat_cpu = torch.cat([t.cpu() for t in flat_parts])
         del flat_parts
-
-        flat_cpu = flat_gpu.cpu()
-        del flat_gpu
 
         # Free GPU memory before serialisation
         rel_dict.clear()
@@ -914,9 +921,9 @@ class DLBAutoSampler:
             _native_fwd_ok = self._check_native_forward_support()
             _past_kv = None          # KV-cache for native forward
             if _native_fwd_ok:
-                print("  ⚡ Native KV-cache forward available — fast path enabled for non-DLB steps")
+                print("  Native KV-cache forward available — fast path enabled for non-DLB steps")
 
-            for _gen_step_idx in range(max_new_tokens if max_new_tokens is not None else 10_000_000):
+            for _gen_step_idx in range(max_new_tokens if max_new_tokens is not None else 10_00_000):
                 _t = {}  # timing dict for this step
                 _t["step"] = _gen_step_idx
                 _t["seq_len"] = generated.shape[1]
@@ -951,6 +958,16 @@ class DLBAutoSampler:
                         target_device=device,
                     )
                     io_data = None
+
+                # ── OOM guard: stop DLB loop if GPU usage > 85% ──
+                _gpu_pct = self._get_gpu_memory_usage_pct()
+                if _use_dlb and _gpu_pct > 85.0:
+                    print(
+                        f" GPU memory at {_gpu_pct:.1f}% after token {_gen_step_idx} "
+                        f"— stopping generation to prevent OOM."
+                    )
+                    stopped_by = "gpu_oom_guard"
+                    break
 
                 if device == "cuda":
                     torch.cuda.synchronize()
@@ -1093,6 +1110,7 @@ class DLBAutoSampler:
                         rel_dict.clear()
                     del rel_dict
                     rel_dict = None
+
                 _t["cleanup"] = time.perf_counter() - _ts
 
                 _t["total"] = _t["predict"] + _t["sampling"] + _t["scores_save"] + _t["io_save"] + _t["backtrace"] + _t["relevance_save"] + _t["cleanup"]
