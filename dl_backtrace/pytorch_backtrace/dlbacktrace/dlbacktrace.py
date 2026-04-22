@@ -212,6 +212,11 @@ class DLBacktrace:
         """Export model deterministically using the reproducibility module."""
         from dl_backtrace.pytorch_backtrace.dlbacktrace.core.reproducibility import export_model_deterministically
         
+        # Clear stale dynamo state from previous exports / generation runs.
+        # This prevents ConstraintViolationError on consecutive calls with
+        # different input shapes (e.g. second HTTP request in the server).
+        torch._dynamo.reset()
+
         try:
             # Use the deterministic export function
             self.exported_program = export_model_deterministically(

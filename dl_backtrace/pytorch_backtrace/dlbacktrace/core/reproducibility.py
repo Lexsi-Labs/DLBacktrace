@@ -178,6 +178,11 @@ def export_model_deterministically(
             module.eval()
 
     try:
+        # Reset dynamo to clear stale guards from previous exports.
+        # Without this, the second call sees residual shape guards
+        # from the first export and raises ConstraintViolationError.
+        torch._dynamo.reset()
+
         if dynamic_shapes:
             ep = export_for_training(model, sample_inputs, dynamic_shapes=dynamic_shapes)
         else:
@@ -191,6 +196,22 @@ def export_model_deterministically(
         return ep
 
     except Exception as e:
+        # If the failure is a ConstraintViolationError from dynamic shapes
+        # (e.g. SDPA kernels branching on seq_len % 8), retry without
+        # dynamic shapes.  The execution engine only needs graph *structure*
+        # — it replays ops with the actual input tensors at runtime.
+        if dynamic_shapes and "Constraint" in type(e).__name__:
+            print(f"Dynamic-shape constraints violated — retrying with static shapes")
+            try:
+                torch._dynamo.reset()
+                ep = export_for_training(model, sample_inputs)
+                if hasattr(ep, "run_decompositions"):
+                    ep = ep.run_decompositions(decomp_table={})
+                print("✅ Model exported deterministically (static shapes)")
+                return ep
+            except Exception:
+                pass  # fall through to the original raise
+
         print(f"❌ Error during deterministic export: {e}")
         raise
 
