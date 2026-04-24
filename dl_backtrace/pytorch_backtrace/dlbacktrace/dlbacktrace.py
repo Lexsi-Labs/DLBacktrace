@@ -121,6 +121,10 @@ class DLBacktrace:
         # I/O and bookkeeping
         self.node_io = {}
         self.activation_dict = {}
+        # Clear per-instance caches so we don't carry over stale state from a
+        # prior DLBacktrace object (important when re-creating in the same session).
+        self._cached_executor = None
+        self._prop_schedule = None
         if self.verbose:
             print("---------------------------v8------------------------------------------", flush=True)
             print("✅ DL-Backtrace FX initialization complete!", flush=True)
@@ -212,11 +216,6 @@ class DLBacktrace:
         """Export model deterministically using the reproducibility module."""
         from dl_backtrace.pytorch_backtrace.dlbacktrace.core.reproducibility import export_model_deterministically
         
-        # Clear stale dynamo state from previous exports / generation runs.
-        # This prevents ConstraintViolationError on consecutive calls with
-        # different input shapes (e.g. second HTTP request in the server).
-        torch._dynamo.reset()
-
         try:
             # Use the deterministic export function
             self.exported_program = export_model_deterministically(
@@ -230,7 +229,10 @@ class DLBacktrace:
             # Fallback: Try with different export strategies for complex models
             print(f"⚠️ Primary export failed: {e}")
             print("🔄 Trying alternative export strategies...")
-            
+            # Reset dynamo again before fallback strategies to ensure clean state
+            torch._dynamo.reset()
+            if hasattr(torch, "compiler") and hasattr(torch.compiler, "reset"):
+                torch.compiler.reset()
             self.exported_program = self._fallback_export()
             self.tracer = self.exported_program.graph_module
 
