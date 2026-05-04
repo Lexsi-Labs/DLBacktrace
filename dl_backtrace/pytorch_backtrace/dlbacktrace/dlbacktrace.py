@@ -187,6 +187,19 @@ class DLBacktrace:
         Release DLBacktrace-owned memory. Set unload_model=True when the wrapped
         model should also be detached from this object before deleting it.
         """
+        model = getattr(self, "model", None)
+        if unload_model and model is not None:
+            try:
+                model.to("cpu")
+            except Exception:
+                pass
+            inner = getattr(model, "model", None)
+            if inner is not None:
+                try:
+                    inner.to("cpu")
+                except Exception:
+                    pass
+
         self.clear_intermediates(clear_executor_cache=True)
 
         for attr in (

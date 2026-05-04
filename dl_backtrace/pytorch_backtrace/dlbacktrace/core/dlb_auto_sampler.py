@@ -91,9 +91,14 @@ class DLBAutoSampler:
     def __init__(self, dlb, tokenizer):
         self.dlb = dlb
         self.tokenizer = tokenizer
+        self._native_fwd_original_device = None
+        self._native_fwd_moved_model = False
 
     def _clear_dlb_memory(self):
         """Clear DLB intermediate storage BEFORE the next allocation, not after."""
+        if hasattr(self.dlb, "clear_intermediates"):
+            self.dlb.clear_intermediates(clear_executor_cache=False)
+            return
 
         node_io = getattr(self.dlb, 'node_io', None)
         if node_io:
@@ -156,11 +161,35 @@ class DLBAutoSampler:
             return model_device
 
         try:
+            if self._native_fwd_original_device is None:
+                self._native_fwd_original_device = model_device
             inner.to(target_device)
+            self._native_fwd_moved_model = True
             return target_device
         except (RuntimeError, torch.cuda.OutOfMemoryError):
             # Not enough VRAM to hold both extracted weights AND model params
             return model_device
+
+    def _restore_native_model_device(self):
+        """Move the native fast-path model back to its pre-generation device."""
+        if not self._native_fwd_moved_model:
+            return
+        original_device = self._native_fwd_original_device
+        if original_device is None:
+            return
+
+        try:
+            inner = self.dlb.model.model
+            inner.to(original_device)
+        except Exception:
+            pass
+        finally:
+            self._native_fwd_moved_model = False
+            self._native_fwd_device_ok = False
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+                torch.cuda.empty_cache()
 
     def _native_forward_with_cache(self, input_ids, attention_mask,
                                     past_key_values=None, target_device=None):
@@ -1157,7 +1186,12 @@ class DLBAutoSampler:
 
             want_extras = return_scores or return_relevance or return_layerwise_output
             if not want_extras:
-                return generated
+                if _past_kv is not None:
+                    del _past_kv
+                self._restore_native_model_device()
+                if hasattr(self.dlb, "clear_intermediates"):
+                    self.dlb.clear_intermediates(clear_executor_cache=False)
+                return generated.detach().cpu()
 
             info = {}
             if return_scores:
@@ -1173,10 +1207,14 @@ class DLBAutoSampler:
                 info["cache_dir"] = str(cache_dir_path)
 
 
+            if _past_kv is not None:
+                del _past_kv
+                _past_kv = None
+            self._restore_native_model_device()
             if hasattr(self.dlb, "clear_intermediates"):
                 self.dlb.clear_intermediates(clear_executor_cache=False)
                    
-            return generated, info  # ([1, T], dict)
+            return generated.detach().cpu(), info  # ([1, T], dict)
 
 
         # ======================
@@ -1429,7 +1467,10 @@ class DLBAutoSampler:
 
         want_extras = return_scores or return_relevance or return_layerwise_output
         if not want_extras:
-            return out_top1
+            self._restore_native_model_device()
+            if hasattr(self.dlb, "clear_intermediates"):
+                self.dlb.clear_intermediates(clear_executor_cache=False)
+            return out_top1.detach().cpu()
 
         info_beam = {}
         if return_scores:
@@ -1451,4 +1492,5 @@ class DLBAutoSampler:
             info_beam["layerwise_output_trace"] = flat_io_trace
         if disk_streaming_beam and cache_dir_path is not None:
             info_beam["cache_dir"] = str(cache_dir_path)
-        return out_top1, info_beam
+        self._restore_native_model_device()
+        return out_top1.detach().cpu(), info_beam
