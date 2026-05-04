@@ -4207,6 +4207,17 @@ class ExecutionEngineNoCache:
             and param.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
         ]
 
+    def clear_cached_state(self):
+        """Drop cached metadata so the executor no longer anchors run objects."""
+        if hasattr(self, "_cached_state") and isinstance(self._cached_state, dict):
+            self._cached_state.clear()
+        self.model = None
+        self.extracted_weights = None
+        self.graph = None
+        self.layer_stack = None
+        self.tracer = None
+        self.exported_program = None
+
     def _detect_model_dtype(self):
         """Detect model's computation dtype from its parameters/buffers (called once at init)."""
         for param in self.model.parameters():

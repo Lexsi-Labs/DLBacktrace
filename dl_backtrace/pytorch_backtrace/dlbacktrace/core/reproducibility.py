@@ -168,6 +168,15 @@ def export_model_deterministically(
     # Configure reproducibility (does not change CUBLAS_WORKSPACE_CONFIG order)
     setup_exact_reproducibility(seed, disable_optimizations=True, verbose=False)
 
+    # 🔧 CRITICAL: Reset dynamo/compiler state before each export to clear stale
+    # shape guards and compiled artifacts from prior runs in the same session.
+    # Without this, the second export attempt will fail with
+    # ConstraintViolationError because dynamo's ShapeEnv caches guards from the
+    # previous trace that are incompatible with the new dynamic shape Dims.
+    torch._dynamo.reset()
+    if hasattr(torch, "compiler") and hasattr(torch.compiler, "reset"):
+        torch.compiler.reset()
+
     # Ensure deterministic evaluation mode
     model.eval()
     model.requires_grad_(False)

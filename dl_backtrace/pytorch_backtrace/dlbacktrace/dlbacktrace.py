@@ -22,6 +22,40 @@ from .core.relevance_saver import save_relevance as _save_relevance, Precision
 import numpy as np 
 import torch
 import inspect
+import gc
+import ctypes
+
+try:
+    _MALLOC_TRIM = getattr(ctypes.CDLL("libc.so.6"), "malloc_trim", None)
+except Exception:
+    _MALLOC_TRIM = None
+
+
+def _clear_tensor_tree(obj):
+    """Best-effort recursive cleanup for nested tensor containers."""
+    if type(obj) is dict:
+        values = list(obj.values())
+        obj.clear()
+        for value in values:
+            _clear_tensor_tree(value)
+    elif type(obj) is list:
+        values = list(obj)
+        obj.clear()
+        for value in values:
+            _clear_tensor_tree(value)
+    elif type(obj) is set:
+        obj.clear()
+    elif type(obj) is tuple:
+        for value in obj:
+            _clear_tensor_tree(value)
+
+
+def _release_cpu_allocator_memory():
+    if _MALLOC_TRIM is not None:
+        try:
+            _MALLOC_TRIM(0)
+        except Exception:
+            pass
 
 class DLBacktrace:
     def __init__(self, model, input_for_graph, dynamic_shapes=None, device="cpu", verbose=False, strict_cpu=True, collect_node_module_map=False,):
@@ -121,9 +155,104 @@ class DLBacktrace:
         # I/O and bookkeeping
         self.node_io = {}
         self.activation_dict = {}
+        # Clear per-instance caches so we don't carry over stale state from a
+        # prior DLBacktrace object (important when re-creating in the same session).
+        self._cached_executor = None
+        self._prop_schedule = None
         if self.verbose:
             print("---------------------------v8------------------------------------------", flush=True)
             print("✅ DL-Backtrace FX initialization complete!", flush=True)
+
+    def clear_intermediates(self, clear_executor_cache=False):
+        """
+        Release tensors produced by predict/evaluation without unloading the model.
+
+        Args:
+            clear_executor_cache (bool): Also drop cached executor metadata and
+                propagation schedule. Use this before deleting the DLBacktrace
+                object or when a run has completed and no reuse is required.
+        """
+        for attr in ("node_io", "activation_dict", "all_wt"):
+            value = getattr(self, attr, None)
+            _clear_tensor_tree(value)
+            setattr(self, attr, {})
+
+        if clear_executor_cache:
+            executor = getattr(self, "_cached_executor", None)
+            if executor is not None and hasattr(executor, "clear_cached_state"):
+                executor.clear_cached_state()
+            self._cached_executor = None
+            self._prop_schedule = None
+
+        gc.collect()
+        _release_cpu_allocator_memory()
+        if torch.cuda.is_available():
+            try:
+                torch.cuda.synchronize()
+            except Exception:
+                pass
+            torch.cuda.empty_cache()
+            try:
+                torch.cuda.ipc_collect()
+            except Exception:
+                pass
+
+    def close(self, unload_model=False):
+        """
+        Release DLBacktrace-owned memory. Set unload_model=True when the wrapped
+        model should also be detached from this object before deleting it.
+        """
+        model = getattr(self, "model", None)
+        if unload_model and model is not None:
+            try:
+                model.to("cpu")
+            except Exception:
+                pass
+            inner = getattr(model, "model", None)
+            if inner is not None:
+                try:
+                    inner.to("cpu")
+                except Exception:
+                    pass
+
+        self.clear_intermediates(clear_executor_cache=True)
+
+        for attr in (
+            "extracted_weights",
+            "fx_placeholders",
+            "placeholder_to_real_name",
+            "graph",
+            "layer_stack",
+            "tracer",
+            "exported_program",
+            "input_for_graph",
+            "fx_node_to_module",
+        ):
+            value = getattr(self, attr, None)
+            _clear_tensor_tree(value)
+            setattr(self, attr, None)
+
+        if unload_model:
+            self.model = None
+
+        gc.collect()
+        _release_cpu_allocator_memory()
+        if torch.cuda.is_available():
+            try:
+                torch.cuda.synchronize()
+            except Exception:
+                pass
+            torch.cuda.empty_cache()
+            try:
+                torch.cuda.ipc_collect()
+            except Exception:
+                pass
+
+    def __del__(self):
+        try:
+            self.close(unload_model=False)
+        except Exception:
+            pass
 
     def map_fx_nodes_to_modules(self):
         """
@@ -225,7 +354,10 @@ class DLBacktrace:
             # Fallback: Try with different export strategies for complex models
             print(f"⚠️ Primary export failed: {e}")
             print("🔄 Trying alternative export strategies...")
-            
+            # Reset dynamo again before fallback strategies to ensure clean state
+            torch._dynamo.reset()
+            if hasattr(torch, "compiler") and hasattr(torch.compiler, "reset"):
+                torch.compiler.reset()
             self.exported_program = self._fallback_export()
             self.tracer = self.exported_program.graph_module
 
