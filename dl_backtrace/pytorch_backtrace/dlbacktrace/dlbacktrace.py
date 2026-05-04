@@ -23,6 +23,12 @@ import numpy as np
 import torch
 import inspect
 import gc
+import ctypes
+
+try:
+    _MALLOC_TRIM = getattr(ctypes.CDLL("libc.so.6"), "malloc_trim", None)
+except Exception:
+    _MALLOC_TRIM = None
 
 
 def _clear_tensor_tree(obj):
@@ -42,6 +48,14 @@ def _clear_tensor_tree(obj):
     elif type(obj) is tuple:
         for value in obj:
             _clear_tensor_tree(value)
+
+
+def _release_cpu_allocator_memory():
+    if _MALLOC_TRIM is not None:
+        try:
+            _MALLOC_TRIM(0)
+        except Exception:
+            pass
 
 class DLBacktrace:
     def __init__(self, model, input_for_graph, dynamic_shapes=None, device="cpu", verbose=False, strict_cpu=True, collect_node_module_map=False,):
@@ -171,6 +185,7 @@ class DLBacktrace:
             self._prop_schedule = None
 
         gc.collect()
+        _release_cpu_allocator_memory()
         if torch.cuda.is_available():
             try:
                 torch.cuda.synchronize()
@@ -221,6 +236,7 @@ class DLBacktrace:
             self.model = None
 
         gc.collect()
+        _release_cpu_allocator_memory()
         if torch.cuda.is_available():
             try:
                 torch.cuda.synchronize()

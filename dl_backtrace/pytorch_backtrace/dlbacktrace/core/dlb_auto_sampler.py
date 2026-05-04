@@ -10,6 +10,7 @@ import gc
 import json
 import time
 import io
+import ctypes
 import numpy as np
 from pathlib import Path
 from typing import Optional, List, Tuple, cast, Any, Dict
@@ -107,6 +108,7 @@ class DLBAutoSampler:
             all_wt.clear()
         self.dlb.all_wt = {}
         gc.collect()
+
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
@@ -608,6 +610,7 @@ class DLBAutoSampler:
 
         if not flat_parts:
             rel_dict.clear()
+            gc.collect()
             return None
 
         # Cat directly on CPU — avoids allocating a large contiguous GPU tensor
@@ -622,7 +625,11 @@ class DLBAutoSampler:
 
         if normalized_policy == "summary":
             cpu_dict = self._flat_to_dict(flat_cpu, meta_entries)
-            return {"summary": self._summarize_relevance(cpu_dict)}
+            summary_val = self._summarize_relevance(cpu_dict)
+            del cpu_dict
+            del flat_cpu
+            gc.collect()
+            return {"summary": summary_val}
 
         if normalized_policy == "full":
             return self._flat_to_dict(flat_cpu, meta_entries)
