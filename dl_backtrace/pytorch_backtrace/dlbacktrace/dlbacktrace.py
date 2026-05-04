@@ -22,6 +22,24 @@ from .core.relevance_saver import save_relevance as _save_relevance, Precision
 import numpy as np 
 import torch
 import inspect
+import gc
+
+
+def _clear_tensor_tree(obj):
+    """Best-effort recursive cleanup for nested tensor containers."""
+    if isinstance(obj, dict):
+        for value in list(obj.values()):
+            _clear_tensor_tree(value)
+        obj.clear()
+    elif isinstance(obj, list):
+        for value in obj:
+            _clear_tensor_tree(value)
+        obj.clear()
+    elif isinstance(obj, set):
+        obj.clear()
+    elif isinstance(obj, tuple):
+        for value in obj:
+            _clear_tensor_tree(value)
 
 class DLBacktrace:
     def __init__(self, model, input_for_graph, dynamic_shapes=None, device="cpu", verbose=False, strict_cpu=True, collect_node_module_map=False,):
@@ -128,6 +146,82 @@ class DLBacktrace:
         if self.verbose:
             print("---------------------------v8------------------------------------------", flush=True)
             print("✅ DL-Backtrace FX initialization complete!", flush=True)
+
+    def clear_intermediates(self, clear_executor_cache=False):
+        """
+        Release tensors produced by predict/evaluation without unloading the model.
+
+        Args:
+            clear_executor_cache (bool): Also drop cached executor metadata and
+                propagation schedule. Use this before deleting the DLBacktrace
+                object or when a run has completed and no reuse is required.
+        """
+        for attr in ("node_io", "activation_dict", "all_wt"):
+            value = getattr(self, attr, None)
+            _clear_tensor_tree(value)
+            setattr(self, attr, {})
+
+        if clear_executor_cache:
+            executor = getattr(self, "_cached_executor", None)
+            if executor is not None and hasattr(executor, "clear_cached_state"):
+                executor.clear_cached_state()
+            self._cached_executor = None
+            self._prop_schedule = None
+
+        gc.collect()
+        if torch.cuda.is_available():
+            try:
+                torch.cuda.synchronize()
+            except Exception:
+                pass
+            torch.cuda.empty_cache()
+            try:
+                torch.cuda.ipc_collect()
+            except Exception:
+                pass
+
+    def close(self, unload_model=False):
+        """
+        Release DLBacktrace-owned memory. Set unload_model=True when the wrapped
+        model should also be detached from this object before deleting it.
+        """
+        self.clear_intermediates(clear_executor_cache=True)
+
+        for attr in (
+            "extracted_weights",
+            "fx_placeholders",
+            "placeholder_to_real_name",
+            "graph",
+            "layer_stack",
+            "tracer",
+            "exported_program",
+            "input_for_graph",
+            "fx_node_to_module",
+        ):
+            value = getattr(self, attr, None)
+            _clear_tensor_tree(value)
+            setattr(self, attr, None)
+
+        if unload_model:
+            self.model = None
+
+        gc.collect()
+        if torch.cuda.is_available():
+            try:
+                torch.cuda.synchronize()
+            except Exception:
+                pass
+            torch.cuda.empty_cache()
+            try:
+                torch.cuda.ipc_collect()
+            except Exception:
+                pass
+
+    def __del__(self):
+        try:
+            self.close(unload_model=False)
+        except Exception:
+            pass
 
     def map_fx_nodes_to_modules(self):
         """

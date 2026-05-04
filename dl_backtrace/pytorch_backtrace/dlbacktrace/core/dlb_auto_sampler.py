@@ -94,32 +94,19 @@ class DLBAutoSampler:
 
     def _clear_dlb_memory(self):
         """Clear DLB intermediate storage BEFORE the next allocation, not after."""
-        # Explicitly delete tensor contents before dropping the dict reference,
-        # so Python's refcount drops to zero immediately without waiting for GC.
+
         node_io = getattr(self.dlb, 'node_io', None)
         if node_io:
-            for v in node_io.values():
-                if isinstance(v, dict):
-                    for vv in v.values():
-                        if torch.is_tensor(vv):
-                            del vv
-                elif torch.is_tensor(v):
-                    del v
             node_io.clear()
         self.dlb.node_io = {}
 
         all_wt = getattr(self.dlb, 'all_wt', None)
         if all_wt:
-            for v in all_wt.values():
-                if isinstance(v, (list, tuple)):
-                    for vv in v:
-                        if torch.is_tensor(vv):
-                            del vv
-                elif torch.is_tensor(v):
-                    del v
             all_wt.clear()
         self.dlb.all_wt = {}
-        # gc.collect()
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     def _get_gpu_memory_usage_pct(self) -> float:
         """Return current GPU memory usage as a percentage (0-100). Returns 0 if no CUDA."""
@@ -1184,6 +1171,11 @@ class DLBAutoSampler:
                 info["layerwise_output_trace"] = io_data_trace
             if disk_streaming and cache_dir_path is not None:
                 info["cache_dir"] = str(cache_dir_path)
+
+
+            if hasattr(self.dlb, "clear_intermediates"):
+                self.dlb.clear_intermediates(clear_executor_cache=False)
+                   
             return generated, info  # ([1, T], dict)
 
 
