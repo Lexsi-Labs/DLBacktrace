@@ -27,17 +27,19 @@ import gc
 
 def _clear_tensor_tree(obj):
     """Best-effort recursive cleanup for nested tensor containers."""
-    if isinstance(obj, dict):
-        for value in list(obj.values()):
+    if type(obj) is dict:
+        values = list(obj.values())
+        obj.clear()
+        for value in values:
             _clear_tensor_tree(value)
+    elif type(obj) is list:
+        values = list(obj)
         obj.clear()
-    elif isinstance(obj, list):
-        for value in obj:
+        for value in values:
             _clear_tensor_tree(value)
+    elif type(obj) is set:
         obj.clear()
-    elif isinstance(obj, set):
-        obj.clear()
-    elif isinstance(obj, tuple):
+    elif type(obj) is tuple:
         for value in obj:
             _clear_tensor_tree(value)
 
