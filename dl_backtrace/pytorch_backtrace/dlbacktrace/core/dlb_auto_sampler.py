@@ -96,9 +96,6 @@ class DLBAutoSampler:
 
     def _clear_dlb_memory(self):
         """Clear DLB intermediate storage BEFORE the next allocation, not after."""
-        if hasattr(self.dlb, "clear_intermediates"):
-            self.dlb.clear_intermediates(clear_executor_cache=False)
-            return
 
         node_io = getattr(self.dlb, 'node_io', None)
         if node_io:
