@@ -22,6 +22,57 @@ def _fmt_rel(x):
     return f"{x:.3f}"
 
 
+def _norm_node_name(s):
+    return str(s).replace("/", " ").replace(":", " ")
+
+
+def _to_float(x, default=0.0):
+    try:
+        if hasattr(x, "detach"):
+            x = x.detach()
+        if hasattr(x, "item"):
+            x = x.item()
+        return float(x)
+    except Exception:
+        return default
+
+
+def _relevance_stats(rel):
+    """Return (mean, max, min, score) for a relevance object."""
+    if isinstance(rel, (list, tuple)):
+        vals = []
+        for item in rel:
+            if hasattr(item, "sum"):
+                vals.append(_to_float(item.sum()))
+        if not vals:
+            return 0.0, 0.0, 0.0, 0.0
+        mean = float(sum(vals) / len(vals))
+        mx = max(vals)
+        mn = min(vals)
+        return mean, mx, mn, max(abs(mean), abs(mx), abs(mn))
+
+    if hasattr(rel, "sum"):
+        mean = _to_float(rel.mean())
+        mx = _to_float(rel.max())
+        mn = _to_float(rel.min())
+        total = _to_float(rel.sum())
+        return mean, mx, mn, max(abs(mean), abs(mx), abs(mn), abs(total))
+
+    val = _to_float(rel)
+    return val, val, val, abs(val)
+
+
+def _relevance_maps(all_wt):
+    stats = {}
+    scores = {}
+    for node_name, rel in (all_wt or {}).items():
+        node_key = _norm_node_name(node_name)
+        mean, mx, mn, score = _relevance_stats(rel)
+        stats[node_key] = (mean, mx, mn)
+        scores[node_key] = score
+    return stats, scores
+
+
 def visualize_graph(graph, save_path="graph.png", *, show=True, dpi=600):
     """📊 Visualize forward execution graph with dynamic scaling (shows inline + saves)"""
     num_nodes = len(graph.nodes)
@@ -455,6 +506,159 @@ def visualize_relevance_fast(
     return g, out
 
 
+def visualize_relevance_subgraph(
+    graph,
+    all_wt,
+    output_path="backtrace_relevance_subgraph",
+    *,
+    top_k=120,
+    max_nodes=220,
+    show=True,
+    inline_format="svg",
+):
+    """Render a bounded relevance-guided subgraph using direct NetworkX edges."""
+    stats_by_norm, scores_by_norm = _relevance_maps(all_wt)
+    raw_by_norm = {_norm_node_name(raw): raw for raw in graph.nodes}
+    norm_by_raw = {raw: _norm_node_name(raw) for raw in graph.nodes}
+
+    output_nodes = [
+        raw for raw in graph.nodes
+        if graph.nodes[raw].get("layer_type") == "Output"
+    ]
+    if not output_nodes:
+        output_nodes = [raw for raw in graph.nodes if graph.out_degree(raw) == 0]
+
+    ranked = []
+    for raw, norm in norm_by_raw.items():
+        score = scores_by_norm.get(norm, 0.0)
+        if score > 0:
+            ranked.append((raw, score))
+    ranked.sort(key=lambda item: item[1], reverse=True)
+
+    selected = set(output_nodes[:3])
+    top_nodes = [raw for raw, _ in ranked[:top_k]]
+
+    def best_path_to_output(raw):
+        best = None
+        for out in output_nodes[:5]:
+            try:
+                path = nx.shortest_path(graph, raw, out)
+            except (nx.NetworkXNoPath, nx.NodeNotFound):
+                continue
+            if best is None or len(path) < len(best):
+                best = path
+        return best
+
+    for raw in top_nodes:
+        if len(selected) >= max_nodes:
+            break
+        path = best_path_to_output(raw)
+        if path:
+            if len(selected | set(path)) <= max_nodes:
+                selected.update(path)
+            else:
+                selected.add(raw)
+        else:
+            selected.add(raw)
+
+    # If paths were unavailable or too sparse, add direct neighbors of top nodes.
+    for raw in top_nodes:
+        if len(selected) >= max_nodes:
+            break
+        if raw not in selected:
+            continue
+        neighbors = list(graph.predecessors(raw))[:2] + list(graph.successors(raw))[:2]
+        for n in neighbors:
+            if len(selected) >= max_nodes:
+                break
+            selected.add(n)
+
+    subgraph = graph.subgraph(selected).copy()
+    if subgraph.number_of_edges() == 0 and top_nodes:
+        selected = set()
+        for raw in top_nodes:
+            if len(selected) >= max_nodes:
+                break
+            selected.add(raw)
+            for n in list(graph.predecessors(raw))[:2] + list(graph.successors(raw))[:2]:
+                if len(selected) >= max_nodes:
+                    break
+                selected.add(n)
+        subgraph = graph.subgraph(selected).copy()
+
+    color_map = {
+        "MLP_Layer": "lightblue",
+        "DL_Layer": "lightgreen",
+        "Activation": "orange",
+        "Normalization": "pink",
+        "Mathematical_Operation": "yellow",
+        "Vector_Operation": "gray",
+        "Indexing_Operation": "lightgray",
+        "ATen_Operation": "violet",
+        "NLP_Embedding": "lightsalmon",
+        "Attention": "gold",
+        "Output": "red",
+        "Placeholder": "white",
+        "Model_Input": "lightcyan",
+    }
+
+    def _short(s, n=42):
+        return s if len(s) <= n else s[:n - 1] + "…"
+
+    g = graphviz.Digraph(
+        "DLBacktraceRelevanceSubgraph",
+        format="svg",
+        engine="dot",
+        graph_attr={
+            "rankdir": "LR",
+            "splines": "spline",
+            "concentrate": "true",
+            "nodesep": "0.22",
+            "ranksep": "0.42",
+            "margin": "0.05",
+            "outputorder": "nodesfirst",
+        },
+        node_attr={"fontname": "Helvetica", "fontsize": "9", "shape": "box", "style": "rounded,filled"},
+        edge_attr={"arrowsize": "0.65", "penwidth": "1.2", "color": "#111827"},
+    )
+
+    for raw in subgraph.nodes:
+        norm = norm_by_raw.get(raw, _norm_node_name(raw))
+        mean, mx, mn = stats_by_norm.get(norm, (0.0, 0.0, 0.0))
+        layer_type = graph.nodes[raw].get("layer_type", "Unknown")
+        g.node(
+            norm,
+            label=(
+                f"{_short(norm)}\n"
+                f"{layer_type}\n"
+                f"Mean: {_fmt_rel(mean)}\n"
+                f"Max: {_fmt_rel(mx)}"
+            ),
+            fillcolor=color_map.get(layer_type, "white"),
+        )
+
+    for src, dst in subgraph.edges:
+        g.edge(norm_by_raw.get(src, _norm_node_name(src)), norm_by_raw.get(dst, _norm_node_name(dst)))
+
+    out = g.render(output_path, cleanup=True)
+
+    if show:
+        if inline_format.lower() == "svg":
+            display(SVG(g.pipe(format="svg")))
+        else:
+            display(IPyImage(data=g.pipe(format="png")))
+
+    top_score = ranked[0][1] if ranked else 0.0
+    print(
+        "✅ Relevance subgraph saved → "
+        f"{out} (full_nodes={len(graph.nodes)}, "
+        f"rendered_nodes={subgraph.number_of_nodes()}, "
+        f"rendered_edges={subgraph.number_of_edges()}, "
+        f"top_score={_fmt_rel(top_score)})"
+    )
+    return g, out
+
+
 def visualize_relevance_auto(
     graph,
     all_wt,
@@ -480,25 +684,13 @@ def visualize_relevance_auto(
             inline_format=inline_format,
         )
     else:
-        # big graph → collapse then fast
-        print(f"big graph → collapsing it ...")
-        simp_graph, collapsed_map = simplify_graph_by_collapsing_degree2(
+        print("big graph → rendering relevance-guided subgraph ...")
+        return visualize_relevance_subgraph(
             graph,
-            protect_types=("Placeholder", "Model_Input", "Output", "Attention"),
-        )
-        simp_edges = sum(len(data.get("parents", []) or []) for data in simp_graph.nodes.values())
-        if simp_edges == 0:
-            print("Collapsed graph has 0 edges; rendering original graph instead.")
-            simp_graph = graph
-            collapsed_map = None
-        print(f"Calculate relevance using `visualize_relevance_fast(...)`")
-        return visualize_relevance_fast(
-            simp_graph,
             all_wt,
             output_path=fast_output_path,
-            collapsed_map=collapsed_map,
-            max_parents_per_node=2,
-            engine_auto_threshold=engine_auto_threshold,
+            top_k=120,
+            max_nodes=220,
             show=show,
             inline_format=inline_format,
         )
