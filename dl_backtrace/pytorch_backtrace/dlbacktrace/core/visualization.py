@@ -202,25 +202,29 @@ def simplify_graph_by_collapsing_degree2(
         changed = False
         passes += 1
 
-        to_collapse = []
-        for n in list(nodes_attr.keys()):
+        collapsed_this_pass = 0
+        while True:
+            candidate = None
+            children = build_children(parents)
+            for n in list(nodes_attr.keys()):
+                if n not in nodes_attr:
+                    continue
+                if is_protected(n):
+                    continue
+                ps = parents.get(n, [])
+                cs = children.get(n, [])
+                if len(ps) == 1 and len(cs) == 1:
+                    p, c = ps[0], cs[0]
+                    if p != c and p in nodes_attr and c in nodes_attr:
+                        candidate = (n, p, c)
+                        break
+
+            if candidate is None:
+                break
+
+            n, p, c = candidate
             if n not in nodes_attr:
-                continue
-            if is_protected(n):
-                continue
-            ps = parents.get(n, [])
-            cs = children.get(n, [])
-            if len(ps) == 1 and len(cs) == 1:
-                p, c = ps[0], cs[0]
-                if p != c and p in nodes_attr and c in nodes_attr:
-                    to_collapse.append((n, p, c))
-
-        if not to_collapse:
-            break
-
-        for n, p, c in to_collapse:
-            if n not in nodes_attr or p not in nodes_attr or c not in nodes_attr:
-                continue
+                break
 
             # rewire child
             if n in parents.get(c, []):
@@ -250,8 +254,10 @@ def simplify_graph_by_collapsing_degree2(
             nodes_attr.pop(n, None)
 
             changed = True
+            collapsed_this_pass += 1
 
-        children = build_children(parents)
+        if collapsed_this_pass == 0:
+            break
 
     simplified_nodes = {}
     for n in nodes_attr:
@@ -409,6 +415,11 @@ def visualize_relevance_fast(
     for raw in present_raw:
         child = norm_by_raw[raw]
         parents = graph.nodes[raw].get("parents", []) or []
+        if not parents and hasattr(graph, "predecessors"):
+            try:
+                parents = list(graph.predecessors(raw))
+            except Exception:
+                parents = []
         if max_parents_per_node is not None and len(parents) > max_parents_per_node:
             parents = sorted(
                 parents,
@@ -475,6 +486,11 @@ def visualize_relevance_auto(
             graph,
             protect_types=("Placeholder", "Model_Input", "Output", "Attention"),
         )
+        simp_edges = sum(len(data.get("parents", []) or []) for data in simp_graph.nodes.values())
+        if simp_edges == 0:
+            print("Collapsed graph has 0 edges; rendering original graph instead.")
+            simp_graph = graph
+            collapsed_map = None
         print(f"Calculate relevance using `visualize_relevance_fast(...)`")
         return visualize_relevance_fast(
             simp_graph,
