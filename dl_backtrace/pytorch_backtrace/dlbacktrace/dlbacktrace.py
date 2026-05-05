@@ -1201,13 +1201,13 @@ class DLBacktrace:
         visualize_graph(self.graph, save_path)
 
     def visualize_dlbacktrace(self, output_path="backtrace_graph", top_k=None, relevance_threshold=None, engine_auto_threshold=1500):
-        visualize_relevance_auto(
+        return visualize_relevance_auto(
             self.graph,
             self.all_wt,
             output_path=output_path,          # pretty path for small graphs
             node_threshold=500,
             engine_auto_threshold=engine_auto_threshold,
-            fast_output_path="backtrace_collapsed_fast",  # path for large graphs
+            fast_output_path=output_path,      # keep caller-provided path for large graphs too
             show=True,                        # ⬅️ show in Colab
             inline_format="svg",              # or "png" if SVG too heavy
         )

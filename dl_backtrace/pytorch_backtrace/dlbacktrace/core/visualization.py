@@ -9,6 +9,19 @@ from collections import defaultdict
 from IPython.display import display, SVG, Image as IPyImage
 
 
+def _fmt_rel(x):
+    """Format small relevance values without rounding them to visual zero."""
+    try:
+        x = float(x)
+    except Exception:
+        return "0.000"
+    if x == 0.0:
+        return "0.000"
+    if abs(x) < 1e-3 or abs(x) >= 1e4:
+        return f"{x:.3e}"
+    return f"{x:.3f}"
+
+
 def visualize_graph(graph, save_path="graph.png", *, show=True, dpi=600):
     """📊 Visualize forward execution graph with dynamic scaling (shows inline + saves)"""
     num_nodes = len(graph.nodes)
@@ -117,7 +130,12 @@ def visualize_relevance(graph, all_wt, output_path="backtrace_graph",
         fill = color_map.get(graph.nodes[node].get("layer_type", "Unknown"), "white")
         g.node(
             name,
-            label=f"{name}\nMean: {rel[0]:.3f}\nMax: {rel[1]:.3f}\nMin: {rel[2]:.3f}",
+            label=(
+                f"{name}\n"
+                f"Mean: {_fmt_rel(rel[0])}\n"
+                f"Max: {_fmt_rel(rel[1])}\n"
+                f"Min: {_fmt_rel(rel[2])}"
+            ),
             style="filled",
             fillcolor=fill,
         )
@@ -228,6 +246,7 @@ def simplify_graph_by_collapsing_degree2(
             children.pop(n, None)
 
             collapsed_into[c].add(n)
+            collapsed_into[c].update(collapsed_into.pop(n, set()))
             nodes_attr.pop(n, None)
 
             changed = True
@@ -265,31 +284,28 @@ def visualize_relevance_fast(
     norm_by_raw = {raw: _norm(raw) for raw in present_raw}
     present_norm = set(norm_by_raw.values())
 
-    # relevance only for present
-    rel_map = {}
+    # Keep relevance for all original nodes. The collapsed renderer needs
+    # relevance from nodes that were removed by simplify_graph_by_collapsing_degree2.
+    all_rel_map = {}
     for k, v in all_wt.items():
         nk = _norm(k)
-        if nk not in present_norm:
-            continue
         if isinstance(v, (list, tuple)):
             flat = [float(t.sum()) for t in v if hasattr(t, "sum")]
             if flat:
                 mean = float(sum(flat) / len(flat))
-                rel_map[nk] = (mean, max(flat), min(flat))
+                all_rel_map[nk] = (mean, max(flat), min(flat))
             else:
-                rel_map[nk] = (0.0, 0.0, 0.0)
+                all_rel_map[nk] = (0.0, 0.0, 0.0)
         elif hasattr(v, "sum"):
-            rel_map[nk] = (float(v.mean()), float(v.max()), float(v.min()))
+            all_rel_map[nk] = (float(v.mean()), float(v.max()), float(v.min()))
         else:
             try:
                 x = float(v)
-                rel_map[nk] = (x, x, x)
+                all_rel_map[nk] = (x, x, x)
             except Exception:
-                rel_map[nk] = (0.0, 0.0, 0.0)
+                all_rel_map[nk] = (0.0, 0.0, 0.0)
 
-    # defaults
-    for nk in present_norm:
-        rel_map.setdefault(nk, (0.0, 0.0, 0.0))
+    rel_map = {nk: all_rel_map.get(nk, (0.0, 0.0, 0.0)) for nk in present_norm}
 
     # aggregate collapsed
     if collapsed_map:
@@ -299,7 +315,7 @@ def visualize_relevance_fast(
             agg_m, agg_x, agg_n = km, kx, kn
             for rm_raw in removed_raws:
                 rm_norm = _norm(rm_raw)
-                m, x, n = rel_map.get(rm_norm, (0.0, 0.0, 0.0))
+                m, x, n = all_rel_map.get(rm_norm, (0.0, 0.0, 0.0))
                 agg_m += m
                 agg_x = max(agg_x, x)
                 agg_n = min(agg_n, n)
@@ -365,9 +381,9 @@ def visualize_relevance_fast(
             nk,
             label=(
                 f"{_short(nk)}\n"
-                f"Mean: {mean:.3f}\n"
-                f"Max: {mx:.3f}\n"
-                f"Min: {mn:.3f}"
+                f"Mean: {_fmt_rel(mean)}\n"
+                f"Max: {_fmt_rel(mx)}\n"
+                f"Min: {_fmt_rel(mn)}"
                 f"{collapsed_line}"
             ),
             style="filled",
@@ -387,7 +403,9 @@ def visualize_relevance_fast(
             )[:max_parents_per_node]
 
         for p_raw in parents:
-            pn = norm_by_raw.get(p_raw, _norm(p_raw))
+            if p_raw not in norm_by_raw:
+                continue
+            pn = norm_by_raw[p_raw]
             e = (pn, child)
             if e in added:
                 continue
@@ -426,7 +444,7 @@ def visualize_relevance_auto(
 
     if num_nodes < node_threshold:
         # small graph → original pretty version
-        visualize_relevance(
+        return visualize_relevance(
             graph,
             all_wt,
             output_path=output_path,
@@ -441,7 +459,7 @@ def visualize_relevance_auto(
             protect_types=("Placeholder", "Model_Input", "Output", "Attention"),
         )
         print(f"Calculate relevance using `visualize_relevance_fast(...)`")
-        visualize_relevance_fast(
+        return visualize_relevance_fast(
             simp_graph,
             all_wt,
             output_path=fast_output_path,
