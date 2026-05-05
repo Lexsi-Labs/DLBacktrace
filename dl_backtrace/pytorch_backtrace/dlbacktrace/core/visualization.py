@@ -330,13 +330,14 @@ def visualize_relevance_fast(
         "ranksep": "0.35",
         "ratio": "compress",
         "margin": "0.05",
-        "outputorder": "edgesfirst",
+        "outputorder": "nodesfirst",
     }
     if engine == "dot":
         graph_attr["rankdir"] = "LR"
         graph_attr["splines"] = "spline"
         graph_attr["concentrate"] = "true"
     else:
+        graph_attr["splines"] = "true"
         if not disable_concentrate_for_sfdp:
             graph_attr["concentrate"] = "true"
 
@@ -346,7 +347,7 @@ def visualize_relevance_fast(
         engine=engine,
         graph_attr=graph_attr,
         node_attr={"fontname": "Helvetica", "fontsize": "9"},
-        edge_attr={"arrowsize": "0.5", "penwidth": "0.7"},
+        edge_attr={"arrowsize": "0.7", "penwidth": "1.4", "color": "#111827"},
     )
 
     color_map = {
@@ -390,6 +391,19 @@ def visualize_relevance_fast(
             fillcolor=fill,
         )
 
+    collapsed_owner = {}
+    if collapsed_map:
+        for kept_raw, removed_raws in collapsed_map.items():
+            for removed_raw in removed_raws:
+                collapsed_owner[removed_raw] = kept_raw
+
+    def _visible_raw(raw):
+        seen = set()
+        while raw in collapsed_owner and raw not in seen:
+            seen.add(raw)
+            raw = collapsed_owner[raw]
+        return raw if raw in norm_by_raw else None
+
     # edges
     added = set()
     for raw in present_raw:
@@ -403,9 +417,12 @@ def visualize_relevance_fast(
             )[:max_parents_per_node]
 
         for p_raw in parents:
-            if p_raw not in norm_by_raw:
+            visible_parent = _visible_raw(p_raw)
+            if visible_parent is None:
                 continue
-            pn = norm_by_raw[p_raw]
+            pn = norm_by_raw[visible_parent]
+            if pn == child:
+                continue
             e = (pn, child)
             if e in added:
                 continue
@@ -423,7 +440,7 @@ def visualize_relevance_fast(
             png_bytes = g.pipe(format="png")
             display(IPyImage(data=png_bytes))
 
-    print(f"✅ Fast graph saved → {out} (nodes={num_nodes}, engine={engine})")
+    print(f"✅ Fast graph saved → {out} (nodes={num_nodes}, edges={len(added)}, engine={engine})")
     return g, out
 
 
