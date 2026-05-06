@@ -667,15 +667,34 @@ def visualize_relevance_auto(
     node_threshold=500,
     engine_auto_threshold=1500,
     fast_output_path="backtrace_collapsed_fast",
+    graph_mode="top_k",
+    graph_top_k=120,
+    graph_max_nodes=220,
     show=True,
     inline_format="svg",
 ):
-    """Auto-choose pretty vs fast; always show inline and save."""
+    """Render either a relevance-guided top-k subgraph or the entire graph."""
     num_nodes = len(graph.nodes)
+    graph_mode = (graph_mode or "top_k").strip().lower()
     print(f"num_nodes: {num_nodes}")
 
+    if graph_mode in {"top_k", "topk", "subgraph", "relevance"}:
+        print("rendering relevance-guided top-k subgraph ...")
+        return visualize_relevance_subgraph(
+            graph,
+            all_wt,
+            output_path=fast_output_path,
+            top_k=graph_top_k,
+            max_nodes=graph_max_nodes,
+            show=show,
+            inline_format=inline_format,
+        )
+
+    if graph_mode not in {"entire", "full", "all"}:
+        raise ValueError("graph_mode must be one of {'top_k', 'entire'}")
+
     if num_nodes < node_threshold:
-        # small graph → original pretty version
+        print("rendering entire graph ...")
         return visualize_relevance(
             graph,
             all_wt,
@@ -684,13 +703,14 @@ def visualize_relevance_auto(
             inline_format=inline_format,
         )
     else:
-        print("big graph → rendering relevance-guided subgraph ...")
-        return visualize_relevance_subgraph(
+        print("big graph → rendering entire graph; this can be slow ...")
+        return visualize_relevance_fast(
             graph,
             all_wt,
             output_path=fast_output_path,
-            top_k=120,
-            max_nodes=220,
+            collapsed_map=None,
+            max_parents_per_node=None,
+            engine_auto_threshold=engine_auto_threshold,
             show=show,
             inline_format=inline_format,
         )

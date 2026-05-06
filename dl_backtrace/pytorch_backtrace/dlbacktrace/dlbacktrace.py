@@ -1200,7 +1200,16 @@ class DLBacktrace:
     def visualize(self, save_path="graph.png"):
         visualize_graph(self.graph, save_path)
 
-    def visualize_dlbacktrace(self, output_path="backtrace_graph", top_k=None, relevance_threshold=None, engine_auto_threshold=1500):
+    def visualize_dlbacktrace(
+        self,
+        output_path="backtrace_graph",
+        top_k=None,
+        relevance_threshold=None,
+        engine_auto_threshold=1500,
+        graph_mode="top_k",
+        graph_top_k=120,
+        graph_max_nodes=220,
+    ):
         return visualize_relevance_auto(
             self.graph,
             self.all_wt,
@@ -1208,6 +1217,9 @@ class DLBacktrace:
             node_threshold=500,
             engine_auto_threshold=engine_auto_threshold,
             fast_output_path=output_path,      # keep caller-provided path for large graphs too
+            graph_mode=graph_mode,
+            graph_top_k=top_k or graph_top_k,
+            graph_max_nodes=graph_max_nodes,
             show=True,                        # ⬅️ show in Colab
             inline_format="svg",              # or "png" if SVG too heavy
         )
