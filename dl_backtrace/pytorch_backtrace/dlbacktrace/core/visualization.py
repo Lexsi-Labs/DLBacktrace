@@ -9,6 +9,70 @@ from collections import defaultdict
 from IPython.display import display, SVG, Image as IPyImage
 
 
+def _fmt_rel(x):
+    """Format small relevance values without rounding them to visual zero."""
+    try:
+        x = float(x)
+    except Exception:
+        return "0.000"
+    if x == 0.0:
+        return "0.000"
+    if abs(x) < 1e-3 or abs(x) >= 1e4:
+        return f"{x:.3e}"
+    return f"{x:.3f}"
+
+
+def _norm_node_name(s):
+    return str(s).replace("/", " ").replace(":", " ")
+
+
+def _to_float(x, default=0.0):
+    try:
+        if hasattr(x, "detach"):
+            x = x.detach()
+        if hasattr(x, "item"):
+            x = x.item()
+        return float(x)
+    except Exception:
+        return default
+
+
+def _relevance_stats(rel):
+    """Return (mean, max, min, score) for a relevance object."""
+    if isinstance(rel, (list, tuple)):
+        vals = []
+        for item in rel:
+            if hasattr(item, "sum"):
+                vals.append(_to_float(item.sum()))
+        if not vals:
+            return 0.0, 0.0, 0.0, 0.0
+        mean = float(sum(vals) / len(vals))
+        mx = max(vals)
+        mn = min(vals)
+        return mean, mx, mn, max(abs(mean), abs(mx), abs(mn))
+
+    if hasattr(rel, "sum"):
+        mean = _to_float(rel.mean())
+        mx = _to_float(rel.max())
+        mn = _to_float(rel.min())
+        total = _to_float(rel.sum())
+        return mean, mx, mn, max(abs(mean), abs(mx), abs(mn), abs(total))
+
+    val = _to_float(rel)
+    return val, val, val, abs(val)
+
+
+def _relevance_maps(all_wt):
+    stats = {}
+    scores = {}
+    for node_name, rel in (all_wt or {}).items():
+        node_key = _norm_node_name(node_name)
+        mean, mx, mn, score = _relevance_stats(rel)
+        stats[node_key] = (mean, mx, mn)
+        scores[node_key] = score
+    return stats, scores
+
+
 def visualize_graph(graph, save_path="graph.png", *, show=True, dpi=600):
     """📊 Visualize forward execution graph with dynamic scaling (shows inline + saves)"""
     num_nodes = len(graph.nodes)
@@ -117,7 +181,12 @@ def visualize_relevance(graph, all_wt, output_path="backtrace_graph",
         fill = color_map.get(graph.nodes[node].get("layer_type", "Unknown"), "white")
         g.node(
             name,
-            label=f"{name}\nMean: {rel[0]:.3f}\nMax: {rel[1]:.3f}\nMin: {rel[2]:.3f}",
+            label=(
+                f"{name}\n"
+                f"Mean: {_fmt_rel(rel[0])}\n"
+                f"Max: {_fmt_rel(rel[1])}\n"
+                f"Min: {_fmt_rel(rel[2])}"
+            ),
             style="filled",
             fillcolor=fill,
         )
@@ -184,25 +253,29 @@ def simplify_graph_by_collapsing_degree2(
         changed = False
         passes += 1
 
-        to_collapse = []
-        for n in list(nodes_attr.keys()):
+        collapsed_this_pass = 0
+        while True:
+            candidate = None
+            children = build_children(parents)
+            for n in list(nodes_attr.keys()):
+                if n not in nodes_attr:
+                    continue
+                if is_protected(n):
+                    continue
+                ps = parents.get(n, [])
+                cs = children.get(n, [])
+                if len(ps) == 1 and len(cs) == 1:
+                    p, c = ps[0], cs[0]
+                    if p != c and p in nodes_attr and c in nodes_attr:
+                        candidate = (n, p, c)
+                        break
+
+            if candidate is None:
+                break
+
+            n, p, c = candidate
             if n not in nodes_attr:
-                continue
-            if is_protected(n):
-                continue
-            ps = parents.get(n, [])
-            cs = children.get(n, [])
-            if len(ps) == 1 and len(cs) == 1:
-                p, c = ps[0], cs[0]
-                if p != c and p in nodes_attr and c in nodes_attr:
-                    to_collapse.append((n, p, c))
-
-        if not to_collapse:
-            break
-
-        for n, p, c in to_collapse:
-            if n not in nodes_attr or p not in nodes_attr or c not in nodes_attr:
-                continue
+                break
 
             # rewire child
             if n in parents.get(c, []):
@@ -228,11 +301,14 @@ def simplify_graph_by_collapsing_degree2(
             children.pop(n, None)
 
             collapsed_into[c].add(n)
+            collapsed_into[c].update(collapsed_into.pop(n, set()))
             nodes_attr.pop(n, None)
 
             changed = True
+            collapsed_this_pass += 1
 
-        children = build_children(parents)
+        if collapsed_this_pass == 0:
+            break
 
     simplified_nodes = {}
     for n in nodes_attr:
@@ -265,31 +341,28 @@ def visualize_relevance_fast(
     norm_by_raw = {raw: _norm(raw) for raw in present_raw}
     present_norm = set(norm_by_raw.values())
 
-    # relevance only for present
-    rel_map = {}
+    # Keep relevance for all original nodes. The collapsed renderer needs
+    # relevance from nodes that were removed by simplify_graph_by_collapsing_degree2.
+    all_rel_map = {}
     for k, v in all_wt.items():
         nk = _norm(k)
-        if nk not in present_norm:
-            continue
         if isinstance(v, (list, tuple)):
             flat = [float(t.sum()) for t in v if hasattr(t, "sum")]
             if flat:
                 mean = float(sum(flat) / len(flat))
-                rel_map[nk] = (mean, max(flat), min(flat))
+                all_rel_map[nk] = (mean, max(flat), min(flat))
             else:
-                rel_map[nk] = (0.0, 0.0, 0.0)
+                all_rel_map[nk] = (0.0, 0.0, 0.0)
         elif hasattr(v, "sum"):
-            rel_map[nk] = (float(v.mean()), float(v.max()), float(v.min()))
+            all_rel_map[nk] = (float(v.mean()), float(v.max()), float(v.min()))
         else:
             try:
                 x = float(v)
-                rel_map[nk] = (x, x, x)
+                all_rel_map[nk] = (x, x, x)
             except Exception:
-                rel_map[nk] = (0.0, 0.0, 0.0)
+                all_rel_map[nk] = (0.0, 0.0, 0.0)
 
-    # defaults
-    for nk in present_norm:
-        rel_map.setdefault(nk, (0.0, 0.0, 0.0))
+    rel_map = {nk: all_rel_map.get(nk, (0.0, 0.0, 0.0)) for nk in present_norm}
 
     # aggregate collapsed
     if collapsed_map:
@@ -299,7 +372,7 @@ def visualize_relevance_fast(
             agg_m, agg_x, agg_n = km, kx, kn
             for rm_raw in removed_raws:
                 rm_norm = _norm(rm_raw)
-                m, x, n = rel_map.get(rm_norm, (0.0, 0.0, 0.0))
+                m, x, n = all_rel_map.get(rm_norm, (0.0, 0.0, 0.0))
                 agg_m += m
                 agg_x = max(agg_x, x)
                 agg_n = min(agg_n, n)
@@ -314,13 +387,14 @@ def visualize_relevance_fast(
         "ranksep": "0.35",
         "ratio": "compress",
         "margin": "0.05",
-        "outputorder": "edgesfirst",
+        "outputorder": "nodesfirst",
     }
     if engine == "dot":
         graph_attr["rankdir"] = "LR"
         graph_attr["splines"] = "spline"
         graph_attr["concentrate"] = "true"
     else:
+        graph_attr["splines"] = "true"
         if not disable_concentrate_for_sfdp:
             graph_attr["concentrate"] = "true"
 
@@ -330,7 +404,7 @@ def visualize_relevance_fast(
         engine=engine,
         graph_attr=graph_attr,
         node_attr={"fontname": "Helvetica", "fontsize": "9"},
-        edge_attr={"arrowsize": "0.5", "penwidth": "0.7"},
+        edge_attr={"arrowsize": "0.7", "penwidth": "1.4", "color": "#111827"},
     )
 
     color_map = {
@@ -365,20 +439,38 @@ def visualize_relevance_fast(
             nk,
             label=(
                 f"{_short(nk)}\n"
-                f"Mean: {mean:.3f}\n"
-                f"Max: {mx:.3f}\n"
-                f"Min: {mn:.3f}"
+                f"Mean: {_fmt_rel(mean)}\n"
+                f"Max: {_fmt_rel(mx)}\n"
+                f"Min: {_fmt_rel(mn)}"
                 f"{collapsed_line}"
             ),
             style="filled",
             fillcolor=fill,
         )
 
+    collapsed_owner = {}
+    if collapsed_map:
+        for kept_raw, removed_raws in collapsed_map.items():
+            for removed_raw in removed_raws:
+                collapsed_owner[removed_raw] = kept_raw
+
+    def _visible_raw(raw):
+        seen = set()
+        while raw in collapsed_owner and raw not in seen:
+            seen.add(raw)
+            raw = collapsed_owner[raw]
+        return raw if raw in norm_by_raw else None
+
     # edges
     added = set()
     for raw in present_raw:
         child = norm_by_raw[raw]
         parents = graph.nodes[raw].get("parents", []) or []
+        if not parents and hasattr(graph, "predecessors"):
+            try:
+                parents = list(graph.predecessors(raw))
+            except Exception:
+                parents = []
         if max_parents_per_node is not None and len(parents) > max_parents_per_node:
             parents = sorted(
                 parents,
@@ -387,7 +479,12 @@ def visualize_relevance_fast(
             )[:max_parents_per_node]
 
         for p_raw in parents:
-            pn = norm_by_raw.get(p_raw, _norm(p_raw))
+            visible_parent = _visible_raw(p_raw)
+            if visible_parent is None:
+                continue
+            pn = norm_by_raw[visible_parent]
+            if pn == child:
+                continue
             e = (pn, child)
             if e in added:
                 continue
@@ -405,7 +502,160 @@ def visualize_relevance_fast(
             png_bytes = g.pipe(format="png")
             display(IPyImage(data=png_bytes))
 
-    print(f"✅ Fast graph saved → {out} (nodes={num_nodes}, engine={engine})")
+    print(f"✅ Fast graph saved → {out} (nodes={num_nodes}, edges={len(added)}, engine={engine})")
+    return g, out
+
+
+def visualize_relevance_subgraph(
+    graph,
+    all_wt,
+    output_path="backtrace_relevance_subgraph",
+    *,
+    top_k=120,
+    max_nodes=220,
+    show=True,
+    inline_format="svg",
+):
+    """Render a bounded relevance-guided subgraph using direct NetworkX edges."""
+    stats_by_norm, scores_by_norm = _relevance_maps(all_wt)
+    raw_by_norm = {_norm_node_name(raw): raw for raw in graph.nodes}
+    norm_by_raw = {raw: _norm_node_name(raw) for raw in graph.nodes}
+
+    output_nodes = [
+        raw for raw in graph.nodes
+        if graph.nodes[raw].get("layer_type") == "Output"
+    ]
+    if not output_nodes:
+        output_nodes = [raw for raw in graph.nodes if graph.out_degree(raw) == 0]
+
+    ranked = []
+    for raw, norm in norm_by_raw.items():
+        score = scores_by_norm.get(norm, 0.0)
+        if score > 0:
+            ranked.append((raw, score))
+    ranked.sort(key=lambda item: item[1], reverse=True)
+
+    selected = set(output_nodes[:3])
+    top_nodes = [raw for raw, _ in ranked[:top_k]]
+
+    def best_path_to_output(raw):
+        best = None
+        for out in output_nodes[:5]:
+            try:
+                path = nx.shortest_path(graph, raw, out)
+            except (nx.NetworkXNoPath, nx.NodeNotFound):
+                continue
+            if best is None or len(path) < len(best):
+                best = path
+        return best
+
+    for raw in top_nodes:
+        if len(selected) >= max_nodes:
+            break
+        path = best_path_to_output(raw)
+        if path:
+            if len(selected | set(path)) <= max_nodes:
+                selected.update(path)
+            else:
+                selected.add(raw)
+        else:
+            selected.add(raw)
+
+    # If paths were unavailable or too sparse, add direct neighbors of top nodes.
+    for raw in top_nodes:
+        if len(selected) >= max_nodes:
+            break
+        if raw not in selected:
+            continue
+        neighbors = list(graph.predecessors(raw))[:2] + list(graph.successors(raw))[:2]
+        for n in neighbors:
+            if len(selected) >= max_nodes:
+                break
+            selected.add(n)
+
+    subgraph = graph.subgraph(selected).copy()
+    if subgraph.number_of_edges() == 0 and top_nodes:
+        selected = set()
+        for raw in top_nodes:
+            if len(selected) >= max_nodes:
+                break
+            selected.add(raw)
+            for n in list(graph.predecessors(raw))[:2] + list(graph.successors(raw))[:2]:
+                if len(selected) >= max_nodes:
+                    break
+                selected.add(n)
+        subgraph = graph.subgraph(selected).copy()
+
+    color_map = {
+        "MLP_Layer": "lightblue",
+        "DL_Layer": "lightgreen",
+        "Activation": "orange",
+        "Normalization": "pink",
+        "Mathematical_Operation": "yellow",
+        "Vector_Operation": "gray",
+        "Indexing_Operation": "lightgray",
+        "ATen_Operation": "violet",
+        "NLP_Embedding": "lightsalmon",
+        "Attention": "gold",
+        "Output": "red",
+        "Placeholder": "white",
+        "Model_Input": "lightcyan",
+    }
+
+    def _short(s, n=42):
+        return s if len(s) <= n else s[:n - 1] + "…"
+
+    g = graphviz.Digraph(
+        "DLBacktraceRelevanceSubgraph",
+        format="svg",
+        engine="dot",
+        graph_attr={
+            "rankdir": "LR",
+            "splines": "spline",
+            "concentrate": "true",
+            "nodesep": "0.22",
+            "ranksep": "0.42",
+            "margin": "0.05",
+            "outputorder": "nodesfirst",
+        },
+        node_attr={"fontname": "Helvetica", "fontsize": "9", "shape": "box", "style": "rounded,filled"},
+        edge_attr={"arrowsize": "0.65", "penwidth": "1.2", "color": "#111827"},
+    )
+
+    for raw in subgraph.nodes:
+        norm = norm_by_raw.get(raw, _norm_node_name(raw))
+        mean, mx, mn = stats_by_norm.get(norm, (0.0, 0.0, 0.0))
+        layer_type = graph.nodes[raw].get("layer_type", "Unknown")
+        g.node(
+            norm,
+            label=(
+                f"{_short(norm)}\n"
+                f"{layer_type}\n"
+                f"Mean: {_fmt_rel(mean)}\n"
+                f"Max: {_fmt_rel(mx)}"
+            ),
+            fillcolor=color_map.get(layer_type, "white"),
+        )
+
+    for src, dst in subgraph.edges:
+        g.edge(norm_by_raw.get(src, _norm_node_name(src)), norm_by_raw.get(dst, _norm_node_name(dst)))
+
+    out = g.render(output_path, cleanup=True)
+
+    if show:
+        if inline_format.lower() == "svg":
+            display(SVG(g.pipe(format="svg")))
+        else:
+            display(IPyImage(data=g.pipe(format="png")))
+
+    top_score = ranked[0][1] if ranked else 0.0
+    print(
+        "✅ Relevance subgraph saved → "
+        f"{out} (full_nodes={len(graph.nodes)}, "
+        f"rendered_nodes={subgraph.number_of_nodes()}, "
+        f"rendered_edges={subgraph.number_of_edges()}, "
+        f"top_score={_fmt_rel(top_score)})"
+    )
     return g, out
 
 
@@ -417,16 +667,35 @@ def visualize_relevance_auto(
     node_threshold=500,
     engine_auto_threshold=1500,
     fast_output_path="backtrace_collapsed_fast",
+    graph_mode="top_k",
+    graph_top_k=120,
+    graph_max_nodes=220,
     show=True,
     inline_format="svg",
 ):
-    """Auto-choose pretty vs fast; always show inline and save."""
+    """Render either a relevance-guided top-k subgraph or the entire graph."""
     num_nodes = len(graph.nodes)
+    graph_mode = (graph_mode or "top_k").strip().lower()
     print(f"num_nodes: {num_nodes}")
 
+    if graph_mode in {"top_k", "topk", "subgraph", "relevance"}:
+        print("rendering relevance-guided top-k subgraph ...")
+        return visualize_relevance_subgraph(
+            graph,
+            all_wt,
+            output_path=fast_output_path,
+            top_k=graph_top_k,
+            max_nodes=graph_max_nodes,
+            show=show,
+            inline_format=inline_format,
+        )
+
+    if graph_mode not in {"entire", "full", "all"}:
+        raise ValueError("graph_mode must be one of {'top_k', 'entire'}")
+
     if num_nodes < node_threshold:
-        # small graph → original pretty version
-        visualize_relevance(
+        print("rendering entire graph ...")
+        return visualize_relevance(
             graph,
             all_wt,
             output_path=output_path,
@@ -434,19 +703,13 @@ def visualize_relevance_auto(
             inline_format=inline_format,
         )
     else:
-        # big graph → collapse then fast
-        print(f"big graph → collapsing it ...")
-        simp_graph, collapsed_map = simplify_graph_by_collapsing_degree2(
+        print("big graph → rendering entire graph; this can be slow ...")
+        return visualize_relevance_fast(
             graph,
-            protect_types=("Placeholder", "Model_Input", "Output", "Attention"),
-        )
-        print(f"Calculate relevance using `visualize_relevance_fast(...)`")
-        visualize_relevance_fast(
-            simp_graph,
             all_wt,
             output_path=fast_output_path,
-            collapsed_map=collapsed_map,
-            max_parents_per_node=2,
+            collapsed_map=None,
+            max_parents_per_node=None,
             engine_auto_threshold=engine_auto_threshold,
             show=show,
             inline_format=inline_format,
