@@ -788,34 +788,21 @@ def calculate_start_wt(arg, scaler=1,*args, **kwargs):
         print(f"target_relevance --- original array: {target_relevance}, value: {np.sum(target_relevance):.4f}, shape: {target_relevance.shape}")
 
     elif task == "generation":
-        # code here
-        print("======arg.shape=====",arg.shape)
-        # x = np.argmax(arg, axis=2)
-        # print("===x.shape============",x.shape)
-        # y = np.zeros_like(arg)
-        # value = 1 / arg.shape[1]
-
-        # batch_size, seq_len, _ = arg.shape
-        # for i in range(batch_size):
-        #     for j in range(seq_len):
-        #         y[i, j, x[i, j]] = value 
-
-        # print("====y.shape=======",y.shape)
-
         next_token_logit = arg[:, -1, :]
-        print(f"next_token_logit: {next_token_logit.shape}")
-        predicted_token = np.argmax(next_token_logit, axis=-1, keepdims=True)  # [B, 1]
-        print(f"predicted_token: {predicted_token}")
+        requested_token = kwargs.get("predicted_token", None)
+        if requested_token is None:
+            predicted_token = np.argmax(next_token_logit, axis=-1, keepdims=True)
+        else:
+            predicted_token = np.asarray(requested_token).reshape(-1, 1)
+            if predicted_token.shape[0] == 1 and arg.shape[0] > 1:
+                predicted_token = np.repeat(predicted_token, arg.shape[0], axis=0)
 
         # Create target relevance
         target_relevance = np.zeros_like(arg, dtype=np.float32)
 
         # Set the 1.0 at predicted indices
         for b, t in enumerate(predicted_token):
-            print(f"batch: {b}, token: {t}")
-            target_relevance[b, -1, t] = 1.0
-        
-        print(f"target_relevance --- value: {np.sum(target_relevance):.4f}, shape: {target_relevance.shape}")
+            target_relevance[b, -1, int(t[0])] = 1.0
 
     return target_relevance
 

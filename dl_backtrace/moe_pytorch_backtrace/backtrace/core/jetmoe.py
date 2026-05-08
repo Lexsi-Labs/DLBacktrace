@@ -58,11 +58,12 @@ def extract_jetmoe_weights(model):
     return weights_dict
 
 
-def create_jetmoe_output(input_text, model, tokenizer, max_length, device):
+def create_jetmoe_output(input_text, model, tokenizer, max_length, device, **kwargs):
     """Capture per-step activations for JetMoE."""
     return create_decoder_output(
         input_text, model, tokenizer, max_length, device,
         attn_attr='self_attention',
+        **kwargs,
     )
 
 

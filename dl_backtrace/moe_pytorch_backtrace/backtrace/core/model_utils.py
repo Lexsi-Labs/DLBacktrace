@@ -297,7 +297,8 @@ def build_decoder_tree(core, lm_head, *, attn_class, ff_class):
 # ═══════════════════════════════════════════════════════════════════════
 
 def create_decoder_output(input_text, model, tokenizer, max_length, device,
-                          *, attn_attr='self_attn'):
+                          *, attn_attr='self_attn', input_ids=None,
+                          attention_mask=None):
     """
     Run greedy decoding while capturing inputs and outputs for key submodules
     at each decoding step. Works for any decoder-only MoE architecture.
@@ -481,8 +482,19 @@ def create_decoder_output(input_text, model, tokenizer, max_length, device,
         nonlocal token_idx
         token_idx += 1
 
-    enc = tokenizer(input_text, return_tensors="pt")
-    input_ids = enc["input_ids"].to(device)
+    if input_ids is None:
+        enc = tokenizer(input_text, return_tensors="pt")
+        input_ids = enc["input_ids"]
+        attention_mask = enc.get("attention_mask", attention_mask)
+
+    input_ids = input_ids.detach().to(device=device, dtype=torch.long)
+    if input_ids.dim() == 1:
+        input_ids = input_ids.unsqueeze(0)
+
+    if attention_mask is not None:
+        attention_mask = attention_mask.detach().to(device=device, dtype=torch.long)
+        if attention_mask.dim() == 1:
+            attention_mask = attention_mask.unsqueeze(0)
     model = model.to(device)
 
     token_idx = 0
@@ -496,7 +508,10 @@ def create_decoder_output(input_text, model, tokenizer, max_length, device,
     try:
         with torch.no_grad():
             for _ in range(max_length):
-                outputs = model(input_ids=input_ids)
+                model_kwargs = {"input_ids": input_ids}
+                if attention_mask is not None:
+                    model_kwargs["attention_mask"] = attention_mask
+                outputs = model(**model_kwargs)
                 next_token_logits = outputs.logits[:, -1, :]
                 next_token_id = next_token_logits.argmax(dim=-1, keepdim=True)
                 # Free model intermediates immediately
@@ -506,6 +521,18 @@ def create_decoder_output(input_text, model, tokenizer, max_length, device,
                     if eos_id is not None and next_token_id[b].item() == eos_id:
                         break
                 input_ids = torch.cat([input_ids, next_token_id], dim=-1)
+                if attention_mask is not None:
+                    attention_mask = torch.cat(
+                        [
+                            attention_mask,
+                            torch.ones(
+                                (attention_mask.shape[0], 1),
+                                dtype=attention_mask.dtype,
+                                device=attention_mask.device,
+                            ),
+                        ],
+                        dim=-1,
+                    )
                 tick()
     finally:
         for h in decoder_hooks:

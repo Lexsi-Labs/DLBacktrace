@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import time
 import gc
+import inspect
+from pathlib import Path
 from typing import Optional, List, Tuple, cast
 
 import torch
@@ -68,6 +70,7 @@ class MoEAutoSampler:
     def __init__(self, moe_bt, tokenizer):
         self.moe_bt = moe_bt
         self.tokenizer = tokenizer
+        self._native_fwd_device_ok = False
 
     # ---------- small dtype helpers ----------
 
@@ -111,6 +114,135 @@ class MoEAutoSampler:
             f"{type(model_like).__name__} isn't a GenerationMixin model. "
             "Pass AutoModelForCausalLM (not base model)."
         )
+
+    def _clear_moe_memory(self, *, clear_relevance: bool = True):
+        if hasattr(self.moe_bt, "clear_intermediates"):
+            self.moe_bt.clear_intermediates(clear_relevance=clear_relevance)
+        else:
+            for attr in ("all_out_model", "all_wt", "all_layer_expert_relevance"):
+                value = getattr(self.moe_bt, attr, None)
+                if isinstance(value, dict):
+                    value.clear()
+                setattr(self.moe_bt, attr, {} if attr != "all_out_model" else None)
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+    def _check_native_forward_support(self) -> bool:
+        try:
+            model = self._get_causallm(self.moe_bt.model)
+            sig = inspect.signature(model.forward)
+            return "use_cache" in sig.parameters and "past_key_values" in sig.parameters
+        except Exception:
+            return False
+
+    def _native_forward_with_cache(self, input_ids, attention_mask, past_key_values=None):
+        """Use the wrapped HF model for fast non-DLB decode steps."""
+        model = self._get_causallm(self.moe_bt.model)
+        try:
+            model_device = next(model.parameters()).device
+        except StopIteration:
+            model_device = input_ids.device
+
+        if past_key_values is not None:
+            model_input = input_ids[:, -1:].to(model_device)
+        else:
+            model_input = input_ids.to(model_device)
+        mask_input = attention_mask.to(model_device) if attention_mask is not None else None
+
+        with torch.no_grad():
+            output = model(
+                input_ids=model_input,
+                attention_mask=mask_input,
+                past_key_values=past_key_values,
+                use_cache=True,
+            )
+
+        logits = output.logits if hasattr(output, "logits") else output[0]
+        return logits, getattr(output, "past_key_values", None)
+
+    @staticmethod
+    def _build_explain_gate(explain_tokens):
+        if isinstance(explain_tokens, str):
+            token_mode = explain_tokens.lower()
+            if token_mode == "none":
+                return lambda idx: False
+            if token_mode == "all":
+                return lambda idx: True
+            raise ValueError("explain_tokens must be 'all', 'none', an int, or a list of ints")
+        if isinstance(explain_tokens, int):
+            return lambda idx: idx < explain_tokens
+        if isinstance(explain_tokens, (list, tuple, set)):
+            dlb_steps = {int(x) for x in explain_tokens}
+            return lambda idx: idx in dlb_steps
+        return lambda idx: True
+
+    def _summarize_relevance(self, step_relevance):
+        total = 0.0
+
+        def add_val(x):
+            nonlocal total
+            if torch.is_tensor(x):
+                total += float(x.detach().float().cpu().sum().item())
+            elif hasattr(x, "sum") and hasattr(x, "shape"):
+                total += float(x.sum())
+            elif isinstance(x, dict):
+                for v in x.values():
+                    add_val(v)
+            elif isinstance(x, (list, tuple)):
+                for v in x:
+                    add_val(v)
+
+        add_val(step_relevance)
+        return total
+
+    def _prepare_cache_dir(self, base_dir: Optional[str], policy: str):
+        if policy != "disk":
+            return None
+        if not base_dir:
+            raise ValueError("relevance_cache_dir is required when relevance_cache_policy='disk'")
+        root = Path(base_dir).expanduser()
+        run_dir = root / f"moe_relevance_cache_run_{int(time.time() * 1000)}"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        return run_dir
+
+    def _store_relevance_entry(self, step_relevance, policy: str, *, step_idx: int = 0,
+                               cache_dir: Optional[Path] = None):
+        policy = (policy or "full").lower()
+        if policy == "none":
+            return None
+        if policy == "summary":
+            summary = self._summarize_relevance(step_relevance)
+            self._clear_nested(step_relevance)
+            return {"summary": summary}
+        if policy == "full":
+            return step_relevance
+        if policy == "disk":
+            if cache_dir is None:
+                raise ValueError("relevance_cache_dir is required when relevance_cache_policy='disk'")
+            summary = self._summarize_relevance(step_relevance)
+            file_path = cache_dir / f"step_{step_idx:05d}.pt"
+            torch.save(step_relevance, file_path)
+            self._clear_nested(step_relevance)
+            gc.collect()
+            return {"summary": summary, "path": str(file_path)}
+        raise ValueError("relevance_cache_policy must be one of {'full', 'summary', 'disk', 'none'} for MoE")
+
+    @staticmethod
+    def _clear_nested(obj):
+        if isinstance(obj, dict):
+            values = list(obj.values())
+            obj.clear()
+            for value in values:
+                MoEAutoSampler._clear_nested(value)
+        elif isinstance(obj, list):
+            values = list(obj)
+            obj.clear()
+            for value in values:
+                MoEAutoSampler._clear_nested(value)
+        elif isinstance(obj, tuple):
+            for value in obj:
+                MoEAutoSampler._clear_nested(value)
 
     @staticmethod
     def _attach_token_tensors(gen_config, device):
@@ -297,6 +429,9 @@ class MoEAutoSampler:
         return_scores: bool = False,
         return_layerwise_output: bool = False,
         return_relevance: bool = False,
+        explain_tokens = "all",
+        relevance_cache_policy: str = "full",
+        relevance_cache_dir: Optional[str] = None,
         debug: bool = False,
     ):
         """
@@ -310,6 +445,14 @@ class MoEAutoSampler:
         device = input_ids.device
         B = input_ids.size(0)
         assert B == 1, "Current implementation assumes batch size = 1."
+
+        cache_policy = (relevance_cache_policy or "full").lower()
+        if cache_policy not in {"full", "summary", "disk", "none"}:
+            raise ValueError("relevance_cache_policy must be one of {'full', 'summary', 'disk', 'none'} for MoE")
+        cache_dir_path = None
+        if return_relevance and cache_policy == "disk":
+            cache_dir_path = self._prepare_cache_dir(relevance_cache_dir, cache_policy)
+        _should_run_dlb = self._build_explain_gate(explain_tokens)
 
         # Dtypes up-front
         input_ids = self._as_long(input_ids)
@@ -397,52 +540,49 @@ class MoEAutoSampler:
         # Non-beam path (B=1)
         # ======================
         if num_beams < 2:
-            # Decode the initial prompt to text
-            prompt_text = self.tokenizer.decode(input_ids[0], skip_special_tokens=True)
-            
-            # Initialize traces
+            generated = self._as_long(input_ids.clone()).to(device)
+            attn = self._as_long(attention_mask.clone()).to(device)
             scores_trace = [] if return_scores else None
             relevance_trace = [] if return_relevance else None
             io_data_trace = [] if return_layerwise_output else None
-            
-            # Track generated tokens
-            generated_tokens = []
-            
+            native_fwd_ok = self._check_native_forward_support()
+            past_kv = None
             stopped_by = None
+
             for step_idx in range(max_new_tokens if max_new_tokens is not None else 10_000_000):
-                # Compute outputs using MoE Backtrace
-                # For each step, we need to run compute_outputs with the current sequence
-                current_text = prompt_text + self.tokenizer.decode(generated_tokens, skip_special_tokens=False)
-                
-                if debug:
-                    print(f"Step {step_idx}: Computing outputs for text length {len(current_text)}")
-                
-                # Run MoE Backtrace compute_outputs for single step
-                all_out, all_in, _ = self.moe_bt.compute_outputs(
-                    input_text=current_text,
-                    tokenizer=self.tokenizer,
-                    max_length=1  # Generate one token at a time
-                )
-                
-                # Extract logits from the last step
-                last_step_key = str(len(all_out) - 1)
-                logits = self._extract_logits_from_output(all_out, last_step_key)
-                
+                use_dlb = (return_relevance and _should_run_dlb(step_idx)) or not native_fwd_ok
+                all_out = all_in = None
+                last_step_key = None
+
+                if use_dlb:
+                    # Clear previous activations before allocating the next hooked pass.
+                    self._clear_moe_memory(clear_relevance=False)
+                    if past_kv is not None:
+                        del past_kv
+                        past_kv = None
+                    all_out, all_in, _ = self.moe_bt.compute_outputs(
+                        input_text=None,
+                        input_ids=generated,
+                        attention_mask=attn,
+                        tokenizer=self.tokenizer,
+                        max_length=1,
+                    )
+                    last_step_key = str(len(all_out) - 1)
+                    logits = self._extract_logits_from_output(all_out, last_step_key)
+                else:
+                    logits, past_kv = self._native_forward_with_cache(
+                        generated, attn, past_key_values=past_kv
+                    )
+
                 if torch.is_tensor(logits):
                     logits = logits.to(device)
                 else:
                     logits = torch.tensor(logits, device=device, dtype=torch.float32)
                 
                 next_logits = self._as_float(logits[:, -1, :])  # [1, V]
-                
-                # Build current input_ids tensor for processors
-                current_ids = torch.cat([
-                    input_ids,
-                    torch.tensor([generated_tokens], device=device, dtype=torch.long) if generated_tokens else torch.empty((1, 0), device=device, dtype=torch.long)
-                ], dim=1)
-                
+
                 # Apply processors
-                scores = logits_processor(self._as_long(current_ids), next_logits)
+                scores = logits_processor(self._as_long(generated), next_logits)
                 if scores.device != device:
                     scores = scores.to(device)
                 
@@ -452,7 +592,7 @@ class MoEAutoSampler:
                 
                 # Sampling vs greedy
                 if do_sample and logits_warper is not None:
-                    scores = logits_warper(self._as_long(current_ids), scores)
+                    scores = logits_warper(self._as_long(generated), scores)
                     probs = F.softmax(scores, dim=-1)
                     next_tokens = torch.multinomial(probs, num_samples=1)  # LongTensor
                 else:
@@ -465,12 +605,10 @@ class MoEAutoSampler:
                 if return_scores:
                     scores_trace.append(scores.detach().to("cpu"))
                 
-                if return_layerwise_output:
+                if return_layerwise_output and all_out is not None:
                     io_data_trace.append({'all_in': all_in, 'all_out': all_out})
                 
-                if return_relevance:
-                    # Compute relevance for this step
-                    # Returns both token relevance (all_wt) and expert relevance separately
+                if return_relevance and _should_run_dlb(step_idx):
                     all_wt, expert_rel = self._compute_relevance_for_step(
                         all_in=all_in,
                         all_out=all_out,
@@ -482,18 +620,33 @@ class MoEAutoSampler:
                         thresholding=0.5,
                         debug=False,
                     )
-                    # Store both separately in the trace
-                    relevance_trace.append({
+                    step_relevance = {
+                        'step_index': step_idx,
+                        'token_id': next_token_id,
                         'all_wt': all_wt,
                         'expert_relevance': expert_rel
-                    })
-                
+                    }
+                    entry = self._store_relevance_entry(
+                        step_relevance,
+                        cache_policy,
+                        step_idx=step_idx,
+                        cache_dir=cache_dir_path,
+                    )
+                    if entry is not None:
+                        relevance_trace.append(entry)
+
                 # Free activations after all consumers are done
-                if not return_layerwise_output:
+                if all_out is not None and not return_layerwise_output:
                     del all_out, all_in
-                
-                # Add token to generated sequence
-                generated_tokens.append(next_token_id)
+                    self._clear_moe_memory(clear_relevance=False)
+                if not return_layerwise_output:
+                    del logits
+
+                generated = torch.cat([generated, next_tokens], dim=1)
+                attn = torch.cat(
+                    [attn, torch.ones((1, 1), dtype=attn.dtype, device=attn.device)],
+                    dim=1,
+                )
                 
                 # Early stop if EOS produced
                 if eos_list and next_token_id in eos_set:
@@ -501,11 +654,7 @@ class MoEAutoSampler:
                     break
                 
                 # HF-native stopping criteria (max_new_tokens / max_time)
-                final_ids = torch.cat([
-                    input_ids,
-                    torch.tensor([generated_tokens], device=device, dtype=torch.long)
-                ], dim=1)
-                crit = stopping_criteria(self._as_long(final_ids[:1, :]), None)
+                crit = stopping_criteria(self._as_long(generated[:1, :]), None)
                 if self._criteria_true(crit):
                     stopped_by = "stopping_criteria"
                     break
@@ -514,25 +663,27 @@ class MoEAutoSampler:
             
             if debug:
                 print(f"[greedy/sampling] stopped_by={stopped_by}")
-            
-            # Build final output tensor
-            generated = torch.cat([
-                input_ids,
-                torch.tensor([generated_tokens], device=device, dtype=torch.long)
-            ], dim=1)
+
+            if past_kv is not None:
+                del past_kv
+                past_kv = None
+            self._clear_moe_memory(clear_relevance=False)
             
             want_extras = return_scores or return_relevance or return_layerwise_output
             if not want_extras:
-                return generated  # [1, T]
+                return generated.detach().cpu()  # [1, T]
             
             info = {}
             if return_scores:
                 info["scores_trace"] = scores_trace
             if return_relevance:
                 info["relevance_trace"] = relevance_trace
+                info["relevance_cache_policy"] = cache_policy
+                if cache_dir_path is not None:
+                    info["relevance_cache_dir"] = str(cache_dir_path)
             if return_layerwise_output:
                 info["layerwise_output_trace"] = io_data_trace
-            return generated, info  # ([1, T], dict)
+            return generated.detach().cpu(), info  # ([1, T], dict)
 
         # ======================
         # Beam search path (deterministic, no sampling) — always return top-1
@@ -688,7 +839,11 @@ class MoEAutoSampler:
                 next_beam_indices = beam_outputs["next_beam_indices"].to(device)  # [beams]
 
                 # Save old beam state for relevance computation (before adding new tokens)
-                old_beam_generated_tokens = [tokens.copy() for tokens in beam_generated_tokens] if return_relevance else None
+                old_beam_generated_tokens = (
+                    [tokens.copy() for tokens in beam_generated_tokens]
+                    if return_relevance and _should_run_dlb(step_idx)
+                    else None
+                )
                 
                 # Update beam_generated_tokens based on beam reordering
                 new_beam_generated_tokens = []
@@ -702,7 +857,7 @@ class MoEAutoSampler:
                 beam_scores = self._as_float(next_beam_scores).to(device)
                 cur_len += 1
 
-                if return_relevance:
+                if return_relevance and _should_run_dlb(step_idx):
                     step_rel_scores = []
                     for b in range(beams):
                         # Use the OLD beam state (before new token) for relevance computation
@@ -736,10 +891,20 @@ class MoEAutoSampler:
                             thresholding=0.5,
                             debug=False,
                         )
-                        step_rel_scores.append({
+                        step_entry = {
+                            'step_index': step_idx,
+                            'token_id': int(chosen_tok_b.item()),
                             'all_wt': all_wt_b,
                             'expert_relevance': expert_rel_b
-                        })
+                        }
+                        stored_entry = self._store_relevance_entry(
+                            step_entry,
+                            cache_policy,
+                            step_idx=step_idx * beams + b,
+                            cache_dir=cache_dir_path,
+                        )
+                        step_rel_scores.append(stored_entry if stored_entry is not None else {})
+                        self._clear_moe_memory(clear_relevance=False)
 
                     relevance_trace_beam.append(step_rel_scores)
 
@@ -815,6 +980,9 @@ class MoEAutoSampler:
                     for step_rels in relevance_trace_beam
                 ]
                 info_beam["relevance_trace"] = flat_relevance
+                info_beam["relevance_cache_policy"] = cache_policy
+                if cache_dir_path is not None:
+                    info_beam["relevance_cache_dir"] = str(cache_dir_path)
             if return_layerwise_output:
                 # collapse to top-1 beam (final winner)
                 flat_io_trace = [

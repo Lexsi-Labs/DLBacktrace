@@ -64,9 +64,10 @@ def extract_qwen3_moe_weights(model):
     return weights_dict
 
 
-def create_qwen3_moe_output(input_text, model, tokenizer, max_length, device):
+def create_qwen3_moe_output(input_text, model, tokenizer, max_length, device, **kwargs):
     """Capture per-step activations for Qwen3-MoE."""
     return create_decoder_output(
         input_text, model, tokenizer, max_length, device,
         attn_attr='self_attn',
+        **kwargs,
     )

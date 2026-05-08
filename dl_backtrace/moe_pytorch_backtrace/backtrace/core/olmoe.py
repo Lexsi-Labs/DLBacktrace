@@ -66,9 +66,10 @@ def extract_olmoe_weights(model):
     return weights_dict
 
 
-def create_olmoe_output(input_text, model, tokenizer, max_length, device):
+def create_olmoe_output(input_text, model, tokenizer, max_length, device, **kwargs):
     """Capture per-step activations for OLMoE."""
     return create_decoder_output(
         input_text, model, tokenizer, max_length, device,
         attn_attr='self_attn',
+        **kwargs,
     )

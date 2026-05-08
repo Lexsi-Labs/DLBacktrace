@@ -57,9 +57,10 @@ def extract_gpt_oss_weights(model):
     return weights_dict
 
 
-def create_gpt_oss_output(input_text, model, tokenizer, max_length, device):
+def create_gpt_oss_output(input_text, model, tokenizer, max_length, device, **kwargs):
     """Capture per-step activations for GPT-OSS."""
     return create_decoder_output(
         input_text, model, tokenizer, max_length, device,
         attn_attr='self_attn',
+        **kwargs,
     )
