@@ -161,6 +161,7 @@ class Backtrace(object):
             device = "cpu"
         self.device = device
         self.impl = "cuda" if device == "cuda" else "original"
+        self.relevance_dtype = torch.float16 if device == "cuda" else np.float32
 
         self.model = model.to(device) if model is not None else None
         self.model_type = model_type
@@ -231,7 +232,7 @@ class Backtrace(object):
         )
 
     # ---- Step 3 moved out of __init__
-    def clear_intermediates(self, clear_relevance=True):
+    def clear_intermediates(self, clear_relevance=True, clear_weight_cache=False):
         """
         Release tensors produced by compute_outputs/proportional_eval without
         unloading the model or the extracted weight references.
@@ -249,6 +250,9 @@ class Backtrace(object):
                 value = getattr(self, attr, None)
                 _clear_tensor_tree(value)
                 setattr(self, attr, {})
+
+        if clear_weight_cache and hasattr(UD2, "clear_tensor_weight_cache"):
+            UD2.clear_tensor_weight_cache()
 
         gc.collect()
         _release_cpu_allocator_memory()
@@ -284,7 +288,7 @@ class Backtrace(object):
         except Exception:
             pass
 
-        self.clear_intermediates(clear_relevance=True)
+        self.clear_intermediates(clear_relevance=True, clear_weight_cache=unload_model)
 
         if unload_model:
             for attr in (
@@ -405,6 +409,32 @@ class Backtrace(object):
         logger.info("device: %s, implementation: %s", device, impl)
         
         # ---- helpers for device-aware I/O ----
+        def relevance_sum(x):
+            if torch.is_tensor(x):
+                return float(x.detach().float().sum().cpu().item())
+            return float(np.sum(x))
+
+        def to_relevance(x):
+            """
+            Normalize relevance values for accumulation.
+            CUDA path stays as a torch tensor on device; CPU path stays NumPy.
+            """
+            if impl == "cuda":
+                if torch.is_tensor(x):
+                    return x.to(device=self.device, dtype=self.relevance_dtype)
+                if isinstance(x, np.ndarray):
+                    return torch.as_tensor(x, device=self.device, dtype=self.relevance_dtype)
+                if isinstance(x, (list, tuple)):
+                    return [to_relevance(xx) for xx in x]
+                return torch.as_tensor(x, device=self.device, dtype=self.relevance_dtype)
+            if torch.is_tensor(x):
+                return x.detach().to(torch.float32).cpu().numpy()
+            if isinstance(x, np.ndarray):
+                return x.astype(np.float32, copy=False)
+            if isinstance(x, (list, tuple)):
+                return [to_relevance(xx) for xx in x]
+            return np.asarray(x, dtype=np.float32)
+
         def arr_from_key(key_or_val):
             """
             Accepts:
@@ -428,7 +458,9 @@ class Backtrace(object):
             if impl == "cuda":
                 if torch.is_tensor(x):
                     return x.to(self.device)
-                return torch.tensor(t2np32(x), dtype=torch.float32, device=self.device)
+                if isinstance(x, np.ndarray):
+                    return torch.as_tensor(x, device=self.device, dtype=self.relevance_dtype)
+                return torch.as_tensor(x, device=self.device, dtype=self.relevance_dtype)
             else:  # original/CPU
                 if torch.is_tensor(x):
                     return t2np32(x)
@@ -438,19 +470,6 @@ class Backtrace(object):
 
         def arr_list_from_keys(keys):
             return [arr_from_key(k) for k in keys]
-
-        def to_np32(x):
-            """
-            Ensure value is a NumPy float32 array for accumulation into all_wt[].
-            Accepts torch, numpy, lists/tuples of arrays.
-            """
-            if torch.is_tensor(x):
-                return x.detach().to(torch.float32).cpu().numpy()
-            if isinstance(x, np.ndarray):
-                return x.astype(np.float32, copy=False)
-            if isinstance(x, (list, tuple)):
-                return [to_np32(xx) for xx in x]
-            return np.array(x, dtype=np.float32)
 
         model_resource = self.model_resource
         layer_stack = self.layer_stack
@@ -464,16 +483,15 @@ class Backtrace(object):
         out_layer = model_resource["outputs"][0]
         out_arr = arr_from_key(out_layer)  # torch or numpy, depending on impl
         if len(start_wt) == 0:
-            # UD2.calculate_start_wt expects numpy
-            sw_src = out_arr if isinstance(out_arr, np.ndarray) else t2np32(out_arr)
+            sw_src = out_arr if impl == "cuda" else (out_arr if isinstance(out_arr, np.ndarray) else t2np32(out_arr))
             start_wt = UD2.calculate_start_wt(
                 sw_src,
                 scaler=scaler,
                 task="generation",
                 predicted_token=predicted_token,
             )
-        all_wt[out_layer] = start_wt * multiplier
-        logger.debug("all_wt[%s] start_wt: %s", [out_layer], np.sum(all_wt[out_layer]))
+        all_wt[out_layer] = to_relevance(start_wt) * multiplier
+        logger.debug("all_wt[%s] start_wt: %s", [out_layer], relevance_sum(all_wt[out_layer]))
 
         # ---- propagate relevance ----
         for start_layer in tqdm(layer_stack):
@@ -481,8 +499,11 @@ class Backtrace(object):
                 child_nodes = model_resource["graph"][start_layer]["child"]
                 for ch in child_nodes:
                     if ch not in all_wt:
-                        x = get_tensor_or_raise(all_in, all_out, ch)
-                        all_wt[ch] = np.zeros_like(t2np32(x), dtype=np.float32)
+                        x = arr_from_key(ch)
+                        if impl == "cuda":
+                            all_wt[ch] = torch.zeros_like(x, dtype=self.relevance_dtype, device=self.device)
+                        else:
+                            all_wt[ch] = np.zeros_like(t2np32(x), dtype=np.float32)
 
                 node_class = model_resource["graph"][start_layer]["class"]
 
@@ -493,7 +514,7 @@ class Backtrace(object):
                     temp_wt = UD2.launch_lm_head(
                         impl, all_wt[start_layer], x, lm_head_weights
                     )
-                    all_wt[child_nodes[0]] += to_np32(temp_wt)
+                    all_wt[child_nodes[0]] += to_relevance(temp_wt)
 
                 elif node_class == "Layer_Norm":
                     all_wt[child_nodes[0]] += all_wt[start_layer]
@@ -506,7 +527,7 @@ class Backtrace(object):
                         xs_np = [t2np32(xx) if torch.is_tensor(xx) else xx for xx in xs]
                         temp_wt = UD2.calculate_wt_residual(all_wt[start_layer], xs_np)
                     for ind, ch in enumerate(child_nodes):
-                        all_wt[ch] += to_np32(temp_wt[ind])
+                        all_wt[ch] += to_relevance(temp_wt[ind])
 
                 # -------------------- For JetMoE ---------------------
                 elif node_class == "JetMoE_Feed_Forward":
@@ -516,7 +537,7 @@ class Backtrace(object):
                     temp_wt, ff_expert = UD2.launch_jetmoe_feed_forward(
                         impl, all_wt[start_layer], x, ff_w, self.model
                     )
-                    all_wt[child_nodes[0]] += to_np32(temp_wt)
+                    all_wt[child_nodes[0]] += to_relevance(temp_wt)
                     self.all_layer_expert_relevance[f"{start_layer}_ff_expert"] = ff_expert
 
                 elif node_class == "JetMoE_Self_Attention":
@@ -526,7 +547,7 @@ class Backtrace(object):
                     temp_wt, attn_expert = UD2.launch_jetmoe_self_attention(
                         impl, all_wt[start_layer], x, sa_w, self.model
                     )
-                    all_wt[child_nodes[0]] += to_np32(temp_wt)
+                    all_wt[child_nodes[0]] += to_relevance(temp_wt)
                     self.all_layer_expert_relevance[f"{start_layer}_attention_expert"] = attn_expert
 
                 # -------------------- For OLMoE ---------------------
@@ -537,7 +558,7 @@ class Backtrace(object):
                     temp_wt, ff_expert = UD2.launch_olmoe_feed_forward(
                         impl, all_wt[start_layer], x, ff_w, self.model
                     )
-                    all_wt[child_nodes[0]] += to_np32(temp_wt)
+                    all_wt[child_nodes[0]] += to_relevance(temp_wt)
                     self.all_layer_expert_relevance[f"{start_layer}_ff_expert"] = ff_expert
 
                 elif node_class == "Self_Attention":
@@ -547,7 +568,7 @@ class Backtrace(object):
                     temp_wt = UD2.launch_olmoe_self_attention(
                         impl, all_wt[start_layer], x, sa_w, self.model
                     )
-                    all_wt[child_nodes[0]] += to_np32(temp_wt)
+                    all_wt[child_nodes[0]] += to_relevance(temp_wt)
 
                 # -------------------- For Qwen3-MoE ---------------------
                 elif node_class == "Qwen_Feed_Forward":
@@ -558,7 +579,7 @@ class Backtrace(object):
                     temp_wt, ff_expert = UD2.launch_qwen3_moe_feed_forward(
                         impl, all_wt[start_layer], x, ff_w, config
                     )
-                    all_wt[child_nodes[0]] += to_np32(temp_wt)
+                    all_wt[child_nodes[0]] += to_relevance(temp_wt)
                     self.all_layer_expert_relevance[f"{start_layer}_ff_expert"] = ff_expert
 
                 elif node_class == "Grouped_Query_Attention":
@@ -569,7 +590,7 @@ class Backtrace(object):
                     temp_wt = UD2.launch_qwen3_moe_self_attention(
                         impl, all_wt[start_layer], x, sa_w, config
                     )
-                    all_wt[child_nodes[0]] += to_np32(temp_wt)
+                    all_wt[child_nodes[0]] += to_relevance(temp_wt)
 
                 # -------------------- For GPT-OSS MoE ---------------------
                 elif node_class == "GPT_OSS_Feed_Forward":
@@ -580,7 +601,7 @@ class Backtrace(object):
                     temp_wt, ff_expert = UD2.launch_gpt_oss_feed_forward(
                         impl, all_wt[start_layer], x, ff_w, config
                     )
-                    all_wt[child_nodes[0]] += to_np32(temp_wt)
+                    all_wt[child_nodes[0]] += to_relevance(temp_wt)
                     self.all_layer_expert_relevance[f"{start_layer}_ff_expert"] = ff_expert
 
                 elif node_class == "GPT_OSS_Self_Attention":
@@ -599,7 +620,7 @@ class Backtrace(object):
                         attn_type=attn_info["attn_type"],
                         sliding_window=attn_info["window"],
                     )
-                    all_wt[child_nodes[0]] += to_np32(temp_wt)
+                    all_wt[child_nodes[0]] += to_relevance(temp_wt)
 
                 # Default passthrough
                 else:
@@ -992,6 +1013,10 @@ class Backtrace(object):
         # Get the graph structure from model_resource
         graph_dict = self.model_resource.get("graph", {})
         num_nodes = len(graph_dict)
+        def rel_abs_sum(value):
+            if torch.is_tensor(value):
+                return float(value.detach().float().abs().sum().cpu().item())
+            return float(np.sum(np.abs(value)))
         
         logger.info("Visualizing MoE DL-Backtrace graph with %d nodes...", num_nodes)
 
@@ -1005,14 +1030,14 @@ class Backtrace(object):
         if relevance_threshold is not None:
             nodes_to_show = {
                 node for node in graph_dict.keys()
-                if node in self.all_wt and np.sum(np.abs(self.all_wt[node])) >= relevance_threshold
+                if node in self.all_wt and rel_abs_sum(self.all_wt[node]) >= relevance_threshold
             }
             logger.info("Filtered to %d nodes with relevance >= %s", len(nodes_to_show), relevance_threshold)
 
         # Filter to top-k if specified
         if top_k is not None and top_k < len(nodes_to_show):
             node_relevances = {
-                node: np.sum(np.abs(self.all_wt.get(node, 0)))
+                node: rel_abs_sum(self.all_wt.get(node, 0))
                 for node in nodes_to_show
             }
             top_nodes = sorted(node_relevances.items(), key=lambda x: x[1], reverse=True)[:top_k]
@@ -1026,7 +1051,7 @@ class Backtrace(object):
             
             # Calculate relevance sum for this node
             if node_name in self.all_wt:
-                relevance_sum = np.sum(np.abs(self.all_wt[node_name]))
+                relevance_sum = rel_abs_sum(self.all_wt[node_name])
                 label = f"{node_name}\n{node_class}\nRel: {relevance_sum:.2f}"
             else:
                 label = f"{node_name}\n{node_class}"

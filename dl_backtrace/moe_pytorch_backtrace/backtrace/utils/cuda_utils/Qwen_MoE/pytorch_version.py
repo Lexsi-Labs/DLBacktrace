@@ -77,7 +77,8 @@ def calculate_wt_lm_head_vectorized(
 
 def calculate_relevance_proj(wts: torch.Tensor, output: torch.Tensor) -> torch.Tensor:
 
-    device = output.device
+    zero = output.new_zeros(())
+    one = output.new_ones(())
     
     # Create masks for positive and negative values
     p_mask = output > 0
@@ -97,17 +98,17 @@ def calculate_relevance_proj(wts: torch.Tensor, output: torch.Tensor) -> torch.T
     p_agg_wt = torch.where(
         (total_sum > 0) & (p_sum > 0),
         p_sum / total_sum,
-        torch.tensor(0.0, device=device)
+        zero
     )
     n_agg_wt = torch.where(
         (total_sum > 0) & (n_sum > 0),
         n_sum / total_sum,
-        torch.tensor(0.0, device=device)
+        zero
     )
     
     # Safe denominators
-    p_sum_safe = torch.where(p_sum != 0, p_sum, torch.tensor(1.0, device=device))
-    n_sum_safe = torch.where(n_sum != 0, n_sum, torch.tensor(1.0, device=device))
+    p_sum_safe = torch.where(p_sum != 0, p_sum, one)
+    n_sum_safe = torch.where(n_sum != 0, n_sum, one)
     
     # Compute total weight
     total_wt = torch.sum(wts)
@@ -119,14 +120,14 @@ def calculate_relevance_proj(wts: torch.Tensor, output: torch.Tensor) -> torch.T
         wt_mat_total[p_mask] = torch.where(
             p_agg_wt > 0,
             (p_vals / p_sum_safe) * total_wt * p_agg_wt,
-            torch.tensor(0.0, device=device)
+            zero
         )
     
     if n_mask.any():
         wt_mat_total[n_mask] = torch.where(
             n_agg_wt > 0,
             (n_vals / n_sum_safe) * total_wt * n_agg_wt * -1.0,
-            torch.tensor(0.0, device=device)
+            zero
         )
     
     return wt_mat_total    
@@ -136,7 +137,8 @@ def calculate_relevance_gated_proj(
     output: torch.Tensor,
 ) -> torch.Tensor:
 
-    device = output.device
+    zero = output.new_zeros(())
+    one = output.new_ones(())
     
     # Create masks for positive and negative values
     pos_mask = output > 0
@@ -166,22 +168,22 @@ def calculate_relevance_gated_proj(
     neg_sum = neg_sum_base
     
     if threshold_condition:
-        pos_sum = torch.tensor(0.0, device=device)
+        pos_sum = zero
     
     if both_positive:
         if t_act == p_act:
-            neg_sum = torch.tensor(0.0, device=device)
+            neg_sum = zero
         elif t_act == n_act:
-            pos_sum = torch.tensor(0.0, device=device)
+            pos_sum = zero
     
     # Calculate aggregation weights
     denominator = pos_sum + neg_sum
-    pos_agg_wt = torch.where(pos_sum > 0, pos_sum / denominator, torch.tensor(0.0, device=device))
-    neg_agg_wt = torch.where(neg_sum > 0, neg_sum / denominator, torch.tensor(0.0, device=device))
+    pos_agg_wt = torch.where(pos_sum > 0, pos_sum / denominator, zero)
+    neg_agg_wt = torch.where(neg_sum > 0, neg_sum / denominator, zero)
     
     # Normalization denominators (avoid division by zero)
-    pos_sum_norm = torch.where(pos_sum != 0, pos_sum, torch.tensor(1.0, device=device))
-    neg_sum_norm = torch.where(neg_sum != 0, neg_sum, torch.tensor(1.0, device=device))
+    pos_sum_norm = torch.where(pos_sum != 0, pos_sum, one)
+    neg_sum_norm = torch.where(neg_sum != 0, neg_sum, one)
     
     total_weight = torch.sum(wts)
     
@@ -301,7 +303,7 @@ def qwen_moe_mlp_forward(
     intermediates['expert_hit'] = experts_used
     
     # Initialize contribution tensor
-    contrib_full = torch.zeros((tokens, top_k, H), device=hs.device)
+    contrib_full = torch.zeros((tokens, top_k, H), dtype=hs.dtype, device=hs.device)
     
     # Process each expert
     for e_tensor in experts_used:
@@ -319,9 +321,9 @@ def qwen_moe_mlp_forward(
         x = hs[tok_idx]  # (M, H)
         
         # Load expert weights
-        Wg = w[f'{e_tensor}']['W_gate_proj'].to(torch.float32)   # (I, H)
-        Wu = w[f'{e_tensor}']['W_up_proj'].to(torch.float32)     # (I, H)
-        Wd = w[f'{e_tensor}']['W_down_proj'].to(torch.float32)   # (H, I)
+        Wg = w[f'{e_tensor}']['W_gate_proj'].to(device=hs.device, dtype=hs.dtype, non_blocking=True)   # (I, H)
+        Wu = w[f'{e_tensor}']['W_up_proj'].to(device=hs.device, dtype=hs.dtype, non_blocking=True)     # (I, H)
+        Wd = w[f'{e_tensor}']['W_down_proj'].to(device=hs.device, dtype=hs.dtype, non_blocking=True)   # (H, I)
         
         # Expert computation: gate projection
         gate = torch.einsum('mh,ih->mi', x, Wg)  # (M, I)
@@ -411,7 +413,7 @@ def calculate_wt_feed_forward(
 
     # Initialize output tensors
     final_relevance_input = torch.zeros_like(hidden_states)  # (tokens, H)
-    relevance_expert = torch.zeros(num_experts, device=hidden_states.device)
+    relevance_expert = torch.zeros(num_experts, dtype=hidden_states.dtype, device=hidden_states.device)
     expert_hit = inter['expert_hit']
 
     # Vectorized expert processing
@@ -482,7 +484,7 @@ def calculate_wt_feed_forward(
         per_slot_scalar = R_slot.sum(dim=-1) * router_fraction  # (tokens, k)
         
         # Vectorized routing mass computation
-        routing_mass_te = torch.zeros((tokens, num_experts), device=hidden_states.device)
+        routing_mass_te = torch.zeros((tokens, num_experts), dtype=hidden_states.dtype, device=hidden_states.device)
         
         # Flatten and use advanced indexing for scatter
         tok_indices = torch.arange(tokens, device=hidden_states.device).unsqueeze(1).expand(-1, k).reshape(-1)
@@ -732,7 +734,7 @@ def qwen_gqa_forward(
     v = v.repeat_interleave(groups, dim=1)
     
     # Scaled dot-product attention
-    scale = 1.0 / torch.sqrt(torch.tensor(D, dtype=torch.float32, device=q.device))
+    scale = 1.0 / torch.sqrt(q.new_tensor(D))
     
     # Compute attention scores
     QK_output = torch.einsum('bhtd,bhsd->bhts', q, k)
@@ -856,5 +858,3 @@ def calculate_wt_self_attention(
     input_relevance = input_relevance_from_Q + input_relevance_from_K + input_relevance_from_V
     
     return input_relevance
-
-

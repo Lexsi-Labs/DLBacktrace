@@ -635,7 +635,7 @@ def calculate_moe_moa_output(
     # Attention computation
     QK_output = torch.einsum('hqd,hkd->hqk', query_states, key_states)
     intermediate_states['QK_output'] = QK_output
-    attn_weights = QK_output / torch.sqrt(torch.tensor(head_dim, dtype=QK_output.dtype, device=device))
+    attn_weights = QK_output / torch.sqrt(QK_output.new_tensor(head_dim))
     
     # Softmax
     attn_weights = torch.softmax(attn_weights, dim=-1)

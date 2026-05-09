@@ -37,8 +37,7 @@ def calculate_wt_lm_head(
     eps: float = 1e-12
 ) -> torch.Tensor:
 
-    # Convert to float32 for computation if needed (handles BFloat16)
-    compute_dtype = torch.float32
+    compute_dtype = wts.dtype if wts.is_floating_point() else inp.dtype
     wts = wts.to(compute_dtype)
     inp = inp.to(compute_dtype)
     w = {k: v.to(compute_dtype) if isinstance(v, torch.Tensor) else v for k, v in w.items()}
@@ -53,7 +52,7 @@ def calculate_wt_lm_head(
     inp_flat = inp.reshape(B * T, D)  # (B*T, D)
     
     # Pre-allocate output buffer
-    relevance_flat = torch.zeros(B * T, D, dtype=torch.float32, device=inp.device)
+    relevance_flat = torch.zeros(B * T, D, dtype=compute_dtype, device=inp.device)
     
     # Process vocabulary in chunks to manage memory
     for start in range(0, V, chunk_rows):
@@ -78,12 +77,12 @@ def calculate_wt_lm_head(
         denom = p_sum + n_sum + eps  # (B*T, C, 1)
         
         # Aggregate weights for positive and negative parts
-        p_agg = torch.where(p_sum > 0, p_sum / denom, torch.tensor(0.0, device=inp.device))
-        n_agg = torch.where(n_sum > 0, n_sum / denom, torch.tensor(0.0, device=inp.device))
+        p_agg = torch.where(p_sum > 0, p_sum / denom, torch.zeros_like(p_sum))
+        n_agg = torch.where(n_sum > 0, n_sum / denom, torch.zeros_like(n_sum))
         
         # Normalize positive and negative contributions
-        p_norm = torch.where(p_sum > 0, L_pos / (p_sum + eps), torch.tensor(0.0, device=inp.device))
-        n_norm = torch.where(n_sum > 0, L_neg / (n_sum + eps), torch.tensor(0.0, device=inp.device))
+        p_norm = torch.where(p_sum > 0, L_pos / (p_sum + eps), torch.zeros_like(L_pos))
+        n_norm = torch.where(n_sum > 0, L_neg / (n_sum + eps), torch.zeros_like(L_neg))
         
         # Combine contributions weighted by relevance scores
         R_expanded = R_chunk.unsqueeze(2)  # (B*T, C, 1)
@@ -99,7 +98,8 @@ def calculate_wt_lm_head(
 
 def calculate_relevance_proj(wts: torch.Tensor, output: torch.Tensor) -> torch.Tensor:
 
-    device = output.device
+    zero = output.new_zeros(())
+    one = output.new_ones(())
     
     # Create masks for positive and negative values
     p_mask = output > 0
@@ -119,17 +119,17 @@ def calculate_relevance_proj(wts: torch.Tensor, output: torch.Tensor) -> torch.T
     p_agg_wt = torch.where(
         (total_sum > 0) & (p_sum > 0),
         p_sum / total_sum,
-        torch.tensor(0.0, device=device)
+        zero
     )
     n_agg_wt = torch.where(
         (total_sum > 0) & (n_sum > 0),
         n_sum / total_sum,
-        torch.tensor(0.0, device=device)
+        zero
     )
     
     # Safe denominators
-    p_sum_safe = torch.where(p_sum != 0, p_sum, torch.tensor(1.0, device=device))
-    n_sum_safe = torch.where(n_sum != 0, n_sum, torch.tensor(1.0, device=device))
+    p_sum_safe = torch.where(p_sum != 0, p_sum, one)
+    n_sum_safe = torch.where(n_sum != 0, n_sum, one)
     
     # Compute total weight
     total_wt = torch.sum(wts)
@@ -141,14 +141,14 @@ def calculate_relevance_proj(wts: torch.Tensor, output: torch.Tensor) -> torch.T
         wt_mat_total[p_mask] = torch.where(
             p_agg_wt > 0,
             (p_vals / p_sum_safe) * total_wt * p_agg_wt,
-            torch.tensor(0.0, device=device)
+            zero
         )
     
     if n_mask.any():
         wt_mat_total[n_mask] = torch.where(
             n_agg_wt > 0,
             (n_vals / n_sum_safe) * total_wt * n_agg_wt * -1.0,
-            torch.tensor(0.0, device=device)
+            zero
         )
     
     return wt_mat_total
@@ -158,7 +158,8 @@ def calculate_relevance_gated_proj(
     output: torch.Tensor,
 ) -> torch.Tensor:
 
-    device = output.device
+    zero = output.new_zeros(())
+    one = output.new_ones(())
     
     # Create masks for positive and negative values
     pos_mask = output > 0
@@ -188,22 +189,22 @@ def calculate_relevance_gated_proj(
     neg_sum = neg_sum_base
     
     if threshold_condition:
-        pos_sum = torch.tensor(0.0, device=device)
+        pos_sum = zero
     
     if both_positive:
         if t_act == p_act:
-            neg_sum = torch.tensor(0.0, device=device)
+            neg_sum = zero
         elif t_act == n_act:
-            pos_sum = torch.tensor(0.0, device=device)
+            pos_sum = zero
     
     # Calculate aggregation weights
     denominator = pos_sum + neg_sum
-    pos_agg_wt = torch.where(pos_sum > 0, pos_sum / denominator, torch.tensor(0.0, device=device))
-    neg_agg_wt = torch.where(neg_sum > 0, neg_sum / denominator, torch.tensor(0.0, device=device))
+    pos_agg_wt = torch.where(pos_sum > 0, pos_sum / denominator, zero)
+    neg_agg_wt = torch.where(neg_sum > 0, neg_sum / denominator, zero)
     
     # Normalization denominators (avoid division by zero)
-    pos_sum_norm = torch.where(pos_sum != 0, pos_sum, torch.tensor(1.0, device=device))
-    neg_sum_norm = torch.where(neg_sum != 0, neg_sum, torch.tensor(1.0, device=device))
+    pos_sum_norm = torch.where(pos_sum != 0, pos_sum, one)
+    neg_sum_norm = torch.where(neg_sum != 0, neg_sum, one)
     
     total_weight = torch.sum(wts)
     
@@ -231,8 +232,7 @@ def gpt_oss_moe_mlp_forward(
     top_k = config.num_experts_per_tok
     hidden_dim = config.hidden_size
     
-    # Convert to float32 for computation if needed (handles BFloat16)
-    compute_dtype = torch.float32
+    compute_dtype = hidden_states.dtype if hidden_states.is_floating_point() else torch.float16
     hidden_states = hidden_states.to(compute_dtype)
     w = {k: v.to(compute_dtype) if isinstance(v, torch.Tensor) else v for k, v in w.items()}
     
@@ -304,9 +304,7 @@ def calculate_wt_gpt_oss_feed_forward_parallel(
     tokens = B * T
     device = inp.device
     
-    # Convert to float32 for computation if needed (handles BFloat16)
-    original_dtype = wts.dtype
-    compute_dtype = torch.float32
+    compute_dtype = wts.dtype if wts.is_floating_point() else inp.dtype
     wts = wts.to(compute_dtype)
     inp = inp.to(compute_dtype)
     w = {k: v.to(compute_dtype) if isinstance(v, torch.Tensor) else v for k, v in w.items()}
@@ -345,8 +343,8 @@ def calculate_wt_gpt_oss_feed_forward_parallel(
     R_slot = alloc * R_out.unsqueeze(1)
     
     # Initialize outputs
-    final_relevance_input = torch.zeros((tokens, H), dtype=torch.float32, device=device)
-    relevance_expert = torch.zeros(num_experts, dtype=torch.float32, device=device)
+    final_relevance_input = torch.zeros((tokens, H), dtype=R_out.dtype, device=device)
+    relevance_expert = torch.zeros(num_experts, dtype=R_out.dtype, device=device)
     
     # Get unique experts
     expert_hit = torch.unique(selected_experts)
@@ -386,8 +384,7 @@ def calculate_wt_gpt_oss_feed_forward_parallel(
     
     final_relevance_input = final_relevance_input.reshape(B, T, H)
     
-    # Keep output in float32 for compatibility with numpy conversion
-    return final_relevance_input.to(torch.float32), relevance_expert.to(torch.float32)
+    return final_relevance_input, relevance_expert
 
 def calculate_relevance_single(
     wts: torch.Tensor, 
@@ -571,8 +568,7 @@ def gpt_oss_gqa_forward(
     B, T, hidden = hidden_states.shape
     device = hidden_states.device
     
-    # Convert to float32 for computation if needed (handles BFloat16)
-    compute_dtype = torch.float32
+    compute_dtype = hidden_states.dtype if hidden_states.is_floating_point() else torch.float16
     hidden_states = hidden_states.to(compute_dtype)
     w = {k: v.to(compute_dtype) if isinstance(v, torch.Tensor) else v for k, v in w.items()}
     dtype = compute_dtype
@@ -633,7 +629,7 @@ def gpt_oss_gqa_forward(
     v = v.repeat_interleave(groups, dim=1)  # (B, H, T, D)
     
     # Compute attention scores: Q @ K^T
-    scale = 1.0 / torch.sqrt(torch.tensor(D, dtype=dtype, device=device))
+    scale = 1.0 / torch.sqrt(q.new_tensor(D))
     QK_output = torch.einsum('bhtd,bhsd->bhts', q, k)  # (B, H, T, T)
     logits_unmasked = QK_output * scale
     
@@ -737,17 +733,16 @@ def calculate_wt_self_attention_parallel_torch(
     B, T, H = inp.shape
     device = inp.device
     
-    # Convert to float32 for computation if needed (handles BFloat16)
-    compute_dtype = torch.float32
+    compute_dtype = wts.dtype if wts.is_floating_point() else inp.dtype
     wts = wts.to(compute_dtype)
     inp = inp.to(compute_dtype)
     w = {k: v.to(compute_dtype) if isinstance(v, torch.Tensor) else v for k, v in w.items()}
     
     # Build attention mask (small, O(T^2))
     if attn_type == "sliding" and sliding_window is not None:
-        attn_mask = _sliding_causal_mask_torch(T, sliding_window, dtype=torch.float32, device=device)
+        attn_mask = _sliding_causal_mask_torch(T, sliding_window, dtype=compute_dtype, device=device)
     else:
-        attn_mask = _causal_mask_torch(T, dtype=torch.float32, device=device)
+        attn_mask = _causal_mask_torch(T, dtype=compute_dtype, device=device)
     
     # Forward pass to get routing & expert caches
     with torch.no_grad():
@@ -758,15 +753,14 @@ def calculate_wt_self_attention_parallel_torch(
     wt_mat_attn = calculate_relevance_single(wts, inter['out'], w['W_d'])
     wt_mat_out_heads = wt_mat_attn.reshape(inter['out_heads'].shape)
     
-    # 2. Convert to float32 for numerical precision
-    A = inter['A'].to(torch.float32)                    # (B,H,T,S)
-    out_heads = inter['out_heads'].to(torch.float32)    # (B,H,T,D)
-    W = wt_mat_out_heads.to(torch.float32)              # (B,H,T,D)
+    A = inter['A'].to(compute_dtype)                    # (B,H,T,S)
+    out_heads = inter['out_heads'].to(compute_dtype)    # (B,H,T,D)
+    W = wt_mat_out_heads.to(compute_dtype)              # (B,H,T,D)
     
     # 3. Sink bookkeeping
     has_sink = 'alpha' in inter
     if has_sink:
-        alpha = inter['alpha'].to(torch.float32)        # (B,H,T)
+        alpha = inter['alpha'].to(compute_dtype)        # (B,H,T)
         alpha_bhtd = alpha.unsqueeze(-1)                # (B,H,T,1)
         R_sink = (1.0 - alpha_bhtd) * W                 # (B,H,T,D)
         wt_eff = alpha_bhtd * W                         # (B,H,T,D)
@@ -780,10 +774,9 @@ def calculate_wt_self_attention_parallel_torch(
     # 4. Relevance calculation of R_QK and R_V
     relevance_norm_out_heads = wt_eff / stabilize(out_heads * 2, eps)
     
-    # Convert inter tensors to float32
-    v_64 = inter['v'].to(torch.float32)
-    q_64 = inter['q'].to(torch.float32)
-    k_64 = inter['k'].to(torch.float32)
+    v_64 = inter['v'].to(compute_dtype)
+    q_64 = inter['q'].to(compute_dtype)
+    k_64 = inter['k'].to(compute_dtype)
     
     # R_QK: (B,H,T,S) - using torch.matmul for clarity
     R_QK = torch.matmul(relevance_norm_out_heads, v_64.transpose(-2, -1)) * A
@@ -806,7 +799,7 @@ def calculate_wt_self_attention_parallel_torch(
         err = m_sink.unsqueeze(-1) - add.sum(dim=-1, keepdim=True)
         
         # Spread correction uniformly across nonzero S entries
-        nz = (S > 0).to(torch.float32)
+        nz = (S > 0).to(compute_dtype)
         nz_cnt = nz.sum(dim=-1, keepdim=True)
         corr = torch.where(nz_cnt > 0, err / torch.clamp(nz_cnt, min=1.0), 0.0) * nz
         
@@ -820,7 +813,7 @@ def calculate_wt_self_attention_parallel_torch(
     R_V = dlb_style_signed_conserve(R_V, v_64)
     
     # 7. Relevance calculation of R_Q and R_K
-    QK_output_64 = inter['QK_output'].to(torch.float32)
+    QK_output_64 = inter['QK_output'].to(compute_dtype)
     relevance_norm_QK_out = R_QK / stabilize(QK_output_64 * 2, eps)
     
     R_Q = torch.matmul(relevance_norm_QK_out, k_64) * q_64
@@ -847,5 +840,4 @@ def calculate_wt_self_attention_parallel_torch(
     
     input_relevance = input_relevance_from_Q + input_relevance_from_K + input_relevance_from_V
     
-    # Keep output in float32 for compatibility with numpy conversion
-    return input_relevance.to(torch.float32)
+    return input_relevance

@@ -506,7 +506,7 @@ def moe_backtrace(
         else 0.0
     )
 
-    backtrace.clear_intermediates(clear_relevance=True)
+    backtrace.clear_intermediates(clear_relevance=True, clear_weight_cache=True)
     del backtrace, input_ids, attention_mask, tokens, results
     gc.collect()
     if device == "cuda":

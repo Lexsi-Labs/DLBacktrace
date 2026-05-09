@@ -23,8 +23,104 @@ from .cuda_utils.GPT_oss.original_version import calculate_wt_lm_head as calcula
 from .cuda_utils.GPT_oss.refactored_version import calculate_wt_lm_head as calculate_wt_lm_head_refactored, calculate_wt_gpt_oss_feed_forward_parallel as calculate_wt_gpt_oss_feed_forward_parallel_refactored, calculate_wt_self_attention_parallel as calculate_wt_gpt_oss_self_attention_parallel_refactored 
 from .cuda_utils.GPT_oss.pytorch_version import calculate_wt_lm_head as calculate_wt_lm_head_pytorch, calculate_wt_gpt_oss_feed_forward_parallel as calculate_wt_gpt_oss_feed_forward_parallel_pytorch, calculate_wt_self_attention_parallel_torch as calculate_wt_gpt_oss_self_attention_parallel_pytorch
 
+CUDA_RELEVANCE_DTYPE = torch.float16
+_TENSOR_WEIGHT_CACHE = {}
+
+
+def clear_tensor_weight_cache():
+    _TENSOR_WEIGHT_CACHE.clear()
+
+
+def _device():
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def _cache_key(obj, device, dtype):
+    idx = device.index if device.index is not None else -1
+    return (id(obj), device.type, idx, str(dtype))
+
+
+def _as_torch(x, device=None, dtype=None):
+    """Convert without avoidable copies; keep integer tensors integer."""
+    device = device or _device()
+    if torch.is_tensor(x):
+        target_dtype = dtype if x.is_floating_point() else None
+        if x.device == device and (target_dtype is None or x.dtype == target_dtype):
+            return x
+        return x.to(device=device, dtype=target_dtype or x.dtype, non_blocking=True)
+    if isinstance(x, np.ndarray):
+        t = torch.as_tensor(x, device=device)
+        if dtype is not None and t.is_floating_point():
+            t = t.to(dtype=dtype)
+        return t
+    t = torch.as_tensor(x, device=device)
+    if dtype is not None and t.is_floating_point():
+        t = t.to(dtype=dtype)
+    return t
+
+
+def _to_numpy(x, dtype=np.float32):
+    if isinstance(x, np.ndarray):
+        return x.astype(dtype, copy=False) if dtype is not None else x
+    if torch.is_tensor(x):
+        arr = x.detach().cpu().numpy()
+        return arr.astype(dtype, copy=False) if dtype is not None else arr
+    return np.asarray(x, dtype=dtype)
+
+
+def _to_tensor_tree(obj, device=None, dtype=CUDA_RELEVANCE_DTYPE):
+    """Recursively tensorize weight dicts once per device/dtype."""
+    device = device or _device()
+    if isinstance(obj, dict):
+        key = _cache_key(obj, device, dtype)
+        cached = _TENSOR_WEIGHT_CACHE.get(key)
+        if cached is not None:
+            return cached
+        converted = {k: _to_tensor_tree(v, device=device, dtype=dtype) for k, v in obj.items()}
+        _TENSOR_WEIGHT_CACHE[key] = converted
+        return converted
+    if isinstance(obj, (list, tuple)):
+        return type(obj)(_to_tensor_tree(v, device=device, dtype=dtype) for v in obj)
+    if torch.is_tensor(obj) or isinstance(obj, np.ndarray):
+        return _as_torch(obj, device=device, dtype=dtype)
+    return obj
+
+
+def _cast_result_tree(obj, device=None, dtype=CUDA_RELEVANCE_DTYPE):
+    device = device or _device()
+    if torch.is_tensor(obj) or isinstance(obj, np.ndarray):
+        return _as_torch(obj, device=device, dtype=dtype)
+    if isinstance(obj, tuple):
+        return tuple(_cast_result_tree(v, device=device, dtype=dtype) for v in obj)
+    if isinstance(obj, list):
+        return [_cast_result_tree(v, device=device, dtype=dtype) for v in obj]
+    if isinstance(obj, dict):
+        return {k: _cast_result_tree(v, device=device, dtype=dtype) for k, v in obj.items()}
+    return obj
+
+
+def _maybe_squeeze_pair_torch(wts_t, inp_t):
+    need_unsq = (inp_t.dim() >= 1 and inp_t.size(0) == 1)
+    inp_call = inp_t[0] if need_unsq else inp_t
+    if wts_t.dim() == inp_call.dim() + 1 and wts_t.size(0) == 1:
+        wts_call = wts_t[0]
+    else:
+        wts_call = wts_t
+    return need_unsq, wts_call, inp_call
+
+
+def _unsqueeze_first_torch(result, need_unsq):
+    if not need_unsq:
+        return result
+    if isinstance(result, tuple):
+        main, *rest = result
+        main = main.unsqueeze(0) if torch.is_tensor(main) else _as_torch(main).unsqueeze(0)
+        return (main, *rest)
+    return result.unsqueeze(0) if torch.is_tensor(result) else _as_torch(result).unsqueeze(0)
+
+
 def _prepare_tensors(device, *arrays):
-    return [torch.tensor(arr, dtype=torch.float32, device=device) for arr in arrays]
+    return [_as_torch(arr, device=device, dtype=CUDA_RELEVANCE_DTYPE) for arr in arrays]
 
 def launch_lm_head(version, wts, inp, w):
     if version == 'original':
@@ -33,41 +129,31 @@ def launch_lm_head(version, wts, inp, w):
         return calculate_wt_lm_head_original(wts, inp, w)
     elif version == 'cuda':
         # CUDA mode: use PyTorch implementation 
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = _device()
         try:
-            # Convert numpy arrays to tensors
-            wts_t = torch.tensor(wts, dtype=torch.float32, device=device) if isinstance(wts, np.ndarray) else wts
-            inp_t = torch.tensor(inp, dtype=torch.float32, device=device) if isinstance(inp, np.ndarray) else inp
-            
-            # Convert weight dictionary to tensors on correct device
-            w_torch = {}
-            for k, v in w.items():
-                if isinstance(v, dict):
-                    w_torch[k] = {sub_k: torch.tensor(sub_v, dtype=torch.float32, device=device) if isinstance(sub_v, np.ndarray) else sub_v.to(device) if torch.is_tensor(sub_v) else sub_v
-                                 for sub_k, sub_v in v.items()}
-                elif isinstance(v, np.ndarray):
-                    w_torch[k] = torch.tensor(v, dtype=torch.float32, device=device)
-                elif torch.is_tensor(v):
-                    w_torch[k] = v.to(device)
-                else:
-                    w_torch[k] = v
+            wts_t = _as_torch(wts, device=device, dtype=CUDA_RELEVANCE_DTYPE)
+            inp_t = _as_torch(inp, device=device, dtype=CUDA_RELEVANCE_DTYPE)
+            w_torch = _to_tensor_tree(w, device=device, dtype=CUDA_RELEVANCE_DTYPE)
             
             result = calculate_wt_lm_head_pytorch(wts_t, inp_t, w_torch)
             if result is None:
                 print(f"⚠️  CUDA LM head implementation returned None, falling back to original")
                 # Convert back to numpy for original implementation
-                wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
-                inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
-                return calculate_wt_lm_head_original(wts_np, inp_np, w)
-            # Convert result back to numpy if it's a tensor
-            return result.cpu().numpy() if isinstance(result, torch.Tensor) else result
+                wts_np = _to_numpy(wts_t)
+                inp_np = _to_numpy(inp_t)
+                result = calculate_wt_lm_head_original(wts_np, inp_np, w)
+            return _cast_result_tree(result, device=device, dtype=CUDA_RELEVANCE_DTYPE)
         except Exception as e:
             print(f"⚠️  CUDA LM head implementation failed: {e}")
             print(f"   Falling back to original implementation")
             # Ensure inputs are numpy arrays for fallback
-            wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
-            inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
-            return calculate_wt_lm_head_original(wts_np, inp_np, w)
+            wts_np = _to_numpy(wts)
+            inp_np = _to_numpy(inp)
+            return _cast_result_tree(
+                calculate_wt_lm_head_original(wts_np, inp_np, w),
+                device=device,
+                dtype=CUDA_RELEVANCE_DTYPE,
+            )
     else:
         raise ValueError(f"Unknown version for LM head: {version}")
 
@@ -77,39 +163,25 @@ def launch_gpt_oss_self_attention(version, wts, inp, w, config, attn_type="full"
         return calculate_wt_gpt_oss_self_attention_parallel_original(wts, inp, w, config, attn_type=attn_type, sliding_window=sliding_window)
     elif version == 'cuda':
         # CUDA mode: use PyTorch implementation
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = _device()
         try:
-            # Convert numpy arrays to tensors
-            wts_t = torch.tensor(wts, dtype=torch.float32, device=device) if isinstance(wts, np.ndarray) else wts
-            inp_t = torch.tensor(inp, dtype=torch.float32, device=device) if isinstance(inp, np.ndarray) else inp
-            
-            # Convert weight dictionary to tensors on correct device
-            w_torch = {}
-            for k, v in w.items():
-                if isinstance(v, dict):
-                    w_torch[k] = {sub_k: torch.tensor(sub_v, dtype=torch.float32, device=device) if isinstance(sub_v, np.ndarray) else sub_v.to(device) if torch.is_tensor(sub_v) else sub_v
-                                 for sub_k, sub_v in v.items()}
-                elif isinstance(v, np.ndarray):
-                    w_torch[k] = torch.tensor(v, dtype=torch.float32, device=device)
-                elif torch.is_tensor(v):
-                    w_torch[k] = v.to(device)
-                else:
-                    w_torch[k] = v
+            wts_t = _as_torch(wts, device=device, dtype=CUDA_RELEVANCE_DTYPE)
+            inp_t = _as_torch(inp, device=device, dtype=CUDA_RELEVANCE_DTYPE)
+            w_torch = _to_tensor_tree(w, device=device, dtype=CUDA_RELEVANCE_DTYPE)
             
             result = calculate_wt_gpt_oss_self_attention_parallel_pytorch(wts_t, inp_t, w_torch, config, attn_type, sliding_window)
             if result is None:
                 print(f"⚠️  CUDA GPT-OSS self attention implementation returned None, falling back to original")
-                wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
-                inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
-                return calculate_wt_gpt_oss_self_attention_parallel_original(wts_np, inp_np, w, config, attn_type=attn_type, sliding_window=sliding_window)
-            # Convert result back to numpy if it's a tensor
-            return result.cpu().numpy() if isinstance(result, torch.Tensor) else result
+                result = calculate_wt_gpt_oss_self_attention_parallel_original(_to_numpy(wts_t), _to_numpy(inp_t), w, config, attn_type=attn_type, sliding_window=sliding_window)
+            return _cast_result_tree(result, device=device, dtype=CUDA_RELEVANCE_DTYPE)
         except Exception as e:
             print(f"⚠️  CUDA GPT-OSS self attention implementation failed: {e}")
             print(f"   Falling back to original implementation")
-            wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
-            inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
-            return calculate_wt_gpt_oss_self_attention_parallel_original(wts_np, inp_np, w, config, attn_type=attn_type, sliding_window=sliding_window)
+            return _cast_result_tree(
+                calculate_wt_gpt_oss_self_attention_parallel_original(_to_numpy(wts), _to_numpy(inp), w, config, attn_type=attn_type, sliding_window=sliding_window),
+                device=device,
+                dtype=CUDA_RELEVANCE_DTYPE,
+            )
     else:
         raise ValueError(f"Unknown version for GPT-OSS self attention: {version}")
 
@@ -119,39 +191,25 @@ def launch_gpt_oss_feed_forward(version, wts, inp, w, config):
         return calculate_wt_gpt_oss_feed_forward_parallel_original(wts, inp, w, config)
     elif version == 'cuda':
         # CUDA mode: use PyTorch implementation
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = _device()
         try:
-            # Convert numpy arrays to tensors
-            wts_t = torch.tensor(wts, dtype=torch.float32, device=device) if isinstance(wts, np.ndarray) else wts
-            inp_t = torch.tensor(inp, dtype=torch.float32, device=device) if isinstance(inp, np.ndarray) else inp
-            
-            # Convert weight dictionary to tensors on correct device
-            w_torch = {}
-            for k, v in w.items():
-                if isinstance(v, dict):
-                    w_torch[k] = {sub_k: torch.tensor(sub_v, dtype=torch.float32, device=device) if isinstance(sub_v, np.ndarray) else sub_v.to(device) if torch.is_tensor(sub_v) else sub_v
-                                 for sub_k, sub_v in v.items()}
-                elif isinstance(v, np.ndarray):
-                    w_torch[k] = torch.tensor(v, dtype=torch.float32, device=device)
-                elif torch.is_tensor(v):
-                    w_torch[k] = v.to(device)
-                else:
-                    w_torch[k] = v
+            wts_t = _as_torch(wts, device=device, dtype=CUDA_RELEVANCE_DTYPE)
+            inp_t = _as_torch(inp, device=device, dtype=CUDA_RELEVANCE_DTYPE)
+            w_torch = _to_tensor_tree(w, device=device, dtype=CUDA_RELEVANCE_DTYPE)
             
             result = calculate_wt_gpt_oss_feed_forward_parallel_pytorch(wts_t, inp_t, w_torch, config)
             if result is None:
                 print(f"⚠️  CUDA GPT-OSS feed forward implementation returned None, falling back to original")
-                wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
-                inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
-                return calculate_wt_gpt_oss_feed_forward_parallel_original(wts_np, inp_np, w, config)
-            # Convert result back to numpy if it's a tensor
-            return result.cpu().numpy() if isinstance(result, torch.Tensor) else result
+                result = calculate_wt_gpt_oss_feed_forward_parallel_original(_to_numpy(wts_t), _to_numpy(inp_t), w, config)
+            return _cast_result_tree(result, device=device, dtype=CUDA_RELEVANCE_DTYPE)
         except Exception as e:
             print(f"⚠️  CUDA GPT-OSS feed forward implementation failed: {e}")
             print(f"   Falling back to original implementation")
-            wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
-            inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
-            return calculate_wt_gpt_oss_feed_forward_parallel_original(wts_np, inp_np, w, config)
+            return _cast_result_tree(
+                calculate_wt_gpt_oss_feed_forward_parallel_original(_to_numpy(wts), _to_numpy(inp), w, config),
+                device=device,
+                dtype=CUDA_RELEVANCE_DTYPE,
+            )
     else:
         raise ValueError(f"Unknown version for GPT-OSS feed forward: {version}")
 
@@ -161,39 +219,25 @@ def launch_qwen3_moe_self_attention(version, wts, inp, w, config):
         return calculate_wt_qwen3_moe_self_attention_parallel_original(wts, inp, w, config)
     elif version == 'cuda':
         # CUDA mode: use PyTorch implementation
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = _device()
         try:
-            # Convert numpy arrays to tensors
-            wts_t = torch.tensor(wts, dtype=torch.float32, device=device) if isinstance(wts, np.ndarray) else wts
-            inp_t = torch.tensor(inp, dtype=torch.float32, device=device) if isinstance(inp, np.ndarray) else inp
-            
-            # Convert weight dictionary to tensors on correct device
-            w_torch = {}
-            for k, v in w.items():
-                if isinstance(v, dict):
-                    w_torch[k] = {sub_k: torch.tensor(sub_v, dtype=torch.float32, device=device) if isinstance(sub_v, np.ndarray) else sub_v.to(device) if torch.is_tensor(sub_v) else sub_v
-                                 for sub_k, sub_v in v.items()}
-                elif isinstance(v, np.ndarray):
-                    w_torch[k] = torch.tensor(v, dtype=torch.float32, device=device)
-                elif torch.is_tensor(v):
-                    w_torch[k] = v.to(device)
-                else:
-                    w_torch[k] = v
+            wts_t = _as_torch(wts, device=device, dtype=CUDA_RELEVANCE_DTYPE)
+            inp_t = _as_torch(inp, device=device, dtype=CUDA_RELEVANCE_DTYPE)
+            w_torch = _to_tensor_tree(w, device=device, dtype=CUDA_RELEVANCE_DTYPE)
             
             result = calculate_wt_qwen3_moe_self_attention_pytorch(wts_t, inp_t, w_torch, config)
             if result is None:
                 print(f"⚠️  CUDA Qwen3-MoE self attention implementation returned None, falling back to original")
-                wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
-                inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
-                return calculate_wt_qwen3_moe_self_attention_parallel_original(wts_np, inp_np, w, config)
-            # Convert result back to numpy if it's a tensor
-            return result.cpu().numpy() if isinstance(result, torch.Tensor) else result
+                result = calculate_wt_qwen3_moe_self_attention_parallel_original(_to_numpy(wts_t), _to_numpy(inp_t), w, config)
+            return _cast_result_tree(result, device=device, dtype=CUDA_RELEVANCE_DTYPE)
         except Exception as e:
             print(f"⚠️  CUDA Qwen3-MoE self attention implementation failed: {e}")
             print(f"   Falling back to original implementation")
-            wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
-            inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
-            return calculate_wt_qwen3_moe_self_attention_parallel_original(wts_np, inp_np, w, config)
+            return _cast_result_tree(
+                calculate_wt_qwen3_moe_self_attention_parallel_original(_to_numpy(wts), _to_numpy(inp), w, config),
+                device=device,
+                dtype=CUDA_RELEVANCE_DTYPE,
+            )
     else:
         raise ValueError(f"Unknown version for Qwen3-MoE self attention: {version}")
 
@@ -203,39 +247,25 @@ def launch_qwen3_moe_feed_forward(version, wts, inp, w, config):
         return calculate_wt_qwen3_moe_feed_forward_original(wts, inp, w, config)
     elif version == 'cuda':
         # CUDA mode: use PyTorch implementation
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = _device()
         try:
-            # Convert numpy arrays to tensors
-            wts_t = torch.tensor(wts, dtype=torch.float32, device=device) if isinstance(wts, np.ndarray) else wts
-            inp_t = torch.tensor(inp, dtype=torch.float32, device=device) if isinstance(inp, np.ndarray) else inp
-            
-            # Convert weight dictionary to tensors on correct device
-            w_torch = {}
-            for k, v in w.items():
-                if isinstance(v, dict):
-                    w_torch[k] = {sub_k: torch.tensor(sub_v, dtype=torch.float32, device=device) if isinstance(sub_v, np.ndarray) else sub_v.to(device) if torch.is_tensor(sub_v) else sub_v
-                                 for sub_k, sub_v in v.items()}
-                elif isinstance(v, np.ndarray):
-                    w_torch[k] = torch.tensor(v, dtype=torch.float32, device=device)
-                elif torch.is_tensor(v):
-                    w_torch[k] = v.to(device)
-                else:
-                    w_torch[k] = v
+            wts_t = _as_torch(wts, device=device, dtype=CUDA_RELEVANCE_DTYPE)
+            inp_t = _as_torch(inp, device=device, dtype=CUDA_RELEVANCE_DTYPE)
+            w_torch = _to_tensor_tree(w, device=device, dtype=CUDA_RELEVANCE_DTYPE)
             
             result = calculate_wt_qwen3_moe_feed_forward_pytorch(wts_t, inp_t, w_torch, config)
             if result is None:
                 print(f"⚠️  CUDA Qwen3-MoE feed forward implementation returned None, falling back to original")
-                wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
-                inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
-                return calculate_wt_qwen3_moe_feed_forward_original(wts_np, inp_np, w, config)
-            # Convert result back to numpy if it's a tensor
-            return result.cpu().numpy() if isinstance(result, torch.Tensor) else result
+                result = calculate_wt_qwen3_moe_feed_forward_original(_to_numpy(wts_t), _to_numpy(inp_t), w, config)
+            return _cast_result_tree(result, device=device, dtype=CUDA_RELEVANCE_DTYPE)
         except Exception as e:
             print(f"⚠️  CUDA Qwen3-MoE feed forward implementation failed: {e}")
             print(f"   Falling back to original implementation")
-            wts_np = wts if isinstance(wts, np.ndarray) else wts.cpu().numpy()
-            inp_np = inp if isinstance(inp, np.ndarray) else inp.cpu().numpy()
-            return calculate_wt_qwen3_moe_feed_forward_original(wts_np, inp_np, w, config)
+            return _cast_result_tree(
+                calculate_wt_qwen3_moe_feed_forward_original(_to_numpy(wts), _to_numpy(inp), w, config),
+                device=device,
+                dtype=CUDA_RELEVANCE_DTYPE,
+            )
     else:
         raise ValueError(f"Unknown version for Qwen3-MoE feed forward: {version}")
 
@@ -295,36 +325,15 @@ def launch_olmoe_feed_forward(version, wts, inp, w, model):
 
     # ---------------- CUDA (PyTorch) ----------------
     elif version == 'cuda':
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-        def _tt(x, dtype=torch.float32):
-            if torch.is_tensor(x): return x.to(device=device, dtype=dtype)
-            return torch.tensor(_np(x), device=device, dtype=dtype)
+        device = _device()
 
         try:
-            wts_t = _tt(wts, dtype=torch.float32) if isinstance(wts, np.ndarray) or not torch.is_tensor(wts) else wts.to(device)
-            inp_t = _tt(inp, dtype=torch.float32) if isinstance(inp, np.ndarray) or not torch.is_tensor(inp) else inp.to(device)
-
-            # Convert weight dictionary to tensors on correct device
-            w_torch = {}
-            for k, v in w.items():
-                if isinstance(v, dict):
-                    w_torch[k] = {sub_k: _tt(sub_v) if isinstance(sub_v, np.ndarray) or not torch.is_tensor(sub_v) else sub_v.to(device) 
-                                 for sub_k, sub_v in v.items()}
-                elif isinstance(v, np.ndarray):
-                    w_torch[k] = _tt(v)
-                elif torch.is_tensor(v):
-                    w_torch[k] = v.to(device)
-                else:
-                    w_torch[k] = v
+            wts_t = _as_torch(wts, device=device, dtype=CUDA_RELEVANCE_DTYPE)
+            inp_t = _as_torch(inp, device=device, dtype=CUDA_RELEVANCE_DTYPE)
+            w_torch = _to_tensor_tree(w, device=device, dtype=CUDA_RELEVANCE_DTYPE)
 
             # Mirror the squeeze rule applied to NumPy path
-            need_unsq = (inp_t.dim() >= 1 and inp_t.size(0) == 1)
-            inp_call = inp_t[0] if need_unsq else inp_t
-            if wts_t.dim() == inp_call.dim() + 1 and wts_t.size(0) == 1:
-                wts_call = wts_t[0]
-            else:
-                wts_call = wts_t 
+            need_unsq, wts_call, inp_call = _maybe_squeeze_pair_torch(wts_t, inp_t)
 
             out = calculate_wt_olmoe_feed_forward_pytorch(wts_call, inp_call, w_torch, model)
 
@@ -335,15 +344,8 @@ def launch_olmoe_feed_forward(version, wts, inp, w, model):
                 out = calculate_wt_olmoe_feed_forward_original(wts_np, inp_np, w, model)
 
             # Unsqueeze first element if needed
-            out = _unsqueeze_first(out, need_unsq)
-
-            # Return NumPy for parity with original path
-            if isinstance(out, tuple):
-                main, *rest = out
-                main_np = _np(main)
-                rest_np = tuple(_np(x) if torch.is_tensor(x) else x for x in rest)
-                return (main_np, *rest_np)
-            return _np(out)
+            out = _unsqueeze_first_torch(_cast_result_tree(out, device=device, dtype=CUDA_RELEVANCE_DTYPE), need_unsq)
+            return out
 
         except Exception as e:
             print(f"[DEBUG olmoe][cuda] exception: {e} -> fallback to original")
@@ -353,10 +355,7 @@ def launch_olmoe_feed_forward(version, wts, inp, w, model):
             need_unsq, wts_call, inp_call = _maybe_squeeze_pair_np(wts_np, inp_np)
             out = calculate_wt_olmoe_feed_forward_original(wts_call, inp_call, w, model)
             out = _unsqueeze_first(out, need_unsq)
-            if isinstance(out, tuple):
-                main, *rest = out
-                return (_np(main), *rest)
-            return _np(out)
+            return _cast_result_tree(out, device=device, dtype=CUDA_RELEVANCE_DTYPE)
 
     else:
         raise ValueError(f"Unknown version for OLMoE feed forward: {version}")
@@ -418,36 +417,15 @@ def launch_olmoe_self_attention(version, wts, inp, w, model):
 
     # ---------------- CUDA (PyTorch) ----------------
     elif version == 'cuda':
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-        def _tt(x, dtype=torch.float32):
-            if torch.is_tensor(x): return x.to(device=device, dtype=dtype)
-            return torch.tensor(_np(x), device=device, dtype=dtype)
+        device = _device()
 
         try:
-            wts_t = _tt(wts, dtype=torch.float32) if isinstance(wts, np.ndarray) or not torch.is_tensor(wts) else wts.to(device)
-            inp_t = _tt(inp, dtype=torch.float32) if isinstance(inp, np.ndarray) or not torch.is_tensor(inp) else inp.to(device)
-
-            # Convert weight dictionary to tensors on correct device
-            w_torch = {}
-            for k, v in w.items():
-                if isinstance(v, dict):
-                    w_torch[k] = {sub_k: _tt(sub_v) if isinstance(sub_v, np.ndarray) or not torch.is_tensor(sub_v) else sub_v.to(device) 
-                                 for sub_k, sub_v in v.items()}
-                elif isinstance(v, np.ndarray):
-                    w_torch[k] = _tt(v)
-                elif torch.is_tensor(v):
-                    w_torch[k] = v.to(device)
-                else:
-                    w_torch[k] = v
+            wts_t = _as_torch(wts, device=device, dtype=CUDA_RELEVANCE_DTYPE)
+            inp_t = _as_torch(inp, device=device, dtype=CUDA_RELEVANCE_DTYPE)
+            w_torch = _to_tensor_tree(w, device=device, dtype=CUDA_RELEVANCE_DTYPE)
 
             # Mirror the squeeze rule applied to NumPy path
-            need_unsq = (inp_t.dim() >= 1 and inp_t.size(0) == 1)
-            inp_call = inp_t[0] if need_unsq else inp_t
-            if wts_t.dim() == inp_call.dim() + 1 and wts_t.size(0) == 1:
-                wts_call = wts_t[0]
-            else:
-                wts_call = wts_t
+            need_unsq, wts_call, inp_call = _maybe_squeeze_pair_torch(wts_t, inp_t)
 
             out =  calculate_wt_olmoe_self_attention_parallel_pytorch(wts_call, inp_call, w_torch, model)
 
@@ -458,15 +436,8 @@ def launch_olmoe_self_attention(version, wts, inp, w, model):
                 out = calculate_wt_olmoe_self_attention_parallel_original(wts_np, inp_np, w, model)
 
             # Unsqueeze first element if needed
-            out = _unsqueeze_first(out, need_unsq)
-
-            # Return NumPy for parity with original path
-            if isinstance(out, tuple):
-                main, *rest = out
-                main_np = _np(main)
-                rest_np = tuple(_np(x) if torch.is_tensor(x) else x for x in rest)
-                return (main_np, *rest_np)
-            return _np(out)
+            out = _unsqueeze_first_torch(_cast_result_tree(out, device=device, dtype=CUDA_RELEVANCE_DTYPE), need_unsq)
+            return out
 
         except Exception as e:
             print(f"[DEBUG olmoe_sa][cuda] exception: {e} -> fallback to original")
@@ -476,10 +447,7 @@ def launch_olmoe_self_attention(version, wts, inp, w, model):
             need_unsq, wts_call, inp_call = _maybe_squeeze_pair_np(wts_np, inp_np)
             out = calculate_wt_olmoe_self_attention_parallel_original(wts_call, inp_call, w, model)
             out = _unsqueeze_first(out, need_unsq)
-            if isinstance(out, tuple):
-                main, *rest = out
-                return (_np(main), *rest)
-            return _np(out)
+            return _cast_result_tree(out, device=device, dtype=CUDA_RELEVANCE_DTYPE)
 
     else:
         raise ValueError(f"Unknown version for OLMoE self attention: {version}") 
@@ -541,36 +509,15 @@ def launch_jetmoe_self_attention(version, wts, inp, w, model):
 
     # ---------------- CUDA (PyTorch) ----------------
     elif version == 'cuda':
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-        def _tt(x, dtype=torch.float32):
-            if torch.is_tensor(x): return x.to(device=device, dtype=dtype)
-            return torch.tensor(_np(x), device=device, dtype=dtype)
+        device = _device()
 
         try:
-            wts_t = _tt(wts, dtype=torch.float32) if isinstance(wts, np.ndarray) or not torch.is_tensor(wts) else wts.to(device)
-            inp_t = _tt(inp, dtype=torch.float32) if isinstance(inp, np.ndarray) or not torch.is_tensor(inp) else inp.to(device)
-
-            # Convert weight dictionary to tensors on correct device
-            w_torch = {}
-            for k, v in w.items():
-                if isinstance(v, dict):
-                    w_torch[k] = {sub_k: _tt(sub_v) if isinstance(sub_v, np.ndarray) or not torch.is_tensor(sub_v) else sub_v.to(device) 
-                                 for sub_k, sub_v in v.items()}
-                elif isinstance(v, np.ndarray):
-                    w_torch[k] = _tt(v)
-                elif torch.is_tensor(v):
-                    w_torch[k] = v.to(device)
-                else:
-                    w_torch[k] = v 
+            wts_t = _as_torch(wts, device=device, dtype=CUDA_RELEVANCE_DTYPE)
+            inp_t = _as_torch(inp, device=device, dtype=CUDA_RELEVANCE_DTYPE)
+            w_torch = _to_tensor_tree(w, device=device, dtype=CUDA_RELEVANCE_DTYPE)
 
             # Mirror the squeeze rule applied to NumPy path
-            need_unsq = (inp_t.dim() >= 1 and inp_t.size(0) == 1)
-            inp_call = inp_t[0] if need_unsq else inp_t
-            if wts_t.dim() == inp_call.dim() + 1 and wts_t.size(0) == 1:
-                wts_call = wts_t[0]
-            else:
-                wts_call = wts_t
+            need_unsq, wts_call, inp_call = _maybe_squeeze_pair_torch(wts_t, inp_t)
 
             out = calculate_wt_jetmoe_self_attention_parallel_pytorch(wts_call, inp_call, w_torch, model)
 
@@ -581,15 +528,8 @@ def launch_jetmoe_self_attention(version, wts, inp, w, model):
                 out = calculate_wt_jetmoe_self_attention_parallel_original(wts_np, inp_np, w, model)
 
             # Unsqueeze first element if needed
-            out = _unsqueeze_first(out, need_unsq)
-
-            # Return NumPy for parity with original path
-            if isinstance(out, tuple):
-                main, *rest = out
-                main_np = _np(main)
-                rest_np = tuple(_np(x) if torch.is_tensor(x) else x for x in rest)
-                return (main_np, *rest_np)
-            return _np(out)
+            out = _unsqueeze_first_torch(_cast_result_tree(out, device=device, dtype=CUDA_RELEVANCE_DTYPE), need_unsq)
+            return out
 
         except Exception as e:
             import traceback
@@ -601,10 +541,7 @@ def launch_jetmoe_self_attention(version, wts, inp, w, model):
             need_unsq, wts_call, inp_call = _maybe_squeeze_pair_np(wts_np, inp_np)
             out = calculate_wt_jetmoe_self_attention_parallel_original(wts_call, inp_call, w, model)
             out = _unsqueeze_first(out, need_unsq)
-            if isinstance(out, tuple):
-                main, *rest = out
-                return (_np(main), *rest)
-            return _np(out)
+            return _cast_result_tree(out, device=device, dtype=CUDA_RELEVANCE_DTYPE)
 
     else:
         raise ValueError(f"Unknown version for JetMoE self attention: {version}")
@@ -666,36 +603,15 @@ def launch_jetmoe_feed_forward(version, wts, inp, w, model):
 
     # ---------------- CUDA (PyTorch) ----------------
     elif version == 'cuda':
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-        def _tt(x, dtype=torch.float32):
-            if torch.is_tensor(x): return x.to(device=device, dtype=dtype)
-            return torch.tensor(_np(x), device=device, dtype=dtype)
+        device = _device()
 
         try:
-            wts_t = _tt(wts, dtype=torch.float32) if isinstance(wts, np.ndarray) or not torch.is_tensor(wts) else wts.to(device)
-            inp_t = _tt(inp, dtype=torch.float32) if isinstance(inp, np.ndarray) or not torch.is_tensor(inp) else inp.to(device)
-
-            # Convert weight dictionary to tensors on correct device
-            w_torch = {}
-            for k, v in w.items():
-                if isinstance(v, dict):
-                    w_torch[k] = {sub_k: _tt(sub_v) if isinstance(sub_v, np.ndarray) or not torch.is_tensor(sub_v) else sub_v.to(device) 
-                                 for sub_k, sub_v in v.items()}
-                elif isinstance(v, np.ndarray):
-                    w_torch[k] = _tt(v)
-                elif torch.is_tensor(v):
-                    w_torch[k] = v.to(device)
-                else:
-                    w_torch[k] = v
+            wts_t = _as_torch(wts, device=device, dtype=CUDA_RELEVANCE_DTYPE)
+            inp_t = _as_torch(inp, device=device, dtype=CUDA_RELEVANCE_DTYPE)
+            w_torch = _to_tensor_tree(w, device=device, dtype=CUDA_RELEVANCE_DTYPE)
 
             # Mirror the squeeze rule applied to NumPy path
-            need_unsq = (inp_t.dim() >= 1 and inp_t.size(0) == 1)
-            inp_call = inp_t[0] if need_unsq else inp_t
-            if wts_t.dim() == inp_call.dim() + 1 and wts_t.size(0) == 1:
-                wts_call = wts_t[0]
-            else:
-                wts_call = wts_t
+            need_unsq, wts_call, inp_call = _maybe_squeeze_pair_torch(wts_t, inp_t)
 
             out = calculate_wt_jetmoe_feed_forward_pytorch(wts_call, inp_call, w_torch, model)
 
@@ -706,15 +622,8 @@ def launch_jetmoe_feed_forward(version, wts, inp, w, model):
                 out = calculate_wt_jetmoe_feed_forward_original(wts_np, inp_np, w, model)
 
             # Unsqueeze first element if needed
-            out = _unsqueeze_first(out, need_unsq)
-
-            # Return NumPy for parity with original path
-            if isinstance(out, tuple):
-                main, *rest = out
-                main_np = _np(main)
-                rest_np = tuple(_np(x) if torch.is_tensor(x) else x for x in rest)
-                return (main_np, *rest_np)
-            return _np(out)
+            out = _unsqueeze_first_torch(_cast_result_tree(out, device=device, dtype=CUDA_RELEVANCE_DTYPE), need_unsq)
+            return out
 
         except Exception as e:
             import traceback
@@ -726,10 +635,7 @@ def launch_jetmoe_feed_forward(version, wts, inp, w, model):
             need_unsq, wts_call, inp_call = _maybe_squeeze_pair_np(wts_np, inp_np)
             out = calculate_wt_jetmoe_feed_forward_original(wts_call, inp_call, w, model)
             out = _unsqueeze_first(out, need_unsq)
-            if isinstance(out, tuple):
-                main, *rest = out
-                return (_np(main), *rest)
-            return _np(out)
+            return _cast_result_tree(out, device=device, dtype=CUDA_RELEVANCE_DTYPE)
 
     else:
         raise ValueError(f"Unknown version for JetMoE feed forward: {version}")
@@ -760,6 +666,30 @@ def np_tanh(x):
 
 def calculate_start_wt(arg, scaler=1,*args, **kwargs):
     task = kwargs.get('task', None)  # Access 'task' from kwargs, default to None if not provided
+    if torch.is_tensor(arg):
+        if task == "generation":
+            requested_token = kwargs.get("predicted_token", None)
+            next_token_logit = arg[:, -1, :]
+            if requested_token is None:
+                predicted_token = torch.argmax(next_token_logit, dim=-1, keepdim=True)
+            else:
+                predicted_token = torch.as_tensor(requested_token, device=arg.device, dtype=torch.long).reshape(-1, 1)
+                if predicted_token.shape[0] == 1 and arg.shape[0] > 1:
+                    predicted_token = predicted_token.repeat(arg.shape[0], 1)
+            target_relevance = torch.zeros_like(arg, dtype=CUDA_RELEVANCE_DTYPE if arg.is_cuda else arg.dtype)
+            batch = torch.arange(arg.shape[0], device=arg.device)
+            target_relevance[batch, -1, predicted_token.view(-1)] = 1.0
+            return target_relevance
+
+        if task == "binary-classification":
+            predicted_class = torch.argmax(arg, dim=-1)
+            target_relevance = torch.zeros_like(arg, dtype=CUDA_RELEVANCE_DTYPE if arg.is_cuda else arg.dtype)
+            if arg.dim() == 2:
+                batch = torch.arange(arg.shape[0], device=arg.device)
+                target_relevance[batch, predicted_class] = 1.0
+            else:
+                target_relevance.scatter_(-1, predicted_class.unsqueeze(-1), 1.0)
+            return target_relevance
     
     if task == "binary-classification":
         # x = np.argmax(arg, axis=2)  # max along features
@@ -929,6 +859,27 @@ def calculate_wt_add_equal(R, inp):
         result.append(np.stack(per_input_rel, axis=0))
 
     return result        
+
+
+def calculate_wt_residual_cuda(wts, inp=None):
+    """Vectorized residual relevance split for CUDA/Torch tensors."""
+    tensors = [_as_torch(x, device=wts.device, dtype=CUDA_RELEVANCE_DTYPE) for x in inp]
+    stacked = torch.stack([x.reshape(-1) for x in tensors], dim=0)
+    flat_wts = _as_torch(wts, device=wts.device, dtype=CUDA_RELEVANCE_DTYPE).reshape(-1)
+
+    pos = torch.clamp(stacked, min=0)
+    neg_abs = torch.clamp(stacked, max=0).neg()
+    p_sum = pos.sum(dim=0, keepdim=True)
+    n_sum = neg_abs.sum(dim=0, keepdim=True)
+    denom = p_sum + n_sum
+
+    p_agg = torch.where(p_sum > 0, p_sum / torch.clamp(denom, min=1e-12), torch.zeros_like(p_sum))
+    n_agg = torch.where(n_sum > 0, n_sum / torch.clamp(denom, min=1e-12), torch.zeros_like(n_sum))
+    p_norm = torch.where(p_sum > 0, pos / torch.clamp(p_sum, min=1e-12), torch.zeros_like(pos))
+    n_norm = torch.where(n_sum > 0, neg_abs / torch.clamp(n_sum, min=1e-12), torch.zeros_like(neg_abs))
+
+    split = (p_norm * p_agg + n_norm * n_agg) * flat_wts.unsqueeze(0)
+    return [split[i].reshape_as(tensors[i]) for i in range(len(tensors))]
 
 def calculate_wt_residual(wts, inp=None):
     wt_mat = []
