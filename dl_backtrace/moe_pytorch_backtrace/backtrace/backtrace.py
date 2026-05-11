@@ -142,7 +142,7 @@ class Backtrace(object):
     Device is set at construction and used everywhere (no device arg in eval()).
     """
 
-    def __init__(self, model=None, activation_dict={}, model_type=None, device="cpu"):
+    def __init__(self, model=None, activation_dict={}, model_type=None, device="cpu", init_device=None):
         # ---- auto-detect model type if not provided ----
         if model_type is None and model is not None:
             model_type = detect_model_type(model)
@@ -159,11 +159,20 @@ class Backtrace(object):
         if device == "cuda" and not torch.cuda.is_available():
             logger.warning("CUDA requested but not available. Falling back to CPU.")
             device = "cpu"
+        if init_device is None:
+            init_device = "cpu" if device == "cuda" else device
+        if init_device not in ["cpu", "cuda"]:
+            raise ValueError(f"Invalid init_device: {init_device}. Must be 'cpu' or 'cuda'.")
+        if init_device == "cuda" and not torch.cuda.is_available():
+            logger.warning("CUDA init_device requested but not available. Falling back to CPU.")
+            init_device = "cpu"
         self.device = device
+        self.init_device = init_device
         self.impl = "cuda" if device == "cuda" else "original"
         self.relevance_dtype = torch.float16 if device == "cuda" else np.float32
 
-        self.model = model.to(device) if model is not None else None
+        self.model = model.to(init_device) if model is not None else None
+        self._model_device = init_device
         self.model_type = model_type
         self.activation_dict = None
         self.all_layer_expert_relevance = {}  # expert relevance filled during proportional_eval
@@ -228,8 +237,30 @@ class Backtrace(object):
         has_outputs = self.all_out_model is not None
         return (
             f"Backtrace(model_type='{self.model_type}', device='{self.device}', "
-            f"layers={n_layers}, outputs_computed={has_outputs})"
+            f"init_device='{self.init_device}', layers={n_layers}, outputs_computed={has_outputs})"
         )
+
+    def _current_model_device(self):
+        if self.model is None:
+            return None
+        try:
+            return str(next(self.model.parameters()).device)
+        except StopIteration:
+            return self._model_device
+
+    def _ensure_model_on_runtime_device(self):
+        """Move the model to the runtime device only when execution needs it."""
+        if self.model is None:
+            return
+        current_device = self._current_model_device()
+        if current_device is not None and current_device.startswith(self.device):
+            self._model_device = self.device
+            return
+        logger.info("Moving MoE model from %s to runtime device %s", current_device, self.device)
+        self.model = self.model.to(self.device)
+        self._model_device = self.device
+        if self.device == "cuda" and torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     # ---- Step 3 moved out of __init__
     def clear_intermediates(self, clear_relevance=True, clear_weight_cache=False):
@@ -273,6 +304,7 @@ class Backtrace(object):
         if unload_model and model is not None:
             try:
                 model.to("cpu")
+                self._model_device = "cpu"
             except Exception:
                 pass
             inner = getattr(model, "model", None)
@@ -332,6 +364,8 @@ class Backtrace(object):
             raise ValueError("tokenizer is required for compute_outputs")
         if input_text is None and input_ids is None:
             raise ValueError("Either input_text or input_ids must be provided")
+
+        self._ensure_model_on_runtime_device()
 
         # Free previous activation dicts before creating new ones.
         self.clear_intermediates(clear_relevance=False)
@@ -908,6 +942,7 @@ class Backtrace(object):
 
         # --- create engine & dispatch ---
         from dl_backtrace.moe_pytorch_backtrace.backtrace.core.moe_auto_sampler import MoEAutoSampler
+        self._ensure_model_on_runtime_device()
         eng = MoEAutoSampler(self, tokenizer)  # `self` is the MoE Backtrace engine
 
         return eng.generate(

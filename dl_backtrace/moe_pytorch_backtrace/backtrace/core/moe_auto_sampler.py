@@ -138,6 +138,8 @@ class MoEAutoSampler:
 
     def _native_forward_with_cache(self, input_ids, attention_mask, past_key_values=None):
         """Use the wrapped HF model for fast non-DLB decode steps."""
+        if hasattr(self.moe_bt, "_ensure_model_on_runtime_device"):
+            self.moe_bt._ensure_model_on_runtime_device()
         model = self._get_causallm(self.moe_bt.model)
         try:
             model_device = next(model.parameters()).device
