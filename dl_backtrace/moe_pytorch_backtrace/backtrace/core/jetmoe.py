@@ -4,7 +4,13 @@ plus the JetMoE-specific RoPE patch.
 """
 import torch
 from typing import Tuple
-from .model_utils import unwrap_model, build_decoder_tree, create_decoder_output, to_numpy
+from .model_utils import (
+    unwrap_model,
+    build_decoder_tree,
+    create_decoder_output,
+    to_numpy,
+    layer_index_from_name,
+)
 
 
 def build_jetmoe_tree(model, root='jet_moe'):
@@ -40,7 +46,9 @@ def extract_jetmoe_weights(model):
         if 'embed_tokens' in name:
             weights_dict['decoder_embeddings'][name] = param_np
         elif 'layers' in name:
-            layer = name.split('.')[2]
+            layer = layer_index_from_name(name)
+            if layer is None:
+                continue
             if 'input_layernorm' in name:
                 weights_dict[f'decoder_layer_norm_{layer}_0'][name] = param_np
             elif 'self_attention' in name:

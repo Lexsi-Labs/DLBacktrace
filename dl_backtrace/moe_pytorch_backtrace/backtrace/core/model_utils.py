@@ -185,6 +185,29 @@ def to_numpy(param):
     return param
 
 
+def index_after_name_part(name, marker):
+    """Return the component immediately after `marker` in a parameter name."""
+    parts = name.split(".")
+    try:
+        idx = parts.index(marker)
+    except ValueError:
+        return None
+    next_idx = idx + 1
+    if next_idx >= len(parts):
+        return None
+    return parts[next_idx]
+
+
+def layer_index_from_name(name):
+    """Robustly parse decoder layer id from wrapped or unwrapped HF names."""
+    return index_after_name_part(name, "layers")
+
+
+def expert_index_from_name(name):
+    """Robustly parse expert id from wrapped or unwrapped MoE parameter names."""
+    return index_after_name_part(name, "experts")
+
+
 # ═══════════════════════════════════════════════════════════════════════
 #  Shared tree builder
 # ═══════════════════════════════════════════════════════════════════════

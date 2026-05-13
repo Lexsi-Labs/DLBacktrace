@@ -2,7 +2,14 @@
 Qwen3-MoE model support – thin wrappers over shared model_utils.
 """
 import torch
-from .model_utils import unwrap_model, build_decoder_tree, create_decoder_output, to_numpy
+from .model_utils import (
+    unwrap_model,
+    build_decoder_tree,
+    create_decoder_output,
+    to_numpy,
+    layer_index_from_name,
+    expert_index_from_name,
+)
 
 
 def build_qwen3_moe_tree(model, root='qwen_moe'):
@@ -42,7 +49,9 @@ def extract_qwen3_moe_weights(model):
         if 'embed_tokens' in name:
             weights_dict['decoder_embeddings'][name] = param_np
         elif 'layers' in name:
-            layer = name.split('.')[2]
+            layer = layer_index_from_name(name)
+            if layer is None:
+                continue
 
             if 'input_layernorm' in name:
                 weights_dict[f'decoder_layer_norm_{layer}_0'][name] = param_np
@@ -53,7 +62,9 @@ def extract_qwen3_moe_weights(model):
             elif 'gate' in name and 'gate_proj' not in name:
                 weights_dict[f'decoder_feed_forward_{layer}'][name] = param_np
             elif 'gate_proj' in name or 'up_proj' in name or 'down_proj' in name:
-                expert_id = name.split('.')[5]
+                expert_id = expert_index_from_name(name)
+                if expert_id is None:
+                    continue
                 weights_dict[f'decoder_feed_forward_{layer}'][f'{expert_id}'][name] = param_np
         elif 'norm.weight' in name:
             weights_dict['decoder_layer_norm'][name] = param_np

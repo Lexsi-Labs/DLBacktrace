@@ -843,6 +843,7 @@ class DLBacktrace:
             }
             for key, value in cache_kwargs.items():
                 generation_kwargs.setdefault(key, value)
+            generation_kwargs.setdefault("temperature", temperature)
 
             # Call sample_auto with generation kwargs and trace flags
             generated_output = self.sample_auto(

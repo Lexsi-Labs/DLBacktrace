@@ -1,5 +1,18 @@
 import torch
+import os
 from typing import Dict, Any, Tuple, Optional
+
+
+def _optional_compile(**kwargs):
+    """Keep GPT-OSS eager by default; torch.compile is opt-in for stable shapes."""
+    enabled = os.getenv("DLBACKTRACE_TORCH_COMPILE", "0").lower() in {"1", "true", "yes", "on"}
+
+    def decorate(fn):
+        if enabled and hasattr(torch, "compile"):
+            return torch.compile(**kwargs)(fn)
+        return fn
+
+    return decorate
 
 def torch_swish(x: torch.Tensor, beta: float = 0.75) -> torch.Tensor:
     x_beta = (beta * x)
@@ -291,7 +304,7 @@ def gpt_oss_moe_mlp_forward(
     
     return intermediates
 
-@torch.compile(mode="default", fullgraph=False)
+@_optional_compile(mode="default", fullgraph=False)
 def calculate_wt_gpt_oss_feed_forward_parallel(
     wts: torch.Tensor,
     inp: torch.Tensor,
@@ -719,7 +732,7 @@ def collapse_to_kv_heads(R_bhtd: torch.Tensor, Kv: int, groups: int) -> torch.Te
     return R_kv.permute(0, 2, 1, 3).reshape(B, T, Kv * D)
 
 
-@torch.compile(mode="default", fullgraph=False)
+@_optional_compile(mode="default", fullgraph=False)
 def calculate_wt_self_attention_parallel_torch(
     wts: torch.Tensor,
     inp: torch.Tensor,
@@ -804,10 +817,6 @@ def calculate_wt_self_attention_parallel_torch(
         corr = torch.where(nz_cnt > 0, err / torch.clamp(nz_cnt, min=1.0), 0.0) * nz
         
         R_QK = R_QK + add + corr
-    
-    # Optional sanity check
-    if has_sink:
-        _ = (add + corr).sum().item()  # Compute but don't print
     
     # 6. Signed conservation on V
     R_V = dlb_style_signed_conserve(R_V, v_64)
