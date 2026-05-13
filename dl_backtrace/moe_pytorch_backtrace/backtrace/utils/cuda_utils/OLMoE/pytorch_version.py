@@ -304,18 +304,20 @@ def calculate_wt_olmoe_feed_forward_parallel(
             - relevance_expert: Per-expert relevance scores of shape (num_experts,)
     """
 
-    device = torch.device('cuda')
+    device = inp.device
+    dtype = inp.dtype
 
-    # Handle the conversion more carefully
+    def to_backend_tensor(value):
+        if torch.is_tensor(value):
+            return value.to(device=device, dtype=dtype, non_blocking=True)
+        return torch.as_tensor(value, dtype=dtype, device=device)
+
     w_torch = {}
     for k, v in w.items():
         if isinstance(v, dict):
-            # If it's a nested dictionary, convert each sub-tensor
-            w_torch[k] = {sub_k: torch.tensor(sub_v, dtype=torch.float32, device=device) 
-                         for sub_k, sub_v in v.items()}
+            w_torch[k] = {sub_k: to_backend_tensor(sub_v) for sub_k, sub_v in v.items()}
         else:
-            # If it's an array/tensor, convert directly
-            w_torch[k] = torch.tensor(v, dtype=torch.float32, device=device)
+            w_torch[k] = to_backend_tensor(v)
     
     num_experts = model.config.num_experts
     intermediate_outputs = olmoe_mlp_forward(inp, w_torch, model)
@@ -364,7 +366,7 @@ def calculate_wt_olmoe_feed_forward_parallel(
     # Final normalization (preserving original logic)
     final_relevance_input = (wts / final_relevance_input) * final_relevance_input
 
-    return final_relevance_input.cpu().numpy(), relevance_expert.cpu().numpy()
+    return final_relevance_input, relevance_expert
 
 def calculate_relevance_QK(wts: torch.Tensor, QK_output: torch.Tensor) -> torch.Tensor:
     
@@ -514,7 +516,7 @@ def calculate_wt_self_attention_parallel(
     
     # Compute attention scores: (num_heads, num_tokens, num_tokens)
     QK_output = torch.einsum('hqd,hkd->hqk', query_states, key_states)
-    attn_weights = QK_output / torch.sqrt(torch.tensor(head_dim, dtype=QK_output.dtype, device=device))
+    attn_weights = QK_output / torch.sqrt(QK_output.new_tensor(head_dim))
     
     # Apply softmax with numerical stability
     attn_weights = attn_weights - torch.max(attn_weights, dim=-1, keepdim=True).values

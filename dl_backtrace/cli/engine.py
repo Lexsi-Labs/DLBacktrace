@@ -429,15 +429,10 @@ def moe_backtrace(
     prompt: str,
     max_new_tokens: int,
     moe_type: str = None,
+    explain_tokens="all",
 ) -> Dict[str, Any]:
     """Run MoE backtrace generation with auto-detected or explicit model type."""
     from dl_backtrace.moe_pytorch_backtrace import Backtrace
-
-    backtrace = Backtrace(
-        model=model,
-        model_type=moe_type,  # None = auto-detect
-        device=device,
-    )
 
     tokens = tokenizer(
         prompt,
@@ -445,22 +440,79 @@ def moe_backtrace(
     )
     input_ids = tokens["input_ids"].to(device)
     attention_mask = tokens["attention_mask"].to(device)
+    input_seq_len = input_ids.shape[1]
 
-    results = backtrace.run_task(
-        task="generation",
-        inputs={"input_ids": input_ids, "attention_mask": attention_mask},
-        tokenizer=tokenizer,
-        max_new_tokens=max_new_tokens,
-        return_relevance=True,
-        return_scores=True,
-        debug=False,
-    )
+    result: Dict[str, Any] = {
+        "mode": "moe_backtrace",
+        "prompt": prompt[:80] + ("..." if len(prompt) > 80 else ""),
+        "input_seq_len": input_seq_len,
+        "max_new_tokens": max_new_tokens,
+    }
+
+    with MemTracker(device) as mem:
+        t0 = time.perf_counter()
+        backtrace = Backtrace(
+            model=model,
+            model_type=moe_type,  # None = auto-detect
+            device=device,
+        )
+        if device == "cuda":
+            torch.cuda.synchronize()
+        t1 = time.perf_counter()
+
+    result["init_time_s"] = t1 - t0
+    result["init_vram_mb"] = mem.vram_peak_mb
+    result["init_ram_delta_mb"] = mem.ram_delta_mb
+
+    with MemTracker(device) as mem:
+        t0 = time.perf_counter()
+        results = backtrace.run_task(
+            task="generation",
+            inputs={"input_ids": input_ids, "attention_mask": attention_mask},
+            tokenizer=tokenizer,
+            max_new_tokens=max_new_tokens,
+            return_relevance=True,
+            return_scores=False,
+            debug=False,
+            explain_tokens=explain_tokens,
+        )
+        if device == "cuda":
+            torch.cuda.synchronize()
+        t1 = time.perf_counter()
+
+    result["generation_time_s"] = t1 - t0
+    result["generation_vram_mb"] = mem.vram_peak_mb
+    result["generation_ram_delta_mb"] = mem.ram_delta_mb
     
     # Decode output
-    generated_text = tokenizer.decode(results['generated_ids'][0], skip_special_tokens=True)
+    generated_ids = results.get("generated_ids")
+    output_seq_len = generated_ids.shape[1] if generated_ids is not None else input_seq_len
+    actual_new_tokens = max(output_seq_len - input_seq_len, 0)
+    generated_text = tokenizer.decode(generated_ids[0, input_seq_len:], skip_special_tokens=True)
     print(f"\n✅ Generated text: {generated_text}")
 
-    return results
+    result["actual_new_tokens"] = actual_new_tokens
+    result["generation_steps"] = len(results.get("relevance_trace", []))
+    result["generated_text"] = generated_text[:200]
+    result["total_time_s"] = result["init_time_s"] + result["generation_time_s"]
+    result["time_per_token_s"] = (
+        result["generation_time_s"] / actual_new_tokens
+        if actual_new_tokens > 0
+        else 0.0
+    )
+    result["throughput_tok_per_s"] = (
+        actual_new_tokens / result["generation_time_s"]
+        if result["generation_time_s"] > 0
+        else 0.0
+    )
+
+    backtrace.clear_intermediates(clear_relevance=True, clear_weight_cache=True)
+    del backtrace, input_ids, attention_mask, tokens, results
+    gc.collect()
+    if device == "cuda":
+        torch.cuda.empty_cache()
+
+    return result
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -549,6 +601,47 @@ def print_gen_table(records: List[Dict[str, Any]]):
         print(f"    [{r['max_new_tokens']} tokens] → \"{r.get('generated_text', '')}\"")
 
 
+def print_moe_table(records: List[Dict[str, Any]]):
+    """Print MoE generation benchmark results."""
+    try:
+        from tabulate import tabulate
+    except ImportError:
+        for r in records:
+            print(r)
+        return
+
+    headers = [
+        "Max New\nTokens", "Actual\nTokens", "Steps",
+        "Init (s)", "Gen (s)", "Total (s)",
+        "Per Token\n(s)", "Throughput\n(tok/s)",
+        "Init\nVRAM (MB)", "Gen\nVRAM (MB)",
+        "Init\nΔRAM (MB)", "Gen\nΔRAM (MB)",
+    ]
+    rows = []
+    for r in records:
+        rows.append([
+            r["max_new_tokens"], r["actual_new_tokens"], r["generation_steps"],
+            f"{r['init_time_s']:.3f}",
+            f"{r['generation_time_s']:.3f}",
+            f"{r['total_time_s']:.3f}",
+            f"{r['time_per_token_s']:.3f}",
+            f"{r['throughput_tok_per_s']:.2f}",
+            f"{r['init_vram_mb']:.1f}",
+            f"{r['generation_vram_mb']:.1f}",
+            f"{r['init_ram_delta_mb']:.1f}",
+            f"{r['generation_ram_delta_mb']:.1f}",
+        ])
+
+    print("\n" + "=" * 70)
+    print("  MOE BACKTRACE GENERATION")
+    print("=" * 70)
+    print(tabulate(rows, headers=headers, tablefmt="grid"))
+
+    print("\n  Generated text samples:")
+    for r in records:
+        print(f"    [{r['max_new_tokens']} tokens] → \"{r.get('generated_text', '')}\"")
+
+
 def save_report(
     seq_records: List[Dict[str, Any]],
     gen_records: List[Dict[str, Any]],
@@ -567,6 +660,7 @@ def save_report(
         "system_info": system_info,
         "seq_scaling_results": seq_records,
         "gen_scaling_results": gen_records,
+        "moe_results": moe_records,
     }
     with open(path, "w") as f:
         json.dump(report, f, indent=2)
@@ -852,6 +946,7 @@ def main():
                     max_new_tokens=num_tokens,
                     device=args.device,
                     prompt=args.gen_prompt,
+                    explain_tokens=args.explain_tokens_resolved,
                 )
                 record["success"] = True
                 moe_records.append(record)
