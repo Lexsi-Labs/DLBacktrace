@@ -1,10 +1,19 @@
 import torch
 import numpy as np
 
+def _unavailable_kernel(error):
+    """The compiled ops only load on some platforms, so report the failure on use and keep the CPU path importable."""
+    def kernel(*args, **kwargs):
+        raise ImportError(f"Precompiled CUDA extension could not be loaded: {error}")
+    return kernel
+
 # Linear Layer
 from .cuda_utils.Linear_v2.original_version import calculate_wt_fc as calculate_wt_fc_original_linear
-from .cuda_utils.Linear_v3.cuda_v3 import calculate_wt_fc_cuda as calculate_wt_fc_cuda_linear
-from .cuda_utils.Linear_v3.cuda_v3 import calculate_wt_fc_cuda_tensor as calculate_wt_fc_cuda_tensor_linear
+try:
+    from .cuda_utils.Linear_v3.cuda_v3 import calculate_wt_fc_cuda as calculate_wt_fc_cuda_linear
+    from .cuda_utils.Linear_v3.cuda_v3 import calculate_wt_fc_cuda_tensor as calculate_wt_fc_cuda_tensor_linear
+except ImportError as e:
+    calculate_wt_fc_cuda_linear = calculate_wt_fc_cuda_tensor_linear = _unavailable_kernel(e)
 
 # Conv2D Layer
 from .cuda_utils.Conv2D.original_version import calculate_wt_conv as calculate_wt_conv_original
@@ -23,11 +32,17 @@ from .cuda_utils.AdaptiveAvgPool2D.pytorch_version import calculate_wt_gavgpool 
 
 # Embedded Layer
 from .cuda_utils.Embedded.original_version import calculate_wt_embedding as calculate_wt_embedding_original
-from .cuda_utils.Embedded.cuda_v2 import calculate_wt_embedding_cuda as calculate_wt_embedding_cuda
+try:
+    from .cuda_utils.Embedded.cuda_v2 import calculate_wt_embedding_cuda as calculate_wt_embedding_cuda
+except ImportError as e:
+    calculate_wt_embedding_cuda = _unavailable_kernel(e)
 
 # SelfAttention Layer
 from .cuda_utils.SelfAttention.original_version import calculate_wt_self_attention as calculate_wt_self_attention_original
-from .cuda_utils.SelfAttention.cuda_v3 import calculate_wt_self_attention_cuda as calculate_wt_self_attention_cuda
+try:
+    from .cuda_utils.SelfAttention.cuda_v3 import calculate_wt_self_attention_cuda as calculate_wt_self_attention_cuda
+except ImportError as e:
+    calculate_wt_self_attention_cuda = _unavailable_kernel(e)
 
 # Wt_add_equal Layer
 from .cuda_utils.Wt_add_equal.original_version import calculate_wt_add_equal as calculate_wt_add_original
