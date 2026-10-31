@@ -1477,22 +1477,22 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
 
             if isinstance(layer_in, list) and len(layer_in) > 1:
                 mask = layer_in[1]
+                # A tensor fill value arrives as a third parent, a number stays in method_args
+                value = layer_in[2] if len(layer_in) > 2 else method_args[0]
                 layer_in = layer_in[0]
 
                 # 🔧 DEVICE CONSISTENCY FIX: Ensure both tensors are on the same device
                 target_device = layer_in.device
                 if mask.device != target_device:
                     mask = mask.to(device=target_device)
+                if isinstance(value, torch.Tensor):
+                    value = value.to(device=target_device)
 
                 # ✅ Ensure mask is boolean
                 if mask.dtype != torch.bool:
                     mask = mask != 0
             else:
                 raise RuntimeError(f"[{node_name}] ❌ Expected list with input and mask for `{func_name}`, got: {layer_in}")
-
-            value = layer_hyperparams.get("value", 0.0)
-            if isinstance(value, torch.Tensor):
-                value = value.item()  # Convert single-element tensor to Python scalar
 
             # 🔧 CRITICAL: Preserve -inf values, don't replace with large negatives
             if value == float('-inf'):
