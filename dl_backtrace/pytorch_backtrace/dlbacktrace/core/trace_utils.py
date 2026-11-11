@@ -64,6 +64,7 @@ def map_placeholders_to_state_dict(exported_program, model) -> Dict[str, str]:
     mapping = {}
     state_dict_keys = set(model.state_dict().keys())
     buffer_keys = set(dict(model.named_buffers()).keys())
+    constant_keys = set(exported_program.constants.keys())
 
     for spec in exported_program.graph_signature.input_specs:
         if hasattr(spec.arg, 'name'):  # Ensure `spec.arg` has a valid name
@@ -73,7 +74,7 @@ def map_placeholders_to_state_dict(exported_program, model) -> Dict[str, str]:
             if (placeholder_name.startswith("p_") or 
                 placeholder_name.startswith("b_") or 
                 placeholder_name.startswith("c_")):
-                if target_name in state_dict_keys or target_name in buffer_keys:
+                if target_name in state_dict_keys or target_name in buffer_keys or target_name in constant_keys:
                     mapping[placeholder_name] = target_name  # Direct match
                     logger.debug(f"Mapped placeholder {placeholder_name} -> {target_name}")
     
@@ -119,6 +120,9 @@ def get_weight_from_placeholder(placeholder_name: str, exported_program, model,
     elif real_key in buffers:
         logger.debug(f"Found {placeholder_name} in buffers")
         return buffers[real_key]
+    elif real_key in exported_program.constants:
+        logger.debug(f"Found {placeholder_name} in constants")
+        return exported_program.constants[real_key]
     else:
         logger.error(f"{placeholder_name} (mapped to {real_key}) not found in any state_dict")
         return None
