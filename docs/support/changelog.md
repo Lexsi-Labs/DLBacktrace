@@ -4,6 +4,30 @@ All notable changes to DL-Backtrace are documented here.
 
 ---
 
+## Unreleased
+
+### Changed
+
+- **`masked_fill` uses the fill value the model passes.** Previously the fill
+  value was read from the layer hyperparameters and defaulted to `0.0`. It is now
+  taken from the model's own `masked_fill` call, whether it is a number or a
+  tensor. Results change for models whose fill value is not `0.0`, including
+  attention masks that fill with `-inf`.
+- **`transformers` is now a dependency** (`transformers>=4.52.3,<5`).
+
+### Fixed
+
+- **CPU use without the compiled CUDA ops.** `import dl_backtrace` and
+  `device="cpu"` runs work when the compiled CUDA extensions cannot be loaded on
+  the platform. If `device="cuda"` is requested in that situation, DL-Backtrace
+  warns with the original load error and uses the CPU implementations, so
+  `evaluation()` does not fail part-way through.
+- **Lifted tensor constants** are resolved when tracing. Tensor constants that
+  the exporter lifts into graph inputs are now looked up alongside parameters and
+  buffers instead of failing to map.
+
+---
+
 <!-- ## [2.0.0] - 2025-01 (Current)
 
 ### 🚀 Major Features

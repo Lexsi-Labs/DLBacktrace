@@ -1,8 +1,19 @@
 import torch
 import numpy as np
 
+# Errors raised while loading the compiled CUDA ops (empty when they all loaded).
+COMPILED_OPS_ERRORS = []
+
+
+def compiled_ops_error():
+    """Return the first load error of the compiled CUDA ops, or None when they are all available."""
+    return COMPILED_OPS_ERRORS[0] if COMPILED_OPS_ERRORS else None
+
+
 def _unavailable_kernel(error):
     """The compiled ops only load on some platforms, so report the failure on use and keep the CPU path importable."""
+    COMPILED_OPS_ERRORS.append(error)
+
     def kernel(*args, **kwargs):
         raise ImportError(f"Precompiled CUDA extension could not be loaded: {error}")
     return kernel

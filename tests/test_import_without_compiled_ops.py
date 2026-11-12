@@ -76,3 +76,27 @@ for launcher in (default_v2.launch_linear_gpu, default_v2.launch_embedding_gpu):
 """
     )
     assert out.count("no compiled ops for this platform") == 2
+
+
+def test_cuda_request_falls_back_to_cpu_with_one_warning_when_ops_are_missing():
+    out = run_python(
+        """
+import warnings
+
+torch.cuda.is_available = lambda: True
+
+from dl_backtrace.pytorch_backtrace import DLBacktrace
+
+dlb = DLBacktrace.__new__(DLBacktrace)
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    config = dlb._parse_device_config("cuda")
+
+assert config == dlb._parse_device_config("cpu"), config
+assert "cuda" not in config.values(), config
+assert len(caught) == 1, [str(w.message) for w in caught]
+print(caught[0].message)
+"""
+    )
+    assert "compiled CUDA ops could not be loaded" in out
+    assert "no compiled ops for this platform" in out

@@ -22,6 +22,7 @@ from .core.relevance_saver import save_relevance as _save_relevance, Precision
 import numpy as np 
 import torch
 import inspect
+import warnings
 import gc
 import ctypes
 
@@ -305,6 +306,19 @@ class DLBacktrace:
             # Check CUDA availability
             if not torch.cuda.is_available():
                 print("⚠️  CUDA device requested but CUDA not available. Falling back to CPU mode.")
+                return self._parse_device_config("cpu")
+
+            # The compiled CUDA ops may be missing on this platform: use the CPU path
+            # instead of failing in the middle of evaluation()
+            from .utils import default_v2
+            ops_error = default_v2.compiled_ops_error()
+            if ops_error is not None:
+                warnings.warn(
+                    f"CUDA device requested but the compiled CUDA ops could not be loaded ({ops_error}). "
+                    "Falling back to CPU mode.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
                 return self._parse_device_config("cpu")
             
             # CUDA mode: use CUDA implementations where available
