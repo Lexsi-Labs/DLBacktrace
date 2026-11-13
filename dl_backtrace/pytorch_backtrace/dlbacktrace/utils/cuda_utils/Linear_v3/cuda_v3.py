@@ -164,7 +164,9 @@ def calculate_wt_fc_cuda_tensor(relevance_y, input_array, w, b, act):
         w = w.cuda()
     if b is not None and not b.is_cuda:
         b = b.cuda()
-    b_torch = b if b is not None else torch.empty(0, device=w.device)
+    # The kernel reads w row-major; addmm callers pass a transposed view (mat2.T)
+    w = w.contiguous()
+    b_torch = b.contiguous() if b is not None else torch.empty(0, device=w.device)
     
     act_type, act_lower, act_upper, act_func_int = _parse_activation(act)
     

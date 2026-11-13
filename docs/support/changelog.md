@@ -43,6 +43,10 @@ All notable changes to DL-Backtrace are documented here.
 
 ### Fixed
 
+- **GPU relevance through `addmm` layers.** The CUDA linear kernel reads its weight
+  row-major, but `addmm` (GPT-2's `Conv1D` and other `x @ W + b` layers) passed it the
+  transposed weight as a view, so on the GPU these layers spread relevance with the
+  wrong weights; CPU results were right. The weight is now made contiguous first.
 - **Token relevance on `input_ids`.** The embedding's `[B, T, D]` relevance was
   aligned to the `[B, T]` token ids by collapsing the batch axis with a norm, which
   mixed positions together and then tiled the result: the per-token relevance did

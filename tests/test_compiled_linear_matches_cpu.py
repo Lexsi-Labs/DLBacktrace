@@ -31,3 +31,14 @@ def test_gpu_linear_matches_cpu_rule(rows, d_in, d_out, bias):
     assert np.allclose(gpu, cpu, rtol=1e-4, atol=1e-5)
     if not bias:
         assert np.isclose(gpu.sum(), r.sum().item(), rtol=1e-4)  # relevance is conserved
+
+
+def test_gpu_linear_reads_a_transposed_weight():
+    # addmm (GPT-2's Conv1D) hands the kernel mat2.T, a non-contiguous view
+    torch.manual_seed(0)
+    x, w_in_out, b = torch.randn(5, 64), torch.randn(64, 16), torch.randn(16)
+    r = torch.rand(5, 16)
+    act = activation_master["None"]
+    cpu = np.asarray(UD2.calculate_wt_fc_original_linear(r.numpy(), x.numpy(), w_in_out.numpy().T, b.numpy(), act))
+    gpu = UD2.launch_linear_gpu(r.cuda(), x.cuda(), w_in_out.cuda().T, b.cuda(), act).cpu().numpy()
+    assert np.allclose(gpu, cpu, rtol=1e-4, atol=1e-5)
