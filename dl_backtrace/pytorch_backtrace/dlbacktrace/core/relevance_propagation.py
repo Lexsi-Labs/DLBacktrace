@@ -88,9 +88,26 @@ def get_relevance_from_child(child, parent, all_wt, node_io):
             log(f"get_rel: child='{child}', parent='{parent}', idx={idx}, slice.shape={r[idx].shape}")
         return r[idx]
     
+    if not _receives_output_relevance(child, parent, getattr(r, "shape", None), node_io):
+        return None
     if DEBUG:
         log(f"get_rel: child='{child}' single-output, shape={r.shape}")
     return r
+
+
+def _receives_output_relevance(child, parent, r_shape, node_io):
+    """The graph output can return several tensors (logits plus KV-cache keys and
+    values when use_cache=True) but carries one relevance array for the scored
+    output. Only the source whose output has that shape receives it; if none
+    matches, every source does, as before."""
+    if child != "output" or r_shape is None:
+        return True
+    sources = node_io.get(child, {}).get("input_sources") or []
+    if len(sources) < 2:
+        return True
+    shapes = {s: tuple(getattr(node_io.get(s, {}).get("output_values"), "shape", ())) for s in sources}
+    matching = [s for s in sources if shapes[s] == tuple(r_shape)]
+    return not matching or parent == matching[0]
 
 
 def align_relevance(r, target_shape, total_relevance=None):
@@ -1401,6 +1418,8 @@ def get_relevance_from_child_gpu(child, parent, all_wt, node_io):
         if idx >= len(r):
             return None
         return r[idx]
+    if not _receives_output_relevance(child, parent, getattr(r, "shape", None), node_io):
+        return None
     return r
 
 

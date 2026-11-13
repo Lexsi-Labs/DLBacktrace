@@ -42,6 +42,10 @@ All notable changes to DL-Backtrace are documented here.
   arguments on the `__main__` module, while uvicorn imports the app from
   `dl_backtrace.cli.server`, so the model was never loaded. The
   `dlbacktrace-server` command was not affected.
+- **Causal language models that return their KV cache** (`use_cache=True`, the
+  default). The relevance seeded on the logits was also handed to every cached
+  key and value tensor in the graph output, so `evaluation()` failed with
+  "Cannot align relevance". It now goes to the logits only.
 
 ---
 
