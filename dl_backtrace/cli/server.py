@@ -426,7 +426,7 @@ class ServerState:
     def run_pytorch_generate(self, req: GenerateRequest, cache_dir: str) -> Dict[str, Any]:
         """Run generation using the PyTorch DLBacktrace backend."""
         from dl_backtrace.pytorch_backtrace import DLBacktrace
-        from torch.export import Dim
+        from dl_backtrace.pytorch_backtrace.dlbacktrace.dlbacktrace import sequence_dynamic_shapes
 
         tokens = self.tokenizer(
             [req.prompt], return_tensors="pt", padding=True, truncation=True,
@@ -435,17 +435,14 @@ class ServerState:
         attention_mask = tokens["attention_mask"]
         input_len = input_ids.shape[1]
 
-        # Dynamic shapes for graph tracing
-        seq_dim = Dim("seq", min=1, max=input_len)
-        dynamic_shapes = {
-            "input_ids":      {0: 1, 1: seq_dim},
-            "attention_mask": {0: 1, 1: seq_dim},
-        }
+        # Trace with a dynamic sequence length: generation feeds longer inputs each
+        # step, and a one-token prompt must not fix the length to 1.
+        sample, dynamic_shapes = sequence_dynamic_shapes((input_ids, attention_mask))
 
         # Initialize DLBacktrace (re-traced per request to handle varying shapes)
         ir = DLBacktrace(
             self.model,
-            (input_ids, attention_mask),
+            sample,
             dynamic_shapes=dynamic_shapes,
             device=self.device,
             verbose=False,

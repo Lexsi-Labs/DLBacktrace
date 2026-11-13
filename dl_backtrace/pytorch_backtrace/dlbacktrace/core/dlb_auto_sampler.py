@@ -587,8 +587,13 @@ class DLBAutoSampler:
         offset = 0
         cast_dtype = self._resolve_torch_dtype(target_dtype) if target_dtype else torch.float32
 
+        def _as_tensor(x):
+            # The CPU propagation path returns numpy arrays, the GPU path tensors.
+            return torch.from_numpy(np.asarray(x)) if isinstance(x, np.ndarray) else x
+
         for k in kept_keys:
             v = rel_dict[k]
+            v = [_as_tensor(x) for x in v] if isinstance(v, (list, tuple)) else _as_tensor(v)
             if torch.is_tensor(v):
                 t = v.detach()
                 orig_dtype = str(t.dtype)
@@ -798,7 +803,11 @@ class DLBAutoSampler:
             relevance_compression_method: "lz4" (default) or "none".
             relevance_pickle_protocol: Pickle protocol (2-5). Default=4.
             relevance_move_to_cpu: move tensors to CPU before caching to reduce VRAM.
-        """ 
+        """
+        # Each step runs the traced graph on a longer sequence, so it must not be
+        # fixed to the sample length it was exported with.
+        if hasattr(self.dlb, "_ensure_dynamic_sequence"):
+            self.dlb._ensure_dynamic_sequence()
         model = self._get_causallm(self.dlb.model)
         device = input_ids.device
         B = input_ids.size(0)
@@ -1116,7 +1125,6 @@ class DLBAutoSampler:
                             compression_method=relevance_compression_method,
                             pickle_protocol=relevance_pickle_protocol,
                         )
-                        relevance_trace.clear()
                         relevance_trace.append(full_rel)
                         del full_rel
                 _t["relevance_save"] = time.perf_counter() - _ts

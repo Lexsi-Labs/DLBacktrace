@@ -62,6 +62,26 @@ def _release_cpu_allocator_memory():
         except Exception:
             pass
 
+
+def sequence_dynamic_shapes(inputs):
+    """Sample inputs and torch.export dynamic shapes with a dynamic sequence length.
+
+    Dimension 1 of every tensor with two or more dimensions (input_ids,
+    attention_mask) gets ``Dim.AUTO``. torch.export specializes a size-1
+    dimension, so a one-token sample is widened to two tokens first; the
+    values do not matter for tracing.
+    """
+    sample, shapes = [], []
+    for t in inputs:
+        if isinstance(t, torch.Tensor) and t.dim() >= 2:
+            if t.shape[1] < 2:
+                t = torch.cat([t, t], dim=1)
+            shapes.append({1: torch.export.Dim.AUTO})
+        else:
+            shapes.append(None)
+        sample.append(t)
+    return tuple(sample), tuple(shapes)
+
 class DLBacktrace:
     def __init__(self, model, input_for_graph, dynamic_shapes=None, device="cpu", verbose=False, strict_cpu=True, collect_node_module_map=False,):
         """
@@ -117,6 +137,14 @@ class DLBacktrace:
         if self.verbose:
             print("---------------------------v2------------------------------------------", flush=True)
             print("🔧 Exporting and tracing model...", flush=True)
+        self._collect_node_module_map = collect_node_module_map
+        self._build_trace_state()
+        if self.verbose:
+            print("---------------------------v8------------------------------------------", flush=True)
+            print("✅ DL-Backtrace FX initialization complete!", flush=True)
+
+    def _build_trace_state(self):
+        """Export the model and build the graph, weights and caches from it."""
         # Export and trace model
         self._trace_model()
         if self.verbose:
@@ -144,7 +172,7 @@ class DLBacktrace:
 
         # Optional: FX node → module mapping
         self.fx_node_to_module = None
-        if collect_node_module_map:
+        if self._collect_node_module_map:
             if self.verbose:
                 print("🔧 Mapping FX nodes to nn.Module hierarchy...", flush=True)
 
@@ -164,9 +192,14 @@ class DLBacktrace:
         # prior DLBacktrace object (important when re-creating in the same session).
         self._cached_executor = None
         self._prop_schedule = None
-        if self.verbose:
-            print("---------------------------v8------------------------------------------", flush=True)
-            print("✅ DL-Backtrace FX initialization complete!", flush=True)
+
+    def _ensure_dynamic_sequence(self):
+        """Re-export once with a dynamic sequence length, so predict() accepts the
+        growing inputs of generation. No-op when dynamic_shapes were given."""
+        if self.dynamic_shapes is not None:
+            return
+        self.input_for_graph, self.dynamic_shapes = sequence_dynamic_shapes(self.input_for_graph)
+        self._build_trace_state()
 
     def clear_intermediates(self, clear_executor_cache=False):
         """

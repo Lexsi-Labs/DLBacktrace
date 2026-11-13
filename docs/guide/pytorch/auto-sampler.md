@@ -291,13 +291,13 @@ for i, output in enumerate(outputs):
 |-----------|------|---------|-------------|
 | `return_scores` | bool | `False` | Return per-token scores |
 | `return_relevance` | bool | `False` | Return per-token relevance trace |
-| `dlb_tokens_count` | int | `None` | Limit DLB relevance to first N tokens (None = all) |
+| `explain_tokens` | `"all"`, `"none"`, int or list[int] | `"all"` | Tokens to compute DLB relevance for: all, none, the first N, or these step indices |
 
 ---
 
 ## Limiting DLB Relevance Computation
 
-For long sequence generation, computing DLB relevance for every token can be expensive. Use `dlb_tokens_count` to limit relevance computation to the **first N tokens** only.
+For long sequence generation, computing DLB relevance for every token can be expensive. Use `explain_tokens=N` to limit relevance computation to the **first N tokens** only.
 
 ### Basic Usage
 
@@ -306,7 +306,7 @@ For long sequence generation, computing DLB relevance for every token can be exp
 output, info = sampler.generate(
     input_ids=input_ids,
     max_new_tokens=50,
-    dlb_tokens_count=10,  # Only first 10 tokens get relevance
+    explain_tokens=10,  # Only first 10 tokens get relevance
     return_relevance=True
 )
 
@@ -322,7 +322,7 @@ results = ir.run_task(
     inputs={'input_ids': input_ids, 'attention_mask': attention_mask},
     tokenizer=tokenizer,
     max_new_tokens=50,
-    dlb_tokens_count=10,  # First 10 tokens get DLB relevance
+    explain_tokens=10,  # First 10 tokens get DLB relevance
     return_relevance=True,
 )
 

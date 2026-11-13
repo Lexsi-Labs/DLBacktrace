@@ -26,6 +26,24 @@ All notable changes to DL-Backtrace are documented here.
 
 ### Fixed
 
+- **Generation past the first token.** `run_task(task="generation")` and
+  `DLBAutoSampler.generate` run the traced graph on a longer sequence at every
+  step; a graph traced without `dynamic_shapes` (as in the guides) was fixed to
+  the sample length, so every step after the first failed. Generation now
+  re-exports once with a dynamic sequence length when no `dynamic_shapes` were
+  given. The helper `sequence_dynamic_shapes` builds that sample and shapes.
+- **One-token prompts on the server.** `/generate` traced with
+  `Dim(min=1, max=prompt_len)`, which `torch.export` rejects for a one-token
+  prompt (HTTP 500) and which capped the traced length at the prompt. It now
+  uses `sequence_dynamic_shapes`.
+- **Relevance traces from generation.** With the default `"full"` policy each
+  step replaced the previous one, and on CPU the stored entry was empty because
+  the CPU path returns numpy arrays. The trace now holds one entry per explained
+  token on CPU and GPU.
+- **Docs.** The guides used `dlb_tokens_count`, which `run_task` no longer
+  accepts; it is `explain_tokens`. The GPT-2 pipeline example passed
+  `attention_mask` as GPT-2's second positional argument, which is
+  `past_key_values`; it now passes `input_ids` only.
 - **GPT-2 and nanoGPT-style eager attention.** The forward pass returned `None`:
   `full` rejected the 0-d size GPT-2 uses for its attention scale and mask value,
   and a buffer whose name contains `bias` or `weight` (GPT-2's causal mask

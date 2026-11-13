@@ -176,10 +176,12 @@ tokenizer = AutoTokenizer.from_pretrained("gpt2")
 prompt = "The future of artificial intelligence is"
 tokens = tokenizer(prompt, return_tensors="pt")
 
-# Initialize DLBacktrace
+# Initialize DLBacktrace. Pass input_ids only: GPT-2's second positional
+# argument is past_key_values, not attention_mask. run_task re-exports with a
+# dynamic sequence length for generation, so the sample length does not matter.
 dlb = DLBacktrace(
     model=model,
-    input_for_graph=(tokens["input_ids"], tokens["attention_mask"]),
+    input_for_graph=(tokens["input_ids"],),
     device="cuda"  # Recommended for generation
 )
 
@@ -189,7 +191,7 @@ results = dlb.run_task(
     inputs={'input_ids': tokens["input_ids"], 'attention_mask': tokens["attention_mask"]},
     tokenizer=tokenizer,
     max_new_tokens=50,
-    dlb_tokens_count=10,  # Compute DLB relevance for first 10 tokens only
+    explain_tokens=10,  # Compute DLB relevance for first 10 tokens only
     temperature=0.8,
     top_p=0.9,
     top_k=50,
@@ -263,7 +265,7 @@ results = dlb.run_task(
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `max_new_tokens` | int | `50` | Maximum tokens to generate |
-| `dlb_tokens_count` | int | `None` | Limit DLB relevance to first N tokens (None = all tokens) |
+| `explain_tokens` | `"all"`, `"none"`, int or list[int] | `"all"` | Tokens to compute DLB relevance for: all, none, the first N, or these step indices |
 | `temperature` | float | `1.0` | Sampling temperature (in generation_kwargs) |
 | `top_k` | int | `50` | Top-k sampling |
 | `top_p` | float | `0.9` | Nucleus sampling threshold |
@@ -323,7 +325,7 @@ results = dlb.run_task(
     inputs={'input_ids': input_ids, 'attention_mask': attention_mask},
     tokenizer=tokenizer,
     max_new_tokens=20,
-    dlb_tokens_count=5,          # Only first 5 tokens get DLB relevance
+    explain_tokens=5,          # Only first 5 tokens get DLB relevance
     return_relevance=True,       # Track relevance per step
     return_scores=True,          # Track logits per step
     return_layerwise_output=True # Track layer outputs per step
@@ -367,7 +369,7 @@ results = dlb.run_task(
     inputs={'input_ids': input_ids, 'attention_mask': attention_mask},
     tokenizer=tokenizer,
     max_new_tokens=50,
-    dlb_tokens_count=10,      # Compute DLB relevance for first 10 tokens only
+    explain_tokens=10,      # Compute DLB relevance for first 10 tokens only
     num_beams=4,              # Use 4 beams
     length_penalty=1.0,       # Neutral length penalty
     early_stopping=True,      # Stop when all beams finish
@@ -435,7 +437,7 @@ results = dlb.run_task(
     inputs=tokens,
     tokenizer=tokenizer,
     max_new_tokens=10,
-    dlb_tokens_count=5,       # Compute DLB relevance for first 5 tokens only
+    explain_tokens=5,       # Compute DLB relevance for first 5 tokens only
     return_relevance=True,
     return_scores=True
 )
@@ -483,7 +485,7 @@ results = dlb.run_task(
     inputs={'input_ids': input_ids, 'attention_mask': attention_mask},
     tokenizer=tokenizer,
     max_new_tokens=10,
-    dlb_tokens_count=5,       # Compute DLB relevance for first 5 tokens only
+    explain_tokens=5,       # Compute DLB relevance for first 5 tokens only
     return_relevance=True
 )
 
@@ -538,7 +540,7 @@ results = dlb.run_task(
     inputs=tokens,
     tokenizer=tokenizer,
     max_new_tokens=50,      # Adjust based on use case
-    dlb_tokens_count=10,    # Limit DLB relevance to first 10 tokens
+    explain_tokens=10,    # Limit DLB relevance to first 10 tokens
     temperature=0.7,        # Lower for more focused output
     top_p=0.9,              # Nucleus sampling
     debug=False             # Enable for troubleshooting
@@ -628,7 +630,7 @@ results = dlb.run_task(
     inputs=tokens,
     tokenizer=tokenizer,
     max_new_tokens=10,
-    dlb_tokens_count=5,  # Limit DLB relevance computation
+    explain_tokens=5,  # Limit DLB relevance computation
     debug=True           # Shows step-by-step progress
 )
 
@@ -737,7 +739,7 @@ results = dlb.run_task(
     inputs={'input_ids': tokens["input_ids"]},
     tokenizer=tokenizer,
     max_new_tokens=20,
-    dlb_tokens_count=5,       # Compute DLB relevance for first 5 tokens only
+    explain_tokens=5,       # Compute DLB relevance for first 5 tokens only
     temperature=0.7,
     return_relevance=True,
     return_scores=True
