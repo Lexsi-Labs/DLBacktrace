@@ -125,7 +125,13 @@ def align_relevance(r, target_shape, total_relevance=None):
     r = np.array(r, dtype=np.float32)
     original_total = np.sum(r, dtype=np.float32) if total_relevance is None else total_relevance
 
-    # 0) collapse extra leading dims
+    # 0) target is a prefix of r's shape (e.g. embedding relevance [B, T, D] onto
+    #    token ids [B, T]): sum the trailing axes, which keeps every position's share.
+    #    Collapsing the leading axes below mixed positions together.
+    if r.ndim > len(target_shape) and tuple(r.shape[:len(target_shape)]) == tuple(target_shape):
+        r = r.sum(axis=tuple(range(len(target_shape), r.ndim)))
+
+    # 0b) collapse extra leading dims
     while r.ndim > len(target_shape):
         if DEBUG:
             log(f"[INFO] collapsing extra dim → shape: {r.shape[1:]}")
@@ -334,6 +340,77 @@ def matmul_relevance(R, A, B, a_is_weight=False, b_is_weight=False, eps=1e-6):
     return RA, RB
 
 
+# Additive mask entries at or below this are treated as blocked (HF uses the dtype
+# minimum or -inf; older BERT-style masks use -10000).
+_MASKED = -1e4
+
+
+def _respect_attention_mask(RQ, RK, RV, R, mask):
+    """Give masked positions no relevance, keeping each head's totals.
+
+    The attention rule spreads each head's Q, K and V relevance over all positions in
+    proportion to the vectors' values, so padding and future tokens got a share. Here a
+    key (and value) keeps the fraction of its relevance that comes from queries allowed
+    to attend to it, weighted by how much relevance each query carries; a padding
+    position (a key blocked for every later query that is not fully unmasked) gets none
+    as a query either. The positive and the negative parts of each head are then scaled
+    back to their totals. Nothing changes when no position is masked.
+    """
+    xp = torch if torch.is_tensor(RQ) else np
+    m = mask if xp is torch else np.asarray(mask)
+    allowed = m > _MASKED                                    # [.., Tq, Tk], broadcastable
+    if bool(allowed.all()):
+        return RQ, RK, RV
+    absR = R.abs() if xp is torch else np.abs(R)
+    w = absR.sum(-1)                                         # [B, H, Tq] relevance per query
+    allowed = allowed.to(w.dtype) if xp is torch else allowed.astype(w.dtype)
+    allowed = allowed + 0 * w[..., None]                     # broadcast to [B, H, Tq, Tk]
+    wq = w.sum(-1, keepdims=True) if xp is np else w.sum(-1, keepdim=True)
+    seen = (w[..., None] * allowed).sum(-2)                  # [B, H, Tk]
+    f_k = xp.where(wq > 0, seen / xp.where(wq > 0, wq, 1), 1)
+    f_q = None
+    tq, tk = allowed.shape[-2], allowed.shape[-1]
+    if tq == tk:
+        full_row = allowed.all(-1) if xp is np else allowed.bool().all(-1)
+        later = (xp.arange(tq)[:, None] >= xp.arange(tk)[None, :])
+        if xp is torch:
+            later = later.to(allowed.device)
+            considered = later & ~full_row[..., None]
+            blocked = considered & ~allowed.bool()
+            pad = considered.any(-2) & (blocked == considered).all(-2)
+            f_q = (~pad).to(w.dtype)
+        else:
+            considered = later & ~full_row[..., None]
+            blocked = considered & ~allowed.astype(bool)
+            pad = considered.any(-2) & (blocked == considered).all(-2)
+            f_q = (~pad).astype(w.dtype)
+        f_k = f_k * f_q
+    return (RQ if f_q is None else _rescale_kept(RQ, f_q)), _rescale_kept(RK, f_k), _rescale_kept(RV, f_k)
+
+
+def _rescale_kept(X, keep):
+    """X [B, H, T, D] times keep [B, H, T], with each head's positive and negative sums
+    restored; if a sign's mass lost every carrier, it is spread evenly over kept positions."""
+    xp = torch if torch.is_tensor(X) else np
+    keep = keep[..., None] + 0 * X
+    if bool((keep == 1).all()):
+        return X
+    def hsum(a):
+        return a.sum((-2, -1), keepdims=True) if xp is np else a.sum((-2, -1), keepdim=True)
+    out = 0 * X
+    carriers = (keep > 0)
+    carriers = carriers.astype(X.dtype) if xp is np else carriers.to(X.dtype)
+    n = hsum(carriers)
+    for sign in (1.0, -1.0):
+        part = xp.maximum(sign * X, 0 * X)
+        kept = part * keep
+        total, now = hsum(part), hsum(kept)
+        scaled = kept * (total / xp.where(now > 0, now, 1))
+        even = carriers * (total / xp.where(n > 0, n, 1))
+        out = out + sign * xp.where(now > 0, scaled, even)
+    return out
+
+
 def sdpa_relevance(launch, R, Q, K, V, mask, hyperparams):
     """Run an attention relevance rule with what scaled_dot_product_attention computes
     but is not given explicitly: the causal mask implied by is_causal=True (newer
@@ -359,6 +436,8 @@ def sdpa_relevance(launch, R, Q, K, V, mask, hyperparams):
         else:
             mask = np.where(np.triu(np.ones((tq, tk), dtype=bool), tk - tq + 1), neg, 0.0).astype(Q.dtype)[None, None]
     RQ, RK, RV, R_mask = launch(R, Q, K, V, mask)
+    if mask is not None:
+        RQ, RK, RV = _respect_attention_mask(RQ, RK, RV, R, mask)
     if groups > 1:
         RK, RV = (t.reshape(t.shape[0], hk, groups, *t.shape[2:]).sum(2) for t in (RK, RV))
     return RQ, RK, RV, (None if built_mask else R_mask)
@@ -1289,6 +1368,10 @@ def align_relevance_gpu(r, target_shape):
     using torch operations — no CPU transfer.
     """
     original_total = r.sum()
+
+    # Target is a prefix of r's shape: sum the trailing axes (see align_relevance)
+    if r.ndim > len(target_shape) and tuple(r.shape[:len(target_shape)]) == tuple(target_shape):
+        r = r.sum(dim=tuple(range(len(target_shape), r.ndim)))
 
     # Collapse extra leading dims
     while r.ndim > len(target_shape):

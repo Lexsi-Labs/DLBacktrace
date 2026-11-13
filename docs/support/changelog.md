@@ -8,6 +8,15 @@ All notable changes to DL-Backtrace are documented here.
 
 ### Changed
 
+- **Attention relevance respects the attention mask.** The attention rule spread
+  each head's relevance over every position in proportion to the Q/K/V values, so
+  padding and future tokens received a share (on a right-padded BERT input about 30%
+  of the token relevance landed on the two padding tokens). Keys and values
+  now keep only the relevance of the queries allowed to attend to them, padding
+  positions get none, and each head's positive and negative totals are unchanged.
+  This applies to `scaled_dot_product_attention` on the CPU, GPU and compiled paths;
+  inputs without padding or a causal mask give the same relevance as before.
+  **Results change** for padded and causal inputs.
 - **Relevance through `matmul`, `bmm` and `mm`.** These ops passed all of their
   relevance to the first operand, so in eager attention (`Q @ K^T`, then
   `P @ V`) it never reached keys or values and stayed at the query token. They
@@ -34,6 +43,12 @@ All notable changes to DL-Backtrace are documented here.
 
 ### Fixed
 
+- **Token relevance on `input_ids`.** The embedding's `[B, T, D]` relevance was
+  aligned to the `[B, T]` token ids by collapsing the batch axis with a norm, which
+  mixed positions together and then tiled the result: the per-token relevance did
+  not follow the embedding's per-position relevance (padding tokens got a share even
+  with eager attention). When the target shape is a prefix, the trailing axes are now
+  summed. **Results change** for token-level relevance of every model.
 - **`scaled_dot_product_attention` called with keyword arguments.** The graph
   builder read sdpa's arguments by position only, so `is_causal=True`,
   `enable_gqa=True` or `scale=` passed by keyword (as
