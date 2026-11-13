@@ -6,11 +6,10 @@ this_dir = osp.dirname(osp.abspath(__file__))
 
 include_dirs = [osp.join(this_dir, "include")]
 
-# Multi-architecture support: compile for common GPU architectures
+# Multi-architecture support: compile for common GPU architectures.
+# Built with CUDA 13 (the toolkit of torch 2.13's default wheels), which no longer targets Volta (sm_70).
 nvcc_flags = [
     '-O3', '--use_fast_math', '-Xcompiler', '-fPIC',
-    # Volta
-    '-gencode', 'arch=compute_70,code=sm_70',
     # Turing
     '-gencode', 'arch=compute_75,code=sm_75',
     # Ampere
