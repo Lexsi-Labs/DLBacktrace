@@ -123,7 +123,9 @@ ATEN_HYPERPARAMS: dict[str, Any] = {
             "bmm": ["input", "mat2"],
             "mm": ["input", "mat2"],
             "_softmax": ["input", "dim", "half_to_float"],
-            "any": ["input", "dim", "keepdim"],
+            # Literal args are matched in order after the input tensor, so no "input" entry.
+            "any": ["dim", "keepdim"],
+            "all": ["dim", "keepdim"],
             "ge": ["other"],
             "scalar_tensor": ["value", "dtype", "device"],
 

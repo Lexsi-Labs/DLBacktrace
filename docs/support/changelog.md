@@ -46,6 +46,12 @@ All notable changes to DL-Backtrace are documented here.
   default). The relevance seeded on the logits was also handed to every cached
   key and value tensor in the graph output, so `evaluation()` failed with
   "Cannot align relevance". It now goes to the logits only.
+- **`torch.all` / `torch.any` with `dim` and `keepdim`.** `all` had no
+  hyperparameter entry and was replayed over dim 0 without `keepdim`; `any` read
+  its arguments one position off. transformers builds the SDPA attention mask
+  with `all(..., dim=-1, keepdim=True)` on CUDA, so causal language models with
+  the default sdpa attention gave wrong logits on GPU (SmolLM2-135M was about 30
+  logits off). Forward outputs now match PyTorch.
 
 ---
 

@@ -2789,6 +2789,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             return aten_op(layer_in)
 
         elif func_name == "any":
+            if getattr(aten_op, "_overloadname", "") == "default":  # reduce every element
+                return aten_op(layer_in)
             return aten_op(layer_in,
                            layer_hyperparams["dim"],
                            layer_hyperparams["keepdim"])
@@ -2827,6 +2829,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             # 🔧 FIX: Get dimension and keepdim parameters with proper fallback
             dim = layer_hyperparams.get("dim", None)
             keepdim = layer_hyperparams.get("keepdim", False)
+            if getattr(aten_op, "_overloadname", "") == "default":
+                dim = None  # all() over every element; the table's dim default does not apply
             
             logger.debug(f"[{node_name}] ✅ all: input shape={layer_in.shape}, dim={dim}, keepdim={keepdim}")
             
