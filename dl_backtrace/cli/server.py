@@ -726,6 +726,11 @@ def main():
 
     args = parse_args()
     _cli_args = args
+    # uvicorn imports "dl_backtrace.cli.server:app" by name. Under
+    # `python -m dl_backtrace.cli.server` this file runs as __main__, a different
+    # module object, so set the args where the imported app's lifespan reads them.
+    import dl_backtrace.cli.server as importable
+    importable._cli_args = args
     args.cache_root = os.path.realpath(args.cache_root)
     os.environ[CACHE_ROOT_ENV] = args.cache_root
 
