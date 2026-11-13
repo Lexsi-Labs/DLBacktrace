@@ -14,6 +14,13 @@ All notable changes to DL-Backtrace are documented here.
   tensor. Results change for models whose fill value is not `0.0`, including
   attention masks that fill with `-inf`.
 - **`transformers` is now a dependency** (`transformers>=4.52.3,<5`).
+- **`dlbacktrace-server` binds to `127.0.0.1` by default** instead of `0.0.0.0`.
+  The server has no authentication; pass `--host 0.0.0.0` to accept remote
+  connections, and only on a trusted network.
+- **`dlbacktrace-server` keeps request cache directories under `--cache-root`**
+  (default: the directory the server starts in). A `/generate` request whose
+  `cache_dir` resolves outside that root, through `..`, an absolute path or a
+  symlink, is rejected with HTTP 400.
 
 ### Fixed
 
@@ -21,10 +28,14 @@ All notable changes to DL-Backtrace are documented here.
   `device="cpu"` runs work when the compiled CUDA extensions cannot be loaded on
   the platform. If `device="cuda"` is requested in that situation, DL-Backtrace
   warns with the original load error and uses the CPU implementations, so
-  `evaluation()` does not fail part-way through.
+  `evaluation()` does not fail part-way through. The notice is also logged
+  once, so it stays visible after an earlier instance has silenced warnings.
 - **Lifted tensor constants** are resolved when tracing. Tensor constants that
   the exporter lifts into graph inputs are now looked up alongside parameters and
   buffers instead of failing to map.
+- **`masked_fill` with a fill value held in a buffer named like a weight or
+  bias** (for example `masked_bias`). The value was dropped and `predict()`
+  returned `None`; it is now used.
 
 ---
 
