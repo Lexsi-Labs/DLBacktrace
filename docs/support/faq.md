@@ -43,7 +43,7 @@ No, DLBacktrace works on both CPU and GPU. However, GPU significantly speeds up 
 
 ### What Python version is required?
 
-Python 3.8 or higher is required.
+Python 3.10 to 3.13.
 
 ### Can I install it via pip?
 

@@ -7,19 +7,19 @@ This guide covers how to install DLBacktrace and its dependencies.
 ## Requirements
 
 ### Python Version
-- **Python 3.8 or higher** is required
+- **Python 3.10 to 3.13** is required
 
 ### Framework Requirements
 
-- **PyTorch 2.6+** (recommended for best compatibility)
-- CUDA 12.6+ (optional, for GPU acceleration)
+- **PyTorch 2.13.0**, installed with the package (the PyPI build, which uses CUDA 13)
+- A GPU is optional
 
 ### System Requirements
 
 **For GPU Support:**
-- NVIDIA GPU with CUDA capability 12.0+
-- CUDA Toolkit 12.6 (for PyTorch) or 11.x (for TensorFlow)
-- cuDNN compatible with your CUDA version
+- NVIDIA GPU of compute capability 7.5 or newer (Turing to Blackwell) and driver 580 or newer, for the
+  bundled CUDA kernels. They are built for the PyPI build of PyTorch 2.13.0; with another PyTorch build
+  DL-Backtrace falls back to its PyTorch implementations.
 
 **For CPU-only:**
 - No special requirements
@@ -53,8 +53,8 @@ The main dependencies are automatically installed from `requirements.txt`:
 
 **Core Dependencies:**
 ```txt
-torch>=2.6.0
-transformers>=4.30.0
+torch==2.13.0
+transformers>=4.52.3,<4.53
 numpy>=1.21.0
 networkx>=2.6
 matplotlib>=3.4.0

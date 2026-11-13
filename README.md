@@ -7,7 +7,7 @@
 <h2 align="center">DLBacktrace: Model-Agnostic Explainability for Any Deep Learning Model</h2>
 
 <p align="center">
-  <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.8%2B-blue.svg"></a>
+  <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg"></a>
   <a href="https://pytorch.org"><img src="https://img.shields.io/badge/PyTorch-2.6%2B-red.svg"></a>
   <a href="https://dlbacktrace.lexsi.ai/"><img src="https://img.shields.io/badge/docs-available-green.svg"></a>
   <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-Lexsi%20Labs%20Source%20Available-orange"></a>
@@ -78,14 +78,17 @@ DLB v2 introduces **major architectural upgrades** to the explainability engine 
 ### From Source (Recommended)
 
 ```bash
-pip install torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu126
 pip install dl-backtrace
 ```
 
+This installs PyTorch 2.13.0 from PyPI (its CUDA 13 build). The bundled CUDA kernels are built for that
+build: they need an NVIDIA driver 580 or newer and a Turing-or-newer GPU (sm_75 to sm_120). With any
+other PyTorch build, or on CPU, DL-Backtrace uses its PyTorch implementations instead.
+
 ### Requirements
 
-- Python 3.8+
-- PyTorch 2.6+ (with CUDA 12.6 support recommended)
+- Python 3.10 to 3.13
+- PyTorch 2.13.0 (installed with the package)
 - Additional dependencies: transformers, matplotlib, seaborn, graphviz, joblib, zstandard
 
 See `requirements.txt` for the complete list of dependencies.

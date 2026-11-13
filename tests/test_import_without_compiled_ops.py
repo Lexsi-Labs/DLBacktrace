@@ -20,6 +20,15 @@ importlib.machinery.ExtensionFileLoader.create_module = block_compiled_ops
 """
 
 
+# The ops are missing either because loading is blocked above or because the package
+# has no build for this platform/Python (e.g. macOS), which reports "not found".
+LOAD_ERRORS = ("no compiled ops for this platform", "not found")
+
+
+def load_errors(out):
+    return sum(any(e in line for e in LOAD_ERRORS) for line in out.splitlines())
+
+
 def run_python(code):
     result = subprocess.run([sys.executable, "-c", BLOCK_COMPILED_OPS + code], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr[-2000:]
@@ -60,7 +69,7 @@ for kernel in (
         print(e)
 """
     )
-    assert out.count("no compiled ops for this platform") == 4
+    assert load_errors(out) == 4
 
 
 def test_gpu_launchers_do_not_fall_back_silently():
@@ -75,7 +84,7 @@ for launcher in (default_v2.launch_linear_gpu, default_v2.launch_embedding_gpu):
         print(type(e).__name__, e)
 """
     )
-    assert out.count("no compiled ops for this platform") == 2
+    assert load_errors(out) == 2
 
 
 def test_cuda_fallback_warning_points_at_the_caller():
@@ -124,4 +133,4 @@ assert "cuda" not in dlb.layer_implementation.values(), dlb.layer_implementation
     )
     after = out.split("NOTICE-START", 1)[1]
     assert "compiled CUDA ops could not be loaded" in after
-    assert "no compiled ops for this platform" in after
+    assert load_errors(after) > 0
