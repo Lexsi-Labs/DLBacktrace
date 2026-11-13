@@ -34,6 +34,7 @@ OP_EMBEDDING    = 5
 OP_MUL          = 6
 OP_ADD          = 7
 OP_VECTOR       = 8
+OP_WHERE        = 9
 
 _WEIGHT_LT = frozenset({"Weight", "Bias", "bn_running_mean", "bn_running_var", "bn_num_batches_tracked"})
 _SYM_KEYS = ("sym_size", "sym_int", "symbolic", "shape", "size", "dim")
@@ -157,6 +158,8 @@ class PropagationSchedule:
                         )
                 elif func == "add":
                     self.op_codes[idx] = OP_ADD
+                elif func == "where":
+                    self.op_codes[idx] = OP_WHERE
                 else:
                     self.op_codes[idx] = OP_PASSTHROUGH
             elif layer in ("Normalization", "Indexing_Operation"):
@@ -354,6 +357,23 @@ def run_propagation_compiled(
                 continue
 
             info = node_io[name]
+
+            # ── WHERE: relevance to the value each position took, none to the condition ──
+            if op == OP_WHERE:
+                if not is_list[idx]:  # fewer than two tensor inputs: plain passthrough
+                    for ci, slot in slots:
+                        _accum(buffers, idx, _get_child_rel(buffers, ci, slot, is_list[ci]), False, device, is_wt)
+                    continue
+                cond = to_gpu_tensor(info["input_values"][0], device).bool()
+                for ci, slot in slots:
+                    R = _get_child_rel(buffers, ci, slot, is_list[ci])
+                    if R is None:
+                        continue
+                    R = R if isinstance(R, torch.Tensor) else to_gpu_tensor(R, device)
+                    zero = torch.zeros((), dtype=R.dtype, device=R.device)
+                    _accum(buffers, idx, [None, torch.where(cond, R, zero), torch.where(cond, zero, R)],
+                           True, device, is_wt)
+                continue
 
             # ── LINEAR (addmm) ──
             if op == OP_LINEAR_ADDMM:

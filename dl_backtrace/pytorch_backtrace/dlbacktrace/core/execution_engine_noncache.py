@@ -2288,7 +2288,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             logger.debug(f"[{node_name}] 🔧 full: initial size={size}, method_args={method_args}")
             
             # 🔧 FIX: Proper size resolution with error handling
-            if not size or all(s is None for s in size):
+            # An empty size is valid: torch.full([], v) is a 0-d scalar (GPT-2's attention scale).
+            if size is None or (len(size) > 0 and all(s is None for s in size)):
                 if method_args and isinstance(method_args[0], (list, tuple)):
                     size = method_args[0]
                     logger.debug(f"[{node_name}] 🔧 Using size from method_args: {size}")
@@ -2328,12 +2329,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             
             logger.debug(f"[{node_name}] ✅ Resolved size: {resolved_size}")
             
-            # 🔧 FIX: Validate resolved size
-            if not resolved_size:
-                raise RuntimeError(f"[{node_name}] ❌ Empty size after resolution")
-            
-            if any(s <= 0 for s in resolved_size):
-                raise RuntimeError(f"[{node_name}] ❌ Invalid size dimensions: {resolved_size} (all must be positive)")
+            if any(s < 0 for s in resolved_size):
+                raise RuntimeError(f"[{node_name}] ❌ Invalid size dimensions: {resolved_size} (must not be negative)")
             
             # Remaining parameters with validation
             # Extract fill_value from method_args[1] if available, otherwise from hyperparams
@@ -3964,11 +3961,14 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
                     '_norm_weight'
                 ]
                 
+                # torch.export names buffers b_*: a buffer is never a layer's weight or bias,
+                # even when its name says so (GPT-2's causal mask is the buffer `attn.bias`).
+                is_buffer = node_name.startswith("b_")
                 if any(key in node_name for key in special_weight_keywords):
                     layer_type = "future_use"
-                elif "weight" in node_name:
+                elif "weight" in node_name and not is_buffer:
                     layer_type = "Weight"
-                elif "bias" in node_name:
+                elif "bias" in node_name and not is_buffer:
                     layer_type = "Bias"
                 elif "running_mean" in node_name:
                     layer_type = "bn_running_mean"

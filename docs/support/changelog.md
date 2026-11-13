@@ -26,6 +26,15 @@ All notable changes to DL-Backtrace are documented here.
 
 ### Fixed
 
+- **GPT-2 and nanoGPT-style eager attention.** The forward pass returned `None`:
+  `full` rejected the 0-d size GPT-2 uses for its attention scale and mask value,
+  and a buffer whose name contains `bias` or `weight` (GPT-2's causal mask
+  `attn.bias`) was treated as a layer bias and dropped. Buffers are no longer
+  classified as weights or biases, and `full` accepts empty and zero-sized shapes.
+- **`where` relevance.** Relevance now goes to the value each position took
+  (`input` where the condition holds, `other` elsewhere); the boolean condition
+  gets none. Before, all of it went to the condition, so relevance through a
+  `where`-masked attention never reached the scores.
 - **CPU use without the compiled CUDA ops.** `import dl_backtrace` and
   `device="cpu"` runs work when the compiled CUDA extensions cannot be loaded on
   the platform. If `device="cuda"` is requested in that situation, DL-Backtrace

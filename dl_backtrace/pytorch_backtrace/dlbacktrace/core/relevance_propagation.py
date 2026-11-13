@@ -866,6 +866,20 @@ def run_evaluation(
                         add_rel([Rx, Ry]) 
             continue
 
+        # — where(cond, input, other): relevance goes to the value each position took;
+        #   the boolean condition gets none (GPT-2's causal mask is a where).
+        if layer == "Mathematical_Operation" and func == "where" and isinstance(all_wt[name], list):
+            cond = tensor_to_numpy(info["input_values"][0]).astype(bool)
+            for c in children:
+                R = get_relevance_from_child(c, name, all_wt, node_io)
+                if R is None:
+                    continue
+                R = np.asarray(R, dtype=np.float32)
+                add_rel(np.where(cond, R, 0.0), parent_idx=1)
+                if len(all_wt[name]) > 2:
+                    add_rel(np.where(cond, 0.0, R), parent_idx=2)
+            continue
+
         # — Norm / Indexing / other simple ops — passthrough
         if layer in {"Normalization", "Indexing_Operation"} or (
            layer=="Mathematical_Operation" and func not in ("mul","mul_")):
@@ -1768,6 +1782,20 @@ def run_evaluation_gpu(
                     if R is not None:
                         result = UD2.launch_wt_add_equal_gpu(R, inp_t)
                         add_rel_gpu(result)
+            continue
+
+        # — where(cond, input, other): see the CPU path
+        if layer == "Mathematical_Operation" and func == "where" and isinstance(all_wt[name], list):
+            cond = to_gpu_tensor(info["input_values"][0], device).bool()
+            for c in children:
+                R = get_relevance_from_child_gpu(c, name, all_wt, node_io)
+                if R is None:
+                    continue
+                R = to_gpu_tensor(R, device)
+                zero = torch.zeros((), dtype=R.dtype, device=R.device)
+                add_rel_gpu(torch.where(cond, R, zero), parent_idx=1)
+                if len(all_wt[name]) > 2:
+                    add_rel_gpu(torch.where(cond, zero, R), parent_idx=2)
             continue
 
         # — Norm / Indexing — passthrough
