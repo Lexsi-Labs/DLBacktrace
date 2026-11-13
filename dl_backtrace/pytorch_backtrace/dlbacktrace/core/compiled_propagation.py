@@ -18,6 +18,8 @@ from typing import Dict, List, Optional, Tuple, Any
 
 from dl_backtrace.pytorch_backtrace.dlbacktrace.utils import default_v2 as UD2
 from .relevance_propagation import (
+    eager_attention_relevance,
+    eager_attention_scores_node,
     matmul_relevance,
     sdpa_relevance,
     tensor_to_numpy,
@@ -370,6 +372,24 @@ def run_propagation_compiled(
                         or getattr(vals[1], "dim", lambda: 0)() < 2:
                     for ci, slot in slots:
                         _accum(buffers, idx, _get_child_rel(buffers, ci, slot, is_list[ci]), is_list[idx], device, is_wt)
+                    continue
+                found = eager_attention_scores_node(name, node_io)
+                qi = n2i.get(found[0]) if found else None
+                if qi is not None and is_list[qi]:
+                    # P @ V of eager attention: same rule as scaled_dot_product_attention
+                    # (see the CPU path); Q and K^T relevance goes to the Q @ K^T node.
+                    P, V = (to_gpu_tensor(v, device).float() for v in vals[:2])
+                    S = to_gpu_tensor(node_io[found[1]]["input_values"][0], device).float()
+                    Q, KT = (to_gpu_tensor(v, device).float() for v in node_io[found[0]]["input_values"][:2])
+                    for ci, slot in slots:
+                        R = _get_child_rel(buffers, ci, slot, is_list[ci])
+                        if R is None:
+                            continue
+                        R = (R if isinstance(R, torch.Tensor) else to_gpu_tensor(R, device)).float()
+                        RQ, RKT, RV = eager_attention_relevance(UD2.launch_self_attention_gpu,
+                                                                R.reshape(P.shape[:-1] + V.shape[-1:]), S, Q, KT, V)
+                        _accum(buffers, idx, [None, RV], True, device, is_wt)
+                        _accum(buffers, qi, [RQ, RKT], True, device, wt_flags[qi])
                     continue
                 A, B = (to_gpu_tensor(v, device).double() for v in vals[:2])
                 parents = info.get("input_sources", [])
