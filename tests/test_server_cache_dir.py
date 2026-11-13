@@ -48,7 +48,7 @@ def test_symlink_out_of_the_root_is_rejected(client, tmp_path):
     assert calls == []
 
 
-@pytest.mark.parametrize("cache_dir, expected", [("runs/a", "runs/a"), ("runs/../b", "b"), (None, "cache")])
+@pytest.mark.parametrize("cache_dir, expected", [("runs/a", "runs/a"), ("runs/../b", "b"), (".", ""), (None, "cache")])
 def test_cache_dir_inside_the_root_is_resolved_under_it(client, cache_dir, expected):
     http, root, calls = client
     body = {"prompt": "hi"}

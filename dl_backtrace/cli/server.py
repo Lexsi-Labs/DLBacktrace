@@ -55,7 +55,9 @@ def resolve_cache_dir(cache_dir: str) -> str:
     """Resolve a request's cache_dir under the cache root; refuse anything outside it with a 400."""
     root = os.path.realpath(os.environ.get(CACHE_ROOT_ENV) or os.getcwd())
     path = os.path.realpath(os.path.join(root, cache_dir))
-    if path != root and not path.startswith(os.path.join(root, "")):
+    if path == root:
+        return root
+    if not path.startswith(os.path.join(root, "")):
         raise HTTPException(status_code=400, detail="cache_dir must be inside the server's cache root")
     return path
 
