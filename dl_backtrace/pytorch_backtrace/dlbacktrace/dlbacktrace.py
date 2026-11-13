@@ -23,8 +23,12 @@ import numpy as np
 import torch
 import inspect
 import warnings
+import logging
 import gc
 import ctypes
+
+logger = logging.getLogger(__name__)
+_cpu_fallback_logged = False
 
 try:
     _MALLOC_TRIM = getattr(ctypes.CDLL("libc.so.6"), "malloc_trim", None)
@@ -313,12 +317,17 @@ class DLBacktrace:
             from .utils import default_v2
             ops_error = default_v2.compiled_ops_error()
             if ops_error is not None:
-                warnings.warn(
+                message = (
                     f"CUDA device requested but the compiled CUDA ops could not be loaded ({ops_error}). "
-                    "Falling back to CPU mode.",
-                    RuntimeWarning,
-                    stacklevel=2,
+                    "Falling back to CPU mode."
                 )
+                # stacklevel 3: the caller of DLBacktrace(...), not __init__
+                warnings.warn(message, RuntimeWarning, stacklevel=3)
+                # Also log once: core/reproducibility.py ignores all warnings globally once imported
+                global _cpu_fallback_logged
+                if not _cpu_fallback_logged:
+                    _cpu_fallback_logged = True
+                    logger.warning(message)
                 return self._parse_device_config("cpu")
             
             # CUDA mode: use CUDA implementations where available

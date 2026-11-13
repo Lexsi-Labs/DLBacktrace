@@ -78,7 +78,7 @@ for launcher in (default_v2.launch_linear_gpu, default_v2.launch_embedding_gpu):
     assert out.count("no compiled ops for this platform") == 2
 
 
-def test_cuda_request_falls_back_to_cpu_with_one_warning_when_ops_are_missing():
+def test_cuda_fallback_warning_points_at_the_caller():
     out = run_python(
         """
 import warnings
@@ -87,16 +87,41 @@ torch.cuda.is_available = lambda: True
 
 from dl_backtrace.pytorch_backtrace import DLBacktrace
 
-dlb = DLBacktrace.__new__(DLBacktrace)
+model = nn.Sequential(nn.Linear(4, 2)).eval()
 with warnings.catch_warnings(record=True) as caught:
     warnings.simplefilter("always")
-    config = dlb._parse_device_config("cuda")
+    dlb = DLBacktrace(model=model, input_for_graph=(torch.randn(1, 4),), device="cuda", verbose=False)
 
-assert config == dlb._parse_device_config("cpu"), config
-assert "cuda" not in config.values(), config
-assert len(caught) == 1, [str(w.message) for w in caught]
-print(caught[0].message)
+assert "cuda" not in dlb.layer_implementation.values(), dlb.layer_implementation
+fallback = [w for w in caught if "compiled CUDA ops could not be loaded" in str(w.message)]
+assert len(fallback) == 1, [str(w.message) for w in caught]
+print("warned from", fallback[0].filename)
 """
     )
-    assert "compiled CUDA ops could not be loaded" in out
-    assert "no compiled ops for this platform" in out
+    assert "warned from <string>" in out
+
+
+def test_cuda_fallback_notice_is_shown_after_a_cpu_instance():
+    # Building any DLBacktrace imports core/reproducibility.py, which installs a global
+    # "ignore" warnings filter; the fallback notice must still reach the user after that
+    out = run_python(
+        """
+import sys
+
+sys.stderr = sys.stdout
+
+from dl_backtrace.pytorch_backtrace import DLBacktrace
+
+model = nn.Sequential(nn.Linear(4, 2)).eval()
+x = torch.randn(1, 4)
+DLBacktrace(model=model, input_for_graph=(x,), device="cpu", verbose=False)
+print("NOTICE-START")
+
+torch.cuda.is_available = lambda: True
+dlb = DLBacktrace(model=model, input_for_graph=(x,), device="cuda", verbose=False)
+assert "cuda" not in dlb.layer_implementation.values(), dlb.layer_implementation
+"""
+    )
+    after = out.split("NOTICE-START", 1)[1]
+    assert "compiled CUDA ops could not be loaded" in after
+    assert "no compiled ops for this platform" in after
