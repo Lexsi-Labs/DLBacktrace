@@ -13,7 +13,9 @@ All notable changes to DL-Backtrace are documented here.
   taken from the model's own `masked_fill` call, whether it is a number or a
   tensor. Results change for models whose fill value is not `0.0`, including
   attention masks that fill with `-inf`.
-- **`transformers` is now a dependency** (`transformers>=4.52.3,<5`).
+- **`transformers` is now a dependency** (`transformers>=4.52.3,<4.53`). With
+  torch 2.6.0, transformers 4.53 and later fail to export causal language models
+  (Llama, GPT-2, SmolLM2, Qwen3); 4.52.4 was checked on CUDA.
 - **`dlbacktrace-server` binds to `127.0.0.1` by default** instead of `0.0.0.0`.
   The server has no authentication; pass `--host 0.0.0.0` to accept remote
   connections, and only on a trusted network.
@@ -36,6 +38,10 @@ All notable changes to DL-Backtrace are documented here.
 - **`masked_fill` with a fill value held in a buffer named like a weight or
   bias** (for example `masked_bias`). The value was dropped and `predict()`
   returned `None`; it is now used.
+- **`python -m dl_backtrace.cli.server` loads the model.** It stored the CLI
+  arguments on the `__main__` module, while uvicorn imports the app from
+  `dl_backtrace.cli.server`, so the model was never loaded. The
+  `dlbacktrace-server` command was not affected.
 
 ---
 

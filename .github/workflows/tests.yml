@@ -30,7 +30,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cpu
-          python -m pip install "transformers>=4.52.3,<5" pytest fastapi httpx lz4 matplotlib seaborn threadpoolctl ninja joblib zstandard tqdm scikit-image graphviz ipython ipykernel ipywidgets lime scikit-learn
+          python -m pip install "transformers>=4.52.3,<4.53" pytest fastapi httpx uvicorn lz4 matplotlib seaborn threadpoolctl ninja joblib zstandard tqdm scikit-image graphviz ipython ipykernel ipywidgets lime scikit-learn
       - name: Run tests
         env:
           PYTHONPATH: ${{ github.workspace }}

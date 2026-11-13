@@ -19,7 +19,7 @@ classifiers = [
 dynamic = ["version"]
 dependencies = [
     "torch==2.6.0",
-    "transformers>=4.52.3,<5",
+    "transformers>=4.52.3,<4.53",
     "huggingface-hub",
     "lz4",
     "matplotlib",
