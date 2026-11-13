@@ -88,3 +88,32 @@ def test_relevance_runs_after_the_fill(model):
     relevance = dlb.evaluation(mode="default", multiplier=100.0, task="multi-class classification")
     assert relevance["output"].sum() == pytest.approx(100.0)
     assert "x" in relevance
+
+
+class FillFromBiasNamedBuffer(nn.Module):
+    """The fill value sits in a buffer whose name contains "bias", which the engine treats as a layer bias."""
+
+    def __init__(self):
+        super().__init__()
+        self.register_buffer("masked_bias", torch.tensor(-1.5))
+        self.a = nn.Linear(4, 2)
+
+    def forward(self, x):
+        return self.a(x.masked_fill(x < 0, self.masked_bias))
+
+
+def test_fill_from_a_bias_named_buffer_matches_a_neutral_name():
+    torch.manual_seed(0)
+    model = FillFromBiasNamedBuffer()
+    neutral = FillFromBuffer()
+    neutral.a.load_state_dict(model.a.state_dict())
+
+    model, dlb, node_io = predict(model, X)
+    assert node_io is not None
+    assert node_io["masked_fill"]["output_values"].tolist() == X.masked_fill(X < 0, -1.5).tolist()
+    assert torch.allclose(node_io["output"]["output_values"], model(X))
+
+    _, neutral_dlb, _ = predict(neutral, X)
+    kwargs = dict(mode="default", multiplier=100.0, task="multi-class classification")
+    relevance = dlb.evaluation(**kwargs)
+    assert relevance["x"] == pytest.approx(neutral_dlb.evaluation(**kwargs)["x"])

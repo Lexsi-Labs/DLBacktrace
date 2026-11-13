@@ -1478,7 +1478,12 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             if isinstance(layer_in, list) and len(layer_in) > 1:
                 mask = layer_in[1]
                 # A tensor fill value arrives as a third parent, a number stays in method_args
-                value = layer_in[2] if len(layer_in) > 2 else method_args[0]
+                if len(layer_in) > 2:
+                    value = layer_in[2]
+                elif method_args:
+                    value = method_args[0]
+                else:
+                    raise RuntimeError(f"[{node_name}] ❌ `{func_name}`: fill value not found (parents={parents}, method_args={method_args})")
                 layer_in = layer_in[0]
 
                 # 🔧 DEVICE CONSISTENCY FIX: Ensure both tensors are on the same device
@@ -4032,8 +4037,9 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
 
                 else:
                     for node_x in parents:
-                        if func_name == "_native_batch_norm_legit_no_training":
-                            # ✅ Include *all* parents for batch norm op
+                        if func_name in ("_native_batch_norm_legit_no_training", "masked_fill", "masked_fill_"):
+                            # ✅ Include *all* parents for batch norm and masked_fill: a masked_fill
+                            # input or fill value may be a buffer whose name contains "weight"/"bias"
                             layer_in.append(node_io[node_x]['output_values'])
                         elif node_io[node_x]['layer_type'] in ("Weight", "Bias", "bn_running_mean", "bn_running_var", "bn_num_batches_tracked", "embeddings"):
                             continue
