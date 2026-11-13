@@ -315,6 +315,24 @@ def align_relevance(r, target_shape, total_relevance=None):
 
     return r
 
+
+def matmul_relevance(R, A, B, a_is_weight=False, b_is_weight=False, eps=1e-6):
+    """Relevance of C = A @ B to A and B (epsilon rule over the terms A[..., i, k] * B[..., k, j]).
+
+    Like elementwise mul, the relevance of each term is split evenly between the two
+    operands, unless one of them is a weight: then the other gets all of it. Works on
+    numpy arrays and torch tensors; the two results sum to R (up to eps).
+    """
+    xp = torch if torch.is_tensor(R) else np
+    C = A @ B
+    C = xp.where(xp.abs(C) < eps, eps * xp.sign(C + (C == 0)), C)
+    S = R / C
+    swap = (lambda t: t.transpose(-1, -2)) if xp is torch else (lambda t: np.swapaxes(t, -1, -2))
+    share_a = 0.0 if a_is_weight else (1.0 if b_is_weight else 0.5)
+    RA = share_a * A * (S @ swap(B))
+    RB = (1.0 - share_a) * B * (swap(A) @ S)
+    return RA, RB
+
 def assign_embedding_relevance(node, info, all_wt, node_io):
     """
     Embedding layers: align relevance to token IDs shape; robust to shape mismatches.
@@ -865,6 +883,21 @@ def run_evaluation(
                             log(f"Y--- relevance: {np.sum(Ry):.8f}, shape: {Ry.shape}") 
                         add_rel([Rx, Ry]) 
             continue
+
+        # — matmul / bmm / mm: epsilon rule over the bilinear terms (eager attention's
+        #   Q @ K^T and P @ V); before, all relevance went to the first operand.
+        if layer == "Mathematical_Operation" and func in ("matmul", "bmm", "mm") and isinstance(all_wt[name], list):
+            A, B = (np.asarray(tensor_to_numpy(v), dtype=np.float64) for v in info["input_values"][:2])
+            if A.ndim >= 2 and B.ndim >= 2:
+                aw, bw = ("weight" in p.lower() for p in parents[:2])
+                for c in children:
+                    R = get_relevance_from_child(c, name, all_wt, node_io)
+                    if R is None:
+                        continue
+                    RA, RB = matmul_relevance(np.asarray(R, dtype=np.float64).reshape((A @ B).shape), A, B, aw, bw)
+                    add_rel(RA.astype(np.float32), parent_idx=0)
+                    add_rel(RB.astype(np.float32), parent_idx=1)
+                continue
 
         # — where(cond, input, other): relevance goes to the value each position took;
         #   the boolean condition gets none (GPT-2's causal mask is a where).
@@ -1783,6 +1816,21 @@ def run_evaluation_gpu(
                         result = UD2.launch_wt_add_equal_gpu(R, inp_t)
                         add_rel_gpu(result)
             continue
+
+        # — matmul / bmm / mm: see the CPU path
+        if layer == "Mathematical_Operation" and func in ("matmul", "bmm", "mm") and isinstance(all_wt[name], list):
+            A, B = (to_gpu_tensor(v, device).double() for v in info["input_values"][:2])
+            if A.dim() >= 2 and B.dim() >= 2:
+                aw, bw = ("weight" in p.lower() for p in parents[:2])
+                for c in children:
+                    R = get_relevance_from_child_gpu(c, name, all_wt, node_io)
+                    if R is None:
+                        continue
+                    R = to_gpu_tensor(R, device).double().reshape((A @ B).shape)
+                    RA, RB = matmul_relevance(R, A, B, aw, bw)
+                    add_rel_gpu(RA.float(), parent_idx=0)
+                    add_rel_gpu(RB.float(), parent_idx=1)
+                continue
 
         # — where(cond, input, other): see the CPU path
         if layer == "Mathematical_Operation" and func == "where" and isinstance(all_wt[name], list):

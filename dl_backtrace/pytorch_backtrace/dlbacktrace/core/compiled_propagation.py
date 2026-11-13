@@ -18,6 +18,7 @@ from typing import Dict, List, Optional, Tuple, Any
 
 from dl_backtrace.pytorch_backtrace.dlbacktrace.utils import default_v2 as UD2
 from .relevance_propagation import (
+    matmul_relevance,
     tensor_to_numpy,
     to_gpu_tensor,
     align_relevance_gpu,
@@ -35,6 +36,7 @@ OP_MUL          = 6
 OP_ADD          = 7
 OP_VECTOR       = 8
 OP_WHERE        = 9
+OP_MATMUL       = 10
 
 _WEIGHT_LT = frozenset({"Weight", "Bias", "bn_running_mean", "bn_running_var", "bn_num_batches_tracked"})
 _SYM_KEYS = ("sym_size", "sym_int", "symbolic", "shape", "size", "dim")
@@ -160,6 +162,8 @@ class PropagationSchedule:
                     self.op_codes[idx] = OP_ADD
                 elif func == "where":
                     self.op_codes[idx] = OP_WHERE
+                elif func in ("matmul", "bmm", "mm"):
+                    self.op_codes[idx] = OP_MATMUL
                 else:
                     self.op_codes[idx] = OP_PASSTHROUGH
             elif layer in ("Normalization", "Indexing_Operation"):
@@ -357,6 +361,26 @@ def run_propagation_compiled(
                 continue
 
             info = node_io[name]
+
+            # ── MATMUL: epsilon rule over the bilinear terms (see matmul_relevance) ──
+            if op == OP_MATMUL:
+                vals = info.get("input_values") or []
+                if not is_list[idx] or len(vals) < 2 or getattr(vals[0], "dim", lambda: 0)() < 2 \
+                        or getattr(vals[1], "dim", lambda: 0)() < 2:
+                    for ci, slot in slots:
+                        _accum(buffers, idx, _get_child_rel(buffers, ci, slot, is_list[ci]), is_list[idx], device, is_wt)
+                    continue
+                A, B = (to_gpu_tensor(v, device).double() for v in vals[:2])
+                parents = info.get("input_sources", [])
+                aw, bw = ("weight" in p.lower() for p in parents[:2])
+                for ci, slot in slots:
+                    R = _get_child_rel(buffers, ci, slot, is_list[ci])
+                    if R is None:
+                        continue
+                    R = (R if isinstance(R, torch.Tensor) else to_gpu_tensor(R, device)).double().reshape((A @ B).shape)
+                    RA, RB = matmul_relevance(R, A, B, aw, bw)
+                    _accum(buffers, idx, [RA.float(), RB.float()], True, device, is_wt)
+                continue
 
             # ── WHERE: relevance to the value each position took, none to the condition ──
             if op == OP_WHERE:

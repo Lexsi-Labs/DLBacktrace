@@ -65,3 +65,40 @@ def test_where_relevance_skips_the_condition(device):
     for v in rel.values():
         for a in (v if isinstance(v, list) else [v]):
             assert torch.isfinite(torch.as_tensor(a).float()).all()
+
+
+class LastTokenAttention(CausalSelfAttention):
+    """Reads only the last position, so earlier tokens matter only through keys and values."""
+
+    def forward(self, x):
+        q, k, v = self.qkv(x).split(D, dim=-1)
+        att = torch.matmul(q, k.transpose(-1, -2)) / math.sqrt(D)
+        y = torch.matmul(att.softmax(dim=-1), v)
+        return self.out(y[:, -1])
+
+
+def test_matmul_relevance_conserves_and_splits():
+    from dl_backtrace.pytorch_backtrace.dlbacktrace.core.relevance_propagation import matmul_relevance
+
+    torch.manual_seed(0)
+    A, B = torch.randn(2, 3, 4, dtype=torch.float64), torch.randn(2, 4, 5, dtype=torch.float64)
+    R = torch.randn(2, 3, 5, dtype=torch.float64)
+    RA, RB = matmul_relevance(R, A, B)
+    assert RA.shape == A.shape and RB.shape == B.shape
+    assert torch.allclose(RA.sum() + RB.sum(), R.sum())
+    assert torch.allclose(RA.sum(), RB.sum())  # an even split
+    RA_np, RB_np = matmul_relevance(R.numpy(), A.numpy(), B.numpy(), b_is_weight=True)
+    assert abs(RA_np.sum() - R.sum().item()) < 1e-9 and RB_np.sum() == 0
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_relevance_reaches_earlier_tokens_through_attention(device):
+    torch.manual_seed(0)
+    model = LastTokenAttention().eval().to(device)
+    x = torch.randn(1, T, D).to(device)
+    dlb = DLBacktrace(model=model, input_for_graph=(x,), device=device, verbose=False)
+    dlb.predict(x)
+    rel = dlb.evaluation(mode="default", multiplier=100.0, task="binary-classification")
+    r = torch.as_tensor(rel["x"]).float().reshape(T, D)
+    assert torch.isfinite(r).all()
+    assert r[:-1].abs().sum() > 0  # before, matmul gave all relevance to its first operand

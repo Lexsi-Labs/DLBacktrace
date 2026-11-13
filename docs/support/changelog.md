@@ -8,6 +8,14 @@ All notable changes to DL-Backtrace are documented here.
 
 ### Changed
 
+- **Relevance through `matmul`, `bmm` and `mm`.** These ops passed all of their
+  relevance to the first operand, so in eager attention (`Q @ K^T`, then
+  `P @ V`) it never reached keys or values and stayed at the query token. They
+  now use the epsilon rule over the products `A[i, k] * B[k, j]`, split evenly
+  between the two operands as for elementwise `mul` (or all to the non-weight
+  operand when one is a weight), which conserves relevance. Explanations change
+  for models that run eager attention or use `matmul` directly; the
+  `scaled_dot_product_attention` path is unchanged.
 - **`masked_fill` uses the fill value the model passes.** Previously the fill
   value was read from the layer hyperparameters and defaulted to `0.0`. It is now
   taken from the model's own `masked_fill` call, whether it is a number or a
