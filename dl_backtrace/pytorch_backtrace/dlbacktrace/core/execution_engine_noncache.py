@@ -1385,6 +1385,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                 attn_mask = layer_in[3]
             else:
                 attn_mask = layer_hyperparams.get("attn_mask", None)
+            if not isinstance(attn_mask, torch.Tensor):
+                attn_mask = None
             if attn_mask is not None:
                 # Keep mask dtype (bool/additive) exactly as provided
                 # Move to correct device if needed
@@ -1443,7 +1445,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             logger.debug(f"  Dropout p: {dropout_p}")
             logger.debug(f"  Is causal: {is_causal}")
             
-            return aten_op(q, k, v, attn_mask, dropout_p, is_causal)
+            return aten_op(q, k, v, attn_mask, dropout_p, is_causal,
+                           scale=layer_hyperparams.get("scale"), enable_gqa=bool(layer_hyperparams.get("enable_gqa", False)))
 
         elif func_name == "lstm":
             return aten_op(layer_in[0],

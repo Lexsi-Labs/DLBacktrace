@@ -34,6 +34,15 @@ All notable changes to DL-Backtrace are documented here.
 
 ### Fixed
 
+- **`scaled_dot_product_attention` called with keyword arguments.** The graph
+  builder read sdpa's arguments by position only, so `is_causal=True`,
+  `enable_gqa=True` or `scale=` passed by keyword (as
+  `F.scaled_dot_product_attention(q, k, v, is_causal=True)` and newer
+  transformers do) were lost and a float reached the engine as the mask. They
+  are now read from the op's schema and passed through. The relevance rules no
+  longer fail on a missing mask, build the causal mask that `is_causal=True`
+  implies, accept boolean masks, and repeat grouped K/V heads (summing their
+  relevance back), on the CPU, GPU and compiled paths.
 - **Relevance on the GPU path.** The compiled CUDA linear kernel counted part of
   each input twice when the input size is a multiple of 4 (threads past the
   vectorised range also ran the scalar loop), and every thread raced to store the

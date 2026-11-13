@@ -333,6 +333,36 @@ def matmul_relevance(R, A, B, a_is_weight=False, b_is_weight=False, eps=1e-6):
     RB = (1.0 - share_a) * B * (swap(A) @ S)
     return RA, RB
 
+
+def sdpa_relevance(launch, R, Q, K, V, mask, hyperparams):
+    """Run an attention relevance rule with what scaled_dot_product_attention computes
+    but is not given explicitly: the causal mask implied by is_causal=True (newer
+    transformers pass attn_mask=None with is_causal=True), and K/V heads repeated for
+    grouped-query attention (enable_gqa=True). K/V relevance is summed back onto the
+    original heads. `launch(R, Q, K, V, mask)` returns (RQ, RK, RV, R_mask)."""
+    hq, hk = Q.shape[1], K.shape[1]
+    groups = hq // hk if hk and hk != hq and hq % hk == 0 else 1
+    if groups > 1:
+        rep = (lambda t: t.repeat_interleave(groups, dim=1)) if torch.is_tensor(K) else (lambda t: np.repeat(t, groups, axis=1))
+        K, V = rep(K), rep(V)
+    neg = float(np.finfo(np.float32).min)  # additive; a finite value avoids inf - inf
+    if mask is not None and (mask.dtype == torch.bool if torch.is_tensor(mask) else mask.dtype == np.bool_):
+        # sdpa takes boolean masks (True = attend); the rules add the mask to the logits
+        mask = (torch.zeros(mask.shape, dtype=Q.dtype, device=mask.device).masked_fill(~mask, neg)
+                if torch.is_tensor(mask) else np.where(mask, 0.0, neg).astype(Q.dtype))
+    built_mask = mask is None and bool((hyperparams or {}).get("is_causal"))
+    if built_mask:
+        tq, tk = Q.shape[-2], K.shape[-2]
+        if torch.is_tensor(Q):
+            future = torch.ones(tq, tk, dtype=torch.bool, device=Q.device).triu(tk - tq + 1)
+            mask = torch.zeros(tq, tk, dtype=Q.dtype, device=Q.device).masked_fill(future, neg)[None, None]
+        else:
+            mask = np.where(np.triu(np.ones((tq, tk), dtype=bool), tk - tq + 1), neg, 0.0).astype(Q.dtype)[None, None]
+    RQ, RK, RV, R_mask = launch(R, Q, K, V, mask)
+    if groups > 1:
+        RK, RV = (t.reshape(t.shape[0], hk, groups, *t.shape[2:]).sum(2) for t in (RK, RV))
+    return RQ, RK, RV, (None if built_mask else R_mask)
+
 def assign_embedding_relevance(node, info, all_wt, node_io):
     """
     Embedding layers: align relevance to token IDs shape; robust to shape mismatches.
@@ -733,7 +763,7 @@ def run_evaluation(
             vals = info.get("input_values", [])
             n = len(vals)
             if n == 4:
-                Q, K, V, masked_fill = (tensor_to_numpy(v) for v in vals)
+                Q, K, V, masked_fill = (None if v is None else tensor_to_numpy(v) for v in vals)
                 if DEBUG:
                     log(f"Q: {Q.shape}, K: {K.shape}, V: {V.shape}, masked_fill: {masked_fill.shape}")
             elif n == 3:
@@ -755,7 +785,8 @@ def run_evaluation(
                     impl = get_layer_implementation("Attention")
                     if DEBUG:
                         log(f"Using {impl} implementation for attention layer {name}")
-                    result = UD2.launch_self_attention(impl, R, Q, K, V, masked_fill)
+                    result = sdpa_relevance(lambda r, q, k, v, m: UD2.launch_self_attention(impl, r, q, k, v, m),
+                                            R, Q, K, V, masked_fill, info.get("layer_hyperparams", {}))
                     RQ, RK, RV, R_masked_fill = result
                     if DEBUG:
                         log(f"RQ: {np.sum(RQ):.8f}, shape: {RQ.shape}")
@@ -1732,7 +1763,7 @@ def run_evaluation_gpu(
             n = len(vals)
 
             if n == 4:
-                Q, K, V, masked_fill = (to_gpu_tensor(v, device) for v in vals)
+                Q, K, V, masked_fill = (None if v is None else to_gpu_tensor(v, device) for v in vals)
             elif n == 3:
                 Q, K, V = (to_gpu_tensor(v, device) for v in vals)
                 raw_mask = info.get("layer_hyperparams", {}).get("attn_mask", None)
@@ -1743,7 +1774,8 @@ def run_evaluation_gpu(
             for c in children:
                 R = get_relevance_from_child_gpu(c, name, all_wt, node_io)
                 if R is not None:
-                    result = UD2.launch_self_attention_gpu(R, Q, K, V, masked_fill)
+                    result = sdpa_relevance(UD2.launch_self_attention_gpu, R, Q, K, V, masked_fill,
+                                            info.get("layer_hyperparams", {}))
                     RQ, RK, RV, R_masked_fill = result
                     add_rel_gpu([RQ, RK, RV, R_masked_fill])
             continue

@@ -19,6 +19,7 @@ from typing import Dict, List, Optional, Tuple, Any
 from dl_backtrace.pytorch_backtrace.dlbacktrace.utils import default_v2 as UD2
 from .relevance_propagation import (
     matmul_relevance,
+    sdpa_relevance,
     tensor_to_numpy,
     to_gpu_tensor,
     align_relevance_gpu,
@@ -437,7 +438,7 @@ def run_propagation_compiled(
                 vals = info.get("input_values", [])
                 nv = len(vals)
                 if nv == 4:
-                    Q, K, V, mf = (to_gpu_tensor(v, device) for v in vals)
+                    Q, K, V, mf = (None if v is None else to_gpu_tensor(v, device) for v in vals)
                 elif nv == 3:
                     Q, K, V = (to_gpu_tensor(v, device) for v in vals)
                     raw_mask = info.get("layer_hyperparams", {}).get("attn_mask", None)
@@ -447,7 +448,8 @@ def run_propagation_compiled(
                 for ci, slot in slots:
                     R = _get_child_rel(buffers, ci, slot, is_list[ci])
                     if R is not None:
-                        RQ, RK, RV, Rmf = UD2.launch_self_attention_gpu(R, Q, K, V, mf)
+                        RQ, RK, RV, Rmf = sdpa_relevance(UD2.launch_self_attention_gpu, R, Q, K, V, mf,
+                                                         info.get("layer_hyperparams", {}))
                         _accum(buffers, idx, [RQ, RK, RV, Rmf], is_list[idx], device, is_wt)
                 continue
 
