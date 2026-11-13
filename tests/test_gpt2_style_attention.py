@@ -53,15 +53,37 @@ def test_forward_matches_torch(device):
     assert torch.allclose(out.to(device), model(x), atol=1e-5)
 
 
+class WhereGate(nn.Module):
+    """torch.where outside attention: relevance must reach the selected values, not the condition."""
+
+    def __init__(self):
+        super().__init__()
+        self.out = nn.Linear(D, 2)
+
+    def forward(self, x):
+        fill = torch.full([], -1.0, dtype=x.dtype, device=x.device)
+        return self.out(torch.where(x > 0, x, fill).mean(dim=1))
+
+
 @pytest.mark.parametrize("device", DEVICES)
 def test_where_relevance_skips_the_condition(device):
-    _, _, dlb, node_io = _run(device)
+    torch.manual_seed(0)
+    model = WhereGate().eval().to(device)
+    x = torch.randn(1, T, D).to(device)
+    dlb = DLBacktrace(model=model, input_for_graph=(x,), device=device, verbose=False)
+    node_io = dlb.predict(x)
     rel = dlb.evaluation(mode="default", multiplier=100.0, task="binary-classification")
     where = [k for k in node_io if k.startswith("where")]
     assert where
     r_cond, r_input = (float(torch.as_tensor(r).float().sum()) for r in rel[where[0]][:2])
     assert r_cond == 0.0
     assert r_input != 0.0
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_causal_attention_relevance_is_finite(device):
+    _, _, dlb, _ = _run(device)
+    rel = dlb.evaluation(mode="default", multiplier=100.0, task="binary-classification")
     for v in rel.values():
         for a in (v if isinstance(v, list) else [v]):
             assert torch.isfinite(torch.as_tensor(a).float()).all()

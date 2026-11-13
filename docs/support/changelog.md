@@ -8,6 +8,14 @@ All notable changes to DL-Backtrace are documented here.
 
 ### Changed
 
+- **Eager and sdpa attention give the same relevance.** Eager attention (`Q @ K^T`,
+  scaling, mask, softmax, `P @ V` as separate ops) now goes through the same relevance
+  rule as `scaled_dot_product_attention`; its mask is read off the softmax input.
+  Before, the ops were propagated one by one and the scaling constant and the additive
+  mask took a share of the relevance at every layer, so a model's input relevance
+  depended on its `attn_implementation` (SmolLM2-135M: 1.82 with sdpa, 0.197 with
+  eager). Results change for models run with eager attention; sdpa results do not.
+
 - **Attention relevance respects the attention mask.** The attention rule spread
   each head's relevance over every position in proportion to the Q/K/V values, so
   padding and future tokens received a share (on a right-padded BERT input about 30%

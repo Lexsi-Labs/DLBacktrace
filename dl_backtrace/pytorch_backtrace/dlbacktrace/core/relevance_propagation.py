@@ -442,6 +442,69 @@ def sdpa_relevance(launch, R, Q, K, V, mask, hyperparams):
         RK, RV = (t.reshape(t.shape[0], hk, groups, *t.shape[2:]).sum(2) for t in (RK, RV))
     return RQ, RK, RV, (None if built_mask else R_mask)
 
+# Ops between softmax and P @ V that only cast or copy the attention probabilities.
+_PROB_PASSTHROUGH = {"to", "_to_copy", "type", "type_as", "dropout", "contiguous", "clone", "alias", "detach"}
+
+
+def eager_attention_scores_node(name, node_io):
+    """If matmul `name` is P @ V of an eager attention block (Q @ K^T, then scaling and
+    masking, softmax, P @ V), return (the Q @ K^T matmul node, the softmax node);
+    otherwise None.
+
+    Eager attention is the same computation as scaled_dot_product_attention split into
+    ops, so its relevance goes through the same rule (`sdpa_relevance`). Propagating it
+    op by op gave the scaling constant and the additive mask a share at each step and
+    lost most of the relevance; the two backends then disagreed several-fold."""
+    src = node_io.get(name, {}).get("input_sources") or []
+    if len(src) < 2:
+        return None
+    p = src[0]
+    while p in node_io and node_io[p].get("func_name") in _PROB_PASSTHROUGH:
+        p = (node_io[p].get("input_sources") or [None])[0]
+    if p not in node_io or node_io[p].get("func_name") not in ("softmax", "_softmax"):
+        return None
+    shape = tuple(getattr(node_io[p].get("output_values"), "shape", ()))
+    seen, todo = set(), list(node_io[p].get("input_sources") or [])
+    while todo:  # breadth-first through the elementwise score ops, scores-shaped only
+        n = todo.pop(0)
+        if n in seen or n not in node_io:
+            continue
+        seen.add(n)
+        info = node_io[n]
+        if tuple(getattr(info.get("output_values"), "shape", ())) != shape:
+            continue
+        if info.get("func_name") in ("matmul", "bmm"):
+            q = (info.get("input_values") or [None])[0]
+            return (n, p) if getattr(q, "ndim", 0) in (3, 4) else None
+        todo.extend(info.get("input_sources") or [])
+    return None
+
+
+def eager_attention_relevance(launch, R, S, Q, KT, V):
+    """Relevance of an eager attention block through `sdpa_relevance`. The mask is read
+    off the softmax input S: a logit at or below -1e3 is blocked (models add -1e4, the
+    dtype minimum or -inf); a row with nothing allowed is left unmasked, as transformers
+    does for sdpa (`_unmask_unattended`), so padded queries are treated the same way."""
+    swap = (lambda t: t.transpose(-1, -2)) if torch.is_tensor(KT) else (lambda t: np.swapaxes(t, -1, -2))
+    one_head = Q.ndim == 3  # [B, T, D] attention without a head axis: treat as one head
+    if one_head:
+        R, S, Q, KT, V = (t[:, None] for t in (R, S, Q, KT, V))
+    neg = float(np.finfo(np.float32).min)
+    if torch.is_tensor(S):
+        blocked = S <= -1e3
+        blocked = blocked & ~blocked.all(-1, keepdim=True)
+        mask = torch.zeros(S.shape, dtype=Q.dtype, device=S.device).masked_fill(blocked, neg)
+    else:
+        blocked = np.asarray(S) <= -1e3
+        blocked = blocked & ~blocked.all(-1, keepdims=True)
+        mask = np.where(blocked, neg, 0.0).astype(Q.dtype)
+    RQ, RK, RV, _ = sdpa_relevance(launch, R, Q, swap(KT), V, mask, {})
+    RKT = swap(RK)
+    if one_head:
+        RQ, RKT, RV = RQ[:, 0], RKT[:, 0], RV[:, 0]
+    return RQ, RKT, RV
+
+
 def assign_embedding_relevance(node, info, all_wt, node_io):
     """
     Embedding layers: align relevance to token IDs shape; robust to shape mismatches.
@@ -997,6 +1060,27 @@ def run_evaluation(
         # — matmul / bmm / mm: epsilon rule over the bilinear terms (eager attention's
         #   Q @ K^T and P @ V); before, all relevance went to the first operand.
         if layer == "Mathematical_Operation" and func in ("matmul", "bmm", "mm") and isinstance(all_wt[name], list):
+            found = eager_attention_scores_node(name, node_io)
+            qk = found[0] if found else None
+            if qk is not None and isinstance(all_wt.get(qk), list):
+                # P @ V of eager attention: same rule as scaled_dot_product_attention. The
+                # probabilities get nothing, so the softmax / mask / scaling ops carry none.
+                P, V = (tensor_to_numpy(v) for v in info["input_values"][:2])
+                S = np.asarray(tensor_to_numpy(node_io[found[1]]["input_values"][0]), dtype=np.float32)
+                Q, KT = (tensor_to_numpy(v) for v in node_io[qk]["input_values"][:2])
+                impl = get_layer_implementation("Attention")
+                for c in children:
+                    R = get_relevance_from_child(c, name, all_wt, node_io)
+                    if R is None:
+                        continue
+                    RQ, RKT, RV = eager_attention_relevance(
+                        lambda r, q, k, v, m: UD2.launch_self_attention(impl, r, q, k, v, m),
+                        np.asarray(R, dtype=np.float32).reshape(P.shape[:-1] + V.shape[-1:]), S, Q, KT, V)
+                    add_rel(RV, parent_idx=1)
+                    buf = all_wt[qk]
+                    buf[0] = buf[0] + align_relevance(np.asarray(RQ, dtype=np.float32), buf[0].shape)
+                    buf[1] = buf[1] + align_relevance(np.asarray(RKT, dtype=np.float32), buf[1].shape)
+                continue
             A, B = (np.asarray(tensor_to_numpy(v), dtype=np.float64) for v in info["input_values"][:2])
             if A.ndim >= 2 and B.ndim >= 2:
                 aw, bw = ("weight" in p.lower() for p in parents[:2])
@@ -1934,6 +2018,23 @@ def run_evaluation_gpu(
 
         # — matmul / bmm / mm: see the CPU path
         if layer == "Mathematical_Operation" and func in ("matmul", "bmm", "mm") and isinstance(all_wt[name], list):
+            found = eager_attention_scores_node(name, node_io)
+            qk = found[0] if found else None
+            if qk is not None and isinstance(all_wt.get(qk), list):
+                P, V = (to_gpu_tensor(v, device).float() for v in info["input_values"][:2])
+                S = to_gpu_tensor(node_io[found[1]]["input_values"][0], device).float()
+                Q, KT = (to_gpu_tensor(v, device).float() for v in node_io[qk]["input_values"][:2])
+                for c in children:
+                    R = get_relevance_from_child_gpu(c, name, all_wt, node_io)
+                    if R is None:
+                        continue
+                    R = to_gpu_tensor(R, device).float().reshape(P.shape[:-1] + V.shape[-1:])
+                    RQ, RKT, RV = eager_attention_relevance(UD2.launch_self_attention_gpu, R, S, Q, KT, V)
+                    add_rel_gpu(RV, parent_idx=1)
+                    buf = all_wt[qk]
+                    buf[0] = buf[0] + align_relevance_gpu(RQ, buf[0].shape)
+                    buf[1] = buf[1] + align_relevance_gpu(RKT, buf[1].shape)
+                continue
             A, B = (to_gpu_tensor(v, device).double() for v in info["input_values"][:2])
             if A.dim() >= 2 and B.dim() >= 2:
                 aw, bw = ("weight" in p.lower() for p in parents[:2])
