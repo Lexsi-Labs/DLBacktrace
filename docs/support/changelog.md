@@ -34,6 +34,17 @@ All notable changes to DL-Backtrace are documented here.
 
 ### Fixed
 
+- **Relevance on the GPU path.** The compiled CUDA linear kernel counted part of
+  each input twice when the input size is a multiple of 4 (threads past the
+  vectorised range also ran the scalar loop), and every thread raced to store the
+  block's sums. It lost 35-45% of the relevance at every linear layer, so CUDA
+  explanations came out 10 to 50 times smaller than CPU ones. The kernel now
+  matches the CPU rule. The compiled ops are rebuilt for torch 2.13.0 and Python
+  3.10 to 3.13 (see the `build-compiled-ops` workflow).
+- **Linear relevance with a one-sided neuron.** When all of a neuron's
+  contributions had the same sign, the CPU rule replaced the empty sum with 1
+  before computing the split, handing relevance to a side with no inputs; it was
+  lost. The split is now computed from the real sums, as the CUDA kernel does.
 - **Generation past the first token.** `run_task(task="generation")` and
   `DLBAutoSampler.generate` run the traced graph on a longer sequence at every
   step; a graph traced without `dynamic_shapes` (as in the guides) was fixed to

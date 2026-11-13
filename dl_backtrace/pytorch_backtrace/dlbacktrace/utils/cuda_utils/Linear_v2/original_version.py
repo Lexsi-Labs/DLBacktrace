@@ -78,15 +78,17 @@ def calculate_wt_fc(relevance_y, input_array, w, b, act):
                     elif t_act == n_act:
                         p_sum = 0
 
-            # Avoid divide by zero
+            # Aggregated weights from the real sums: an empty (or zeroed) side gets none.
+            # Substituting 1 for an empty sum before this gave that side relevance it
+            # had no inputs to pass on, so it was lost.
+            p_agg_wt = ((p_sum + pbias) / (p_sum + n_sum + pbias + nbias)) * (p_sum / (p_sum + pbias)) if p_sum > 0 else 0
+            n_agg_wt = ((n_sum + nbias) / (p_sum + n_sum + pbias + nbias)) * (n_sum / (n_sum + nbias)) if n_sum > 0 else 0
+
+            # Avoid divide by zero below
             if p_sum == 0:
                 p_sum = 1
             if n_sum == 0:
                 n_sum = 1
-
-            # Aggregated weights
-            p_agg_wt = ((p_sum + pbias) / (p_sum + n_sum + pbias + nbias)) * (p_sum / (p_sum + pbias)) if p_sum > 0 else 0
-            n_agg_wt = ((n_sum + nbias) / (p_sum + n_sum + pbias + nbias)) * (n_sum / (n_sum + nbias)) if n_sum > 0 else 0
 
             # Redistribute relevance
             wt_ind[p_ind] = (contribs[p_ind] / p_sum) * wt * p_agg_wt
