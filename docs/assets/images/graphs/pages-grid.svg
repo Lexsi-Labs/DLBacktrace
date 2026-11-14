@@ -1,0 +1,720 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="2476px" height="1737px">
+<rect width="100%" height="100%" fill="white"/>
+<text x="24" y="22" font-family="Helvetica" font-size="14">DLBacktrace Graph - 4 pages, 3 per row</text>
+<svg x="24" y="54" width="615pt" height="541pt"
+ viewBox="0.00 0.00 615.00 541.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 536.75)">
+<title>DLBacktrace_Page1</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-536.75 610.85,-536.75 610.85,4 -4,4"/>
+<text xml:space="preserve" text-anchor="middle" x="303.43" y="-515.45" font-family="Times,serif" font-size="14.00">DLBacktrace Graph &#45; Page 1/4</text>
+<!-- input_ids -->
+<g id="node1" class="node">
+<title>input_ids</title>
+<path fill="#bfffbf" stroke="black" d="M187.88,-508.25C187.88,-508.25 98.38,-508.25 98.38,-508.25 92.38,-508.25 86.38,-502.25 86.38,-496.25 86.38,-496.25 86.38,-478.5 86.38,-478.5 86.38,-472.5 92.38,-466.5 98.38,-466.5 98.38,-466.5 187.88,-466.5 187.88,-466.5 193.88,-466.5 199.88,-472.5 199.88,-478.5 199.88,-478.5 199.88,-496.25 199.88,-496.25 199.88,-502.25 193.88,-508.25 187.88,-508.25"/>
+<text xml:space="preserve" text-anchor="middle" x="143.12" y="-494.75" font-family="Helvetica,sans-Serif" font-size="10.00">input_ids</text>
+<text xml:space="preserve" text-anchor="middle" x="143.12" y="-483.5" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 25.000</text>
+<text xml:space="preserve" text-anchor="middle" x="143.12" y="-472.25" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 6.154 Min: 2.951</text>
+</g>
+<!-- embedding -->
+<g id="node3" class="node">
+<title>embedding</title>
+<path fill="#bfffbf" stroke="black" d="M197.25,-430.5C197.25,-430.5 89,-430.5 89,-430.5 83,-430.5 77,-424.5 77,-418.5 77,-418.5 77,-400.75 77,-400.75 77,-394.75 83,-388.75 89,-388.75 89,-388.75 197.25,-388.75 197.25,-388.75 203.25,-388.75 209.25,-394.75 209.25,-400.75 209.25,-400.75 209.25,-418.5 209.25,-418.5 209.25,-424.5 203.25,-430.5 197.25,-430.5"/>
+<text xml:space="preserve" text-anchor="middle" x="143.12" y="-417" font-family="Helvetica,sans-Serif" font-size="10.00">embedding</text>
+<text xml:space="preserve" text-anchor="middle" x="143.12" y="-405.75" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 25.000</text>
+<text xml:space="preserve" text-anchor="middle" x="143.12" y="-394.5" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 0.486 Min: 1.712e&#45;04</text>
+</g>
+<!-- input_ids&#45;&gt;embedding -->
+<g id="edge1" class="edge">
+<title>input_ids&#45;&gt;embedding</title>
+<path fill="none" stroke="black" d="M143.12,-466.08C143.12,-458.77 143.12,-450.35 143.12,-442.31"/>
+<polygon fill="black" stroke="black" points="146.63,-442.49 143.13,-432.49 139.63,-442.49 146.63,-442.49"/>
+</g>
+<!-- attention_mask -->
+<g id="node2" class="node">
+<title>attention_mask</title>
+<path fill="#ffffff" stroke="black" d="M563.88,-275C563.88,-275 474.38,-275 474.38,-275 468.38,-275 462.38,-269 462.38,-263 462.38,-263 462.38,-245.25 462.38,-245.25 462.38,-239.25 468.38,-233.25 474.38,-233.25 474.38,-233.25 563.88,-233.25 563.88,-233.25 569.88,-233.25 575.88,-239.25 575.88,-245.25 575.88,-245.25 575.88,-263 575.88,-263 575.88,-269 569.88,-275 563.88,-275"/>
+<text xml:space="preserve" text-anchor="middle" x="519.12" y="-261.5" font-family="Helvetica,sans-Serif" font-size="10.00">attention_mask</text>
+<text xml:space="preserve" text-anchor="middle" x="519.12" y="-250.25" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 0.000</text>
+<text xml:space="preserve" text-anchor="middle" x="519.12" y="-239" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 0.000 Min: 0.000</text>
+</g>
+<!-- scaled_dot_product_attention -->
+<g id="node10" class="node">
+<title>scaled_dot_product_attention</title>
+<path fill="#7fff7f" stroke="black" d="M433.88,-197.25C433.88,-197.25 314.38,-197.25 314.38,-197.25 308.38,-197.25 302.38,-191.25 302.38,-185.25 302.38,-185.25 302.38,-167.5 302.38,-167.5 302.38,-161.5 308.38,-155.5 314.38,-155.5 314.38,-155.5 433.88,-155.5 433.88,-155.5 439.88,-155.5 445.88,-161.5 445.88,-167.5 445.88,-167.5 445.88,-185.25 445.88,-185.25 445.88,-191.25 439.88,-197.25 433.88,-197.25"/>
+<text xml:space="preserve" text-anchor="middle" x="374.12" y="-183.75" font-family="Helvetica,sans-Serif" font-size="10.00">scaled_dot_product_attention</text>
+<text xml:space="preserve" text-anchor="middle" x="374.12" y="-172.5" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 50.000</text>
+<text xml:space="preserve" text-anchor="middle" x="374.12" y="-161.25" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 25.000 Min: 0.000</text>
+</g>
+<!-- attention_mask&#45;&gt;scaled_dot_product_attention -->
+<g id="edge11" class="edge">
+<title>attention_mask&#45;&gt;scaled_dot_product_attention</title>
+<path fill="none" stroke="black" d="M480.27,-232.83C462.71,-223.66 441.78,-212.72 423.16,-202.99"/>
+<polygon fill="black" stroke="black" points="424.92,-199.96 414.43,-198.43 421.67,-206.16 424.92,-199.96"/>
+</g>
+<!-- layer_norm -->
+<g id="node6" class="node">
+<title>layer_norm</title>
+<path fill="#00ff00" stroke="black" d="M347.12,-352.75C347.12,-352.75 247.12,-352.75 247.12,-352.75 241.12,-352.75 235.12,-346.75 235.12,-340.75 235.12,-340.75 235.12,-323 235.12,-323 235.12,-317 241.12,-311 247.12,-311 247.12,-311 347.12,-311 347.12,-311 353.12,-311 359.12,-317 359.12,-323 359.12,-323 359.12,-340.75 359.12,-340.75 359.12,-346.75 353.12,-352.75 347.12,-352.75"/>
+<text xml:space="preserve" text-anchor="middle" x="297.12" y="-339.25" font-family="Helvetica,sans-Serif" font-size="10.00">layer_norm</text>
+<text xml:space="preserve" text-anchor="middle" x="297.12" y="-328" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 100.000</text>
+<text xml:space="preserve" text-anchor="middle" x="297.12" y="-316.75" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 100.000 Min: 0.000</text>
+</g>
+<!-- embedding&#45;&gt;layer_norm -->
+<g id="edge2" class="edge">
+<title>embedding&#45;&gt;layer_norm</title>
+<path fill="none" stroke="black" d="M184.39,-388.33C203.21,-379.07 225.68,-368.02 245.6,-358.22"/>
+<polygon fill="black" stroke="black" points="246.96,-361.45 254.38,-353.9 243.87,-355.17 246.96,-361.45"/>
+</g>
+<!-- embedding_1 -->
+<g id="node4" class="node">
+<title>embedding_1</title>
+<path fill="#bfffbf" stroke="black" d="M351.25,-430.5C351.25,-430.5 243,-430.5 243,-430.5 237,-430.5 231,-424.5 231,-418.5 231,-418.5 231,-400.75 231,-400.75 231,-394.75 237,-388.75 243,-388.75 243,-388.75 351.25,-388.75 351.25,-388.75 357.25,-388.75 363.25,-394.75 363.25,-400.75 363.25,-400.75 363.25,-418.5 363.25,-418.5 363.25,-424.5 357.25,-430.5 351.25,-430.5"/>
+<text xml:space="preserve" text-anchor="middle" x="297.12" y="-417" font-family="Helvetica,sans-Serif" font-size="10.00">embedding_1</text>
+<text xml:space="preserve" text-anchor="middle" x="297.12" y="-405.75" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 25.000</text>
+<text xml:space="preserve" text-anchor="middle" x="297.12" y="-394.5" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 0.486 Min: 1.712e&#45;04</text>
+</g>
+<!-- embedding_1&#45;&gt;layer_norm -->
+<g id="edge3" class="edge">
+<title>embedding_1&#45;&gt;layer_norm</title>
+<path fill="none" stroke="black" d="M297.12,-388.33C297.12,-381.02 297.12,-372.6 297.12,-364.56"/>
+<polygon fill="black" stroke="black" points="300.63,-364.74 297.13,-354.74 293.63,-364.74 300.63,-364.74"/>
+</g>
+<!-- embedding_2 -->
+<g id="node5" class="node">
+<title>embedding_2</title>
+<path fill="#7fff7f" stroke="black" d="M505.25,-430.5C505.25,-430.5 397,-430.5 397,-430.5 391,-430.5 385,-424.5 385,-418.5 385,-418.5 385,-400.75 385,-400.75 385,-394.75 391,-388.75 397,-388.75 397,-388.75 505.25,-388.75 505.25,-388.75 511.25,-388.75 517.25,-394.75 517.25,-400.75 517.25,-400.75 517.25,-418.5 517.25,-418.5 517.25,-424.5 511.25,-430.5 505.25,-430.5"/>
+<text xml:space="preserve" text-anchor="middle" x="451.12" y="-417" font-family="Helvetica,sans-Serif" font-size="10.00">embedding_2</text>
+<text xml:space="preserve" text-anchor="middle" x="451.12" y="-405.75" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 50.000</text>
+<text xml:space="preserve" text-anchor="middle" x="451.12" y="-394.5" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 0.972 Min: 3.424e&#45;04</text>
+</g>
+<!-- embedding_2&#45;&gt;layer_norm -->
+<g id="edge4" class="edge">
+<title>embedding_2&#45;&gt;layer_norm</title>
+<path fill="none" stroke="black" d="M409.86,-388.33C391.04,-379.07 368.57,-368.02 348.65,-358.22"/>
+<polygon fill="black" stroke="black" points="350.38,-355.17 339.87,-353.9 347.29,-361.45 350.38,-355.17"/>
+</g>
+<!-- linear -->
+<g id="node7" class="node">
+<title>linear</title>
+<path fill="#dfffdf" stroke="black" d="M120.25,-275C120.25,-275 12,-275 12,-275 6,-275 0,-269 0,-263 0,-263 0,-245.25 0,-245.25 0,-239.25 6,-233.25 12,-233.25 12,-233.25 120.25,-233.25 120.25,-233.25 126.25,-233.25 132.25,-239.25 132.25,-245.25 132.25,-245.25 132.25,-263 132.25,-263 132.25,-269 126.25,-275 120.25,-275"/>
+<text xml:space="preserve" text-anchor="middle" x="66.12" y="-261.5" font-family="Helvetica,sans-Serif" font-size="10.00">linear</text>
+<text xml:space="preserve" text-anchor="middle" x="66.12" y="-250.25" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 12.500</text>
+<text xml:space="preserve" text-anchor="middle" x="66.12" y="-239" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 0.265 Min: 3.274e&#45;05</text>
+</g>
+<!-- layer_norm&#45;&gt;linear -->
+<g id="edge5" class="edge">
+<title>layer_norm&#45;&gt;linear</title>
+<path fill="none" stroke="black" d="M235.22,-310.58C205.57,-300.85 169.87,-289.15 138.93,-279"/>
+<polygon fill="black" stroke="black" points="140.23,-275.74 129.64,-275.95 138.05,-282.39 140.23,-275.74"/>
+</g>
+<!-- linear_1 -->
+<g id="node8" class="node">
+<title>linear_1</title>
+<path fill="#dfffdf" stroke="black" d="M274.25,-275C274.25,-275 166,-275 166,-275 160,-275 154,-269 154,-263 154,-263 154,-245.25 154,-245.25 154,-239.25 160,-233.25 166,-233.25 166,-233.25 274.25,-233.25 274.25,-233.25 280.25,-233.25 286.25,-239.25 286.25,-245.25 286.25,-245.25 286.25,-263 286.25,-263 286.25,-269 280.25,-275 274.25,-275"/>
+<text xml:space="preserve" text-anchor="middle" x="220.12" y="-261.5" font-family="Helvetica,sans-Serif" font-size="10.00">linear_1</text>
+<text xml:space="preserve" text-anchor="middle" x="220.12" y="-250.25" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 12.500</text>
+<text xml:space="preserve" text-anchor="middle" x="220.12" y="-239" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 0.229 Min: 2.562e&#45;05</text>
+</g>
+<!-- layer_norm&#45;&gt;linear_1 -->
+<g id="edge6" class="edge">
+<title>layer_norm&#45;&gt;linear_1</title>
+<path fill="none" stroke="black" d="M276.49,-310.58C268.03,-302.25 258.1,-292.48 248.94,-283.47"/>
+<polygon fill="black" stroke="black" points="251.48,-281.06 241.9,-276.54 246.57,-286.05 251.48,-281.06"/>
+</g>
+<!-- linear_2 -->
+<g id="node9" class="node">
+<title>linear_2</title>
+<path fill="#bfffbf" stroke="black" d="M428.25,-275C428.25,-275 320,-275 320,-275 314,-275 308,-269 308,-263 308,-263 308,-245.25 308,-245.25 308,-239.25 314,-233.25 320,-233.25 320,-233.25 428.25,-233.25 428.25,-233.25 434.25,-233.25 440.25,-239.25 440.25,-245.25 440.25,-245.25 440.25,-263 440.25,-263 440.25,-269 434.25,-275 428.25,-275"/>
+<text xml:space="preserve" text-anchor="middle" x="374.12" y="-261.5" font-family="Helvetica,sans-Serif" font-size="10.00">linear_2</text>
+<text xml:space="preserve" text-anchor="middle" x="374.12" y="-250.25" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 25.000</text>
+<text xml:space="preserve" text-anchor="middle" x="374.12" y="-239" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 0.501 Min: 6.140e&#45;05</text>
+</g>
+<!-- layer_norm&#45;&gt;linear_2 -->
+<g id="edge7" class="edge">
+<title>layer_norm&#45;&gt;linear_2</title>
+<path fill="none" stroke="black" d="M317.76,-310.58C326.22,-302.25 336.15,-292.48 345.31,-283.47"/>
+<polygon fill="black" stroke="black" points="347.68,-286.05 352.35,-276.54 342.77,-281.06 347.68,-286.05"/>
+</g>
+<!-- layer_norm_1 -->
+<g id="node12" class="node">
+<title>layer_norm_1</title>
+<path fill="#00ff00" stroke="black" d="M542.12,-41.75C542.12,-41.75 442.12,-41.75 442.12,-41.75 436.12,-41.75 430.12,-35.75 430.12,-29.75 430.12,-29.75 430.12,-12 430.12,-12 430.12,-6 436.12,0 442.12,0 442.12,0 542.12,0 542.12,0 548.12,0 554.12,-6 554.12,-12 554.12,-12 554.12,-29.75 554.12,-29.75 554.12,-35.75 548.12,-41.75 542.12,-41.75"/>
+<text xml:space="preserve" text-anchor="middle" x="492.12" y="-28.25" font-family="Helvetica,sans-Serif" font-size="10.00">layer_norm_1</text>
+<text xml:space="preserve" text-anchor="middle" x="492.12" y="-17" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 100.000</text>
+<text xml:space="preserve" text-anchor="middle" x="492.12" y="-5.75" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 100.000 Min: 0.000</text>
+</g>
+<!-- layer_norm&#45;&gt;layer_norm_1 -->
+<g id="edge14" class="edge">
+<title>layer_norm&#45;&gt;layer_norm_1</title>
+<path fill="none" stroke="black" d="M359.57,-327.87C436.02,-322.73 558.85,-309.25 587.12,-275 643.65,-206.54 564.79,-101.06 519.74,-50.64"/>
+<polygon fill="black" stroke="black" points="522.37,-48.33 513.05,-43.29 517.2,-53.04 522.37,-48.33"/>
+</g>
+<!-- linear&#45;&gt;scaled_dot_product_attention -->
+<g id="edge8" class="edge">
+<title>linear&#45;&gt;scaled_dot_product_attention</title>
+<path fill="none" stroke="black" d="M132.47,-235.93C136.07,-235.02 139.64,-234.12 143.12,-233.25 192.11,-221 247.05,-207.7 291.06,-197.14"/>
+<polygon fill="black" stroke="black" points="291.62,-200.61 300.53,-194.87 289.99,-193.8 291.62,-200.61"/>
+</g>
+<!-- linear_1&#45;&gt;scaled_dot_product_attention -->
+<g id="edge9" class="edge">
+<title>linear_1&#45;&gt;scaled_dot_product_attention</title>
+<path fill="none" stroke="black" d="M261.39,-232.83C280.21,-223.57 302.68,-212.52 322.6,-202.72"/>
+<polygon fill="black" stroke="black" points="323.96,-205.95 331.38,-198.4 320.87,-199.67 323.96,-205.95"/>
+</g>
+<!-- linear_2&#45;&gt;scaled_dot_product_attention -->
+<g id="edge10" class="edge">
+<title>linear_2&#45;&gt;scaled_dot_product_attention</title>
+<path fill="none" stroke="black" d="M374.12,-232.83C374.12,-225.52 374.12,-217.1 374.12,-209.06"/>
+<polygon fill="black" stroke="black" points="377.63,-209.24 374.13,-199.24 370.63,-209.24 377.63,-209.24"/>
+</g>
+<!-- linear_3 -->
+<g id="node11" class="node">
+<title>linear_3</title>
+<path fill="#7fff7f" stroke="black" d="M496.25,-119.5C496.25,-119.5 388,-119.5 388,-119.5 382,-119.5 376,-113.5 376,-107.5 376,-107.5 376,-89.75 376,-89.75 376,-83.75 382,-77.75 388,-77.75 388,-77.75 496.25,-77.75 496.25,-77.75 502.25,-77.75 508.25,-83.75 508.25,-89.75 508.25,-89.75 508.25,-107.5 508.25,-107.5 508.25,-113.5 502.25,-119.5 496.25,-119.5"/>
+<text xml:space="preserve" text-anchor="middle" x="442.12" y="-106" font-family="Helvetica,sans-Serif" font-size="10.00">linear_3</text>
+<text xml:space="preserve" text-anchor="middle" x="442.12" y="-94.75" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 50.000</text>
+<text xml:space="preserve" text-anchor="middle" x="442.12" y="-83.5" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 2.173 Min: 2.281e&#45;05</text>
+</g>
+<!-- scaled_dot_product_attention&#45;&gt;linear_3 -->
+<g id="edge12" class="edge">
+<title>scaled_dot_product_attention&#45;&gt;linear_3</title>
+<path fill="none" stroke="black" d="M392.35,-155.08C399.67,-146.92 408.24,-137.38 416.18,-128.52"/>
+<polygon fill="black" stroke="black" points="418.77,-130.89 422.84,-121.11 413.56,-126.21 418.77,-130.89"/>
+</g>
+<!-- linear_3&#45;&gt;layer_norm_1 -->
+<g id="edge13" class="edge">
+<title>linear_3&#45;&gt;layer_norm_1</title>
+<path fill="none" stroke="black" d="M455.52,-77.33C460.74,-69.43 466.81,-60.22 472.5,-51.61"/>
+<polygon fill="black" stroke="black" points="475.27,-53.77 477.86,-43.49 469.43,-49.91 475.27,-53.77"/>
+</g>
+</g>
+</svg>
+
+<svg x="868" y="54" width="585pt" height="846pt"
+ viewBox="0.00 0.00 585.00 846.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 842)">
+<title>DLBacktrace_Page2</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-842 580.5,-842 580.5,4 -4,4"/>
+<text xml:space="preserve" text-anchor="middle" x="288.25" y="-820.7" font-family="Times,serif" font-size="14.00">DLBacktrace Graph &#45; Page 2/4</text>
+<!-- layer_norm_1 -->
+<g id="node1" class="node">
+<title>layer_norm_1</title>
+<path fill="lightgray" stroke="black" stroke-dasharray="5,2" d="M322.38,-813.5C322.38,-813.5 271.88,-813.5 271.88,-813.5 265.88,-813.5 259.88,-807.5 259.88,-801.5 259.88,-801.5 259.88,-789.5 259.88,-789.5 259.88,-783.5 265.88,-777.5 271.88,-777.5 271.88,-777.5 322.38,-777.5 322.38,-777.5 328.38,-777.5 334.38,-783.5 334.38,-789.5 334.38,-789.5 334.38,-801.5 334.38,-801.5 334.38,-807.5 328.38,-813.5 322.38,-813.5"/>
+<text xml:space="preserve" text-anchor="middle" x="297.12" y="-797.25" font-family="Helvetica,sans-Serif" font-size="10.00">layer_norm_1</text>
+<text xml:space="preserve" text-anchor="middle" x="297.12" y="-786" font-family="Helvetica,sans-Serif" font-size="10.00">(earlier page)</text>
+</g>
+<!-- linear_4 -->
+<g id="node3" class="node">
+<title>linear_4</title>
+<path fill="#7fff7f" stroke="black" d="M301.25,-741.5C301.25,-741.5 193,-741.5 193,-741.5 187,-741.5 181,-735.5 181,-729.5 181,-729.5 181,-711.75 181,-711.75 181,-705.75 187,-699.75 193,-699.75 193,-699.75 301.25,-699.75 301.25,-699.75 307.25,-699.75 313.25,-705.75 313.25,-711.75 313.25,-711.75 313.25,-729.5 313.25,-729.5 313.25,-735.5 307.25,-741.5 301.25,-741.5"/>
+<text xml:space="preserve" text-anchor="middle" x="247.12" y="-728" font-family="Helvetica,sans-Serif" font-size="10.00">linear_4</text>
+<text xml:space="preserve" text-anchor="middle" x="247.12" y="-716.75" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 50.000</text>
+<text xml:space="preserve" text-anchor="middle" x="247.12" y="-705.5" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 1.464 Min: 5.500e&#45;04</text>
+</g>
+<!-- layer_norm_1&#45;&gt;linear_4 -->
+<g id="edge1" class="edge">
+<title>layer_norm_1&#45;&gt;linear_4</title>
+<path fill="none" stroke="black" d="M285.28,-777.23C279.93,-769.44 273.47,-760.02 267.39,-751.16"/>
+<polygon fill="black" stroke="black" points="270.42,-749.39 261.87,-743.12 264.65,-753.35 270.42,-749.39"/>
+</g>
+<!-- layer_norm_2 -->
+<g id="node6" class="node">
+<title>layer_norm_2</title>
+<path fill="#00ff00" stroke="black" d="M347.12,-508.25C347.12,-508.25 247.12,-508.25 247.12,-508.25 241.12,-508.25 235.12,-502.25 235.12,-496.25 235.12,-496.25 235.12,-478.5 235.12,-478.5 235.12,-472.5 241.12,-466.5 247.12,-466.5 247.12,-466.5 347.12,-466.5 347.12,-466.5 353.12,-466.5 359.12,-472.5 359.12,-478.5 359.12,-478.5 359.12,-496.25 359.12,-496.25 359.12,-502.25 353.12,-508.25 347.12,-508.25"/>
+<text xml:space="preserve" text-anchor="middle" x="297.12" y="-494.75" font-family="Helvetica,sans-Serif" font-size="10.00">layer_norm_2</text>
+<text xml:space="preserve" text-anchor="middle" x="297.12" y="-483.5" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 100.000</text>
+<text xml:space="preserve" text-anchor="middle" x="297.12" y="-472.25" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 100.000 Min: 0.000</text>
+</g>
+<!-- layer_norm_1&#45;&gt;layer_norm_2 -->
+<g id="edge5" class="edge">
+<title>layer_norm_1&#45;&gt;layer_norm_2</title>
+<path fill="none" stroke="black" d="M308.59,-777.17C314.5,-767.19 321.09,-754.15 324.12,-741.5 344.59,-656.25 343.69,-629.71 324.12,-544.25 322.14,-535.56 318.61,-526.65 314.75,-518.57"/>
+<polygon fill="black" stroke="black" points="317.96,-517.16 310.28,-509.86 311.74,-520.36 317.96,-517.16"/>
+</g>
+<!-- attention_mask -->
+<g id="node2" class="node">
+<title>attention_mask</title>
+<path fill="lightgray" stroke="black" stroke-dasharray="5,2" d="M533.5,-427.62C533.5,-427.62 474.75,-427.62 474.75,-427.62 468.75,-427.62 462.75,-421.62 462.75,-415.62 462.75,-415.62 462.75,-403.62 462.75,-403.62 462.75,-397.62 468.75,-391.62 474.75,-391.62 474.75,-391.62 533.5,-391.62 533.5,-391.62 539.5,-391.62 545.5,-397.62 545.5,-403.62 545.5,-403.62 545.5,-415.62 545.5,-415.62 545.5,-421.62 539.5,-427.62 533.5,-427.62"/>
+<text xml:space="preserve" text-anchor="middle" x="504.12" y="-411.38" font-family="Helvetica,sans-Serif" font-size="10.00">attention_mask</text>
+<text xml:space="preserve" text-anchor="middle" x="504.12" y="-400.12" font-family="Helvetica,sans-Serif" font-size="10.00">(earlier page)</text>
+</g>
+<!-- scaled_dot_product_attention_1 -->
+<g id="node10" class="node">
+<title>scaled_dot_product_attention_1</title>
+<path fill="#7fff7f" stroke="black" d="M439.12,-352.75C439.12,-352.75 309.12,-352.75 309.12,-352.75 303.12,-352.75 297.12,-346.75 297.12,-340.75 297.12,-340.75 297.12,-323 297.12,-323 297.12,-317 303.12,-311 309.12,-311 309.12,-311 439.12,-311 439.12,-311 445.12,-311 451.12,-317 451.12,-323 451.12,-323 451.12,-340.75 451.12,-340.75 451.12,-346.75 445.12,-352.75 439.12,-352.75"/>
+<text xml:space="preserve" text-anchor="middle" x="374.12" y="-339.25" font-family="Helvetica,sans-Serif" font-size="10.00">scaled_dot_product_attention_1</text>
+<text xml:space="preserve" text-anchor="middle" x="374.12" y="-328" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 50.000</text>
+<text xml:space="preserve" text-anchor="middle" x="374.12" y="-316.75" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 25.000 Min: 0.000</text>
+</g>
+<!-- attention_mask&#45;&gt;scaled_dot_product_attention_1 -->
+<g id="edge12" class="edge">
+<title>attention_mask&#45;&gt;scaled_dot_product_attention_1</title>
+<path fill="none" stroke="black" d="M474.3,-391.25C457.86,-381.66 437.11,-369.58 418.77,-358.89"/>
+<polygon fill="black" stroke="black" points="420.58,-355.9 410.18,-353.89 417.06,-361.94 420.58,-355.9"/>
+</g>
+<!-- gelu -->
+<g id="node4" class="node">
+<title>gelu</title>
+<path fill="#7fff7f" stroke="black" d="M301.25,-663.75C301.25,-663.75 193,-663.75 193,-663.75 187,-663.75 181,-657.75 181,-651.75 181,-651.75 181,-634 181,-634 181,-628 187,-622 193,-622 193,-622 301.25,-622 301.25,-622 307.25,-622 313.25,-628 313.25,-634 313.25,-634 313.25,-651.75 313.25,-651.75 313.25,-657.75 307.25,-663.75 301.25,-663.75"/>
+<text xml:space="preserve" text-anchor="middle" x="247.12" y="-650.25" font-family="Helvetica,sans-Serif" font-size="10.00">gelu</text>
+<text xml:space="preserve" text-anchor="middle" x="247.12" y="-639" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 50.000</text>
+<text xml:space="preserve" text-anchor="middle" x="247.12" y="-627.75" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 0.836 Min: 2.233e&#45;05</text>
+</g>
+<!-- linear_4&#45;&gt;gelu -->
+<g id="edge2" class="edge">
+<title>linear_4&#45;&gt;gelu</title>
+<path fill="none" stroke="black" d="M247.12,-699.33C247.12,-692.02 247.12,-683.6 247.12,-675.56"/>
+<polygon fill="black" stroke="black" points="250.63,-675.74 247.13,-665.74 243.63,-675.74 250.63,-675.74"/>
+</g>
+<!-- linear_5 -->
+<g id="node5" class="node">
+<title>linear_5</title>
+<path fill="#7fff7f" stroke="black" d="M301.25,-586C301.25,-586 193,-586 193,-586 187,-586 181,-580 181,-574 181,-574 181,-556.25 181,-556.25 181,-550.25 187,-544.25 193,-544.25 193,-544.25 301.25,-544.25 301.25,-544.25 307.25,-544.25 313.25,-550.25 313.25,-556.25 313.25,-556.25 313.25,-574 313.25,-574 313.25,-580 307.25,-586 301.25,-586"/>
+<text xml:space="preserve" text-anchor="middle" x="247.12" y="-572.5" font-family="Helvetica,sans-Serif" font-size="10.00">linear_5</text>
+<text xml:space="preserve" text-anchor="middle" x="247.12" y="-561.25" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 50.000</text>
+<text xml:space="preserve" text-anchor="middle" x="247.12" y="-550" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 0.836 Min: 2.233e&#45;05</text>
+</g>
+<!-- gelu&#45;&gt;linear_5 -->
+<g id="edge3" class="edge">
+<title>gelu&#45;&gt;linear_5</title>
+<path fill="none" stroke="black" d="M247.12,-621.58C247.12,-614.27 247.12,-605.85 247.12,-597.81"/>
+<polygon fill="black" stroke="black" points="250.63,-597.99 247.13,-587.99 243.63,-597.99 250.63,-597.99"/>
+</g>
+<!-- linear_5&#45;&gt;layer_norm_2 -->
+<g id="edge4" class="edge">
+<title>linear_5&#45;&gt;layer_norm_2</title>
+<path fill="none" stroke="black" d="M260.52,-543.83C265.74,-535.93 271.81,-526.72 277.5,-518.11"/>
+<polygon fill="black" stroke="black" points="280.27,-520.27 282.86,-509.99 274.43,-516.41 280.27,-520.27"/>
+</g>
+<!-- linear_6 -->
+<g id="node7" class="node">
+<title>linear_6</title>
+<path fill="#dfffdf" stroke="black" d="M120.25,-430.5C120.25,-430.5 12,-430.5 12,-430.5 6,-430.5 0,-424.5 0,-418.5 0,-418.5 0,-400.75 0,-400.75 0,-394.75 6,-388.75 12,-388.75 12,-388.75 120.25,-388.75 120.25,-388.75 126.25,-388.75 132.25,-394.75 132.25,-400.75 132.25,-400.75 132.25,-418.5 132.25,-418.5 132.25,-424.5 126.25,-430.5 120.25,-430.5"/>
+<text xml:space="preserve" text-anchor="middle" x="66.12" y="-417" font-family="Helvetica,sans-Serif" font-size="10.00">linear_6</text>
+<text xml:space="preserve" text-anchor="middle" x="66.12" y="-405.75" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 12.500</text>
+<text xml:space="preserve" text-anchor="middle" x="66.12" y="-394.5" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 0.256 Min: 1.638e&#45;04</text>
+</g>
+<!-- layer_norm_2&#45;&gt;linear_6 -->
+<g id="edge6" class="edge">
+<title>layer_norm_2&#45;&gt;linear_6</title>
+<path fill="none" stroke="black" d="M235.22,-466.08C205.57,-456.35 169.87,-444.65 138.93,-434.5"/>
+<polygon fill="black" stroke="black" points="140.23,-431.24 129.64,-431.45 138.05,-437.89 140.23,-431.24"/>
+</g>
+<!-- linear_7 -->
+<g id="node8" class="node">
+<title>linear_7</title>
+<path fill="#dfffdf" stroke="black" d="M274.25,-430.5C274.25,-430.5 166,-430.5 166,-430.5 160,-430.5 154,-424.5 154,-418.5 154,-418.5 154,-400.75 154,-400.75 154,-394.75 160,-388.75 166,-388.75 166,-388.75 274.25,-388.75 274.25,-388.75 280.25,-388.75 286.25,-394.75 286.25,-400.75 286.25,-400.75 286.25,-418.5 286.25,-418.5 286.25,-424.5 280.25,-430.5 274.25,-430.5"/>
+<text xml:space="preserve" text-anchor="middle" x="220.12" y="-417" font-family="Helvetica,sans-Serif" font-size="10.00">linear_7</text>
+<text xml:space="preserve" text-anchor="middle" x="220.12" y="-405.75" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 12.500</text>
+<text xml:space="preserve" text-anchor="middle" x="220.12" y="-394.5" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 0.241 Min: 1.287e&#45;04</text>
+</g>
+<!-- layer_norm_2&#45;&gt;linear_7 -->
+<g id="edge7" class="edge">
+<title>layer_norm_2&#45;&gt;linear_7</title>
+<path fill="none" stroke="black" d="M276.49,-466.08C268.03,-457.75 258.1,-447.98 248.94,-438.97"/>
+<polygon fill="black" stroke="black" points="251.48,-436.56 241.9,-432.04 246.57,-441.55 251.48,-436.56"/>
+</g>
+<!-- linear_8 -->
+<g id="node9" class="node">
+<title>linear_8</title>
+<path fill="#bfffbf" stroke="black" d="M428.25,-430.5C428.25,-430.5 320,-430.5 320,-430.5 314,-430.5 308,-424.5 308,-418.5 308,-418.5 308,-400.75 308,-400.75 308,-394.75 314,-388.75 320,-388.75 320,-388.75 428.25,-388.75 428.25,-388.75 434.25,-388.75 440.25,-394.75 440.25,-400.75 440.25,-400.75 440.25,-418.5 440.25,-418.5 440.25,-424.5 434.25,-430.5 428.25,-430.5"/>
+<text xml:space="preserve" text-anchor="middle" x="374.12" y="-417" font-family="Helvetica,sans-Serif" font-size="10.00">linear_8</text>
+<text xml:space="preserve" text-anchor="middle" x="374.12" y="-405.75" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 25.000</text>
+<text xml:space="preserve" text-anchor="middle" x="374.12" y="-394.5" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 0.439 Min: 2.171e&#45;04</text>
+</g>
+<!-- layer_norm_2&#45;&gt;linear_8 -->
+<g id="edge8" class="edge">
+<title>layer_norm_2&#45;&gt;linear_8</title>
+<path fill="none" stroke="black" d="M317.76,-466.08C326.22,-457.75 336.15,-447.98 345.31,-438.97"/>
+<polygon fill="black" stroke="black" points="347.68,-441.55 352.35,-432.04 342.77,-436.56 347.68,-441.55"/>
+</g>
+<!-- layer_norm_3 -->
+<g id="node12" class="node">
+<title>layer_norm_3</title>
+<path fill="#00ff00" stroke="black" d="M526.12,-197.25C526.12,-197.25 426.12,-197.25 426.12,-197.25 420.12,-197.25 414.12,-191.25 414.12,-185.25 414.12,-185.25 414.12,-167.5 414.12,-167.5 414.12,-161.5 420.12,-155.5 426.12,-155.5 426.12,-155.5 526.12,-155.5 526.12,-155.5 532.12,-155.5 538.12,-161.5 538.12,-167.5 538.12,-167.5 538.12,-185.25 538.12,-185.25 538.12,-191.25 532.12,-197.25 526.12,-197.25"/>
+<text xml:space="preserve" text-anchor="middle" x="476.12" y="-183.75" font-family="Helvetica,sans-Serif" font-size="10.00">layer_norm_3</text>
+<text xml:space="preserve" text-anchor="middle" x="476.12" y="-172.5" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 100.000</text>
+<text xml:space="preserve" text-anchor="middle" x="476.12" y="-161.25" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 100.000 Min: 0.000</text>
+</g>
+<!-- layer_norm_2&#45;&gt;layer_norm_3 -->
+<g id="edge15" class="edge">
+<title>layer_norm_2&#45;&gt;layer_norm_3</title>
+<path fill="none" stroke="black" d="M359.6,-481.74C428.21,-475.19 531.89,-460.52 556.12,-430.5 610.9,-362.64 541,-256.81 500.8,-206.21"/>
+<polygon fill="black" stroke="black" points="503.64,-204.16 494.63,-198.6 498.21,-208.57 503.64,-204.16"/>
+</g>
+<!-- linear_6&#45;&gt;scaled_dot_product_attention_1 -->
+<g id="edge9" class="edge">
+<title>linear_6&#45;&gt;scaled_dot_product_attention_1</title>
+<path fill="none" stroke="black" d="M132.47,-391.43C136.07,-390.52 139.64,-389.62 143.12,-388.75 190.17,-376.99 242.7,-364.25 285.77,-353.91"/>
+<polygon fill="black" stroke="black" points="286.41,-357.36 295.32,-351.62 284.78,-350.55 286.41,-357.36"/>
+</g>
+<!-- linear_7&#45;&gt;scaled_dot_product_attention_1 -->
+<g id="edge10" class="edge">
+<title>linear_7&#45;&gt;scaled_dot_product_attention_1</title>
+<path fill="none" stroke="black" d="M261.39,-388.33C280.21,-379.07 302.68,-368.02 322.6,-358.22"/>
+<polygon fill="black" stroke="black" points="323.96,-361.45 331.38,-353.9 320.87,-355.17 323.96,-361.45"/>
+</g>
+<!-- linear_8&#45;&gt;scaled_dot_product_attention_1 -->
+<g id="edge11" class="edge">
+<title>linear_8&#45;&gt;scaled_dot_product_attention_1</title>
+<path fill="none" stroke="black" d="M374.12,-388.33C374.12,-381.02 374.12,-372.6 374.12,-364.56"/>
+<polygon fill="black" stroke="black" points="377.63,-364.74 374.13,-354.74 370.63,-364.74 377.63,-364.74"/>
+</g>
+<!-- linear_9 -->
+<g id="node11" class="node">
+<title>linear_9</title>
+<path fill="#7fff7f" stroke="black" d="M475.88,-275C475.88,-275 386.38,-275 386.38,-275 380.38,-275 374.38,-269 374.38,-263 374.38,-263 374.38,-245.25 374.38,-245.25 374.38,-239.25 380.38,-233.25 386.38,-233.25 386.38,-233.25 475.88,-233.25 475.88,-233.25 481.88,-233.25 487.88,-239.25 487.88,-245.25 487.88,-245.25 487.88,-263 487.88,-263 487.88,-269 481.88,-275 475.88,-275"/>
+<text xml:space="preserve" text-anchor="middle" x="431.12" y="-261.5" font-family="Helvetica,sans-Serif" font-size="10.00">linear_9</text>
+<text xml:space="preserve" text-anchor="middle" x="431.12" y="-250.25" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 50.000</text>
+<text xml:space="preserve" text-anchor="middle" x="431.12" y="-239" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 3.709 Min: 0.009</text>
+</g>
+<!-- scaled_dot_product_attention_1&#45;&gt;linear_9 -->
+<g id="edge13" class="edge">
+<title>scaled_dot_product_attention_1&#45;&gt;linear_9</title>
+<path fill="none" stroke="black" d="M389.4,-310.58C395.41,-302.59 402.42,-293.27 408.96,-284.58"/>
+<polygon fill="black" stroke="black" points="411.68,-286.78 414.9,-276.69 406.09,-282.58 411.68,-286.78"/>
+</g>
+<!-- linear_9&#45;&gt;layer_norm_3 -->
+<g id="edge14" class="edge">
+<title>linear_9&#45;&gt;layer_norm_3</title>
+<path fill="none" stroke="black" d="M443.18,-232.83C447.82,-225.01 453.23,-215.92 458.3,-207.38"/>
+<polygon fill="black" stroke="black" points="461.16,-209.42 463.26,-199.03 455.14,-205.84 461.16,-209.42"/>
+</g>
+<!-- linear_10 -->
+<g id="node13" class="node">
+<title>linear_10</title>
+<path fill="#7fff7f" stroke="black" d="M530.25,-119.5C530.25,-119.5 422,-119.5 422,-119.5 416,-119.5 410,-113.5 410,-107.5 410,-107.5 410,-89.75 410,-89.75 410,-83.75 416,-77.75 422,-77.75 422,-77.75 530.25,-77.75 530.25,-77.75 536.25,-77.75 542.25,-83.75 542.25,-89.75 542.25,-89.75 542.25,-107.5 542.25,-107.5 542.25,-113.5 536.25,-119.5 530.25,-119.5"/>
+<text xml:space="preserve" text-anchor="middle" x="476.12" y="-106" font-family="Helvetica,sans-Serif" font-size="10.00">linear_10</text>
+<text xml:space="preserve" text-anchor="middle" x="476.12" y="-94.75" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 50.000</text>
+<text xml:space="preserve" text-anchor="middle" x="476.12" y="-83.5" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 2.226 Min: 1.327e&#45;04</text>
+</g>
+<!-- layer_norm_3&#45;&gt;linear_10 -->
+<g id="edge16" class="edge">
+<title>layer_norm_3&#45;&gt;linear_10</title>
+<path fill="none" stroke="black" d="M476.12,-155.08C476.12,-147.77 476.12,-139.35 476.12,-131.31"/>
+<polygon fill="black" stroke="black" points="479.63,-131.49 476.13,-121.49 472.63,-131.49 479.63,-131.49"/>
+</g>
+<!-- gelu_1 -->
+<g id="node14" class="node">
+<title>gelu_1</title>
+<path fill="#7fff7f" stroke="black" d="M530.25,-41.75C530.25,-41.75 422,-41.75 422,-41.75 416,-41.75 410,-35.75 410,-29.75 410,-29.75 410,-12 410,-12 410,-6 416,0 422,0 422,0 530.25,0 530.25,0 536.25,0 542.25,-6 542.25,-12 542.25,-12 542.25,-29.75 542.25,-29.75 542.25,-35.75 536.25,-41.75 530.25,-41.75"/>
+<text xml:space="preserve" text-anchor="middle" x="476.12" y="-28.25" font-family="Helvetica,sans-Serif" font-size="10.00">gelu_1</text>
+<text xml:space="preserve" text-anchor="middle" x="476.12" y="-17" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 50.000</text>
+<text xml:space="preserve" text-anchor="middle" x="476.12" y="-5.75" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 1.894 Min: 2.596e&#45;05</text>
+</g>
+<!-- linear_10&#45;&gt;gelu_1 -->
+<g id="edge17" class="edge">
+<title>linear_10&#45;&gt;gelu_1</title>
+<path fill="none" stroke="black" d="M476.12,-77.33C476.12,-70.02 476.12,-61.6 476.12,-53.56"/>
+<polygon fill="black" stroke="black" points="479.63,-53.74 476.13,-43.74 472.63,-53.74 479.63,-53.74"/>
+</g>
+</g>
+</svg>
+
+<svg x="1672" y="54" width="585pt" height="846pt"
+ viewBox="0.00 0.00 585.00 846.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 842)">
+<title>DLBacktrace_Page3</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-842 580.5,-842 580.5,4 -4,4"/>
+<text xml:space="preserve" text-anchor="middle" x="288.25" y="-820.7" font-family="Times,serif" font-size="14.00">DLBacktrace Graph &#45; Page 3/4</text>
+<!-- gelu_1 -->
+<g id="node1" class="node">
+<title>gelu_1</title>
+<path fill="lightgray" stroke="black" stroke-dasharray="5,2" d="M259.25,-813.5C259.25,-813.5 211,-813.5 211,-813.5 205,-813.5 199,-807.5 199,-801.5 199,-801.5 199,-789.5 199,-789.5 199,-783.5 205,-777.5 211,-777.5 211,-777.5 259.25,-777.5 259.25,-777.5 265.25,-777.5 271.25,-783.5 271.25,-789.5 271.25,-789.5 271.25,-801.5 271.25,-801.5 271.25,-807.5 265.25,-813.5 259.25,-813.5"/>
+<text xml:space="preserve" text-anchor="middle" x="235.12" y="-797.25" font-family="Helvetica,sans-Serif" font-size="10.00">gelu_1</text>
+<text xml:space="preserve" text-anchor="middle" x="235.12" y="-786" font-family="Helvetica,sans-Serif" font-size="10.00">(earlier page)</text>
+</g>
+<!-- linear_11 -->
+<g id="node4" class="node">
+<title>linear_11</title>
+<path fill="#7fff7f" stroke="black" d="M289.25,-741.5C289.25,-741.5 181,-741.5 181,-741.5 175,-741.5 169,-735.5 169,-729.5 169,-729.5 169,-711.75 169,-711.75 169,-705.75 175,-699.75 181,-699.75 181,-699.75 289.25,-699.75 289.25,-699.75 295.25,-699.75 301.25,-705.75 301.25,-711.75 301.25,-711.75 301.25,-729.5 301.25,-729.5 301.25,-735.5 295.25,-741.5 289.25,-741.5"/>
+<text xml:space="preserve" text-anchor="middle" x="235.12" y="-728" font-family="Helvetica,sans-Serif" font-size="10.00">linear_11</text>
+<text xml:space="preserve" text-anchor="middle" x="235.12" y="-716.75" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 50.000</text>
+<text xml:space="preserve" text-anchor="middle" x="235.12" y="-705.5" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 1.894 Min: 2.596e&#45;05</text>
+</g>
+<!-- gelu_1&#45;&gt;linear_11 -->
+<g id="edge1" class="edge">
+<title>gelu_1&#45;&gt;linear_11</title>
+<path fill="none" stroke="black" d="M235.12,-777.23C235.12,-770.02 235.12,-761.41 235.12,-753.15"/>
+<polygon fill="black" stroke="black" points="238.63,-753.39 235.13,-743.39 231.63,-753.39 238.63,-753.39"/>
+</g>
+<!-- layer_norm_3 -->
+<g id="node2" class="node">
+<title>layer_norm_3</title>
+<path fill="lightgray" stroke="black" stroke-dasharray="5,2" d="M385.38,-738.62C385.38,-738.62 334.88,-738.62 334.88,-738.62 328.88,-738.62 322.88,-732.62 322.88,-726.62 322.88,-726.62 322.88,-714.62 322.88,-714.62 322.88,-708.62 328.88,-702.62 334.88,-702.62 334.88,-702.62 385.38,-702.62 385.38,-702.62 391.38,-702.62 397.38,-708.62 397.38,-714.62 397.38,-714.62 397.38,-726.62 397.38,-726.62 397.38,-732.62 391.38,-738.62 385.38,-738.62"/>
+<text xml:space="preserve" text-anchor="middle" x="360.12" y="-722.38" font-family="Helvetica,sans-Serif" font-size="10.00">layer_norm_3</text>
+<text xml:space="preserve" text-anchor="middle" x="360.12" y="-711.12" font-family="Helvetica,sans-Serif" font-size="10.00">(earlier page)</text>
+</g>
+<!-- layer_norm_4 -->
+<g id="node5" class="node">
+<title>layer_norm_4</title>
+<path fill="#00ff00" stroke="black" d="M347.12,-663.75C347.12,-663.75 247.12,-663.75 247.12,-663.75 241.12,-663.75 235.12,-657.75 235.12,-651.75 235.12,-651.75 235.12,-634 235.12,-634 235.12,-628 241.12,-622 247.12,-622 247.12,-622 347.12,-622 347.12,-622 353.12,-622 359.12,-628 359.12,-634 359.12,-634 359.12,-651.75 359.12,-651.75 359.12,-657.75 353.12,-663.75 347.12,-663.75"/>
+<text xml:space="preserve" text-anchor="middle" x="297.12" y="-650.25" font-family="Helvetica,sans-Serif" font-size="10.00">layer_norm_4</text>
+<text xml:space="preserve" text-anchor="middle" x="297.12" y="-639" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 100.000</text>
+<text xml:space="preserve" text-anchor="middle" x="297.12" y="-627.75" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 100.000 Min: 0.000</text>
+</g>
+<!-- layer_norm_3&#45;&gt;layer_norm_4 -->
+<g id="edge3" class="edge">
+<title>layer_norm_3&#45;&gt;layer_norm_4</title>
+<path fill="none" stroke="black" d="M345.83,-702.44C338.6,-693.75 329.63,-682.96 321.37,-673.02"/>
+<polygon fill="black" stroke="black" points="324.1,-670.84 315.01,-665.38 318.72,-675.31 324.1,-670.84"/>
+</g>
+<!-- attention_mask -->
+<g id="node3" class="node">
+<title>attention_mask</title>
+<path fill="lightgray" stroke="black" stroke-dasharray="5,2" d="M533.5,-583.12C533.5,-583.12 474.75,-583.12 474.75,-583.12 468.75,-583.12 462.75,-577.12 462.75,-571.12 462.75,-571.12 462.75,-559.12 462.75,-559.12 462.75,-553.12 468.75,-547.12 474.75,-547.12 474.75,-547.12 533.5,-547.12 533.5,-547.12 539.5,-547.12 545.5,-553.12 545.5,-559.12 545.5,-559.12 545.5,-571.12 545.5,-571.12 545.5,-577.12 539.5,-583.12 533.5,-583.12"/>
+<text xml:space="preserve" text-anchor="middle" x="504.12" y="-566.88" font-family="Helvetica,sans-Serif" font-size="10.00">attention_mask</text>
+<text xml:space="preserve" text-anchor="middle" x="504.12" y="-555.62" font-family="Helvetica,sans-Serif" font-size="10.00">(earlier page)</text>
+</g>
+<!-- scaled_dot_product_attention_2 -->
+<g id="node9" class="node">
+<title>scaled_dot_product_attention_2</title>
+<path fill="#7fff7f" stroke="black" d="M439.12,-508.25C439.12,-508.25 309.12,-508.25 309.12,-508.25 303.12,-508.25 297.12,-502.25 297.12,-496.25 297.12,-496.25 297.12,-478.5 297.12,-478.5 297.12,-472.5 303.12,-466.5 309.12,-466.5 309.12,-466.5 439.12,-466.5 439.12,-466.5 445.12,-466.5 451.12,-472.5 451.12,-478.5 451.12,-478.5 451.12,-496.25 451.12,-496.25 451.12,-502.25 445.12,-508.25 439.12,-508.25"/>
+<text xml:space="preserve" text-anchor="middle" x="374.12" y="-494.75" font-family="Helvetica,sans-Serif" font-size="10.00">scaled_dot_product_attention_2</text>
+<text xml:space="preserve" text-anchor="middle" x="374.12" y="-483.5" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 50.000</text>
+<text xml:space="preserve" text-anchor="middle" x="374.12" y="-472.25" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 25.000 Min: 0.000</text>
+</g>
+<!-- attention_mask&#45;&gt;scaled_dot_product_attention_2 -->
+<g id="edge10" class="edge">
+<title>attention_mask&#45;&gt;scaled_dot_product_attention_2</title>
+<path fill="none" stroke="black" d="M474.3,-546.75C457.86,-537.16 437.11,-525.08 418.77,-514.39"/>
+<polygon fill="black" stroke="black" points="420.58,-511.4 410.18,-509.39 417.06,-517.44 420.58,-511.4"/>
+</g>
+<!-- linear_11&#45;&gt;layer_norm_4 -->
+<g id="edge2" class="edge">
+<title>linear_11&#45;&gt;layer_norm_4</title>
+<path fill="none" stroke="black" d="M251.74,-699.33C258.34,-691.26 266.06,-681.83 273.24,-673.05"/>
+<polygon fill="black" stroke="black" points="275.88,-675.36 279.51,-665.4 270.46,-670.92 275.88,-675.36"/>
+</g>
+<!-- linear_12 -->
+<g id="node6" class="node">
+<title>linear_12</title>
+<path fill="#dfffdf" stroke="black" d="M120.25,-586C120.25,-586 12,-586 12,-586 6,-586 0,-580 0,-574 0,-574 0,-556.25 0,-556.25 0,-550.25 6,-544.25 12,-544.25 12,-544.25 120.25,-544.25 120.25,-544.25 126.25,-544.25 132.25,-550.25 132.25,-556.25 132.25,-556.25 132.25,-574 132.25,-574 132.25,-580 126.25,-586 120.25,-586"/>
+<text xml:space="preserve" text-anchor="middle" x="66.12" y="-572.5" font-family="Helvetica,sans-Serif" font-size="10.00">linear_12</text>
+<text xml:space="preserve" text-anchor="middle" x="66.12" y="-561.25" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 12.500</text>
+<text xml:space="preserve" text-anchor="middle" x="66.12" y="-550" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 0.237 Min: 4.954e&#45;04</text>
+</g>
+<!-- layer_norm_4&#45;&gt;linear_12 -->
+<g id="edge4" class="edge">
+<title>layer_norm_4&#45;&gt;linear_12</title>
+<path fill="none" stroke="black" d="M235.22,-621.58C205.57,-611.85 169.87,-600.15 138.93,-590"/>
+<polygon fill="black" stroke="black" points="140.23,-586.74 129.64,-586.95 138.05,-593.39 140.23,-586.74"/>
+</g>
+<!-- linear_13 -->
+<g id="node7" class="node">
+<title>linear_13</title>
+<path fill="#dfffdf" stroke="black" d="M274.25,-586C274.25,-586 166,-586 166,-586 160,-586 154,-580 154,-574 154,-574 154,-556.25 154,-556.25 154,-550.25 160,-544.25 166,-544.25 166,-544.25 274.25,-544.25 274.25,-544.25 280.25,-544.25 286.25,-550.25 286.25,-556.25 286.25,-556.25 286.25,-574 286.25,-574 286.25,-580 280.25,-586 274.25,-586"/>
+<text xml:space="preserve" text-anchor="middle" x="220.12" y="-572.5" font-family="Helvetica,sans-Serif" font-size="10.00">linear_13</text>
+<text xml:space="preserve" text-anchor="middle" x="220.12" y="-561.25" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 12.500</text>
+<text xml:space="preserve" text-anchor="middle" x="220.12" y="-550" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 0.245 Min: 4.953e&#45;04</text>
+</g>
+<!-- layer_norm_4&#45;&gt;linear_13 -->
+<g id="edge5" class="edge">
+<title>layer_norm_4&#45;&gt;linear_13</title>
+<path fill="none" stroke="black" d="M276.49,-621.58C268.03,-613.25 258.1,-603.48 248.94,-594.47"/>
+<polygon fill="black" stroke="black" points="251.48,-592.06 241.9,-587.54 246.57,-597.05 251.48,-592.06"/>
+</g>
+<!-- linear_14 -->
+<g id="node8" class="node">
+<title>linear_14</title>
+<path fill="#bfffbf" stroke="black" d="M428.25,-586C428.25,-586 320,-586 320,-586 314,-586 308,-580 308,-574 308,-574 308,-556.25 308,-556.25 308,-550.25 314,-544.25 320,-544.25 320,-544.25 428.25,-544.25 428.25,-544.25 434.25,-544.25 440.25,-550.25 440.25,-556.25 440.25,-556.25 440.25,-574 440.25,-574 440.25,-580 434.25,-586 428.25,-586"/>
+<text xml:space="preserve" text-anchor="middle" x="374.12" y="-572.5" font-family="Helvetica,sans-Serif" font-size="10.00">linear_14</text>
+<text xml:space="preserve" text-anchor="middle" x="374.12" y="-561.25" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 25.000</text>
+<text xml:space="preserve" text-anchor="middle" x="374.12" y="-550" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 0.458 Min: 8.362e&#45;04</text>
+</g>
+<!-- layer_norm_4&#45;&gt;linear_14 -->
+<g id="edge6" class="edge">
+<title>layer_norm_4&#45;&gt;linear_14</title>
+<path fill="none" stroke="black" d="M317.76,-621.58C326.22,-613.25 336.15,-603.48 345.31,-594.47"/>
+<polygon fill="black" stroke="black" points="347.68,-597.05 352.35,-587.54 342.77,-592.06 347.68,-597.05"/>
+</g>
+<!-- layer_norm_5 -->
+<g id="node11" class="node">
+<title>layer_norm_5</title>
+<path fill="#00ff00" stroke="black" d="M526.12,-352.75C526.12,-352.75 426.12,-352.75 426.12,-352.75 420.12,-352.75 414.12,-346.75 414.12,-340.75 414.12,-340.75 414.12,-323 414.12,-323 414.12,-317 420.12,-311 426.12,-311 426.12,-311 526.12,-311 526.12,-311 532.12,-311 538.12,-317 538.12,-323 538.12,-323 538.12,-340.75 538.12,-340.75 538.12,-346.75 532.12,-352.75 526.12,-352.75"/>
+<text xml:space="preserve" text-anchor="middle" x="476.12" y="-339.25" font-family="Helvetica,sans-Serif" font-size="10.00">layer_norm_5</text>
+<text xml:space="preserve" text-anchor="middle" x="476.12" y="-328" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 100.000</text>
+<text xml:space="preserve" text-anchor="middle" x="476.12" y="-316.75" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 100.000 Min: 0.000</text>
+</g>
+<!-- layer_norm_4&#45;&gt;layer_norm_5 -->
+<g id="edge13" class="edge">
+<title>layer_norm_4&#45;&gt;layer_norm_5</title>
+<path fill="none" stroke="black" d="M359.6,-637.24C428.21,-630.69 531.89,-616.02 556.12,-586 610.9,-518.14 541,-412.31 500.8,-361.71"/>
+<polygon fill="black" stroke="black" points="503.64,-359.66 494.63,-354.1 498.21,-364.07 503.64,-359.66"/>
+</g>
+<!-- linear_12&#45;&gt;scaled_dot_product_attention_2 -->
+<g id="edge7" class="edge">
+<title>linear_12&#45;&gt;scaled_dot_product_attention_2</title>
+<path fill="none" stroke="black" d="M132.47,-546.93C136.07,-546.02 139.64,-545.12 143.12,-544.25 190.17,-532.49 242.7,-519.75 285.77,-509.41"/>
+<polygon fill="black" stroke="black" points="286.41,-512.86 295.32,-507.12 284.78,-506.05 286.41,-512.86"/>
+</g>
+<!-- linear_13&#45;&gt;scaled_dot_product_attention_2 -->
+<g id="edge8" class="edge">
+<title>linear_13&#45;&gt;scaled_dot_product_attention_2</title>
+<path fill="none" stroke="black" d="M261.39,-543.83C280.21,-534.57 302.68,-523.52 322.6,-513.72"/>
+<polygon fill="black" stroke="black" points="323.96,-516.95 331.38,-509.4 320.87,-510.67 323.96,-516.95"/>
+</g>
+<!-- linear_14&#45;&gt;scaled_dot_product_attention_2 -->
+<g id="edge9" class="edge">
+<title>linear_14&#45;&gt;scaled_dot_product_attention_2</title>
+<path fill="none" stroke="black" d="M374.12,-543.83C374.12,-536.52 374.12,-528.1 374.12,-520.06"/>
+<polygon fill="black" stroke="black" points="377.63,-520.24 374.13,-510.24 370.63,-520.24 377.63,-520.24"/>
+</g>
+<!-- linear_15 -->
+<g id="node10" class="node">
+<title>linear_15</title>
+<path fill="#7fff7f" stroke="black" d="M475.88,-430.5C475.88,-430.5 386.38,-430.5 386.38,-430.5 380.38,-430.5 374.38,-424.5 374.38,-418.5 374.38,-418.5 374.38,-400.75 374.38,-400.75 374.38,-394.75 380.38,-388.75 386.38,-388.75 386.38,-388.75 475.88,-388.75 475.88,-388.75 481.88,-388.75 487.88,-394.75 487.88,-400.75 487.88,-400.75 487.88,-418.5 487.88,-418.5 487.88,-424.5 481.88,-430.5 475.88,-430.5"/>
+<text xml:space="preserve" text-anchor="middle" x="431.12" y="-417" font-family="Helvetica,sans-Serif" font-size="10.00">linear_15</text>
+<text xml:space="preserve" text-anchor="middle" x="431.12" y="-405.75" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 50.000</text>
+<text xml:space="preserve" text-anchor="middle" x="431.12" y="-394.5" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 4.432 Min: 0.000</text>
+</g>
+<!-- scaled_dot_product_attention_2&#45;&gt;linear_15 -->
+<g id="edge11" class="edge">
+<title>scaled_dot_product_attention_2&#45;&gt;linear_15</title>
+<path fill="none" stroke="black" d="M389.4,-466.08C395.41,-458.09 402.42,-448.77 408.96,-440.08"/>
+<polygon fill="black" stroke="black" points="411.68,-442.28 414.9,-432.19 406.09,-438.08 411.68,-442.28"/>
+</g>
+<!-- linear_15&#45;&gt;layer_norm_5 -->
+<g id="edge12" class="edge">
+<title>linear_15&#45;&gt;layer_norm_5</title>
+<path fill="none" stroke="black" d="M443.18,-388.33C447.82,-380.51 453.23,-371.42 458.3,-362.88"/>
+<polygon fill="black" stroke="black" points="461.16,-364.92 463.26,-354.53 455.14,-361.34 461.16,-364.92"/>
+</g>
+<!-- linear_16 -->
+<g id="node12" class="node">
+<title>linear_16</title>
+<path fill="#7fff7f" stroke="black" d="M475.88,-275C475.88,-275 386.38,-275 386.38,-275 380.38,-275 374.38,-269 374.38,-263 374.38,-263 374.38,-245.25 374.38,-245.25 374.38,-239.25 380.38,-233.25 386.38,-233.25 386.38,-233.25 475.88,-233.25 475.88,-233.25 481.88,-233.25 487.88,-239.25 487.88,-245.25 487.88,-245.25 487.88,-263 487.88,-263 487.88,-269 481.88,-275 475.88,-275"/>
+<text xml:space="preserve" text-anchor="middle" x="431.12" y="-261.5" font-family="Helvetica,sans-Serif" font-size="10.00">linear_16</text>
+<text xml:space="preserve" text-anchor="middle" x="431.12" y="-250.25" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 50.000</text>
+<text xml:space="preserve" text-anchor="middle" x="431.12" y="-239" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 4.076 Min: 0.000</text>
+</g>
+<!-- layer_norm_5&#45;&gt;linear_16 -->
+<g id="edge14" class="edge">
+<title>layer_norm_5&#45;&gt;linear_16</title>
+<path fill="none" stroke="black" d="M464.07,-310.58C459.43,-302.76 454.02,-293.67 448.95,-285.13"/>
+<polygon fill="black" stroke="black" points="452.11,-283.59 443.99,-276.78 446.09,-287.17 452.11,-283.59"/>
+</g>
+<!-- layer_norm_6 -->
+<g id="node15" class="node">
+<title>layer_norm_6</title>
+<path fill="#00ff00" stroke="black" d="M526.12,-41.75C526.12,-41.75 426.12,-41.75 426.12,-41.75 420.12,-41.75 414.12,-35.75 414.12,-29.75 414.12,-29.75 414.12,-12 414.12,-12 414.12,-6 420.12,0 426.12,0 426.12,0 526.12,0 526.12,0 532.12,0 538.12,-6 538.12,-12 538.12,-12 538.12,-29.75 538.12,-29.75 538.12,-35.75 532.12,-41.75 526.12,-41.75"/>
+<text xml:space="preserve" text-anchor="middle" x="476.12" y="-28.25" font-family="Helvetica,sans-Serif" font-size="10.00">layer_norm_6</text>
+<text xml:space="preserve" text-anchor="middle" x="476.12" y="-17" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 100.000</text>
+<text xml:space="preserve" text-anchor="middle" x="476.12" y="-5.75" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 100.000 Min: 0.000</text>
+</g>
+<!-- layer_norm_5&#45;&gt;layer_norm_6 -->
+<g id="edge18" class="edge">
+<title>layer_norm_5&#45;&gt;layer_norm_6</title>
+<path fill="none" stroke="black" d="M486.76,-310.52C491.56,-300.18 496.7,-287.25 499.12,-275 516.13,-189 516.13,-163.75 499.12,-77.75 497.46,-69.33 494.51,-60.59 491.27,-52.58"/>
+<polygon fill="black" stroke="black" points="494.56,-51.39 487.36,-43.62 488.15,-54.19 494.56,-51.39"/>
+</g>
+<!-- gelu_2 -->
+<g id="node13" class="node">
+<title>gelu_2</title>
+<path fill="#7fff7f" stroke="black" d="M475.88,-197.25C475.88,-197.25 386.38,-197.25 386.38,-197.25 380.38,-197.25 374.38,-191.25 374.38,-185.25 374.38,-185.25 374.38,-167.5 374.38,-167.5 374.38,-161.5 380.38,-155.5 386.38,-155.5 386.38,-155.5 475.88,-155.5 475.88,-155.5 481.88,-155.5 487.88,-161.5 487.88,-167.5 487.88,-167.5 487.88,-185.25 487.88,-185.25 487.88,-191.25 481.88,-197.25 475.88,-197.25"/>
+<text xml:space="preserve" text-anchor="middle" x="431.12" y="-183.75" font-family="Helvetica,sans-Serif" font-size="10.00">gelu_2</text>
+<text xml:space="preserve" text-anchor="middle" x="431.12" y="-172.5" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 50.000</text>
+<text xml:space="preserve" text-anchor="middle" x="431.12" y="-161.25" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 3.766 Min: 0.000</text>
+</g>
+<!-- linear_16&#45;&gt;gelu_2 -->
+<g id="edge15" class="edge">
+<title>linear_16&#45;&gt;gelu_2</title>
+<path fill="none" stroke="black" d="M431.12,-232.83C431.12,-225.52 431.12,-217.1 431.12,-209.06"/>
+<polygon fill="black" stroke="black" points="434.63,-209.24 431.13,-199.24 427.63,-209.24 434.63,-209.24"/>
+</g>
+<!-- linear_17 -->
+<g id="node14" class="node">
+<title>linear_17</title>
+<path fill="#7fff7f" stroke="black" d="M475.88,-119.5C475.88,-119.5 386.38,-119.5 386.38,-119.5 380.38,-119.5 374.38,-113.5 374.38,-107.5 374.38,-107.5 374.38,-89.75 374.38,-89.75 374.38,-83.75 380.38,-77.75 386.38,-77.75 386.38,-77.75 475.88,-77.75 475.88,-77.75 481.88,-77.75 487.88,-83.75 487.88,-89.75 487.88,-89.75 487.88,-107.5 487.88,-107.5 487.88,-113.5 481.88,-119.5 475.88,-119.5"/>
+<text xml:space="preserve" text-anchor="middle" x="431.12" y="-106" font-family="Helvetica,sans-Serif" font-size="10.00">linear_17</text>
+<text xml:space="preserve" text-anchor="middle" x="431.12" y="-94.75" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 50.000</text>
+<text xml:space="preserve" text-anchor="middle" x="431.12" y="-83.5" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 3.766 Min: 0.000</text>
+</g>
+<!-- gelu_2&#45;&gt;linear_17 -->
+<g id="edge16" class="edge">
+<title>gelu_2&#45;&gt;linear_17</title>
+<path fill="none" stroke="black" d="M431.12,-155.08C431.12,-147.77 431.12,-139.35 431.12,-131.31"/>
+<polygon fill="black" stroke="black" points="434.63,-131.49 431.13,-121.49 427.63,-131.49 434.63,-131.49"/>
+</g>
+<!-- linear_17&#45;&gt;layer_norm_6 -->
+<g id="edge17" class="edge">
+<title>linear_17&#45;&gt;layer_norm_6</title>
+<path fill="none" stroke="black" d="M443.18,-77.33C447.82,-69.51 453.23,-60.42 458.3,-51.88"/>
+<polygon fill="black" stroke="black" points="461.16,-53.92 463.26,-43.53 455.14,-50.34 461.16,-53.92"/>
+</g>
+</g>
+</svg>
+
+<svg x="24" y="1206" width="193pt" height="380pt"
+ viewBox="0.00 0.00 193.00 380.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 375.5)">
+<title>DLBacktrace_Page4</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-375.5 188.75,-375.5 188.75,4 -4,4"/>
+<text xml:space="preserve" text-anchor="middle" x="92.38" y="-354.2" font-family="Times,serif" font-size="14.00">DLBacktrace Graph &#45; Page 4/4</text>
+<!-- layer_norm_6 -->
+<g id="node1" class="node">
+<title>layer_norm_6</title>
+<path fill="lightgray" stroke="black" stroke-dasharray="5,2" d="M117.62,-347C117.62,-347 67.12,-347 67.12,-347 61.12,-347 55.12,-341 55.12,-335 55.12,-335 55.12,-323 55.12,-323 55.12,-317 61.12,-311 67.12,-311 67.12,-311 117.62,-311 117.62,-311 123.62,-311 129.62,-317 129.62,-323 129.62,-323 129.62,-335 129.62,-335 129.62,-341 123.62,-347 117.62,-347"/>
+<text xml:space="preserve" text-anchor="middle" x="92.38" y="-330.75" font-family="Helvetica,sans-Serif" font-size="10.00">layer_norm_6</text>
+<text xml:space="preserve" text-anchor="middle" x="92.38" y="-319.5" font-family="Helvetica,sans-Serif" font-size="10.00">(earlier page)</text>
+</g>
+<!-- linear_18 -->
+<g id="node2" class="node">
+<title>linear_18</title>
+<path fill="#00ff00" stroke="black" d="M139.75,-275C139.75,-275 45,-275 45,-275 39,-275 33,-269 33,-263 33,-263 33,-245.25 33,-245.25 33,-239.25 39,-233.25 45,-233.25 45,-233.25 139.75,-233.25 139.75,-233.25 145.75,-233.25 151.75,-239.25 151.75,-245.25 151.75,-245.25 151.75,-263 151.75,-263 151.75,-269 145.75,-275 139.75,-275"/>
+<text xml:space="preserve" text-anchor="middle" x="92.38" y="-261.5" font-family="Helvetica,sans-Serif" font-size="10.00">linear_18</text>
+<text xml:space="preserve" text-anchor="middle" x="92.38" y="-250.25" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 100.000</text>
+<text xml:space="preserve" text-anchor="middle" x="92.38" y="-239" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 10.177 Min: 0.045</text>
+</g>
+<!-- layer_norm_6&#45;&gt;linear_18 -->
+<g id="edge1" class="edge">
+<title>layer_norm_6&#45;&gt;linear_18</title>
+<path fill="none" stroke="black" d="M92.38,-310.73C92.38,-303.52 92.38,-294.91 92.38,-286.65"/>
+<polygon fill="black" stroke="black" points="95.88,-286.89 92.38,-276.89 88.88,-286.89 95.88,-286.89"/>
+</g>
+<!-- tanh -->
+<g id="node3" class="node">
+<title>tanh</title>
+<path fill="#00ff00" stroke="black" d="M139.75,-197.25C139.75,-197.25 45,-197.25 45,-197.25 39,-197.25 33,-191.25 33,-185.25 33,-185.25 33,-167.5 33,-167.5 33,-161.5 39,-155.5 45,-155.5 45,-155.5 139.75,-155.5 139.75,-155.5 145.75,-155.5 151.75,-161.5 151.75,-167.5 151.75,-167.5 151.75,-185.25 151.75,-185.25 151.75,-191.25 145.75,-197.25 139.75,-197.25"/>
+<text xml:space="preserve" text-anchor="middle" x="92.38" y="-183.75" font-family="Helvetica,sans-Serif" font-size="10.00">tanh</text>
+<text xml:space="preserve" text-anchor="middle" x="92.38" y="-172.5" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 100.000</text>
+<text xml:space="preserve" text-anchor="middle" x="92.38" y="-161.25" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 16.103 Min: 0.043</text>
+</g>
+<!-- linear_18&#45;&gt;tanh -->
+<g id="edge2" class="edge">
+<title>linear_18&#45;&gt;tanh</title>
+<path fill="none" stroke="black" d="M92.38,-232.83C92.38,-225.52 92.38,-217.1 92.38,-209.06"/>
+<polygon fill="black" stroke="black" points="95.88,-209.24 92.38,-199.24 88.88,-209.24 95.88,-209.24"/>
+</g>
+<!-- linear_19 -->
+<g id="node4" class="node">
+<title>linear_19</title>
+<path fill="#00ff00" stroke="black" d="M139.75,-119.5C139.75,-119.5 45,-119.5 45,-119.5 39,-119.5 33,-113.5 33,-107.5 33,-107.5 33,-89.75 33,-89.75 33,-83.75 39,-77.75 45,-77.75 45,-77.75 139.75,-77.75 139.75,-77.75 145.75,-77.75 151.75,-83.75 151.75,-89.75 151.75,-89.75 151.75,-107.5 151.75,-107.5 151.75,-113.5 145.75,-119.5 139.75,-119.5"/>
+<text xml:space="preserve" text-anchor="middle" x="92.38" y="-106" font-family="Helvetica,sans-Serif" font-size="10.00">linear_19</text>
+<text xml:space="preserve" text-anchor="middle" x="92.38" y="-94.75" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 100.000</text>
+<text xml:space="preserve" text-anchor="middle" x="92.38" y="-83.5" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 16.103 Min: 0.043</text>
+</g>
+<!-- tanh&#45;&gt;linear_19 -->
+<g id="edge3" class="edge">
+<title>tanh&#45;&gt;linear_19</title>
+<path fill="none" stroke="black" d="M92.38,-155.08C92.38,-147.77 92.38,-139.35 92.38,-131.31"/>
+<polygon fill="black" stroke="black" points="95.88,-131.49 92.38,-121.49 88.88,-131.49 95.88,-131.49"/>
+</g>
+<!-- output -->
+<g id="node5" class="node">
+<title>output</title>
+<path fill="#00ff00" stroke="black" d="M142.38,-41.75C142.38,-41.75 42.38,-41.75 42.38,-41.75 36.37,-41.75 30.38,-35.75 30.38,-29.75 30.38,-29.75 30.38,-12 30.38,-12 30.38,-6 36.38,0 42.38,0 42.38,0 142.38,0 142.38,0 148.38,0 154.38,-6 154.38,-12 154.38,-12 154.38,-29.75 154.38,-29.75 154.38,-35.75 148.38,-41.75 142.38,-41.75"/>
+<text xml:space="preserve" text-anchor="middle" x="92.38" y="-28.25" font-family="Helvetica,sans-Serif" font-size="10.00">output</text>
+<text xml:space="preserve" text-anchor="middle" x="92.38" y="-17" font-family="Helvetica,sans-Serif" font-size="10.00">Sum: 100.000</text>
+<text xml:space="preserve" text-anchor="middle" x="92.38" y="-5.75" font-family="Helvetica,sans-Serif" font-size="10.00">Max: 100.000 Min: 0.000</text>
+</g>
+<!-- linear_19&#45;&gt;output -->
+<g id="edge4" class="edge">
+<title>linear_19&#45;&gt;output</title>
+<path fill="none" stroke="black" d="M92.38,-77.33C92.38,-70.02 92.38,-61.6 92.38,-53.56"/>
+<polygon fill="black" stroke="black" points="95.88,-53.74 92.38,-43.74 88.88,-53.74 95.88,-53.74"/>
+</g>
+</g>
+</svg>
+
+</svg>

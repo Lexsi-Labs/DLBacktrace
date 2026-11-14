@@ -1,0 +1,57 @@
+# Builds the bundled CUDA extensions (Linear, Embedding, SelfAttention) for every
+# supported Python against the pinned torch, so the .so files shipped in the package
+# can be reproduced. It runs when the extension sources or this file change and
+# uploads the built files as artifacts; a maintainer commits them next to setup.py.
+#
+# The extensions must match torch exactly (torch==2.13.0, whose PyPI wheels use
+# CUDA 13), so they are built with the CUDA 13.0 toolkit from conda-forge.
+name: build-compiled-ops
+
+on:
+  pull_request:
+    paths:
+      - "dl_backtrace/pytorch_backtrace/dlbacktrace/utils/cuda_utils/*/cuda_version_v*/**"
+      - ".github/workflows/build-compiled-ops.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04  # glibc 2.35, so the files load on older distributions too
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: CUDA 13.0 toolkit
+        run: |
+          curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xj -C "$RUNNER_TEMP" bin/micromamba
+          "$RUNNER_TEMP/bin/micromamba" create -y -q -r "$RUNNER_TEMP/mamba" -p "$RUNNER_TEMP/cu13" -c conda-forge \
+            cuda-version=13.0 cuda-nvcc cuda-cudart-dev libcublas-dev libcusparse-dev libcusolver-dev \
+            libcurand-dev libcufft-dev cuda-nvtx-dev cuda-profiler-api
+          echo "CUDA_HOME=$RUNNER_TEMP/cu13" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/cu13/bin" >> "$GITHUB_PATH"
+
+      - name: Install torch
+        run: python -m pip install torch==2.13.0 setuptools ninja numpy
+
+      - name: Build
+        run: |
+          for op in Linear_v3/cuda_version_v3 Embedded/cuda_version_v2 SelfAttention/cuda_version_v3; do
+            (cd "dl_backtrace/pytorch_backtrace/dlbacktrace/utils/cuda_utils/$op" && rm -f ./*.so && MAX_JOBS=4 python setup.py -q build_ext --inplace)
+          done
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: compiled-ops-py${{ matrix.python-version }}
+          path: dl_backtrace/pytorch_backtrace/dlbacktrace/utils/cuda_utils/*/cuda_version_v*/*.cpython-*.so
+          if-no-files-found: error

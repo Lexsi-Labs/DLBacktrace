@@ -101,11 +101,7 @@ def calculate_wt_fc(
         n_sum = torch.where(t_eq_p, torch.zeros_like(n_sum), n_sum)
         p_sum = torch.where(t_eq_n, torch.zeros_like(p_sum), p_sum)
     
-    # Avoid divide by zero (vectorized)
-    p_sum = torch.where(p_sum == 0, torch.ones_like(p_sum), p_sum)
-    n_sum = torch.where(n_sum == 0, torch.ones_like(n_sum), n_sum)
-    
-    # Compute aggregated weights (vectorized)
+    # Compute aggregated weights from the real sums (an empty side gets none)
     total_sum = p_sum + n_sum + pbias + nbias
     
     # Handle edge case where total_sum might be zero
@@ -122,6 +118,10 @@ def calculate_wt_fc(
         ((n_sum + nbias) / total_sum) * (n_sum / (n_sum + nbias)),
         torch.zeros_like(n_sum)
     )
+
+    # Avoid divide by zero below (after the weights, so an empty side keeps none)
+    p_sum = torch.where(p_sum == 0, torch.ones_like(p_sum), p_sum)
+    n_sum = torch.where(n_sum == 0, torch.ones_like(n_sum), n_sum)
     
     # Expand for broadcasting: [batch_size, output_dim] -> [batch_size, output_dim, 1]
     relevance_expanded = relevance_flat.unsqueeze(-1)  # [batch_size, output_dim, 1]

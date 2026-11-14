@@ -14,6 +14,10 @@ Usage:
 
   # Custom port
   python server.py --model allenai/OLMoE-1B-7B-0125-Instruct --port 9000
+
+The server has no authentication and binds to 127.0.0.1 by default. Pass
+--host 0.0.0.0 only on a trusted network. A request's cache_dir must resolve
+inside --cache-root (default: the directory the server starts in).
 """
 
 import argparse
@@ -42,6 +46,20 @@ except ImportError:
     __version__ = "0.1.1"
 
 logger = logging.getLogger("dl_backtrace.server")
+
+# Set by main() so uvicorn workers that re-import this module see the same root
+CACHE_ROOT_ENV = "DLBACKTRACE_CACHE_ROOT"
+
+
+def resolve_cache_dir(cache_dir: str) -> str:
+    """Resolve a request's cache_dir under the cache root; refuse anything outside it with a 400."""
+    root = os.path.realpath(os.environ.get(CACHE_ROOT_ENV) or os.getcwd())
+    path = os.path.realpath(os.path.join(root, cache_dir))
+    if path == root:
+        return root
+    if not path.startswith(os.path.join(root, "")):
+        raise HTTPException(status_code=400, detail="cache_dir must be inside the server's cache root")
+    return path
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -114,7 +132,10 @@ class GenerateRequest(BaseModel):
     )
     cache_dir: str = Field(
         "cache",
-        description="Directory for disk-streamed relevance/scores/IO data (used when relevance_cache_policy='disk')",
+        description=(
+            "Directory for disk-streamed relevance/scores/IO data (used when relevance_cache_policy='disk'). "
+            "Resolved relative to the server's --cache-root and must stay inside it."
+        ),
     )
 
 
@@ -343,13 +364,13 @@ class ServerState:
         logger.info("✅ Server ready — model: %s, backend: %s, device: %s",
                      model_id, backend, device)
 
-    def run_moe_generate(self, req: GenerateRequest) -> Dict[str, Any]:
+    def run_moe_generate(self, req: GenerateRequest, cache_dir: str) -> Dict[str, Any]:
         """Run generation using the MoE Backtrace backend."""
         tokens = self.tokenizer(req.prompt, return_tensors="pt")
         input_ids = tokens["input_ids"].to(self.device)
         attention_mask = tokens["attention_mask"].to(self.device)
 
-        os.makedirs(req.cache_dir, exist_ok=True)
+        os.makedirs(cache_dir, exist_ok=True)
         t0 = time.perf_counter()
         results = self.backtrace_engine.run_task(
             task="generation",
@@ -367,7 +388,7 @@ class ServerState:
             top_p=req.top_p,
             explain_tokens=req.explain_tokens,
             relevance_cache_policy=req.relevance_cache_policy,
-            relevance_cache_dir=req.cache_dir,
+            relevance_cache_dir=cache_dir,
         )
         elapsed = time.perf_counter() - t0
 
@@ -402,10 +423,10 @@ class ServerState:
             "scores_trace": scores_trace,
         }
 
-    def run_pytorch_generate(self, req: GenerateRequest) -> Dict[str, Any]:
+    def run_pytorch_generate(self, req: GenerateRequest, cache_dir: str) -> Dict[str, Any]:
         """Run generation using the PyTorch DLBacktrace backend."""
         from dl_backtrace.pytorch_backtrace import DLBacktrace
-        from torch.export import Dim
+        from dl_backtrace.pytorch_backtrace.dlbacktrace.dlbacktrace import sequence_dynamic_shapes
 
         tokens = self.tokenizer(
             [req.prompt], return_tensors="pt", padding=True, truncation=True,
@@ -414,23 +435,20 @@ class ServerState:
         attention_mask = tokens["attention_mask"]
         input_len = input_ids.shape[1]
 
-        # Dynamic shapes for graph tracing
-        seq_dim = Dim("seq", min=1, max=input_len)
-        dynamic_shapes = {
-            "input_ids":      {0: 1, 1: seq_dim},
-            "attention_mask": {0: 1, 1: seq_dim},
-        }
+        # Trace with a dynamic sequence length: generation feeds longer inputs each
+        # step, and a one-token prompt must not fix the length to 1.
+        sample, dynamic_shapes = sequence_dynamic_shapes((input_ids, attention_mask))
 
         # Initialize DLBacktrace (re-traced per request to handle varying shapes)
         ir = DLBacktrace(
             self.model,
-            (input_ids, attention_mask),
+            sample,
             dynamic_shapes=dynamic_shapes,
             device=self.device,
             verbose=False,
         )
 
-        os.makedirs(req.cache_dir, exist_ok=True)
+        os.makedirs(cache_dir, exist_ok=True)
         t0 = time.perf_counter()
         results = ir.run_task(
             task="generation",
@@ -448,7 +466,7 @@ class ServerState:
             top_p=req.top_p,
             explain_tokens=req.explain_tokens,
             relevance_cache_policy=req.relevance_cache_policy,
-            relevance_cache_dir=req.cache_dir,
+            relevance_cache_dir=cache_dir,
         )
         elapsed = time.perf_counter() - t0
 
@@ -587,14 +605,15 @@ async def generate(req: GenerateRequest):
     Send a prompt and hyperparameters, receive generated text and
     per-token relevance attribution data.
     """
+    cache_dir = resolve_cache_dir(req.cache_dir)
     if not _server_state.ready:
         raise HTTPException(status_code=503, detail="Model not loaded yet")
 
     try:
         if _server_state.backend == "moe":
-            result = _server_state.run_moe_generate(req)
+            result = _server_state.run_moe_generate(req, cache_dir)
         elif _server_state.backend == "pytorch":
-            result = _server_state.run_pytorch_generate(req)
+            result = _server_state.run_pytorch_generate(req, cache_dir)
         else:
             raise HTTPException(
                 status_code=500,
@@ -628,6 +647,7 @@ def parse_args():
             "  python server.py --model allenai/OLMoE-1B-7B-0125-Instruct --device cuda\n"
             "  python server.py --model meta-llama/Llama-3.2-1B --backend pytorch --device cuda\n"
             "  python server.py --model jetmoe/jetmoe-8b --backend moe --port 9000\n"
+            "  python server.py --model jetmoe/jetmoe-8b --host 0.0.0.0 --cache-root /data/dlb-cache\n"
         ),
     )
     parser.add_argument(
@@ -646,8 +666,11 @@ def parse_args():
         help="Device (default: cuda)",
     )
     parser.add_argument(
-        "--host", type=str, default="0.0.0.0",
-        help="Bind host (default: 0.0.0.0)",
+        "--host", type=str, default="127.0.0.1",
+        help=(
+            "Bind host (default: 127.0.0.1). The server has no authentication; "
+            "use --host 0.0.0.0 to accept remote connections only on a trusted network"
+        ),
     )
     parser.add_argument(
         "--port", type=int, default=8000,
@@ -665,6 +688,13 @@ def parse_args():
     parser.add_argument(
         "--cache-dir", type=str, default="cache",
         help="Server-wide default directory for disk-streamed relevance/scores/IO data (default: cache)",
+    )
+    parser.add_argument(
+        "--cache-root", type=str, default=os.environ.get(CACHE_ROOT_ENV, "."),
+        help=(
+            "Directory that every request's cache_dir is resolved under; requests whose "
+            "cache_dir points outside it are rejected (default: the current directory)"
+        ),
     )
     parser.add_argument(
         "--output-dir", type=str, default="results",
@@ -693,6 +723,13 @@ def main():
 
     args = parse_args()
     _cli_args = args
+    # uvicorn imports "dl_backtrace.cli.server:app" by name. Under
+    # `python -m dl_backtrace.cli.server` this file runs as __main__, a different
+    # module object, so set the args where the imported app's lifespan reads them.
+    import dl_backtrace.cli.server as importable
+    importable._cli_args = args
+    args.cache_root = os.path.realpath(args.cache_root)
+    os.environ[CACHE_ROOT_ENV] = args.cache_root
 
     # Resolve --explain-tokens into the right type (mirrors engine.py logic)
     et = args.explain_tokens
@@ -722,6 +759,7 @@ def main():
     print(f"  Address        : http://{args.host}:{args.port}")
     print(f"  Docs           : http://{args.host}:{args.port}/docs")
     print(f"  Cache dir      : {args.cache_dir}")
+    print(f"  Cache root     : {args.cache_root}")
     print(f"  Output dir     : {args.output_dir}")
     print(f"  Explain tokens : {args.explain_tokens_resolved}")
     print(f"  View output    : {args.view_output}")

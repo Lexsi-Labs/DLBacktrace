@@ -88,9 +88,41 @@ def get_relevance_from_child(child, parent, all_wt, node_io):
             log(f"get_rel: child='{child}', parent='{parent}', idx={idx}, slice.shape={r[idx].shape}")
         return r[idx]
     
+    if not _receives_output_relevance(child, parent, getattr(r, "shape", None), node_io):
+        return None
     if DEBUG:
         log(f"get_rel: child='{child}' single-output, shape={r.shape}")
     return r
+
+
+def _receives_output_relevance(child, parent, r_shape, node_io):
+    """The graph output can return several tensors (logits plus KV-cache keys and
+    values when use_cache=True) but carries one relevance array for the scored
+    output. Only the source whose output has that shape receives it; if none
+    matches, every source does, as before."""
+    if child != "output" or r_shape is None:
+        return True
+    sources = node_io.get(child, {}).get("input_sources") or []
+    if len(sources) < 2:
+        return True
+    shapes = {s: tuple(getattr(node_io.get(s, {}).get("output_values"), "shape", ())) for s in sources}
+    matching = [s for s in sources if shapes[s] == tuple(r_shape)]
+    return not matching or parent == matching[0]
+
+
+def slice_end(hp, info):
+    """End of a `slice` node. With a dynamic sequence length it is not a hyperparameter
+    (None) but the node's second input, a size computed at run time."""
+    end = hp.get("end", None)
+    if end is None:
+        vals = info.get("input_values")
+        if isinstance(vals, (list, tuple)) and len(vals) > 1:
+            e = vals[1]
+            if isinstance(e, torch.Tensor) and e.numel() == 1:
+                e = e.item()
+            if isinstance(e, (int, np.integer)) and not isinstance(e, bool):
+                return int(e)
+    return end
 
 
 def align_relevance(r, target_shape, total_relevance=None):
@@ -108,7 +140,13 @@ def align_relevance(r, target_shape, total_relevance=None):
     r = np.array(r, dtype=np.float32)
     original_total = np.sum(r, dtype=np.float32) if total_relevance is None else total_relevance
 
-    # 0) collapse extra leading dims
+    # 0) target is a prefix of r's shape (e.g. embedding relevance [B, T, D] onto
+    #    token ids [B, T]): sum the trailing axes, which keeps every position's share.
+    #    Collapsing the leading axes below mixed positions together.
+    if r.ndim > len(target_shape) and tuple(r.shape[:len(target_shape)]) == tuple(target_shape):
+        r = r.sum(axis=tuple(range(len(target_shape), r.ndim)))
+
+    # 0b) collapse extra leading dims
     while r.ndim > len(target_shape):
         if DEBUG:
             log(f"[INFO] collapsing extra dim → shape: {r.shape[1:]}")
@@ -297,6 +335,190 @@ def align_relevance(r, target_shape, total_relevance=None):
             log(f"[INFO] normalized relevance total from {final_total:.4f} to {original_total:.4f}")
 
     return r
+
+
+def matmul_relevance(R, A, B, a_is_weight=False, b_is_weight=False, eps=1e-6):
+    """Relevance of C = A @ B to A and B (epsilon rule over the terms A[..., i, k] * B[..., k, j]).
+
+    Like elementwise mul, the relevance of each term is split evenly between the two
+    operands, unless one of them is a weight: then the other gets all of it. Works on
+    numpy arrays and torch tensors; the two results sum to R (up to eps).
+    """
+    xp = torch if torch.is_tensor(R) else np
+    C = A @ B
+    C = xp.where(xp.abs(C) < eps, eps * xp.sign(C + (C == 0)), C)
+    S = R / C
+    swap = (lambda t: t.transpose(-1, -2)) if xp is torch else (lambda t: np.swapaxes(t, -1, -2))
+    share_a = 0.0 if a_is_weight else (1.0 if b_is_weight else 0.5)
+    RA = share_a * A * (S @ swap(B))
+    RB = (1.0 - share_a) * B * (swap(A) @ S)
+    return RA, RB
+
+
+# Additive mask entries at or below this are treated as blocked (HF uses the dtype
+# minimum or -inf; older BERT-style masks use -10000).
+_MASKED = -1e4
+
+
+def _respect_attention_mask(RQ, RK, RV, R, mask):
+    """Give masked positions no relevance, keeping each head's totals.
+
+    The attention rule spreads each head's Q, K and V relevance over all positions in
+    proportion to the vectors' values, so padding and future tokens got a share. Here a
+    key (and value) keeps the fraction of its relevance that comes from queries allowed
+    to attend to it, weighted by how much relevance each query carries; a padding
+    position (a key blocked for every later query that is not fully unmasked) gets none
+    as a query either. The positive and the negative parts of each head are then scaled
+    back to their totals. Nothing changes when no position is masked.
+    """
+    xp = torch if torch.is_tensor(RQ) else np
+    m = mask if xp is torch else np.asarray(mask)
+    allowed = m > _MASKED                                    # [.., Tq, Tk], broadcastable
+    if bool(allowed.all()):
+        return RQ, RK, RV
+    absR = R.abs() if xp is torch else np.abs(R)
+    w = absR.sum(-1)                                         # [B, H, Tq] relevance per query
+    allowed = allowed.to(w.dtype) if xp is torch else allowed.astype(w.dtype)
+    allowed = allowed + 0 * w[..., None]                     # broadcast to [B, H, Tq, Tk]
+    wq = w.sum(-1, keepdims=True) if xp is np else w.sum(-1, keepdim=True)
+    seen = (w[..., None] * allowed).sum(-2)                  # [B, H, Tk]
+    f_k = xp.where(wq > 0, seen / xp.where(wq > 0, wq, 1), 1)
+    f_q = None
+    tq, tk = allowed.shape[-2], allowed.shape[-1]
+    if tq == tk:
+        full_row = allowed.all(-1) if xp is np else allowed.bool().all(-1)
+        later = (xp.arange(tq)[:, None] >= xp.arange(tk)[None, :])
+        if xp is torch:
+            later = later.to(allowed.device)
+            considered = later & ~full_row[..., None]
+            blocked = considered & ~allowed.bool()
+            pad = considered.any(-2) & (blocked == considered).all(-2)
+            f_q = (~pad).to(w.dtype)
+        else:
+            considered = later & ~full_row[..., None]
+            blocked = considered & ~allowed.astype(bool)
+            pad = considered.any(-2) & (blocked == considered).all(-2)
+            f_q = (~pad).astype(w.dtype)
+        f_k = f_k * f_q
+    return (RQ if f_q is None else _rescale_kept(RQ, f_q)), _rescale_kept(RK, f_k), _rescale_kept(RV, f_k)
+
+
+def _rescale_kept(X, keep):
+    """X [B, H, T, D] times keep [B, H, T], with each head's positive and negative sums
+    restored; if a sign's mass lost every carrier, it is spread evenly over kept positions."""
+    xp = torch if torch.is_tensor(X) else np
+    keep = keep[..., None] + 0 * X
+    if bool((keep == 1).all()):
+        return X
+    def hsum(a):
+        return a.sum((-2, -1), keepdims=True) if xp is np else a.sum((-2, -1), keepdim=True)
+    out = 0 * X
+    carriers = (keep > 0)
+    carriers = carriers.astype(X.dtype) if xp is np else carriers.to(X.dtype)
+    n = hsum(carriers)
+    for sign in (1.0, -1.0):
+        part = xp.maximum(sign * X, 0 * X)
+        kept = part * keep
+        total, now = hsum(part), hsum(kept)
+        scaled = kept * (total / xp.where(now > 0, now, 1))
+        even = carriers * (total / xp.where(n > 0, n, 1))
+        out = out + sign * xp.where(now > 0, scaled, even)
+    return out
+
+
+def sdpa_relevance(launch, R, Q, K, V, mask, hyperparams):
+    """Run an attention relevance rule with what scaled_dot_product_attention computes
+    but is not given explicitly: the causal mask implied by is_causal=True (newer
+    transformers pass attn_mask=None with is_causal=True), and K/V heads repeated for
+    grouped-query attention (enable_gqa=True). K/V relevance is summed back onto the
+    original heads. `launch(R, Q, K, V, mask)` returns (RQ, RK, RV, R_mask)."""
+    hq, hk = Q.shape[1], K.shape[1]
+    groups = hq // hk if hk and hk != hq and hq % hk == 0 else 1
+    if groups > 1:
+        rep = (lambda t: t.repeat_interleave(groups, dim=1)) if torch.is_tensor(K) else (lambda t: np.repeat(t, groups, axis=1))
+        K, V = rep(K), rep(V)
+    neg = float(np.finfo(np.float32).min)  # additive; a finite value avoids inf - inf
+    if mask is not None and (mask.dtype == torch.bool if torch.is_tensor(mask) else mask.dtype == np.bool_):
+        # sdpa takes boolean masks (True = attend); the rules add the mask to the logits
+        mask = (torch.zeros(mask.shape, dtype=Q.dtype, device=mask.device).masked_fill(~mask, neg)
+                if torch.is_tensor(mask) else np.where(mask, 0.0, neg).astype(Q.dtype))
+    built_mask = mask is None and bool((hyperparams or {}).get("is_causal"))
+    if built_mask:
+        tq, tk = Q.shape[-2], K.shape[-2]
+        if torch.is_tensor(Q):
+            future = torch.ones(tq, tk, dtype=torch.bool, device=Q.device).triu(tk - tq + 1)
+            mask = torch.zeros(tq, tk, dtype=Q.dtype, device=Q.device).masked_fill(future, neg)[None, None]
+        else:
+            mask = np.where(np.triu(np.ones((tq, tk), dtype=bool), tk - tq + 1), neg, 0.0).astype(Q.dtype)[None, None]
+    RQ, RK, RV, R_mask = launch(R, Q, K, V, mask)
+    if mask is not None:
+        RQ, RK, RV = _respect_attention_mask(RQ, RK, RV, R, mask)
+    if groups > 1:
+        RK, RV = (t.reshape(t.shape[0], hk, groups, *t.shape[2:]).sum(2) for t in (RK, RV))
+    return RQ, RK, RV, (None if built_mask else R_mask)
+
+# Ops between softmax and P @ V that only cast or copy the attention probabilities.
+_PROB_PASSTHROUGH = {"to", "_to_copy", "type", "type_as", "dropout", "contiguous", "clone", "alias", "detach"}
+
+
+def eager_attention_scores_node(name, node_io):
+    """If matmul `name` is P @ V of an eager attention block (Q @ K^T, then scaling and
+    masking, softmax, P @ V), return (the Q @ K^T matmul node, the softmax node);
+    otherwise None.
+
+    Eager attention is the same computation as scaled_dot_product_attention split into
+    ops, so its relevance goes through the same rule (`sdpa_relevance`). Propagating it
+    op by op gave the scaling constant and the additive mask a share at each step and
+    lost most of the relevance; the two backends then disagreed several-fold."""
+    src = node_io.get(name, {}).get("input_sources") or []
+    if len(src) < 2:
+        return None
+    p = src[0]
+    while p in node_io and node_io[p].get("func_name") in _PROB_PASSTHROUGH:
+        p = (node_io[p].get("input_sources") or [None])[0]
+    if p not in node_io or node_io[p].get("func_name") not in ("softmax", "_softmax"):
+        return None
+    shape = tuple(getattr(node_io[p].get("output_values"), "shape", ()))
+    seen, todo = set(), list(node_io[p].get("input_sources") or [])
+    while todo:  # breadth-first through the elementwise score ops, scores-shaped only
+        n = todo.pop(0)
+        if n in seen or n not in node_io:
+            continue
+        seen.add(n)
+        info = node_io[n]
+        if tuple(getattr(info.get("output_values"), "shape", ())) != shape:
+            continue
+        if info.get("func_name") in ("matmul", "bmm"):
+            q = (info.get("input_values") or [None])[0]
+            return (n, p) if getattr(q, "ndim", 0) in (3, 4) else None
+        todo.extend(info.get("input_sources") or [])
+    return None
+
+
+def eager_attention_relevance(launch, R, S, Q, KT, V):
+    """Relevance of an eager attention block through `sdpa_relevance`. The mask is read
+    off the softmax input S: a logit at or below -1e3 is blocked (models add -1e4, the
+    dtype minimum or -inf); a row with nothing allowed is left unmasked, as transformers
+    does for sdpa (`_unmask_unattended`), so padded queries are treated the same way."""
+    swap = (lambda t: t.transpose(-1, -2)) if torch.is_tensor(KT) else (lambda t: np.swapaxes(t, -1, -2))
+    one_head = Q.ndim == 3  # [B, T, D] attention without a head axis: treat as one head
+    if one_head:
+        R, S, Q, KT, V = (t[:, None] for t in (R, S, Q, KT, V))
+    neg = float(np.finfo(np.float32).min)
+    if torch.is_tensor(S):
+        blocked = S <= -1e3
+        blocked = blocked & ~blocked.all(-1, keepdim=True)
+        mask = torch.zeros(S.shape, dtype=Q.dtype, device=S.device).masked_fill(blocked, neg)
+    else:
+        blocked = np.asarray(S) <= -1e3
+        blocked = blocked & ~blocked.all(-1, keepdims=True)
+        mask = np.where(blocked, neg, 0.0).astype(Q.dtype)
+    RQ, RK, RV, _ = sdpa_relevance(launch, R, Q, swap(KT), V, mask, {})
+    RKT = swap(RK)
+    if one_head:
+        RQ, RKT, RV = RQ[:, 0], RKT[:, 0], RV[:, 0]
+    return RQ, RKT, RV
+
 
 def assign_embedding_relevance(node, info, all_wt, node_io):
     """
@@ -698,7 +920,7 @@ def run_evaluation(
             vals = info.get("input_values", [])
             n = len(vals)
             if n == 4:
-                Q, K, V, masked_fill = (tensor_to_numpy(v) for v in vals)
+                Q, K, V, masked_fill = (None if v is None else tensor_to_numpy(v) for v in vals)
                 if DEBUG:
                     log(f"Q: {Q.shape}, K: {K.shape}, V: {V.shape}, masked_fill: {masked_fill.shape}")
             elif n == 3:
@@ -720,7 +942,8 @@ def run_evaluation(
                     impl = get_layer_implementation("Attention")
                     if DEBUG:
                         log(f"Using {impl} implementation for attention layer {name}")
-                    result = UD2.launch_self_attention(impl, R, Q, K, V, masked_fill)
+                    result = sdpa_relevance(lambda r, q, k, v, m: UD2.launch_self_attention(impl, r, q, k, v, m),
+                                            R, Q, K, V, masked_fill, info.get("layer_hyperparams", {}))
                     RQ, RK, RV, R_masked_fill = result
                     if DEBUG:
                         log(f"RQ: {np.sum(RQ):.8f}, shape: {RQ.shape}")
@@ -849,6 +1072,56 @@ def run_evaluation(
                         add_rel([Rx, Ry]) 
             continue
 
+        # — matmul / bmm / mm: epsilon rule over the bilinear terms (eager attention's
+        #   Q @ K^T and P @ V); before, all relevance went to the first operand.
+        if layer == "Mathematical_Operation" and func in ("matmul", "bmm", "mm") and isinstance(all_wt[name], list):
+            found = eager_attention_scores_node(name, node_io)
+            qk = found[0] if found else None
+            if qk is not None and isinstance(all_wt.get(qk), list):
+                # P @ V of eager attention: same rule as scaled_dot_product_attention. The
+                # probabilities get nothing, so the softmax / mask / scaling ops carry none.
+                P, V = (tensor_to_numpy(v) for v in info["input_values"][:2])
+                S = np.asarray(tensor_to_numpy(node_io[found[1]]["input_values"][0]), dtype=np.float32)
+                Q, KT = (tensor_to_numpy(v) for v in node_io[qk]["input_values"][:2])
+                impl = get_layer_implementation("Attention")
+                for c in children:
+                    R = get_relevance_from_child(c, name, all_wt, node_io)
+                    if R is None:
+                        continue
+                    RQ, RKT, RV = eager_attention_relevance(
+                        lambda r, q, k, v, m: UD2.launch_self_attention(impl, r, q, k, v, m),
+                        np.asarray(R, dtype=np.float32).reshape(P.shape[:-1] + V.shape[-1:]), S, Q, KT, V)
+                    add_rel(RV, parent_idx=1)
+                    buf = all_wt[qk]
+                    buf[0] = buf[0] + align_relevance(np.asarray(RQ, dtype=np.float32), buf[0].shape)
+                    buf[1] = buf[1] + align_relevance(np.asarray(RKT, dtype=np.float32), buf[1].shape)
+                continue
+            A, B = (np.asarray(tensor_to_numpy(v), dtype=np.float64) for v in info["input_values"][:2])
+            if A.ndim >= 2 and B.ndim >= 2:
+                aw, bw = ("weight" in p.lower() for p in parents[:2])
+                for c in children:
+                    R = get_relevance_from_child(c, name, all_wt, node_io)
+                    if R is None:
+                        continue
+                    RA, RB = matmul_relevance(np.asarray(R, dtype=np.float64).reshape((A @ B).shape), A, B, aw, bw)
+                    add_rel(RA.astype(np.float32), parent_idx=0)
+                    add_rel(RB.astype(np.float32), parent_idx=1)
+                continue
+
+        # — where(cond, input, other): relevance goes to the value each position took;
+        #   the boolean condition gets none (GPT-2's causal mask is a where).
+        if layer == "Mathematical_Operation" and func == "where" and isinstance(all_wt[name], list):
+            cond = tensor_to_numpy(info["input_values"][0]).astype(bool)
+            for c in children:
+                R = get_relevance_from_child(c, name, all_wt, node_io)
+                if R is None:
+                    continue
+                R = np.asarray(R, dtype=np.float32)
+                add_rel(np.where(cond, R, 0.0), parent_idx=1)
+                if len(all_wt[name]) > 2:
+                    add_rel(np.where(cond, 0.0, R), parent_idx=2)
+            continue
+
         # — Norm / Indexing / other simple ops — passthrough
         if layer in {"Normalization", "Indexing_Operation"} or (
            layer=="Mathematical_Operation" and func not in ("mul","mul_")):
@@ -963,7 +1236,7 @@ def run_evaluation(
                 elif func == "slice":
                     dim = hp.get("dim", 0)
                     start = hp.get("start", 0)
-                    end = hp.get("end", None)
+                    end = slice_end(hp, info)
                     step = hp.get("step", 1)
 
                     if all(x is not None for x in [dim, start, end]):
@@ -1195,6 +1468,10 @@ def align_relevance_gpu(r, target_shape):
     """
     original_total = r.sum()
 
+    # Target is a prefix of r's shape: sum the trailing axes (see align_relevance)
+    if r.ndim > len(target_shape) and tuple(r.shape[:len(target_shape)]) == tuple(target_shape):
+        r = r.sum(dim=tuple(range(len(target_shape), r.ndim)))
+
     # Collapse extra leading dims
     while r.ndim > len(target_shape):
         r = torch.linalg.norm(r, dim=0)
@@ -1401,6 +1678,8 @@ def get_relevance_from_child_gpu(child, parent, all_wt, node_io):
         if idx >= len(r):
             return None
         return r[idx]
+    if not _receives_output_relevance(child, parent, getattr(r, "shape", None), node_io):
+        return None
     return r
 
 
@@ -1666,7 +1945,7 @@ def run_evaluation_gpu(
             n = len(vals)
 
             if n == 4:
-                Q, K, V, masked_fill = (to_gpu_tensor(v, device) for v in vals)
+                Q, K, V, masked_fill = (None if v is None else to_gpu_tensor(v, device) for v in vals)
             elif n == 3:
                 Q, K, V = (to_gpu_tensor(v, device) for v in vals)
                 raw_mask = info.get("layer_hyperparams", {}).get("attn_mask", None)
@@ -1677,7 +1956,8 @@ def run_evaluation_gpu(
             for c in children:
                 R = get_relevance_from_child_gpu(c, name, all_wt, node_io)
                 if R is not None:
-                    result = UD2.launch_self_attention_gpu(R, Q, K, V, masked_fill)
+                    result = sdpa_relevance(UD2.launch_self_attention_gpu, R, Q, K, V, masked_fill,
+                                            info.get("layer_hyperparams", {}))
                     RQ, RK, RV, R_masked_fill = result
                     add_rel_gpu([RQ, RK, RV, R_masked_fill])
             continue
@@ -1749,6 +2029,52 @@ def run_evaluation_gpu(
                     if R is not None:
                         result = UD2.launch_wt_add_equal_gpu(R, inp_t)
                         add_rel_gpu(result)
+            continue
+
+        # — matmul / bmm / mm: see the CPU path
+        if layer == "Mathematical_Operation" and func in ("matmul", "bmm", "mm") and isinstance(all_wt[name], list):
+            found = eager_attention_scores_node(name, node_io)
+            qk = found[0] if found else None
+            if qk is not None and isinstance(all_wt.get(qk), list):
+                P, V = (to_gpu_tensor(v, device).float() for v in info["input_values"][:2])
+                S = to_gpu_tensor(node_io[found[1]]["input_values"][0], device).float()
+                Q, KT = (to_gpu_tensor(v, device).float() for v in node_io[qk]["input_values"][:2])
+                for c in children:
+                    R = get_relevance_from_child_gpu(c, name, all_wt, node_io)
+                    if R is None:
+                        continue
+                    R = to_gpu_tensor(R, device).float().reshape(P.shape[:-1] + V.shape[-1:])
+                    RQ, RKT, RV = eager_attention_relevance(UD2.launch_self_attention_gpu, R, S, Q, KT, V)
+                    add_rel_gpu(RV, parent_idx=1)
+                    buf = all_wt[qk]
+                    buf[0] = buf[0] + align_relevance_gpu(RQ, buf[0].shape)
+                    buf[1] = buf[1] + align_relevance_gpu(RKT, buf[1].shape)
+                continue
+            A, B = (to_gpu_tensor(v, device).double() for v in info["input_values"][:2])
+            if A.dim() >= 2 and B.dim() >= 2:
+                aw, bw = ("weight" in p.lower() for p in parents[:2])
+                for c in children:
+                    R = get_relevance_from_child_gpu(c, name, all_wt, node_io)
+                    if R is None:
+                        continue
+                    R = to_gpu_tensor(R, device).double().reshape((A @ B).shape)
+                    RA, RB = matmul_relevance(R, A, B, aw, bw)
+                    add_rel_gpu(RA.float(), parent_idx=0)
+                    add_rel_gpu(RB.float(), parent_idx=1)
+                continue
+
+        # — where(cond, input, other): see the CPU path
+        if layer == "Mathematical_Operation" and func == "where" and isinstance(all_wt[name], list):
+            cond = to_gpu_tensor(info["input_values"][0], device).bool()
+            for c in children:
+                R = get_relevance_from_child_gpu(c, name, all_wt, node_io)
+                if R is None:
+                    continue
+                R = to_gpu_tensor(R, device)
+                zero = torch.zeros((), dtype=R.dtype, device=R.device)
+                add_rel_gpu(torch.where(cond, R, zero), parent_idx=1)
+                if len(all_wt[name]) > 2:
+                    add_rel_gpu(torch.where(cond, zero, R), parent_idx=2)
             continue
 
         # — Norm / Indexing — passthrough
@@ -1826,7 +2152,7 @@ def run_evaluation_gpu(
                 elif func == "slice":
                     dim = hp.get("dim", 0)
                     start = hp.get("start", 0)
-                    end = hp.get("end", None)
+                    end = slice_end(hp, info)
                     step = hp.get("step", 1)
 
                     if all(x is not None for x in [dim, start, end]):

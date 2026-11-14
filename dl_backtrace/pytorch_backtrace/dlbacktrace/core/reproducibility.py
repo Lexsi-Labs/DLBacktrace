@@ -163,7 +163,9 @@ def export_model_deterministically(
     Returns:
         torch.export.ExportedProgram with deterministic configuration applied.
     """
-    from torch.export import export, export_for_training
+    import torch.export as _te
+    # torch 2.10+ removed export_for_training; export() now returns the same training IR.
+    export_for_training = getattr(_te, "export_for_training", _te.export)
 
     # Configure reproducibility (does not change CUBLAS_WORKSPACE_CONFIG order)
     setup_exact_reproducibility(seed, disable_optimizations=True, verbose=False)

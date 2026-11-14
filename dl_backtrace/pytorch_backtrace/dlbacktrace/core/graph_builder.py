@@ -228,6 +228,17 @@ def extract_layer_hyperparams(node: Any, extracted_weights: Dict[str, Any]) -> D
             layer_hyperparams["bias"] = None
             logger.debug("Added default bias=None")
 
+        if func_name == "scaled_dot_product_attention":
+            # Read sdpa's arguments from its schema, keywords included: the positional scan
+            # above misses is_causal / enable_gqa / scale when they are passed by keyword
+            # (as newer transformers and F.scaled_dot_product_attention(is_causal=True) do).
+            sdpa = {"attn_mask": None, "dropout_p": 0.0, "is_causal": False, "scale": None, "enable_gqa": False}
+            sdpa.update(zip(("attn_mask", "dropout_p", "is_causal"), node.args[3:6]))
+            sdpa.update({k: v for k, v in node.kwargs.items() if k in sdpa})
+            if isinstance(sdpa["attn_mask"], torch.fx.node.Node):
+                sdpa["attn_mask"] = None  # a mask tensor arrives as the fourth parent
+            layer_hyperparams.update(sdpa)
+
         logger.debug(f"Extracted {len(layer_hyperparams)} hyperparameters for {func_name}")
         return layer_hyperparams
         

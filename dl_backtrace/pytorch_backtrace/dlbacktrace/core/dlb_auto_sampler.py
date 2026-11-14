@@ -122,15 +122,26 @@ class DLBAutoSampler:
 
     # -- Native Forward with KV-Cache (Fast Path) --------------------------
 
+    def _native_causallm(self):
+        """The causal LM the native fast path runs, or None when there is none.
+
+        The model itself when it is a causal LM (``LlamaForCausalLM`` passed to
+        ``DLBacktrace`` directly), else the one a wrapper holds in ``.model``
+        (``ModelWrapper.model``). Using ``dlb.model.model`` unconditionally ran
+        the bare base model of a causal LM and took its hidden states for logits.
+        """
+        try:
+            return self._get_causallm(self.dlb.model)
+        except TypeError:
+            return None
+
     def _check_native_forward_support(self):
         """Check if the underlying model supports native forward with KV-cache.
 
-        Walks the wrapper chain (e.g., ModelWrapper.model → AutoModelForCausalLM)
-        looking for a model whose forward() accepts `use_cache` and
+        True when the causal LM's forward() accepts `use_cache` and
         `past_key_values` parameters.
         """
-        model = self.dlb.model
-        inner = getattr(model, 'model', None)
+        inner = self._native_causallm()
         if inner is None:
             return False
         try:
@@ -150,7 +161,7 @@ class DLBAutoSampler:
         Returns the device the model actually ended up on (may differ from
         *target_device* if OOM prevented the move).
         """
-        inner = self.dlb.model.model
+        inner = self._native_causallm()
         try:
             model_device = next(inner.parameters()).device
         except StopIteration:
@@ -178,7 +189,7 @@ class DLBAutoSampler:
             return
 
         try:
-            inner = self.dlb.model.model
+            inner = self._native_causallm()
             inner.to(original_device)
         except Exception:
             pass
@@ -218,7 +229,7 @@ class DLBAutoSampler:
             ``[batch, seq_len, vocab]`` for prefill.
             *new_past_key_values*: updated cache for the next call.
         """
-        inner_model = self.dlb.model.model
+        inner_model = self._native_causallm()
 
         # ── One-time device alignment ──
         if not hasattr(self, '_native_fwd_device_ok'):
@@ -587,8 +598,13 @@ class DLBAutoSampler:
         offset = 0
         cast_dtype = self._resolve_torch_dtype(target_dtype) if target_dtype else torch.float32
 
+        def _as_tensor(x):
+            # The CPU propagation path returns numpy arrays, the GPU path tensors.
+            return torch.from_numpy(np.asarray(x)) if isinstance(x, np.ndarray) else x
+
         for k in kept_keys:
             v = rel_dict[k]
+            v = [_as_tensor(x) for x in v] if isinstance(v, (list, tuple)) else _as_tensor(v)
             if torch.is_tensor(v):
                 t = v.detach()
                 orig_dtype = str(t.dtype)
@@ -798,7 +814,11 @@ class DLBAutoSampler:
             relevance_compression_method: "lz4" (default) or "none".
             relevance_pickle_protocol: Pickle protocol (2-5). Default=4.
             relevance_move_to_cpu: move tensors to CPU before caching to reduce VRAM.
-        """ 
+        """
+        # Each step runs the traced graph on a longer sequence, so it must not be
+        # fixed to the sample length it was exported with.
+        if hasattr(self.dlb, "_ensure_dynamic_sequence"):
+            self.dlb._ensure_dynamic_sequence()
         model = self._get_causallm(self.dlb.model)
         device = input_ids.device
         B = input_ids.size(0)
@@ -907,6 +927,20 @@ class DLBAutoSampler:
         else:
             logits_warper = None
 
+        # Which generated tokens get relevance (explain_tokens); the beam path needs it too
+        if isinstance(explain_tokens, str):
+            if explain_tokens.lower() == "none":
+                _should_run_dlb = lambda idx: False
+            else:  # "all"
+                _should_run_dlb = lambda idx: True
+        elif isinstance(explain_tokens, int):
+            _should_run_dlb = lambda idx: idx < explain_tokens
+        elif isinstance(explain_tokens, (list, tuple)):
+            _dlb_steps = set(explain_tokens)
+            _should_run_dlb = lambda idx: idx in _dlb_steps
+        else:
+            _should_run_dlb = lambda idx: True
+
         # ======================
         # Non-beam path (B=1)
         # ======================
@@ -922,20 +956,6 @@ class DLBAutoSampler:
             _step_timings = []
 
             stopped_by = None
-
-            # Build DLB gating function from explain_tokens
-            if isinstance(explain_tokens, str):
-                if explain_tokens.lower() == "none":
-                    _should_run_dlb = lambda idx: False
-                else:  # "all"
-                    _should_run_dlb = lambda idx: True
-            elif isinstance(explain_tokens, int):
-                _should_run_dlb = lambda idx: idx < explain_tokens
-            elif isinstance(explain_tokens, (list, tuple)):
-                _dlb_steps = set(explain_tokens)
-                _should_run_dlb = lambda idx: idx in _dlb_steps
-            else:
-                _should_run_dlb = lambda idx: True
 
             # ── Fast-path: native model with KV-cache ──
             _native_fwd_ok = self._check_native_forward_support()
@@ -1116,7 +1136,6 @@ class DLBAutoSampler:
                             compression_method=relevance_compression_method,
                             pickle_protocol=relevance_pickle_protocol,
                         )
-                        relevance_trace.clear()
                         relevance_trace.append(full_rel)
                         del full_rel
                 _t["relevance_save"] = time.perf_counter() - _ts

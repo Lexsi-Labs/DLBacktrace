@@ -11,7 +11,10 @@ from .core.config import activation_master
 from .core.dlb_auto_sampler import DLBAutoSampler
 from .core.relevance_propagation import RelevancePropagator
 from .core.compiled_propagation import PropagationSchedule
-from .core.visualization import visualize_graph, visualize_relevance, visualize_relevance_auto 
+from .core.visualization import (
+    visualize_graph, visualize_relevance, visualize_relevance_auto,
+    visualize_relevance_paginated, SEMANTIC_LAYER_TYPES,
+)
 from .core.token_relevance_visuals import (
     plot_tokenwise_relevance_map_swapped,
     plot_input_heatmap_for_token,
@@ -22,8 +25,13 @@ from .core.relevance_saver import save_relevance as _save_relevance, Precision
 import numpy as np 
 import torch
 import inspect
+import warnings
+import logging
 import gc
 import ctypes
+
+logger = logging.getLogger(__name__)
+_cpu_fallback_logged = False
 
 try:
     _MALLOC_TRIM = getattr(ctypes.CDLL("libc.so.6"), "malloc_trim", None)
@@ -56,6 +64,26 @@ def _release_cpu_allocator_memory():
             _MALLOC_TRIM(0)
         except Exception:
             pass
+
+
+def sequence_dynamic_shapes(inputs):
+    """Sample inputs and torch.export dynamic shapes with a dynamic sequence length.
+
+    Dimension 1 of every tensor with two or more dimensions (input_ids,
+    attention_mask) gets ``Dim.AUTO``. torch.export specializes a size-1
+    dimension, so a one-token sample is widened to two tokens first; the
+    values do not matter for tracing.
+    """
+    sample, shapes = [], []
+    for t in inputs:
+        if isinstance(t, torch.Tensor) and t.dim() >= 2:
+            if t.shape[1] < 2:
+                t = torch.cat([t, t], dim=1)
+            shapes.append({1: torch.export.Dim.AUTO})
+        else:
+            shapes.append(None)
+        sample.append(t)
+    return tuple(sample), tuple(shapes)
 
 class DLBacktrace:
     def __init__(self, model, input_for_graph, dynamic_shapes=None, device="cpu", verbose=False, strict_cpu=True, collect_node_module_map=False,):
@@ -112,6 +140,14 @@ class DLBacktrace:
         if self.verbose:
             print("---------------------------v2------------------------------------------", flush=True)
             print("🔧 Exporting and tracing model...", flush=True)
+        self._collect_node_module_map = collect_node_module_map
+        self._build_trace_state()
+        if self.verbose:
+            print("---------------------------v8------------------------------------------", flush=True)
+            print("✅ DL-Backtrace FX initialization complete!", flush=True)
+
+    def _build_trace_state(self):
+        """Export the model and build the graph, weights and caches from it."""
         # Export and trace model
         self._trace_model()
         if self.verbose:
@@ -139,7 +175,7 @@ class DLBacktrace:
 
         # Optional: FX node → module mapping
         self.fx_node_to_module = None
-        if collect_node_module_map:
+        if self._collect_node_module_map:
             if self.verbose:
                 print("🔧 Mapping FX nodes to nn.Module hierarchy...", flush=True)
 
@@ -159,9 +195,14 @@ class DLBacktrace:
         # prior DLBacktrace object (important when re-creating in the same session).
         self._cached_executor = None
         self._prop_schedule = None
-        if self.verbose:
-            print("---------------------------v8------------------------------------------", flush=True)
-            print("✅ DL-Backtrace FX initialization complete!", flush=True)
+
+    def _ensure_dynamic_sequence(self):
+        """Re-export once with a dynamic sequence length, so predict() accepts the
+        growing inputs of generation. No-op when dynamic_shapes were given."""
+        if self.dynamic_shapes is not None:
+            return
+        self.input_for_graph, self.dynamic_shapes = sequence_dynamic_shapes(self.input_for_graph)
+        self._build_trace_state()
 
     def clear_intermediates(self, clear_executor_cache=False):
         """
@@ -305,6 +346,24 @@ class DLBacktrace:
             # Check CUDA availability
             if not torch.cuda.is_available():
                 print("⚠️  CUDA device requested but CUDA not available. Falling back to CPU mode.")
+                return self._parse_device_config("cpu")
+
+            # The compiled CUDA ops may be missing on this platform: use the CPU path
+            # instead of failing in the middle of evaluation()
+            from .utils import default_v2
+            ops_error = default_v2.compiled_ops_error()
+            if ops_error is not None:
+                message = (
+                    f"CUDA device requested but the compiled CUDA ops could not be loaded ({ops_error}). "
+                    "Falling back to CPU mode."
+                )
+                # stacklevel 3: the caller of DLBacktrace(...), not __init__
+                warnings.warn(message, RuntimeWarning, stacklevel=3)
+                # Also log once: core/reproducibility.py ignores all warnings globally once imported
+                global _cpu_fallback_logged
+                if not _cpu_fallback_logged:
+                    _cpu_fallback_logged = True
+                    logger.warning(message)
                 return self._parse_device_config("cpu")
             
             # CUDA mode: use CUDA implementations where available
@@ -671,6 +730,153 @@ class DLBacktrace:
         )
         return self.all_wt
 
+    # ------------------------------------------------------------------ #
+    #  Two-step generation: forward_pass() then relevance_pass()          #
+    # ------------------------------------------------------------------ #
+
+    def _generate_tokens(self, inputs, **generation_kwargs):
+        """Generate without relevance; return (token ids [1, T], attention mask [1, T], prompt length).
+
+        Runs the sampler with ``explain_tokens="none"``: the relevance pass never runs,
+        and when the model supports it the native KV-cache forward is used.
+        """
+        if isinstance(inputs, dict):
+            input_ids, attention_mask = inputs.get("input_ids"), inputs.get("attention_mask")
+        elif isinstance(inputs, (tuple, list)):
+            input_ids = inputs[0]
+            attention_mask = inputs[1] if len(inputs) > 1 else None
+        else:
+            raise ValueError("inputs must be a dict with 'input_ids' or a tuple/list of (input_ids, attention_mask)")
+        if input_ids is None:
+            raise ValueError("input_ids is required")
+
+        input_ids = torch.as_tensor(input_ids).long()
+        if input_ids.dim() == 1:
+            input_ids = input_ids.unsqueeze(0)
+        attention_mask = torch.ones_like(input_ids) if attention_mask is None else torch.as_tensor(attention_mask).long()
+        if attention_mask.dim() == 1:
+            attention_mask = attention_mask.unsqueeze(0)
+
+        out = self.sample_auto(
+            tokenizer=None, input_ids=input_ids, attention_mask=attention_mask,
+            explain_tokens="none", return_relevance=False, **generation_kwargs,
+        )
+        sequence = (out[0] if isinstance(out, tuple) else out).detach()
+        # The attention mask of every position (the prompt's, then 1 per generated token), on the sequence's device.
+        n_new = sequence.shape[1] - input_ids.shape[1]
+        mask = torch.cat([attention_mask.to(sequence.device), torch.ones(1, n_new, dtype=attention_mask.dtype, device=sequence.device)], dim=1)
+        return sequence, mask, input_ids.shape[1]
+
+    def forward_pass(
+        self,
+        inputs,
+        max_new_tokens=50,
+        temperature=None,
+        top_k=None,
+        top_p=None,
+        eos_token_id=None,
+        store_node_io=True,
+        move_snapshots_to_cpu=True,
+        debug=False,
+        **generation_kwargs,
+    ):
+        """Step 1 of the two-step API: generate tokens now, explain them later.
+
+        No relevance is computed. The generated sequence is kept on this object so
+        ``relevance_pass()`` can explain any of the generated tokens afterwards,
+        including after you have read the text.
+
+        Args:
+            inputs: dict with ``input_ids`` (and optionally ``attention_mask``), or a
+                tuple/list ``(input_ids, attention_mask)``. Batch size 1.
+            max_new_tokens (int): Number of tokens to generate (default 50).
+            temperature, top_k, top_p: Sampling controls; with none of them the
+                decoding is greedy.
+            eos_token_id (int | list[int] | None): Stop at these token(s).
+            store_node_io (bool): Keep the generation for ``relevance_pass()`` (default
+                True). With False only the tokens are returned and ``relevance_pass()``
+                raises until the next ``forward_pass()``.
+            move_snapshots_to_cpu (bool): Accepted for code written against the
+                snapshot-based first version of this API; no per-step snapshots are
+                kept any more, so it has no effect.
+            debug (bool): Accepted for symmetry with ``relevance_pass``.
+            **generation_kwargs: any other ``DLBAutoSampler.generate`` option
+                (``repetition_penalty``, ``min_new_tokens``, ``num_beams``, ...).
+
+        Returns:
+            dict with ``generated_token_ids`` (list[int]), ``complete_sequence``
+            (tensor [1, T]: prompt and generated tokens) and ``num_steps``.
+        """
+        sequence, mask, prompt_len = self._generate_tokens(
+            inputs, max_new_tokens=max_new_tokens, temperature=temperature, top_k=top_k,
+            top_p=top_p, eos_token_id=eos_token_id, debug=debug, **generation_kwargs,
+        )
+        tokens = sequence[0, prompt_len:].tolist()
+        self._generation_trace = {"sequence": sequence, "mask": mask, "prompt_len": prompt_len} if store_node_io else None
+        return {"generated_token_ids": tokens, "complete_sequence": sequence, "num_steps": len(tokens)}
+
+    def relevance_pass(
+        self,
+        token_indices=None,
+        mode="default",
+        multiplier=100.0,
+        scaler=1.0,
+        thresholding=0.5,
+        debug=False,
+    ):
+        """Step 2 of the two-step API: explain tokens generated by ``forward_pass()``.
+
+        For each requested step the model runs on the sequence as it was when that
+        token was chosen, and relevance is propagated for the token that was
+        generated. The result equals what ``run_task("generation")`` computes for
+        the same token. Only the token ids are stored between the two steps, so
+        memory does not grow with the number of generated tokens; the price is one
+        forward pass per explained token.
+
+        Args:
+            token_indices (list[int] | None): Generation steps to explain (0-based);
+                ``None`` explains every step.
+            mode, multiplier, scaler, thresholding: as in ``evaluation()``.
+            debug (bool): Print one line per step.
+
+        Returns:
+            list[dict], one per requested step, with ``step_index``, ``token_id`` and
+            ``relevance`` (node name to relevance, the format ``evaluation()`` returns).
+        """
+        trace = getattr(self, "_generation_trace", None)
+        if not trace:
+            raise RuntimeError("No generation to explain. Call forward_pass() first.")
+        sequence, mask, prompt_len = trace["sequence"], trace["mask"], trace["prompt_len"]
+        total = sequence.shape[1] - prompt_len
+
+        indices = list(range(total)) if token_indices is None else [int(i) for i in token_indices]
+        for i in indices:
+            if not 0 <= i < total:
+                raise IndexError(f"token index {i} out of range: forward_pass generated {total} token(s) (0..{total - 1})")
+
+        self._ensure_dynamic_sequence()
+        results = []
+        for i in indices:
+            end = prompt_len + i
+            token_id = int(sequence[0, end])
+            if debug:
+                print(f"relevance_pass: step {i}, token {token_id}")
+            self.predict(sequence[:, :end], mask[:, :end], temperature=1.0, debug=False)
+            relevance = self.evaluation(
+                mode=mode, start_wt=[], multiplier=multiplier, scaler=scaler,
+                thresholding=thresholding, task="generation", target_token_ids=[token_id], debug=False,
+            )
+            results.append({"step_index": i, "token_id": token_id, "relevance": relevance})
+            # Hand the result over: keep no reference, so clearing this object later leaves it intact.
+            self.node_io, self.all_wt = {}, {}
+            gc.collect()
+        return results
+
+    def clear_traces(self):
+        """Forget the generation kept by ``forward_pass()`` and free intermediate memory."""
+        self._generation_trace = None
+        self.clear_intermediates()
+
     def run_task(
         self,
         task="auto",
@@ -702,12 +908,13 @@ class DLBacktrace:
         Unified method for running DL-Backtrace on different tasks.
         
         Args:
-            task (str): Task type - "auto", "image-classification", "text-classification", or "generation"
+            task (str): Task type - "auto", "image-classification", "text-classification", "generation", or "forward-only-generation"
                 - "auto": Automatically detect task based on inputs
                 - "tabular-classification": For PyTorch Tabular Classification models 
                 - "image-classification": For image classification models (e.g., MobileNet, ResNet)
                 - "text-classification": For text classification models (e.g., BERT sentiment)
                 - "generation": For text generation models (e.g., GPT, LLaMA)
+                - "forward-only-generation": Same generation, no relevance and no tokenizer needed
             
             inputs: Input data for the model
                 - For tabular-classification: torch.Tensor of shape (B, F)
@@ -715,7 +922,7 @@ class DLBacktrace:
                 - For text-classification: dict with 'input_ids' and 'attention_mask' or tuple of tensors
                 - For generation: dict with 'input_ids' and 'attention_mask' or tuple of tensors
             
-            tokenizer: Required for generation tasks (HuggingFace tokenizer)
+            tokenizer: Required for the "generation" task (HuggingFace tokenizer); not needed for "forward-only-generation"
             
             mode (str): Relevance propagation mode (default: "default")
             multiplier (float): Starting relevance value (default: 100.0)
@@ -749,6 +956,8 @@ class DLBacktrace:
                 - 'relevance': Relevance scores from evaluation()
                 - 'predictions': Model predictions (logits for classification)
                 - 'generated_ids': (generation only) Generated token IDs
+                - 'generated_token_ids', 'complete_sequence': (forward-only-generation) the new tokens as a
+                  list[int] and the prompt plus new tokens as a tensor [1, T]
                 - 'scores_trace': (if return_scores=True) Scores trace
                 - 'relevance_trace': (if return_relevance=True) Relevance trace
                 - 'layerwise_output_trace': (if return_layerwise_output=True) Layer-wise output trace
@@ -780,6 +989,16 @@ class DLBacktrace:
                 return_scores=True
             )
             
+            # Generation without relevance (and without a tokenizer)
+            results = dlb.run_task(
+                task="forward-only-generation",
+                inputs={'input_ids': input_ids, 'attention_mask': attention_mask},
+                max_new_tokens=10,
+                temperature=0.8,
+                top_k=50,
+            )
+            new_tokens = results['generated_token_ids']  # list[int]
+
             # Text generation with saving relevance to disk
             results = dlb.run_task(
                 task="generation",
@@ -799,7 +1018,8 @@ class DLBacktrace:
             "tabular-classification",
             "image-classification", 
             "text-classification", 
-            "generation"
+            "generation",
+            "forward-only-generation",
         ]
 
         # Auto-detect task if needed
@@ -812,6 +1032,16 @@ class DLBacktrace:
             raise ValueError(f"task must be one of {valid_tasks}, got: {task}")
         
         # Prepare inputs based on task
+        if task == "forward-only-generation":
+            if temperature != 1.0:
+                generation_kwargs.setdefault("temperature", temperature)
+            sequence, _, prompt_len = self._generate_tokens(inputs, debug=debug, **generation_kwargs)
+            return {
+                'task': task,
+                'generated_token_ids': sequence[0, prompt_len:].tolist(),
+                'complete_sequence': sequence,
+            }
+
         if task == "generation":
             # Generation task - delegate to sample_auto
             if tokenizer is None:
@@ -1210,7 +1440,74 @@ class DLBacktrace:
         graph_mode="top_k",
         graph_top_k=120,
         graph_max_nodes=220,
+        show=True,
+        inline_format="svg",
+        layer_types=None,
+        compact=False,
+        paginated=False,
+        max_nodes_per_page=30,
+        pages_per_row=1,
+        rankdir=None,
+        relevance_stat="sum",
+        show_parameters=True,
     ):
+        """Draw the relevance graph with Graphviz (needs the `dot` program) and save it.
+
+        Parameters
+        ----------
+        output_path : str
+            Output path without extension; the graph is saved as SVG. With ``paginated=True``
+            the pages are ``{output_path}_page1.svg``, ``..._page2.svg``, ...
+        top_k : int, optional
+            With ``graph_mode="top_k"``, how many of the most relevant nodes the subgraph is
+            built around (same as ``graph_top_k``).
+        graph_mode : {"top_k", "entire"}
+            ``"top_k"`` (default) draws the most relevant nodes and their paths to the
+            output; ``"entire"`` draws every node.
+        layer_types : list[str], optional
+            Draw only nodes of these types: "MLP_Layer", "DL_Layer", "Activation",
+            "Normalization", "Attention", "NLP_Embedding", "Mathematical_Operation",
+            "Vector_Operation", "Placeholder" (the model inputs), "Output", ... Nodes in
+            between are skipped and their neighbours are linked directly. The output always
+            stays.
+        compact : bool
+            Shortcut for ``layer_types=SEMANTIC_LAYER_TYPES`` (the layers that matter, for a
+            graph that fits a paper). Ignored when ``layer_types`` is given. With the default
+            ``graph_mode="top_k"`` this is still a top-k subgraph of those layers; use
+            ``graph_mode="entire"`` for all of them.
+        paginated : bool
+            Split the graph into pages of ``max_nodes_per_page`` nodes in execution order
+            (for long graphs). ``graph_mode`` does not apply; combine it with ``compact``.
+        pages_per_row : int
+            With ``paginated=True``, also save the pages as one grid with this many pages
+            per row, ``{output_path}_combined.svg``.
+        rankdir : {"LR", "TB", "RL", "BT"}, optional
+            Direction of the graph. Default ``"LR"``, or ``"TB"`` when paginated.
+        relevance_stat : {"sum", "mean"}
+            What the first line of each node label shows: the node's total relevance
+            (default; it does not depend on the tensor size) or its mean.
+        show_parameters : bool
+            Draw the parameter, buffer and constant placeholders (``p_*``, ``b_*``, ``c_*``).
+            They carry no relevance; ``False`` leaves them out of every mode. Default ``True``.
+        show, inline_format
+            Whether to display the graph inline in a notebook, as ``"svg"`` or ``"png"``.
+        """
+        if compact and layer_types is None:
+            layer_types = list(SEMANTIC_LAYER_TYPES)
+        if paginated:
+            return visualize_relevance_paginated(
+                self.graph,
+                self.all_wt,
+                output_path=output_path,
+                max_nodes_per_page=max_nodes_per_page,
+                layer_types=layer_types,
+                rankdir=rankdir or "TB",
+                pages_per_row=pages_per_row,
+                relevance_stat=relevance_stat,
+                show_parameters=show_parameters,
+                show=show,
+                inline_format=inline_format,
+            )
         return visualize_relevance_auto(
             self.graph,
             self.all_wt,
@@ -1221,8 +1518,12 @@ class DLBacktrace:
             graph_mode=graph_mode,
             graph_top_k=top_k or graph_top_k,
             graph_max_nodes=graph_max_nodes,
-            show=True,                        # ⬅️ show in Colab
-            inline_format="svg",              # or "png" if SVG too heavy
+            layer_types=layer_types,
+            rankdir=rankdir or "LR",
+            relevance_stat=relevance_stat,
+            show_parameters=show_parameters,
+            show=show,                        # show inline in Colab / Jupyter
+            inline_format=inline_format,      # "svg", or "png" if SVG is too heavy
         )
 
     def visualize_dlbacktrace_with_modules(

@@ -13,7 +13,10 @@ except ImportError:
     # Try importing from the cuda_version_v3 directory (in-tree build)
     _cuda_version_dir = os.path.join(os.path.dirname(__file__), "cuda_version_v3")
     import importlib.util
-    _so_files = [f for f in os.listdir(_cuda_version_dir) if f.endswith('.so')] if os.path.isdir(_cuda_version_dir) else []
+    from importlib.machinery import EXTENSION_SUFFIXES
+    # Only a build for this interpreter: the package ships one .so per Python version.
+    _so_files = ["wt_selfattention_v3_ops" + s for s in EXTENSION_SUFFIXES
+                 if os.path.isfile(os.path.join(_cuda_version_dir, "wt_selfattention_v3_ops" + s))]
     if _so_files:
         _spec = importlib.util.spec_from_file_location("wt_selfattention_v3_ops", os.path.join(_cuda_version_dir, _so_files[0]))
         _ops_module = importlib.util.module_from_spec(_spec)

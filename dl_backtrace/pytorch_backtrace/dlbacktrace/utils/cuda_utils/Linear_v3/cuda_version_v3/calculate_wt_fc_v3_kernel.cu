@@ -98,7 +98,9 @@ __global__ void calculate_wt_fc_kernel(
         const int vec_input_dim = input_dim / vec_size;
         
         // Process vectorized elements
-        if ((input_dim % vec_size == 0) && (tid * vec_size < input_dim)) {
+        // Choose the path for the whole block: threads past the vectorised range used to
+        // fall into the scalar loop and count elements the vector loop had summed.
+        if (input_dim % vec_size == 0) {
             for (int i = tid; i < vec_input_dim; i += block_size) {
                 int idx = i * vec_size;
                 if (idx < input_dim) {
@@ -126,10 +128,16 @@ __global__ void calculate_wt_fc_kernel(
             }
         }
         
-        // Efficient block reduction
-        p_sum_final = block_reduce_sum(local_p_sum, reduction_shared);
+        // Efficient block reduction. Only thread 0 holds the block total, so only it
+        // may store it: every thread writing its partial value raced, and the
+        // relevance was redistributed with whichever partial sum was written last.
+        float block_p_sum = block_reduce_sum(local_p_sum, reduction_shared);
         __syncthreads();
-        n_sum_final = block_reduce_sum(local_n_sum, reduction_shared);
+        float block_n_sum = block_reduce_sum(local_n_sum, reduction_shared);
+        if (tid == 0) {
+            p_sum_final = block_p_sum;
+            n_sum_final = block_n_sum;
+        }
         __syncthreads();
         
         // Thread 0 computes final values

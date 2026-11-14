@@ -119,14 +119,62 @@ dlb.visualize(
 
 ### `visualize_dlbacktrace()`
 
-Generates visualization of top-k most relevant nodes.
+Draws the relevance graph with Graphviz (the `graphviz` Python package and the `dot` program
+must be installed) and saves it as SVG. By default it draws the most relevant nodes and their
+paths to the output (`graph_mode="top_k"`).
 
 ```python
-dlb.visualize_dlbacktrace(
-    top_k=15,
-    ouput_path="relevance_graph",
-    relevance_threshold
-)
+dlb.visualize_dlbacktrace(top_k=15, output_path="relevance_graph")
+
+# the whole graph
+dlb.visualize_dlbacktrace(graph_mode="entire", output_path="whole_graph")
+
+# only the layers that matter (linear, conv, activation, normalization, attention,
+# embedding, inputs, output), linked through the nodes that were left out
+dlb.visualize_dlbacktrace(compact=True, graph_mode="entire", rankdir="TB", show_parameters=False)
+
+# the same, with any layer types you choose
+dlb.visualize_dlbacktrace(layer_types=["MLP_Layer", "Attention"], graph_mode="entire")
+
+# a long graph as pages of 30 nodes, three pages per row in a grid
+dlb.visualize_dlbacktrace(paginated=True, compact=True, pages_per_row=3, show_parameters=False,
+                          output_path="pages")
+```
+
+| Parameter | Meaning |
+|-----------|---------|
+| `graph_mode` | `"top_k"` (default) or `"entire"`. `top_k` / `graph_top_k` and `graph_max_nodes` size the subgraph. |
+| `layer_types` | Draw only nodes of these types: `"MLP_Layer"`, `"DL_Layer"`, `"Activation"`, `"Normalization"`, `"Attention"`, `"NLP_Embedding"`, `"Mathematical_Operation"`, `"Vector_Operation"`, `"Placeholder"` (the model inputs), `"Output"`, ... Applies in both graph modes and to pages. The output always stays. |
+| `compact` | `True` is `layer_types=SEMANTIC_LAYER_TYPES` (importable from `dl_backtrace.pytorch_backtrace.dlbacktrace`). Ignored when `layer_types` is given. With the default `graph_mode="top_k"` the result is a top-k subgraph of those layers; use `graph_mode="entire"` for all of them. |
+| `rankdir` | `"LR"` (default, wide), `"TB"` (tall, fits a page), `"RL"`, `"BT"`. Pages default to `"TB"`. |
+| `paginated`, `max_nodes_per_page` | Split the graph into pages of at most `max_nodes_per_page` (default 30) nodes in execution order, saved as `{output_path}_page1.svg`, `..._page2.svg`, ... A parent on an earlier page is drawn as a dashed grey stub, so no edge is lost. |
+| `pages_per_row` | With `paginated=True` and more than one page, also save one grid with this many pages per row, `{output_path}_combined.svg`. |
+| `relevance_stat` | `"sum"` (default) or `"mean"`: what the first line of each node label shows. |
+| `show_parameters` | `True` (default) draws the parameter, buffer and constant placeholders (`p_*`, `b_*`, `c_*`); `False` leaves them out in every mode. They carry no relevance. In a paginated or compact graph they fill whole pages and make the graph larger, so `show_parameters=False` is usually what you want there. |
+| `show`, `inline_format` | Display the graph inline in a notebook, as `"svg"` or `"png"`. |
+
+Nodes are coloured by layer type, and in pages by the sign and size of the relevance (green
+positive, red negative, darker is larger).
+
+**What the label shows.** Each node shows `Sum`, `Max` and `Min` of its relevance. The sum
+is the node's total relevance; it does not depend on the size of the tensor, so it can be
+compared between nodes: where a layer splits its relevance among inputs, the parts add up to
+the whole (in the compact example below, `layer_norm` 100 goes to the attention block's three
+projections as 12.5 + 12.5 + 25 and to the residual path). The mean divides by the tensor
+size, so the same total reads differently on a `[1, 7, 64]` and a `[1, 7, 32]` tensor. Older
+versions showed the mean; pass `relevance_stat="mean"` to get it back.
+
+**Compact graphs and residual connections.** The compact graph links each kept layer to the
+nearest kept layers before it. In a model with residual connections the additions are not
+kept, so a layer is linked to every earlier layer whose output reaches it through the
+residual stream, which makes the graph dense. Add `"Mathematical_Operation"` to
+`layer_types` to keep the additions and see the residual stream.
+
+The two examples below were made with `show_parameters=False`.
+
+![Compact graph of a tiny BERT](../../assets/images/graphs/compact.svg)
+
+![The compact graph as four pages, three per row](../../assets/images/graphs/pages-grid.svg)
 
 ---
 

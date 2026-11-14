@@ -1385,6 +1385,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
                 attn_mask = layer_in[3]
             else:
                 attn_mask = layer_hyperparams.get("attn_mask", None)
+            if not isinstance(attn_mask, torch.Tensor):
+                attn_mask = None
             if attn_mask is not None:
                 # Keep mask dtype (bool/additive) exactly as provided
                 # Move to correct device if needed
@@ -1443,7 +1445,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             logger.debug(f"  Dropout p: {dropout_p}")
             logger.debug(f"  Is causal: {is_causal}")
             
-            return aten_op(q, k, v, attn_mask, dropout_p, is_causal)
+            return aten_op(q, k, v, attn_mask, dropout_p, is_causal,
+                           scale=layer_hyperparams.get("scale"), enable_gqa=bool(layer_hyperparams.get("enable_gqa", False)))
 
         elif func_name == "lstm":
             return aten_op(layer_in[0],
@@ -1477,22 +1480,27 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
 
             if isinstance(layer_in, list) and len(layer_in) > 1:
                 mask = layer_in[1]
+                # A tensor fill value arrives as a third parent, a number stays in method_args
+                if len(layer_in) > 2:
+                    value = layer_in[2]
+                elif method_args:
+                    value = method_args[0]
+                else:
+                    raise RuntimeError(f"[{node_name}] ❌ `{func_name}`: fill value not found (parents={parents}, method_args={method_args})")
                 layer_in = layer_in[0]
 
                 # 🔧 DEVICE CONSISTENCY FIX: Ensure both tensors are on the same device
                 target_device = layer_in.device
                 if mask.device != target_device:
                     mask = mask.to(device=target_device)
+                if isinstance(value, torch.Tensor):
+                    value = value.to(device=target_device)
 
                 # ✅ Ensure mask is boolean
                 if mask.dtype != torch.bool:
                     mask = mask != 0
             else:
                 raise RuntimeError(f"[{node_name}] ❌ Expected list with input and mask for `{func_name}`, got: {layer_in}")
-
-            value = layer_hyperparams.get("value", 0.0)
-            if isinstance(value, torch.Tensor):
-                value = value.item()  # Convert single-element tensor to Python scalar
 
             # 🔧 CRITICAL: Preserve -inf values, don't replace with large negatives
             if value == float('-inf'):
@@ -2283,7 +2291,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             logger.debug(f"[{node_name}] 🔧 full: initial size={size}, method_args={method_args}")
             
             # 🔧 FIX: Proper size resolution with error handling
-            if not size or all(s is None for s in size):
+            # An empty size is valid: torch.full([], v) is a 0-d scalar (GPT-2's attention scale).
+            if size is None or (len(size) > 0 and all(s is None for s in size)):
                 if method_args and isinstance(method_args[0], (list, tuple)):
                     size = method_args[0]
                     logger.debug(f"[{node_name}] 🔧 Using size from method_args: {size}")
@@ -2323,12 +2332,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             
             logger.debug(f"[{node_name}] ✅ Resolved size: {resolved_size}")
             
-            # 🔧 FIX: Validate resolved size
-            if not resolved_size:
-                raise RuntimeError(f"[{node_name}] ❌ Empty size after resolution")
-            
-            if any(s <= 0 for s in resolved_size):
-                raise RuntimeError(f"[{node_name}] ❌ Invalid size dimensions: {resolved_size} (all must be positive)")
+            if any(s < 0 for s in resolved_size):
+                raise RuntimeError(f"[{node_name}] ❌ Invalid size dimensions: {resolved_size} (must not be negative)")
             
             # Remaining parameters with validation
             # Extract fill_value from method_args[1] if available, otherwise from hyperparams
@@ -2784,6 +2789,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             return aten_op(layer_in)
 
         elif func_name == "any":
+            if getattr(aten_op, "_overloadname", "") == "default":  # reduce every element
+                return aten_op(layer_in)
             return aten_op(layer_in,
                            layer_hyperparams["dim"],
                            layer_hyperparams["keepdim"])
@@ -2822,6 +2829,8 @@ def execute_aten_operation(func_name, aten_op, layer_in, layer_hyperparams, meth
             # 🔧 FIX: Get dimension and keepdim parameters with proper fallback
             dim = layer_hyperparams.get("dim", None)
             keepdim = layer_hyperparams.get("keepdim", False)
+            if getattr(aten_op, "_overloadname", "") == "default":
+                dim = None  # all() over every element; the table's dim default does not apply
             
             logger.debug(f"[{node_name}] ✅ all: input shape={layer_in.shape}, dim={dim}, keepdim={keepdim}")
             
@@ -3955,11 +3964,14 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
                     '_norm_weight'
                 ]
                 
+                # torch.export names buffers b_*: a buffer is never a layer's weight or bias,
+                # even when its name says so (GPT-2's causal mask is the buffer `attn.bias`).
+                is_buffer = node_name.startswith("b_")
                 if any(key in node_name for key in special_weight_keywords):
                     layer_type = "future_use"
-                elif "weight" in node_name:
+                elif "weight" in node_name and not is_buffer:
                     layer_type = "Weight"
-                elif "bias" in node_name:
+                elif "bias" in node_name and not is_buffer:
                     layer_type = "Bias"
                 elif "running_mean" in node_name:
                     layer_type = "bn_running_mean"
@@ -4032,8 +4044,9 @@ def run_execution_nocache(graph, layer_stack, model, extracted_weights, inputs, 
 
                 else:
                     for node_x in parents:
-                        if func_name == "_native_batch_norm_legit_no_training":
-                            # ✅ Include *all* parents for batch norm op
+                        if func_name in ("_native_batch_norm_legit_no_training", "masked_fill", "masked_fill_"):
+                            # ✅ Include *all* parents for batch norm and masked_fill: a masked_fill
+                            # input or fill value may be a buffer whose name contains "weight"/"bias"
                             layer_in.append(node_io[node_x]['output_values'])
                         elif node_io[node_x]['layer_type'] in ("Weight", "Bias", "bn_running_mean", "bn_running_var", "bn_num_batches_tracked", "embeddings"):
                             continue

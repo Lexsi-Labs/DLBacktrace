@@ -18,6 +18,11 @@ from typing import Dict, List, Optional, Tuple, Any
 
 from dl_backtrace.pytorch_backtrace.dlbacktrace.utils import default_v2 as UD2
 from .relevance_propagation import (
+    eager_attention_relevance,
+    eager_attention_scores_node,
+    matmul_relevance,
+    sdpa_relevance,
+    slice_end,
     tensor_to_numpy,
     to_gpu_tensor,
     align_relevance_gpu,
@@ -34,6 +39,8 @@ OP_EMBEDDING    = 5
 OP_MUL          = 6
 OP_ADD          = 7
 OP_VECTOR       = 8
+OP_WHERE        = 9
+OP_MATMUL       = 10
 
 _WEIGHT_LT = frozenset({"Weight", "Bias", "bn_running_mean", "bn_running_var", "bn_num_batches_tracked"})
 _SYM_KEYS = ("sym_size", "sym_int", "symbolic", "shape", "size", "dim")
@@ -157,6 +164,10 @@ class PropagationSchedule:
                         )
                 elif func == "add":
                     self.op_codes[idx] = OP_ADD
+                elif func == "where":
+                    self.op_codes[idx] = OP_WHERE
+                elif func in ("matmul", "bmm", "mm"):
+                    self.op_codes[idx] = OP_MATMUL
                 else:
                     self.op_codes[idx] = OP_PASSTHROUGH
             elif layer in ("Normalization", "Indexing_Operation"):
@@ -355,6 +366,61 @@ def run_propagation_compiled(
 
             info = node_io[name]
 
+            # ── MATMUL: epsilon rule over the bilinear terms (see matmul_relevance) ──
+            if op == OP_MATMUL:
+                vals = info.get("input_values") or []
+                if not is_list[idx] or len(vals) < 2 or getattr(vals[0], "dim", lambda: 0)() < 2 \
+                        or getattr(vals[1], "dim", lambda: 0)() < 2:
+                    for ci, slot in slots:
+                        _accum(buffers, idx, _get_child_rel(buffers, ci, slot, is_list[ci]), is_list[idx], device, is_wt)
+                    continue
+                found = eager_attention_scores_node(name, node_io)
+                qi = n2i.get(found[0]) if found else None
+                if qi is not None and is_list[qi]:
+                    # P @ V of eager attention: same rule as scaled_dot_product_attention
+                    # (see the CPU path); Q and K^T relevance goes to the Q @ K^T node.
+                    P, V = (to_gpu_tensor(v, device).float() for v in vals[:2])
+                    S = to_gpu_tensor(node_io[found[1]]["input_values"][0], device).float()
+                    Q, KT = (to_gpu_tensor(v, device).float() for v in node_io[found[0]]["input_values"][:2])
+                    for ci, slot in slots:
+                        R = _get_child_rel(buffers, ci, slot, is_list[ci])
+                        if R is None:
+                            continue
+                        R = (R if isinstance(R, torch.Tensor) else to_gpu_tensor(R, device)).float()
+                        RQ, RKT, RV = eager_attention_relevance(UD2.launch_self_attention_gpu,
+                                                                R.reshape(P.shape[:-1] + V.shape[-1:]), S, Q, KT, V)
+                        _accum(buffers, idx, [None, RV], True, device, is_wt)
+                        _accum(buffers, qi, [RQ, RKT], True, device, wt_flags[qi])
+                    continue
+                A, B = (to_gpu_tensor(v, device).double() for v in vals[:2])
+                parents = info.get("input_sources", [])
+                aw, bw = ("weight" in p.lower() for p in parents[:2])
+                for ci, slot in slots:
+                    R = _get_child_rel(buffers, ci, slot, is_list[ci])
+                    if R is None:
+                        continue
+                    R = (R if isinstance(R, torch.Tensor) else to_gpu_tensor(R, device)).double().reshape((A @ B).shape)
+                    RA, RB = matmul_relevance(R, A, B, aw, bw)
+                    _accum(buffers, idx, [RA.float(), RB.float()], True, device, is_wt)
+                continue
+
+            # ── WHERE: relevance to the value each position took, none to the condition ──
+            if op == OP_WHERE:
+                if not is_list[idx]:  # fewer than two tensor inputs: plain passthrough
+                    for ci, slot in slots:
+                        _accum(buffers, idx, _get_child_rel(buffers, ci, slot, is_list[ci]), False, device, is_wt)
+                    continue
+                cond = to_gpu_tensor(info["input_values"][0], device).bool()
+                for ci, slot in slots:
+                    R = _get_child_rel(buffers, ci, slot, is_list[ci])
+                    if R is None:
+                        continue
+                    R = R if isinstance(R, torch.Tensor) else to_gpu_tensor(R, device)
+                    zero = torch.zeros((), dtype=R.dtype, device=R.device)
+                    _accum(buffers, idx, [None, torch.where(cond, R, zero), torch.where(cond, zero, R)],
+                           True, device, is_wt)
+                continue
+
             # ── LINEAR (addmm) ──
             if op == OP_LINEAR_ADDMM:
                 bias_v, mat1, mat2 = info["input_values"]
@@ -393,7 +459,7 @@ def run_propagation_compiled(
                 vals = info.get("input_values", [])
                 nv = len(vals)
                 if nv == 4:
-                    Q, K, V, mf = (to_gpu_tensor(v, device) for v in vals)
+                    Q, K, V, mf = (None if v is None else to_gpu_tensor(v, device) for v in vals)
                 elif nv == 3:
                     Q, K, V = (to_gpu_tensor(v, device) for v in vals)
                     raw_mask = info.get("layer_hyperparams", {}).get("attn_mask", None)
@@ -403,7 +469,8 @@ def run_propagation_compiled(
                 for ci, slot in slots:
                     R = _get_child_rel(buffers, ci, slot, is_list[ci])
                     if R is not None:
-                        RQ, RK, RV, Rmf = UD2.launch_self_attention_gpu(R, Q, K, V, mf)
+                        RQ, RK, RV, Rmf = sdpa_relevance(UD2.launch_self_attention_gpu, R, Q, K, V, mf,
+                                                         info.get("layer_hyperparams", {}))
                         _accum(buffers, idx, [RQ, RK, RV, Rmf], is_list[idx], device, is_wt)
                 continue
 
@@ -584,7 +651,7 @@ def _apply_vector_op(R, func, shape, hp, info, idx, names, node_io, buffers, is_
     elif func == "slice":
         dim = hp.get("dim", 0)
         start = hp.get("start", 0)
-        end = hp.get("end", None)
+        end = slice_end(hp, info)
         step = hp.get("step", 1)
         if all(x is not None for x in [dim, start, end]):
             slicer = [slice(None)] * len(shape)
