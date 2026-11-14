@@ -131,8 +131,9 @@ def test_two_step_relevance_equals_one_step(arch, device):
                 assert torch.allclose(g, w, rtol=1e-4, atol=1e-5 * max(1.0, float(w.abs().max()))), key
                 checked += 1
     assert checked > 50
-    assert float(torch.as_tensor(np.asarray(two[0]["relevance"]["input_ids"][0] if isinstance(
-        two[0]["relevance"]["input_ids"], list) else two[0]["relevance"]["input_ids"])).abs().sum()) > 0
+    tokens = two[0]["relevance"]["input_ids"]
+    tokens = tokens[0] if isinstance(tokens, list) else tokens
+    assert float(torch.as_tensor(np.asarray(tokens.cpu() if torch.is_tensor(tokens) else tokens)).abs().sum()) > 0
 
 
 def test_relevance_pass_selected_steps_and_sampling(monkeypatch):
