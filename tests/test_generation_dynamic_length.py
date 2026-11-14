@@ -68,3 +68,32 @@ def test_server_generates_from_a_one_token_prompt(tmp_path, monkeypatch):
     req = server.GenerateRequest(prompt="hi", max_new_tokens=2, return_relevance=False, return_scores=False)
     out = state.run_pytorch_generate(req, str(tmp_path / "cache"))
     assert out["num_tokens_generated"] == 2
+
+
+@pytest.mark.parametrize("device", ["cpu", pytest.param("cuda", marks=pytest.mark.skipif(
+    not torch.cuda.is_available(), reason="no CUDA"))])
+def test_gpt2_relevance_with_a_dynamic_sequence_length(device):
+    """GPT-2 slices its causal-mask buffer `attn.bias[:, :, :T, :T]`. With a dynamic
+    sequence length T is that slice's second input, not a hyperparameter, so the
+    relevance was not placed in the buffer's shape ("Cannot align relevance
+    (1, 1, 5, 64) -> (1, 1, 64, 64)") and GPT-2 generation with relevance failed."""
+    torch.manual_seed(0)
+    cfg = transformers.GPT2Config(vocab_size=64, n_embd=16, n_layer=2, n_head=4, n_positions=64, use_cache=False)
+    lm = transformers.GPT2LMHeadModel._from_config(cfg, attn_implementation="eager").eval().to(device)
+
+    class Logits(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.model = lm
+
+        def forward(self, input_ids, attention_mask):
+            return self.model(input_ids=input_ids, attention_mask=attention_mask, use_cache=False).logits
+
+    sample = torch.randint(1, 64, (1, 6), device=device)
+    dlb = DLBacktrace(Logits().eval(), (sample, torch.ones_like(sample)), device=device, verbose=False)
+    dlb._ensure_dynamic_sequence()
+    for n in (5, 7):
+        ids = torch.randint(1, 64, (1, n), device=device)
+        dlb.predict(ids, torch.ones_like(ids))
+        relevance = dlb.evaluation(task="generation", target_token_ids=[3])
+        assert relevance["input_ids"] is not None

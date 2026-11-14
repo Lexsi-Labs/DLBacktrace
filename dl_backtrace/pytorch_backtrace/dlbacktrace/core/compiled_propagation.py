@@ -22,6 +22,7 @@ from .relevance_propagation import (
     eager_attention_scores_node,
     matmul_relevance,
     sdpa_relevance,
+    slice_end,
     tensor_to_numpy,
     to_gpu_tensor,
     align_relevance_gpu,
@@ -650,7 +651,7 @@ def _apply_vector_op(R, func, shape, hp, info, idx, names, node_io, buffers, is_
     elif func == "slice":
         dim = hp.get("dim", 0)
         start = hp.get("start", 0)
-        end = hp.get("end", None)
+        end = slice_end(hp, info)
         step = hp.get("step", 1)
         if all(x is not None for x in [dim, start, end]):
             slicer = [slice(None)] * len(shape)

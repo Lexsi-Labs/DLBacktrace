@@ -110,6 +110,21 @@ def _receives_output_relevance(child, parent, r_shape, node_io):
     return not matching or parent == matching[0]
 
 
+def slice_end(hp, info):
+    """End of a `slice` node. With a dynamic sequence length it is not a hyperparameter
+    (None) but the node's second input, a size computed at run time."""
+    end = hp.get("end", None)
+    if end is None:
+        vals = info.get("input_values")
+        if isinstance(vals, (list, tuple)) and len(vals) > 1:
+            e = vals[1]
+            if isinstance(e, torch.Tensor) and e.numel() == 1:
+                e = e.item()
+            if isinstance(e, (int, np.integer)) and not isinstance(e, bool):
+                return int(e)
+    return end
+
+
 def align_relevance(r, target_shape, total_relevance=None):
     """
     Align array `r` to `target_shape` with intelligent fallbacks:
@@ -1221,7 +1236,7 @@ def run_evaluation(
                 elif func == "slice":
                     dim = hp.get("dim", 0)
                     start = hp.get("start", 0)
-                    end = hp.get("end", None)
+                    end = slice_end(hp, info)
                     step = hp.get("step", 1)
 
                     if all(x is not None for x in [dim, start, end]):
@@ -2137,7 +2152,7 @@ def run_evaluation_gpu(
                 elif func == "slice":
                     dim = hp.get("dim", 0)
                     start = hp.get("start", 0)
-                    end = hp.get("end", None)
+                    end = slice_end(hp, info)
                     step = hp.get("step", 1)
 
                     if all(x is not None for x in [dim, start, end]):
