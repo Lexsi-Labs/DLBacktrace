@@ -63,7 +63,7 @@ seaborn>=0.11.0
 
 **Optional Dependencies:**
 ```txt
-# For visualization
+# For visualization (also needs the Graphviz program `dot`: `apt install graphviz`, `brew install graphviz`)
 graphviz>=0.16
 
 # For caching and compression

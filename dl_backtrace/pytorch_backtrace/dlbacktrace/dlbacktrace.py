@@ -11,7 +11,10 @@ from .core.config import activation_master
 from .core.dlb_auto_sampler import DLBAutoSampler
 from .core.relevance_propagation import RelevancePropagator
 from .core.compiled_propagation import PropagationSchedule
-from .core.visualization import visualize_graph, visualize_relevance, visualize_relevance_auto 
+from .core.visualization import (
+    visualize_graph, visualize_relevance, visualize_relevance_auto,
+    visualize_relevance_paginated, SEMANTIC_LAYER_TYPES,
+)
 from .core.token_relevance_visuals import (
     plot_tokenwise_relevance_map_swapped,
     plot_input_heatmap_for_token,
@@ -1439,7 +1442,67 @@ class DLBacktrace:
         graph_max_nodes=220,
         show=True,
         inline_format="svg",
+        layer_types=None,
+        compact=False,
+        paginated=False,
+        max_nodes_per_page=30,
+        pages_per_row=1,
+        rankdir=None,
+        relevance_stat="sum",
     ):
+        """Draw the relevance graph with Graphviz (needs the `dot` program) and save it.
+
+        Parameters
+        ----------
+        output_path : str
+            Output path without extension; the graph is saved as SVG. With ``paginated=True``
+            the pages are ``{output_path}_page1.svg``, ``..._page2.svg``, ...
+        top_k : int, optional
+            With ``graph_mode="top_k"``, how many of the most relevant nodes the subgraph is
+            built around (same as ``graph_top_k``).
+        graph_mode : {"top_k", "entire"}
+            ``"top_k"`` (default) draws the most relevant nodes and their paths to the
+            output; ``"entire"`` draws every node.
+        layer_types : list[str], optional
+            Draw only nodes of these types: "MLP_Layer", "DL_Layer", "Activation",
+            "Normalization", "Attention", "NLP_Embedding", "Mathematical_Operation",
+            "Vector_Operation", "Placeholder" (the model inputs), "Output", ... Nodes in
+            between are skipped and their neighbours are linked directly. The output always
+            stays.
+        compact : bool
+            Shortcut for ``layer_types=SEMANTIC_LAYER_TYPES`` (the layers that matter, for a
+            graph that fits a paper). Ignored when ``layer_types`` is given. With the default
+            ``graph_mode="top_k"`` this is still a top-k subgraph of those layers; use
+            ``graph_mode="entire"`` for all of them.
+        paginated : bool
+            Split the graph into pages of ``max_nodes_per_page`` nodes in execution order
+            (for long graphs). ``graph_mode`` does not apply; combine it with ``compact``.
+        pages_per_row : int
+            With ``paginated=True``, also save the pages as one grid with this many pages
+            per row, ``{output_path}_combined.svg``.
+        rankdir : {"LR", "TB", "RL", "BT"}, optional
+            Direction of the graph. Default ``"LR"``, or ``"TB"`` when paginated.
+        relevance_stat : {"sum", "mean"}
+            What the first line of each node label shows: the node's total relevance
+            (default; it does not depend on the tensor size) or its mean.
+        show, inline_format
+            Whether to display the graph inline in a notebook, as ``"svg"`` or ``"png"``.
+        """
+        if compact and layer_types is None:
+            layer_types = list(SEMANTIC_LAYER_TYPES)
+        if paginated:
+            return visualize_relevance_paginated(
+                self.graph,
+                self.all_wt,
+                output_path=output_path,
+                max_nodes_per_page=max_nodes_per_page,
+                layer_types=layer_types,
+                rankdir=rankdir or "TB",
+                pages_per_row=pages_per_row,
+                relevance_stat=relevance_stat,
+                show=show,
+                inline_format=inline_format,
+            )
         return visualize_relevance_auto(
             self.graph,
             self.all_wt,
@@ -1450,6 +1513,9 @@ class DLBacktrace:
             graph_mode=graph_mode,
             graph_top_k=top_k or graph_top_k,
             graph_max_nodes=graph_max_nodes,
+            layer_types=layer_types,
+            rankdir=rankdir or "LR",
+            relevance_stat=relevance_stat,
             show=show,                        # show inline in Colab / Jupyter
             inline_format=inline_format,      # "svg", or "png" if SVG is too heavy
         )

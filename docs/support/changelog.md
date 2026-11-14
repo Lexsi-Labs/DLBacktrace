@@ -22,9 +22,34 @@ All notable changes to DL-Backtrace are documented here.
   `generated_token_ids` (list) and `complete_sequence` (tensor). Also from PR #13.
 - **`visualize_dlbacktrace(show=..., inline_format=...)`**: whether to display the graph inline
   and in which format (`"svg"` or `"png"`); both were fixed to `True` and `"svg"`. Also from PR #13.
+- **Compact, filtered and paginated relevance graphs** (from PR #13, by @neerajaryaai,
+  re-implemented on top of the `graph_mode` / top-k rework). `visualize_dlbacktrace()` takes
+  `layer_types` (draw only nodes of these types, linked through the nodes left out),
+  `compact=True` (shortcut for `layer_types=SEMANTIC_LAYER_TYPES`, now exported),
+  `rankdir` (`"LR"`, `"TB"`, `"RL"`, `"BT"`), `paginated`, `max_nodes_per_page` and
+  `pages_per_row` (pages saved as `{output_path}_pageN.svg`, plus a grid
+  `{output_path}_combined.svg`). `layer_types` and `rankdir` also work with `graph_mode="top_k"`
+  and `"entire"` and on `visualize_relevance`, `visualize_relevance_fast`,
+  `visualize_relevance_subgraph` and `visualize_relevance_auto`; `visualize_relevance_paginated`
+  is new. A parent on an earlier page is drawn as a dashed stub on every page, so no edge is
+  lost. New `relevance_stat="sum" | "mean"` (see Changed). Needs the Graphviz `dot` program,
+  as before.
 
 ### Changed
 
+- **Relevance graph labels show the sum, not the mean** (from PR #13). Every node label
+  (default top-k graph, entire graph, fast graph, pages) now reads `Sum:` and shows the total
+  relevance of the node, and for a node that passes relevance to several inputs the total over
+  all of them (it was the average of the per-input totals). The mean divides the total by the
+  tensor size, so the same total read 0.223 on a `[1, 7, 64]` tensor and 0.446 on a
+  `[1, 7, 32]` one; the sum does not depend on the size and the parts a layer splits its
+  relevance into add up to the whole. `relevance_stat="mean"` restores the old numbers.
+  `top_k` and `relevance_threshold` on `visualize_relevance` rank and threshold on the sum.
+- **Relevance graphs no longer draw parameter, buffer and constant placeholders** (`p_*`,
+  `b_*`, `c_*`; they carry no relevance and made up 10 to 40% of the nodes of the tiny models
+  checked), and nodes are coloured by their layer type as the colour map intended (linear
+  layers blue, activations orange, attention gold, ...) instead of all ATen operations being
+  violet. Nothing else was added or removed from the default, top-k and entire graphs.
 - **Eager and sdpa attention give the same relevance.** Eager attention (`Q @ K^T`,
   scaling, mask, softmax, `P @ V` as separate ops) now goes through the same relevance
   rule as `scaled_dot_product_attention`; its mask is read off the softmax input.
