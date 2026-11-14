@@ -207,6 +207,39 @@ print(f"Relevance trace steps: {len(results['relevance_trace'])}")  # Will have 
 print(f"Scores trace steps: {len(results['scores_trace'])}")
 ```
 
+#### Generate first, explain later: `forward_pass()` and `relevance_pass()`
+
+`explain_tokens` has to be chosen before generation starts. The two-step API lets you
+read the generated text first and then pick the tokens to explain:
+
+```python
+# Step 1: generate. No relevance is computed, and no tokenizer is needed.
+gen = dlb.forward_pass(
+    inputs={'input_ids': tokens["input_ids"], 'attention_mask': tokens["attention_mask"]},
+    max_new_tokens=20,
+    temperature=0.8,
+    top_k=50,
+    eos_token_id=tokenizer.eos_token_id,
+)
+print(tokenizer.decode(gen["complete_sequence"][0]))
+print(gen["generated_token_ids"], gen["num_steps"])
+
+# Step 2: explain the 1st, 5th and 10th generated tokens (None explains all of them).
+for r in dlb.relevance_pass(token_indices=[0, 4, 9], multiplier=100.0):
+    print(r["step_index"], r["token_id"], len(r["relevance"]))  # relevance: node name -> array
+
+dlb.clear_traces()  # forget the generation and free memory
+```
+
+For the same tokens, `relevance_pass()` returns the relevance that
+`run_task(task="generation")` computes. Only the generated token ids are kept between the two
+calls; `relevance_pass()` runs the model once on the sequence as it was when each requested
+token was chosen. `forward_pass()` takes the same sampling options as the sampler
+(`temperature`, `top_k`, `top_p`, `repetition_penalty`, `min_new_tokens`, ...), and
+`run_task(task="forward-only-generation", ...)` does the same generation in one call and returns
+`generated_token_ids` and `complete_sequence` without keeping anything for later.
+Batch size is 1.
+
 **Supported Models:**
 - GPT-2 (all sizes)
 - Llama (all versions)
@@ -245,9 +278,9 @@ results = dlb.run_task(
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `task` | str | `"auto"` | Task type: `"auto"`, `"text-classification"`, `"image-classification"`, or `"generation"` |
+| `task` | str | `"auto"` | Task type: `"auto"`, `"text-classification"`, `"image-classification"`, `"generation"`, or `"forward-only-generation"` (generation without relevance) |
 | `inputs` | dict/tuple | **Required** | Input data (dict with keys or tuple of tensors) |
-| `tokenizer` | Tokenizer | `None` | HuggingFace tokenizer (required for generation) |
+| `tokenizer` | Tokenizer | `None` | HuggingFace tokenizer (required for `"generation"`, not for `"forward-only-generation"`) |
 | `debug` | bool | `False` | Enable debug logging |
 
 ### Relevance Parameters

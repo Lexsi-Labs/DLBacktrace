@@ -6,6 +6,23 @@ All notable changes to DL-Backtrace are documented here.
 
 ## Unreleased
 
+### Added
+
+- **Two-step generation: `forward_pass()` and `relevance_pass()`.** `forward_pass(inputs,
+  max_new_tokens, temperature, top_k, top_p, eos_token_id, ...)` generates without computing
+  relevance and keeps the sequence; `relevance_pass(token_indices=None, ...)` then explains
+  any of the generated tokens and returns one `{step_index, token_id, relevance}` entry per
+  step, equal to what `run_task("generation")` computes for the same token; `clear_traces()`
+  forgets the generation. Only the token ids are kept between the calls (the model runs once
+  per explained token in `relevance_pass()`), so memory does not grow with the length of the
+  generation. Contributed by @neerajaryaai (PR #13), re-implemented on top of the reworked
+  generation.
+- **`run_task(task="forward-only-generation")`** generates without relevance and without a
+  tokenizer, with greedy, temperature, top-k and top-p decoding and EOS stopping, and returns
+  `generated_token_ids` (list) and `complete_sequence` (tensor). Also from PR #13.
+- **`visualize_dlbacktrace(show=..., inline_format=...)`**: whether to display the graph inline
+  and in which format (`"svg"` or `"png"`); both were fixed to `True` and `"svg"`. Also from PR #13.
+
 ### Changed
 
 - **Eager and sdpa attention give the same relevance.** Eager attention (`Q @ K^T`,
@@ -51,6 +68,19 @@ All notable changes to DL-Backtrace are documented here.
 
 ### Fixed
 
+- **Beam search with `return_relevance=True` raised `UnboundLocalError`.** The beam path read
+  the `explain_tokens` gate (`_should_run_dlb`), which was only defined for the non-beam path.
+- **Generation steps without relevance used the wrong model for a causal LM passed to
+  `DLBacktrace` directly.** `explain_tokens` (and the forward-only paths) run steps that
+  skip relevance with the model's own KV-cache forward, which looked at `dlb.model.model`:
+  for `LlamaForCausalLM` that is the base model, whose hidden states were taken for logits
+  (`IndexError`, or wrong tokens). The causal LM is now found the way the sampler finds it,
+  so a bare causal LM and a wrapper that holds one in `.model` both work.
+- **GPT-2 relevance with a dynamic sequence length.** GPT-2 slices its causal-mask buffer
+  `attn.bias[:, :, :T, :T]`. With a dynamic length, `T` is the slice node's second input rather
+  than a hyperparameter, so the relevance was not placed in the buffer's shape ("Cannot align
+  relevance (1, 1, 5, 64) -> (1, 1, 64, 64)") and generation with relevance failed on GPT-2.
+  The CPU, GPU and compiled paths now read it from the node's inputs.
 - **GPU relevance through `addmm` layers.** The CUDA linear kernel reads its weight
   row-major, but `addmm` (GPT-2's `Conv1D` and other `x @ W + b` layers) passed it the
   transposed weight as a view, so on the GPU these layers spread relevance with the
