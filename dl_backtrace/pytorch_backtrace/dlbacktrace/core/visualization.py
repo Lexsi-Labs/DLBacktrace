@@ -19,7 +19,7 @@ SEMANTIC_LAYER_TYPES: tuple[str, ...] = (
     "Normalization",  # batch_norm, layer_norm, dropout
     "Attention",      # scaled_dot_product_attention
     "Output",
-    "Placeholder",    # model inputs (parameter placeholders are dropped, see below)
+    "Placeholder",    # the model inputs, and the parameters unless show_parameters=False
     "Model_Input",
     "NLP_Embedding",  # embedding, embedding_bag
 )
@@ -28,8 +28,8 @@ SEMANTIC_LAYER_TYPES: tuple[str, ...] = (
 DEFAULT_FORCE_INCLUDE_TYPES: tuple[str, ...] = ("Model_Input", "Output")
 
 # Placeholders with these prefixes are parameters (p_), buffers (b_) and lifted constants (c_)
-# of the exported program (see trace_utils.extract_placeholders). They carry no relevance and
-# are left out of the graphs that are drawn.
+# of the exported program (see trace_utils.extract_placeholders). They carry no relevance;
+# `show_parameters=False` leaves them out of the graphs that are drawn.
 EXCLUDED_NODE_PREFIXES: tuple[str, ...] = ("p_", "b_", "c_")
 
 _RANKDIRS = ("LR", "TB", "RL", "BT")
@@ -176,20 +176,22 @@ def _normalise_layer_types(layer_types):
     return list(layer_types)
 
 
-def _compact_graph(graph, layer_types=None):
-    """A `networkx.DiGraph` without parameter placeholders and, if `layer_types` is given, with
-    only the nodes of those types (plus the output).
+def _compact_graph(graph, layer_types=None, show_parameters=True):
+    """A `networkx.DiGraph` with only the nodes of `layer_types` (plus the output) and, if
+    `show_parameters` is False, without parameter placeholders. With neither, the graph itself.
 
     Every kept node is linked to its nearest kept ancestors, so the nodes that were dropped
     in between (reshapes, casts, ...) do not break the graph into pieces. Node attributes
     kept: layer_type, layer_name, collapsed_count, and `parents` (the new ones).
     """
     layer_types = _normalise_layer_types(layer_types)
+    if layer_types is None and show_parameters:
+        return graph
     wanted = None if layer_types is None else set(layer_types) | set(DEFAULT_FORCE_INCLUDE_TYPES)
     attrs = {n: graph.nodes[n] for n in graph.nodes}
 
     def keep(n):
-        if _is_excluded_node(n, attrs[n]):
+        if not show_parameters and _is_excluded_node(n, attrs[n]):
             return False
         return wanted is None or bool(_node_kinds(attrs[n]) & wanted)
 
@@ -278,6 +280,7 @@ def visualize_relevance(graph, all_wt, output_path="backtrace_graph",
                         layer_types: Optional[Sequence[str]] = None,
                         rankdir: str = "LR",
                         relevance_stat="sum",
+                        show_parameters=True,
                         show=True, inline_format="svg"):
     """🎯 Visualize relevance backtrace using Graphviz (shows inline + saves)
 
@@ -292,10 +295,12 @@ def visualize_relevance(graph, all_wt, output_path="backtrace_graph",
         What the first line of each label shows: the node's total relevance (default) or its
         mean. See `_relevance_stats`.
 
-    Parameter, buffer and constant placeholders (`p_*`, `b_*`, `c_*`) are not drawn.
+    show_parameters : bool
+        Draw the parameter, buffer and constant placeholders (`p_*`, `b_*`, `c_*`). They carry
+        no relevance; `False` leaves them out. Default True.
     """
     rankdir = _check_rankdir(rankdir)
-    graph = _compact_graph(graph, layer_types)
+    graph = _compact_graph(graph, layer_types, show_parameters)
     relevance_data, _ = _relevance_maps(all_wt, relevance_stat)
 
     # --- Filter based on top_k or threshold ---
@@ -485,16 +490,17 @@ def visualize_relevance_fast(
     layer_types: Optional[Sequence[str]] = None,
     rankdir: str = "LR",
     relevance_stat="sum",
+    show_parameters=True,
     show=True,
     inline_format="svg",
 ):
-    """Render a large graph quickly (parameter placeholders are not drawn).
+    """Render a large graph quickly.
 
-    `layer_types`, `rankdir` and `relevance_stat` are as in `visualize_relevance`; `rankdir`
-    applies to the `dot` engine only.
+    `layer_types`, `rankdir`, `relevance_stat` and `show_parameters` are as in
+    `visualize_relevance`; `rankdir` applies to the `dot` engine only.
     """
     rankdir = _check_rankdir(rankdir)
-    graph = _compact_graph(graph, layer_types)
+    graph = _compact_graph(graph, layer_types, show_parameters)
     _norm = _norm_node_name
 
     # present nodes
@@ -644,6 +650,7 @@ def visualize_relevance_subgraph(
     layer_types: Optional[Sequence[str]] = None,
     rankdir: str = "LR",
     relevance_stat="sum",
+    show_parameters=True,
     show=True,
     inline_format="svg",
 ):
@@ -651,11 +658,11 @@ def visualize_relevance_subgraph(
 
     With `layer_types` the subgraph is chosen among the nodes of those types only (linked
     through the nodes that were left out); `rankdir` and `relevance_stat` are as in
-    `visualize_relevance`. Parameter placeholders (`p_*`, `b_*`, `c_*`) are never drawn.
+    `visualize_relevance`, and so is `show_parameters`.
     """
     rankdir = _check_rankdir(rankdir)
     full_nodes = len(graph.nodes)
-    graph = _compact_graph(graph, layer_types)  # also drops parameter placeholders
+    graph = _compact_graph(graph, layer_types, show_parameters)
     stats_by_norm, scores_by_norm = _relevance_maps(all_wt, relevance_stat)
     raw_by_norm = {_norm_node_name(raw): raw for raw in graph.nodes}
     norm_by_raw = {raw: _norm_node_name(raw) for raw in graph.nodes}
@@ -795,6 +802,7 @@ def visualize_relevance_auto(
     layer_types: Optional[Sequence[str]] = None,
     rankdir: str = "LR",
     relevance_stat="sum",
+    show_parameters=True,
     show=True,
     inline_format="svg",
 ):
@@ -819,6 +827,7 @@ def visualize_relevance_auto(
             layer_types=layer_types,
             rankdir=rankdir,
             relevance_stat=relevance_stat,
+            show_parameters=show_parameters,
             show=show,
             inline_format=inline_format,
         )
@@ -826,7 +835,7 @@ def visualize_relevance_auto(
     if graph_mode not in {"entire", "full", "all"}:
         raise ValueError("graph_mode must be one of {'top_k', 'entire'}")
 
-    graph = _compact_graph(graph, layer_types)  # also drops parameter placeholders
+    graph = _compact_graph(graph, layer_types, show_parameters)
     num_nodes = len(graph.nodes)
 
     if num_nodes < node_threshold:
@@ -837,6 +846,7 @@ def visualize_relevance_auto(
             output_path=output_path,
             rankdir=rankdir,
             relevance_stat=relevance_stat,
+            show_parameters=show_parameters,
             show=show,
             inline_format=inline_format,
         )
@@ -851,6 +861,7 @@ def visualize_relevance_auto(
             engine_auto_threshold=engine_auto_threshold,
             rankdir=rankdir,
             relevance_stat=relevance_stat,
+            show_parameters=show_parameters,
             show=show,
             inline_format=inline_format,
         )
@@ -952,6 +963,7 @@ def visualize_relevance_paginated(
     rankdir: str = "TB",
     pages_per_row: int = 1,
     relevance_stat="sum",
+    show_parameters=True,
     show=True,
     inline_format="svg",
 ):
@@ -964,7 +976,8 @@ def visualize_relevance_paginated(
     pages one by one instead of the grid). Node colour shows the sign and size of the
     relevance (green positive, red negative, darker is larger).
 
-    `layer_types`, `rankdir` and `relevance_stat` are as in `visualize_relevance`.
+    `layer_types`, `rankdir`, `relevance_stat` and `show_parameters` are as in
+    `visualize_relevance`.
 
     Returns a list of `(graphviz.Digraph, saved path)`, one per page, and the combined SVG
     path as a last entry when it was made.
@@ -972,7 +985,7 @@ def visualize_relevance_paginated(
     rankdir = _check_rankdir(rankdir)
     if pages_per_row < 1:
         raise ValueError("pages_per_row must be at least 1")
-    compact = _compact_graph(graph, layer_types)
+    compact = _compact_graph(graph, layer_types, show_parameters)
     stats, _ = _relevance_maps(all_wt, relevance_stat)
     pages = _paginate(compact, max_nodes_per_page)
     print(f"📊 Paginated: {len(graph.nodes)} nodes → {len(compact)} nodes in {len(pages)} pages "

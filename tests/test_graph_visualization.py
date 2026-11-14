@@ -92,14 +92,19 @@ def test_parameter_placeholders_are_excluded_but_not_other_nodes():
     assert not viz._is_excluded_node("p_proj", {"layer_type": "ATen_Operation"})
 
 
-def test_compact_graph_without_filter_only_drops_parameters():
-    c = viz._compact_graph(_graph())
+def test_compact_graph_without_filter_is_the_graph_itself():
+    g = _graph()
+    assert viz._compact_graph(g) is g
+
+
+def test_compact_graph_can_drop_parameters():
+    c = viz._compact_graph(_graph(), show_parameters=False)
     assert set(c.nodes) == set(_graph().nodes) - {"p_model_w", "b_buf", "c_lifted_tensor_0"}
     assert set(c.predecessors("linear")) == {"view"}
 
 
 def test_compact_graph_keeps_selected_types_and_links_through_dropped_nodes(capsys):
-    c = viz._compact_graph(_graph(), SEMANTIC_LAYER_TYPES)
+    c = viz._compact_graph(_graph(), SEMANTIC_LAYER_TYPES, show_parameters=False)
     # view (Vector_Operation) and add (Mathematical_Operation) are dropped; the inputs, the
     # output and the semantic layers stay
     assert set(c.nodes) == {"input_ids", "attention_mask", "embedding", "linear", "silu", "linear_1", "output"}
@@ -114,6 +119,13 @@ def test_compact_graph_keeps_selected_types_and_links_through_dropped_nodes(caps
     }
     assert c.nodes["silu"]["parents"] == ["embedding", "linear", "attention_mask"]
     assert "12 nodes -> 7 nodes" in capsys.readouterr().out
+
+
+def test_compact_graph_keeps_parameter_placeholders_by_default(capsys):
+    c = viz._compact_graph(_graph(), SEMANTIC_LAYER_TYPES)   # "Placeholder" is one of the types
+    assert {"p_model_w", "b_buf", "c_lifted_tensor_0"} <= set(c.nodes)
+    assert ("p_model_w", "embedding") in c.edges
+    assert not {"p_model_w", "b_buf"} & set(viz._compact_graph(_graph(), ["MLP_Layer"]).nodes)  # not a requested type
 
 
 def test_compact_graph_single_type_still_keeps_the_output(capsys):
@@ -182,11 +194,26 @@ def test_entire_graph_label_uses_sum_and_stat_mean_restores_the_mean(no_dot):
 
 
 # ---------------------------------------------------------------- entire graph, rankdir, filter
-def test_entire_graph_drops_parameters_and_keeps_every_edge(no_dot):
+def test_entire_graph_shows_parameters_by_default_and_every_edge(no_dot):
     g = _graph()
     dot, _ = viz.visualize_relevance(g, _relevance(g), "x", show=False)
-    assert _names(dot.source) == set(g.nodes) - {"p_model_w", "b_buf", "c_lifted_tensor_0"}
-    assert ("embedding", "view") in _edges(dot.source) and ("p_model_w", "linear") not in _edges(dot.source)
+    assert _names(dot.source) == set(g.nodes)
+    assert _edges(dot.source) == set(g.edges)
+
+
+@pytest.mark.parametrize("fn", ["visualize_relevance", "visualize_relevance_fast", "visualize_relevance_subgraph",
+                                "visualize_relevance_paginated", "visualize_relevance_auto"])
+def test_show_parameters_false_hides_parameter_placeholders_in_every_renderer(no_dot, fn, tmp_path):
+    g = _graph()
+    r = _relevance(g)
+    kw = dict(graph_mode="entire") if fn == "visualize_relevance_auto" else {}
+    shown = getattr(viz, fn)(g, r, str(tmp_path / "x"), show=False, **kw)
+    hidden = getattr(viz, fn)(g, r, str(tmp_path / "x"), show=False, show_parameters=False, **kw)
+    src = lambda res: res[0][0].source if isinstance(res, list) else res[0].source
+    assert {"p_model_w", "b_buf", "c_lifted_tensor_0"} <= _names(src(shown))
+    assert not _names(src(hidden)) & {"p_model_w", "b_buf", "c_lifted_tensor_0"}
+    assert {"input_ids", "attention_mask", "embedding", "output"} <= _names(src(hidden))
+    assert not {e for e in _edges(src(hidden)) if "p_model_w" in e or "b_buf" in e}
 
 
 @pytest.mark.parametrize("rankdir", ["LR", "TB", "RL", "BT"])
@@ -216,7 +243,8 @@ def test_bad_rankdir_is_rejected(no_dot):
 @pytest.mark.parametrize("fn", ["visualize_relevance", "visualize_relevance_fast", "visualize_relevance_subgraph"])
 def test_layer_types_filter_each_renderer(no_dot, fn):
     g = _graph()
-    dot, _ = getattr(viz, fn)(g, _relevance(g), "x", layer_types=SEMANTIC_LAYER_TYPES, show=False)
+    dot, _ = getattr(viz, fn)(g, _relevance(g), "x", layer_types=SEMANTIC_LAYER_TYPES, show_parameters=False,
+                              show=False)
     names = _names(dot.source)
     assert {"embedding", "linear", "silu", "linear_1", "output"} <= names
     assert not names & {"view", "add", "p_model_w", "b_buf", "c_lifted_tensor_0"}
@@ -234,11 +262,11 @@ def test_colour_follows_the_category_not_aten_operation(no_dot):
 def test_auto_picks_the_renderer_after_the_filter(no_dot, capsys):
     g = _graph()
     r = _relevance(g)
-    # 12 nodes: the entire graph is 9 after the parameters are dropped, 7 compact
+    # 12 nodes: the entire graph has 12, the compact one 7 once the parameters are hidden, 10 with them
     viz.visualize_relevance_auto(g, r, "x", graph_mode="entire", node_threshold=8, show=False)
     assert "big graph" in capsys.readouterr().out
     viz.visualize_relevance_auto(g, r, "x", graph_mode="entire", node_threshold=8,
-                                 layer_types=SEMANTIC_LAYER_TYPES, show=False)
+                                 layer_types=SEMANTIC_LAYER_TYPES, show_parameters=False, show=False)
     assert "rendering entire graph" in capsys.readouterr().out
     with pytest.raises(ValueError, match="graph_mode"):
         viz.visualize_relevance_auto(g, r, "x", graph_mode="partial", show=False)
@@ -250,8 +278,12 @@ def test_top_k_graph_mode_still_draws_the_relevant_path(no_dot):
     r["embedding"] = torch.ones(1, 4, 2) * 50   # most relevant
     dot, _ = viz.visualize_relevance_auto(g, r, "x", graph_mode="top_k", graph_top_k=1, show=False)
     names = _names(dot.source)
-    assert {"embedding", "output"} <= names and not names & {"p_model_w", "b_buf"}
+    assert {"embedding", "output"} <= names
     assert ("silu", "linear_1") in _edges(dot.source)  # the path from the top node to the output
+    hidden, _ = viz.visualize_relevance_auto(g, r, "x", graph_mode="top_k", graph_top_k=5, show_parameters=False, show=False)
+    shown, _ = viz.visualize_relevance_auto(g, r, "x", graph_mode="top_k", graph_top_k=5, show=False)
+    assert not _names(hidden.source) & {"p_model_w", "b_buf", "c_lifted_tensor_0"}
+    assert _names(shown.source) & {"p_model_w", "b_buf", "c_lifted_tensor_0"}
 
 
 # ---------------------------------------------------------------- pages
@@ -370,7 +402,11 @@ def test_method_compact_keeps_the_semantic_layers_of_a_real_graph(tiny, no_dot, 
     dot, _ = tiny.visualize_dlbacktrace(output_path=str(tmp_path / "g"), compact=True, graph_mode="entire", show=False)
     names = _names(dot.source)
     assert any(n.startswith("linear") for n in names) and any(n.startswith("relu") for n in names)
-    assert "output" in names and not any(n.startswith(("p_", "b_", "c_")) for n in names)
+    assert "output" in names and any(n.startswith("p_") for n in names)   # parameters are shown by default
+    dot, _ = tiny.visualize_dlbacktrace(output_path=str(tmp_path / "g"), compact=True, graph_mode="entire",
+                                        show_parameters=False, show=False)
+    names = _names(dot.source)
+    assert any(n.startswith("linear") for n in names) and not any(n.startswith(("p_", "b_", "c_")) for n in names)
     assert "rankdir=LR" in dot.source and "Sum:" in dot.source
 
 
@@ -386,6 +422,17 @@ def test_method_paginated_with_default_and_explicit_rankdir(tiny, no_dot, tmp_pa
     assert len(res) >= 2 and "rankdir=TB" in res[0][0].source
     res = tiny.visualize_dlbacktrace(output_path=str(tmp_path / "g"), paginated=True, rankdir="LR", show=False)
     assert "rankdir=LR" in res[0][0].source
+
+
+@pytest.mark.parametrize("kwargs", [dict(), dict(graph_mode="entire"), dict(compact=True, graph_mode="entire"),
+                                    dict(paginated=True, max_nodes_per_page=4)])
+def test_method_show_parameters_flag_on_a_real_graph(tiny, no_dot, tmp_path, kwargs):
+    def names(**kw):
+        res = tiny.visualize_dlbacktrace(output_path=str(tmp_path / "g"), show=False, **kwargs, **kw)
+        dots = [d for d, _ in res] if isinstance(res, list) else [res[0]]
+        return set().union(*(_names(d.source) for d in dots))
+    assert any(n.startswith("p_") for n in names())
+    assert not any(n.startswith(("p_", "b_", "c_")) for n in names(show_parameters=False))
 
 
 def test_method_default_is_still_the_top_k_subgraph(tiny, no_dot, tmp_path):

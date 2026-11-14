@@ -34,6 +34,10 @@ All notable changes to DL-Backtrace are documented here.
   is new. A parent on an earlier page is drawn as a dashed stub on every page, so no edge is
   lost. New `relevance_stat="sum" | "mean"` (see Changed). Needs the Graphviz `dot` program,
   as before.
+- **`show_parameters`** on `visualize_dlbacktrace()` and every relevance renderer (default
+  `True`: nothing changes). `show_parameters=False` leaves out the parameter, buffer and
+  constant placeholders (`p_*`, `b_*`, `c_*`), which carry no relevance and are 10 to 40% of
+  the nodes of the tiny models checked.
 
 ### Changed
 
@@ -45,11 +49,9 @@ All notable changes to DL-Backtrace are documented here.
   `[1, 7, 32]` one; the sum does not depend on the size and the parts a layer splits its
   relevance into add up to the whole. `relevance_stat="mean"` restores the old numbers.
   `top_k` and `relevance_threshold` on `visualize_relevance` rank and threshold on the sum.
-- **Relevance graphs no longer draw parameter, buffer and constant placeholders** (`p_*`,
-  `b_*`, `c_*`; they carry no relevance and made up 10 to 40% of the nodes of the tiny models
-  checked), and nodes are coloured by their layer type as the colour map intended (linear
-  layers blue, activations orange, attention gold, ...) instead of all ATen operations being
-  violet. Nothing else was added or removed from the default, top-k and entire graphs.
+- **Relevance graphs colour nodes by their layer type**, as the colour map intended (linear
+  layers blue, activations orange, attention gold, ...), instead of every ATen operation being
+  violet. The nodes and edges of the default, top-k and entire graphs are unchanged.
 - **Eager and sdpa attention give the same relevance.** Eager attention (`Q @ K^T`,
   scaling, mask, softmax, `P @ V` as separate ops) now goes through the same relevance
   rule as `scaled_dot_product_attention`; its mask is read off the softmax input.

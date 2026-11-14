@@ -1449,6 +1449,7 @@ class DLBacktrace:
         pages_per_row=1,
         rankdir=None,
         relevance_stat="sum",
+        show_parameters=True,
     ):
         """Draw the relevance graph with Graphviz (needs the `dot` program) and save it.
 
@@ -1485,6 +1486,9 @@ class DLBacktrace:
         relevance_stat : {"sum", "mean"}
             What the first line of each node label shows: the node's total relevance
             (default; it does not depend on the tensor size) or its mean.
+        show_parameters : bool
+            Draw the parameter, buffer and constant placeholders (``p_*``, ``b_*``, ``c_*``).
+            They carry no relevance; ``False`` leaves them out of every mode. Default ``True``.
         show, inline_format
             Whether to display the graph inline in a notebook, as ``"svg"`` or ``"png"``.
         """
@@ -1500,6 +1504,7 @@ class DLBacktrace:
                 rankdir=rankdir or "TB",
                 pages_per_row=pages_per_row,
                 relevance_stat=relevance_stat,
+                show_parameters=show_parameters,
                 show=show,
                 inline_format=inline_format,
             )
@@ -1516,6 +1521,7 @@ class DLBacktrace:
             layer_types=layer_types,
             rankdir=rankdir or "LR",
             relevance_stat=relevance_stat,
+            show_parameters=show_parameters,
             show=show,                        # show inline in Colab / Jupyter
             inline_format=inline_format,      # "svg", or "png" if SVG is too heavy
         )

@@ -131,13 +131,14 @@ dlb.visualize_dlbacktrace(graph_mode="entire", output_path="whole_graph")
 
 # only the layers that matter (linear, conv, activation, normalization, attention,
 # embedding, inputs, output), linked through the nodes that were left out
-dlb.visualize_dlbacktrace(compact=True, graph_mode="entire", rankdir="TB")
+dlb.visualize_dlbacktrace(compact=True, graph_mode="entire", rankdir="TB", show_parameters=False)
 
 # the same, with any layer types you choose
 dlb.visualize_dlbacktrace(layer_types=["MLP_Layer", "Attention"], graph_mode="entire")
 
 # a long graph as pages of 30 nodes, three pages per row in a grid
-dlb.visualize_dlbacktrace(paginated=True, compact=True, pages_per_row=3, output_path="pages")
+dlb.visualize_dlbacktrace(paginated=True, compact=True, pages_per_row=3, show_parameters=False,
+                          output_path="pages")
 ```
 
 | Parameter | Meaning |
@@ -149,11 +150,11 @@ dlb.visualize_dlbacktrace(paginated=True, compact=True, pages_per_row=3, output_
 | `paginated`, `max_nodes_per_page` | Split the graph into pages of at most `max_nodes_per_page` (default 30) nodes in execution order, saved as `{output_path}_page1.svg`, `..._page2.svg`, ... A parent on an earlier page is drawn as a dashed grey stub, so no edge is lost. |
 | `pages_per_row` | With `paginated=True` and more than one page, also save one grid with this many pages per row, `{output_path}_combined.svg`. |
 | `relevance_stat` | `"sum"` (default) or `"mean"`: what the first line of each node label shows. |
+| `show_parameters` | `True` (default) draws the parameter, buffer and constant placeholders (`p_*`, `b_*`, `c_*`); `False` leaves them out in every mode. They carry no relevance. In a paginated or compact graph they fill whole pages and make the graph larger, so `show_parameters=False` is usually what you want there. |
 | `show`, `inline_format` | Display the graph inline in a notebook, as `"svg"` or `"png"`. |
 
-Parameter, buffer and constant placeholders (`p_*`, `b_*`, `c_*`) are never drawn: they
-carry no relevance. Nodes are coloured by layer type, and in pages by the sign and size of
-the relevance (green positive, red negative, darker is larger).
+Nodes are coloured by layer type, and in pages by the sign and size of the relevance (green
+positive, red negative, darker is larger).
 
 **What the label shows.** Each node shows `Sum`, `Max` and `Min` of its relevance. The sum
 is the node's total relevance; it does not depend on the size of the tensor, so it can be
@@ -168,6 +169,8 @@ nearest kept layers before it. In a model with residual connections the addition
 kept, so a layer is linked to every earlier layer whose output reaches it through the
 residual stream, which makes the graph dense. Add `"Mathematical_Operation"` to
 `layer_types` to keep the additions and see the residual stream.
+
+The two examples below were made with `show_parameters=False`.
 
 ![Compact graph of a tiny BERT](../../assets/images/graphs/compact.svg)
 
